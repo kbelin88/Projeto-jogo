@@ -30,6 +30,26 @@
     bottom: 10px; right: 10px; pointer-events: auto;
     display: flex; flex-direction: column; gap: 6px;
   }
+  /* HUD da partida (motor) */
+  #game {
+    top: 10px; right: 10px;
+    background: rgba(40,28,14,.82); border: 2px solid #6b4a22; border-radius: 6px;
+    padding: 8px 12px; line-height: 1.55; min-width: 190px;
+  }
+  #gamebar {
+    position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
+    pointer-events: auto; display: flex; align-items: center; gap: 8px;
+    background: rgba(40,28,14,.82); border: 2px solid #6b4a22; border-radius: 8px;
+    padding: 6px 10px; color: #f5e9c8; text-shadow: 1px 1px 2px #000; user-select: none;
+  }
+  #gamebar button {
+    font: bold 14px "Trebuchet MS", sans-serif; color: #f5e9c8;
+    background: linear-gradient(#7a5226,#523414); border: 2px solid #2b1a0a;
+    border-radius: 6px; padding: 6px 12px; cursor: pointer; text-shadow: 1px 1px 2px #000;
+  }
+  #gamebar button:hover { background: linear-gradient(#946530,#5f3c16); }
+  #gamebar button:active { transform: translateY(1px); }
+  #gamebar label { font-size: 12px; display: flex; align-items: center; gap: 5px; }
   #zoombar button {
     width: 44px; height: 44px; font-size: 22px; font-weight: bold;
     color: #f5e9c8; background: linear-gradient(#7a5226,#523414);
@@ -62,14 +82,29 @@
   <button id="zout" title="Afastar">−</button>
 </div>
 
+<div id="game" class="hud"></div>
+
+<div id="gamebar">
+  <button id="gplay">▶ Play</button>
+  <button id="gstep">Passo</button>
+  <button id="greset">Reiniciar</button>
+  <label>vel <input id="gspeed" type="range" min="80" max="1200" value="500" style="width:90px"></label>
+</div>
+
+<script src="world.js"></script>
+<script src="engine.js"></script>
 <script>
 (() => {
   "use strict";
 
-  // ---------- Configuração do mundo ----------
-  const TILE = 32;          // pixels de mundo por coordenada (elementos ~1/4 do tamanho anterior)
-  const WORLD = 200;        // grade WORLD x WORLD de coordenadas
-  const MIN_SCALE = 0.80;   // zoom máximo afastado (não vai além disso)
+  // ---------- Mundo: FONTE UNICA em world.js ----------
+  // O motor (engine.js) e o render leem exatamente a mesma geracao de terreno.
+  const { hash, lerp, vnoise, lakeInfo, isWater, cellData, villageName,
+          TRIBES, WORLD, LAKE_G, T_GRASS, T_FOREST, T_MOUNT, T_WATER } = World;
+
+  // ---------- Configuração de render ----------
+  const TILE = 32;          // pixels de mundo por coordenada
+  const MIN_SCALE = 0.55;   // zoom máximo afastado (folga p/ ver todo o teatro)
   const MAX_SCALE = 4.0;    // zoom máximo aproximado (vilas detalhadas)
 
   // ---------- Canvas ----------
@@ -107,100 +142,10 @@
     panY = wpy >= VH ? Math.min(0, Math.max(VH - wpy, panY)) : (VH - wpy) / 2;
   }
 
-  // ---------- PRNG determinístico baseado em hash (mundo estável e infinito-ish) ----------
-  // Usa Math.imul (multiplicação 32-bit exata) — sem perda de precisão/viés
-  function hash(x, y, salt = 0) {
-    let h = Math.imul((x | 0) ^ 0x9e3779b9, 0x85ebca6b);
-    h = Math.imul(h ^ (y | 0) ^ 0xc2b2ae35, 0x27d4eb2f);
-    h = Math.imul(h ^ (salt | 0) ^ 0x165667b1, 0x85ebca6b);
-    h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d); h ^= h >>> 13;
-    return (h >>> 0) / 4294967296;
-  }
-
-  // Tipos de célula
-  const T_GRASS = 0, T_FOREST = 1, T_MOUNT = 2, T_WATER = 3;
-
-  // Ruído suave (value noise) para agrupar biomas em vez de pixels aleatórios
-  function vnoise(x, y, salt, freq) {
-    const fx = x * freq, fy = y * freq;
-    const x0 = Math.floor(fx), y0 = Math.floor(fy);
-    const tx = fx - x0, ty = fy - y0;
-    const a = hash(x0, y0, salt), b = hash(x0 + 1, y0, salt);
-    const c = hash(x0, y0 + 1, salt), d = hash(x0 + 1, y0 + 1, salt);
-    const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
-    return lerp(lerp(a, b, sx), lerp(c, d, sx), sy);
-  }
-
-  // Lagos pequenos e irregulares (sem oceanos): centros espalhados numa grade grossa
-  const LAKE_G = 16; // tamanho da região onde pode existir um lago
-  function lakeInfo(gx, gy) {
-    if (hash(gx, gy, 71) > 0.40) return null; // só ~40% das regiões têm lago
-    return {
-      cx: gx * LAKE_G + 3 + hash(gx, gy, 72) * (LAKE_G - 6),
-      cy: gy * LAKE_G + 3 + hash(gx, gy, 73) * (LAKE_G - 6),
-      rad: 1.8 + hash(gx, gy, 74) * 2.6,
-      seed: (gx & 1023) * 1024 + (gy & 1023),
-    };
-  }
-  function isWater(x, y) {
-    const gx0 = Math.floor(x / LAKE_G), gy0 = Math.floor(y / LAKE_G);
-    for (let gx = gx0 - 1; gx <= gx0 + 1; gx++) {
-      for (let gy = gy0 - 1; gy <= gy0 + 1; gy++) {
-        const lk = lakeInfo(gx, gy);
-        if (!lk) continue;
-        const dx = x + 0.5 - lk.cx, dy = y + 0.5 - lk.cy;
-        const wobble = 0.80 + hash(x, y, 75) * 0.45; // borda irregular
-        const rr = lk.rad * wobble;
-        if (dx * dx + dy * dy < rr * rr) return true;
-      }
-    }
-    return false;
-  }
-
-  function cellData(x, y) {
-    const r = hash(x, y, 1);
-    let type = T_GRASS;
-    if (isWater(x, y)) {
-      type = T_WATER;
-    } else {
-      const mt = vnoise(x, y, 7, 0.09);  // cordilheiras
-      const ft = vnoise(x, y, 9, 0.15);  // bosques
-      if (mt > 0.93 && hash(x, y, 5) > 0.70) type = T_MOUNT;
-      else if (ft > 0.56 && hash(x, y, 6) > 0.35) type = T_FOREST;
-    }
-
-    let village = false, tribe = 0, level = 1;
-    if (type === T_GRASS || type === T_FOREST) {
-      if (hash(x, y, 3) < 0.08) {   // bem menos vilas que antes
-        village = true;
-        tribe = Math.floor(hash(x, y, 4) * TRIBES.length);
-        level = 1 + Math.floor(hash(x, y, 6) * 5);
-      }
-    }
-    return { type, village, tribe, level, r };
-  }
-
-  // Tribos / cores de bandeira
-  const TRIBES = [
-    { c: "#d83b3b", n: "VERMELHA" },
-    { c: "#3b6bd8", n: "AZUL" },
-    { c: "#39a845", n: "VERDE" },
-    { c: "#e0a020", n: "DOURADA" },
-    { c: "#9b3bd8", n: "ROXA" },
-    { c: "#e0e0e0", n: "BRANCA" },
-  ];
-
-  // Nomes de vila proceduralmente
-  const SYL_A = ["Vald", "Nor", "Eich", "Stein", "Brun", "Hel", "Kal", "Mor", "Ast", "Dorn", "Falk", "Rab", "Wolf", "Gold"];
-  const SYL_B = ["heim", "burg", "feld", "stadt", "wald", "berg", "tal", "furt", "dorf", "hain", "see", "ried"];
-  function villageName(x, y) {
-    const a = SYL_A[Math.floor(hash(x, y, 11) * SYL_A.length)];
-    const b = SYL_B[Math.floor(hash(x, y, 12) * SYL_B.length)];
-    return a + b;
-  }
+  // (terreno, ruido, lagos, cellData, TRIBES, villageName e lerp agora vivem
+  //  em world.js — desestruturados no topo. Nada de geracao de terreno aqui.)
 
   // ---------- Helpers de desenho ----------
-  function lerp(a, b, t) { return a + (b - a) * t; }
 
   // Cor de grama com variação suave de larga escala (sem xadrez por célula)
   function grassColor(x, y) {
@@ -490,28 +435,30 @@
       }
     }
 
-    // 3) vilas
+    // 3) vilas — SOMENTE as 50 aldeias da partida (cenário procedural escondido).
+    //    A cor segue o DONO (azul A / vermelho B / tom neutro).
     for (let y = cy0; y < cy1; y++) {
       for (let x = cx0; x < cx1; x++) {
         const d = cellData(x, y);
         if (!d.village) continue;
+        const gv = game ? game.byCell.get(x + "," + y) : null;
+        if (game && !gv) continue;            // fora da partida: não desenha
         const sx = x * cs + panX, sy = y * cs + panY;
-        const tribe = TRIBES[d.tribe];
+        const cor = gv ? (gv.dono === null ? COR.neutra : COR[gv.dono]) : TRIBES[d.tribe].c;
 
         if (gridView) {
-          // ponto colorido por tribo
           const r = Math.max(2, cs * 0.28);
-          ctx.fillStyle = tribe.c;
+          ctx.fillStyle = cor;
           ctx.fillRect(sx + cs / 2 - r, sy + cs / 2 - r, r * 2, r * 2);
           ctx.strokeStyle = "rgba(0,0,0,.5)"; ctx.lineWidth = 1;
           ctx.strokeRect(sx + cs / 2 - r, sy + cs / 2 - r, r * 2, r * 2);
         } else if (detailed) {
-          drawVillage(sx + cs * 0.5, sy + cs * 0.48, cs * 0.34, tribe.c);
-          if (showNames) {
+          drawVillage(sx + cs * 0.5, sy + cs * 0.48, cs * 0.34, cor);
+          if (showNames && gv) {
             const fs = Math.max(9, cs * 0.13);
             ctx.font = `bold ${fs}px "Trebuchet MS", sans-serif`;
             ctx.textAlign = "center";
-            const name = villageName(x, y);
+            const name = gv.nome;
             const tw = ctx.measureText(name).width;
             ctx.fillStyle = "rgba(30,20,10,.7)";
             ctx.fillRect(sx + cs * 0.5 - tw / 2 - 3, sy + cs * 0.78, tw + 6, fs + 4);
@@ -519,11 +466,10 @@
             ctx.fillText(name, sx + cs * 0.5, sy + cs * 0.78 + fs);
           }
         } else {
-          // nível intermediário: ícone simples
           const r = cs * 0.22;
           ctx.fillStyle = "#b9a489";
           ctx.fillRect(sx + cs / 2 - r, sy + cs / 2 - r * 0.6, r * 2, r * 1.4);
-          ctx.fillStyle = tribe.c;
+          ctx.fillStyle = cor;
           ctx.fillRect(sx + cs / 2 - r, sy + cs / 2 - r * 0.6, r * 2, r * 0.4);
         }
       }
@@ -561,6 +507,7 @@
       }
     }
 
+    drawGame();   // camada do motor por cima do mapa
     updateHUD();
   }
 
@@ -575,10 +522,17 @@
     document.getElementById("zoom").textContent = scale.toFixed(2) + "x";
     const hn = document.getElementById("hovername");
     if (inB) {
-      const d = cellData(wx, wy);
-      hn.textContent = d.village
-        ? `Vila: ${villageName(wx, wy)} — Tribo ${TRIBES[d.tribe].n}`
-        : "";
+      const gv = game && game.aldeias.find((a) => a.x === wx && a.y === wy);
+      if (gv) {
+        const dono = gv.dono === null ? "neutra (" + gv.tipo + ")" : "Rei " + gv.dono;
+        const tro = `L${gv.tropas.lanceiro}/A${gv.tropas.arqueiro}/C${gv.tropas.cavaleiro} (força ${Engine.forcaDe(gv.tropas, game.config)})`;
+        hn.textContent = `${gv.nome} — ${dono} · ${tro}`;
+      } else {
+        const d = cellData(wx, wy);
+        hn.textContent = d.village
+          ? `Vila: ${villageName(wx, wy)} — Tribo ${TRIBES[d.tribe].n}`
+          : "";
+      }
     } else hn.textContent = "";
   }
 
@@ -620,10 +574,131 @@
   document.getElementById("zin").addEventListener("click", () => zoomAt(VW / 2, VH / 2, 1.3));
   document.getElementById("zout").addEventListener("click", () => zoomAt(VW / 2, VH / 2, 1 / 1.3));
 
+  // ============================================================
+  //  CAMADA DO MOTOR (engine.js) — assistir a partida no mapa
+  // ============================================================
+  const COR = { A: "#3b6bd8", B: "#d83b3b", neutra: "#d9d2bd" };
+
+  let game = null;        // estado da partida (engine)
+  let playing = false;
+  let speed = 500;        // ms por turno
+  let timer = null;
+
+  // enquadra a camera no teatro da partida
+  function enquadrarTeatro() {
+    const t = Engine.CONFIG.teatro;
+    const fit = Math.min(VW / (t.w * TILE), VH / (t.h * TILE));
+    scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, fit * 0.96));
+    centerOn(t.x0 + t.w / 2, t.y0 + t.h / 2);
+  }
+
+  function novaPartida() {
+    pause();
+    game = Engine.criarEstadoInicial(Engine.CONFIG);
+    // indice celula -> aldeia (posicoes fixas): filtro rapido no render
+    game.byCell = new Map(game.aldeias.map((a) => [a.x + "," + a.y, a]));
+    enquadrarTeatro();
+    updateGameHUD();
+    draw();
+  }
+
+  function passoTurno() {
+    if (!game || Engine.checarVitoria(game)) { pause(); return; }
+    Engine.rodarTurno(game, null);
+    updateGameHUD();
+    draw();
+    if (Engine.checarVitoria(game)) pause();
+  }
+
+  function play() {
+    if (playing || !game || Engine.checarVitoria(game)) return;
+    playing = true;
+    document.getElementById("gplay").textContent = "⏸ Pausar";
+    timer = setInterval(passoTurno, speed);
+  }
+  function pause() {
+    playing = false;
+    if (timer) { clearInterval(timer); timer = null; }
+    const b = document.getElementById("gplay");
+    if (b) b.textContent = "▶ Play";
+  }
+
+  // desenha aldeias do jogo (cor do dono) + exercitos em transito
+  function drawGame() {
+    if (!game) return;
+    const cs = TILE * scale;
+
+    for (const a of game.aldeias) {
+      const sx = a.x * cs + panX + cs / 2, sy = a.y * cs + panY + cs / 2;
+      if (sx < -60 || sy < -60 || sx > VW + 60 || sy > VH + 60) continue;
+      const col = a.dono === null ? COR.neutra : COR[a.dono];
+      const r = Math.max(5, cs * 0.40);
+
+      ctx.lineWidth = 1; ctx.strokeStyle = "rgba(0,0,0,.55)";
+      ctx.beginPath(); ctx.arc(sx, sy, r + 2, 0, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = Math.max(2.5, cs * 0.11); ctx.strokeStyle = col;
+      ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.stroke();
+
+      if (cs > 20) {
+        const LET = { lanceiro: "L", arqueiro: "A", cavaleiro: "C" };
+        const val = a.dono === null
+          ? (a.tropas[a.tipo] || 0) + LET[a.tipo]      // neutra: "40L" (tipo único)
+          : Engine.forcaDe(a.tropas, game.config);     // rei: força total
+
+        const fs = Math.max(10, cs * 0.32);
+        ctx.font = `bold ${fs}px Verdana`; ctx.textAlign = "center";
+        ctx.lineWidth = Math.max(2, fs * 0.28); ctx.strokeStyle = "rgba(20,12,4,.85)";
+        ctx.strokeText(val, sx, sy - r - 3);
+        ctx.fillStyle = a.dono === null ? "#fff" : col === COR.A ? "#bcd0ff" : "#ffc4c4";
+        ctx.fillText(val, sx, sy - r - 3);
+      }
+    }
+
+    for (const m of game.movimentos) {
+      const o = game.aldeias.find((a) => a.id === m.origemId);
+      const d = game.aldeias.find((a) => a.id === m.destinoId);
+      if (!o || !d) continue;
+      const prog = m.turnosTotal ? (m.turnosTotal - m.turnosRestantes) / m.turnosTotal : 1;
+      const mx = lerp(o.x, d.x, prog) * cs + panX + cs / 2;
+      const my = lerp(o.y, d.y, prog) * cs + panY + cs / 2;
+      const dx = d.x * cs + panX + cs / 2, dy = d.y * cs + panY + cs / 2;
+      const col = COR[m.dono];
+
+      ctx.setLineDash([5, 5]); ctx.lineWidth = 1; ctx.strokeStyle = "rgba(0,0,0,.25)";
+      ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(dx, dy); ctx.stroke(); ctx.setLineDash([]);
+
+      const r = Math.max(3, cs * 0.20);
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(mx, my, r, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(0,0,0,.65)"; ctx.stroke();
+    }
+  }
+
+  function updateGameHUD() {
+    if (!game) return;
+    const A = Engine.aldeiasDe(game, "A"), B = Engine.aldeiasDe(game, "B");
+    const f = (lista) => lista.reduce((s, a) => s + Engine.forcaDe(a.tropas, game.config), 0);
+    const venc = Engine.checarVitoria(game);
+    document.getElementById("game").innerHTML =
+      `<b>Turno ${game.turno}</b><br>` +
+      `<span style="color:#7aa0ff">■ Rei A</span>: ${A.length} aldeias · força ${f(A)}<br>` +
+      `<span style="color:#ff7a7a">■ Rei B</span>: ${B.length} aldeias · força ${f(B)}<br>` +
+      `neutras ${Engine.aldeiasDe(game, null).length} · em trânsito ${game.movimentos.length}` +
+      (venc ? `<br><b style="color:#ffd56b">🏆 ${venc === "empate" ? "Empate" : "Vitória do Rei " + venc}</b>` : "");
+  }
+
+  // controles
+  document.getElementById("gplay").addEventListener("click", () => (playing ? pause() : play()));
+  document.getElementById("gstep").addEventListener("click", () => { pause(); passoTurno(); });
+  document.getElementById("greset").addEventListener("click", novaPartida);
+  document.getElementById("gspeed").addEventListener("input", (e) => {
+    speed = +e.target.value;
+    if (playing) { pause(); play(); }
+  });
+
   // ---------- Início ----------
   resize();
-  centerOn(WORLD / 2, WORLD / 2);
-  draw();
+  novaPartida();
 })();
 </script>
 </body>
