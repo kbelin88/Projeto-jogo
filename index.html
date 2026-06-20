@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapa - Projeto Jogo (estilo Tribal Wars)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #2b2014; font-family: "Trebuchet MS", Verdana, sans-serif; }
+  #map { display: block; width: 100vw; height: 100vh; cursor: grab; }
+  #map.dragging { cursor: grabbing; }
+
+  /* HUD */
+  .hud {
+    position: fixed; pointer-events: none; color: #f5e9c8;
+    text-shadow: 1px 1px 2px #000; font-size: 13px; user-select: none;
+  }
+  #info {
+    top: 10px; left: 10px;
+    background: rgba(40,28,14,.78); border: 2px solid #6b4a22; border-radius: 6px;
+    padding: 8px 12px; line-height: 1.5;
+  }
+  #info b { color: #ffd56b; }
+  #help {
+    bottom: 10px; left: 10px;
+    background: rgba(40,28,14,.78); border: 2px solid #6b4a22; border-radius: 6px;
+    padding: 8px 12px; line-height: 1.5; max-width: 260px;
+  }
+  #zoombar {
+    bottom: 10px; right: 10px; pointer-events: auto;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  #zoombar button {
+    width: 44px; height: 44px; font-size: 22px; font-weight: bold;
+    color: #f5e9c8; background: linear-gradient(#7a5226,#523414);
+    border: 2px solid #2b1a0a; border-radius: 8px; cursor: pointer;
+    text-shadow: 1px 1px 2px #000;
+  }
+  #zoombar button:hover { background: linear-gradient(#946530,#5f3c16); }
+  #zoombar button:active { transform: translateY(1px); }
+</style>
+</head>
+<body>
+<canvas id="map"></canvas>
+
+<div id="info" class="hud">
+  <div>Coordenada: <b id="coord">—</b></div>
+  <div>Zoom: <b id="zoom">—</b></div>
+  <div id="hovername" style="color:#ffd56b"></div>
+</div>
+
+<div id="help" class="hud">
+  <b>Como navegar</b><br>
+  • Arraste para mover o mapa<br>
+  • Roda do mouse = zoom (+ / −)<br>
+  • Afaste para ver a grade de coordenadas<br>
+  • Aproxime para ver as vilas
+</div>
+
+<div id="zoombar">
+  <button id="zin" title="Aproximar">+</button>
+  <button id="zout" title="Afastar">−</button>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------- Configuração do mundo ----------
+  const TILE = 32;          // pixels de mundo por coordenada (elementos ~1/4 do tamanho anterior)
+  const WORLD = 200;        // grade WORLD x WORLD de coordenadas
+  const MIN_SCALE = 0.80;   // zoom máximo afastado (não vai além disso)
+  const MAX_SCALE = 4.0;    // zoom máximo aproximado (vilas detalhadas)
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("map");
+  const ctx = canvas.getContext("2d");
+  let DPR = Math.min(window.devicePixelRatio || 1, 2);
+  let VW = 0, VH = 0;
+
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    VW = window.innerWidth; VH = window.innerHeight;
+    canvas.width = Math.floor(VW * DPR);
+    canvas.height = Math.floor(VH * DPR);
+    canvas.style.width = VW + "px";
+    canvas.style.height = VH + "px";
+    draw();
+  }
+  window.addEventListener("resize", resize);
+
+  // ---------- Câmera ----------
+  // worldX -> screenX:  sx = wx * scale + panX
+  let scale = 1.6;
+  let panX = 0, panY = 0;
+
+  // Começa centralizado em uma região movimentada do mundo
+  function centerOn(cx, cy) {
+    panX = VW / 2 - cx * TILE * scale;
+    panY = VH / 2 - cy * TILE * scale;
+  }
+
+  // Prende a câmera às bordas do mundo: o mapa sempre preenche a tela toda
+  function clampPan() {
+    const cs = TILE * scale, wpx = WORLD * cs, wpy = WORLD * cs;
+    panX = wpx >= VW ? Math.min(0, Math.max(VW - wpx, panX)) : (VW - wpx) / 2;
+    panY = wpy >= VH ? Math.min(0, Math.max(VH - wpy, panY)) : (VH - wpy) / 2;
+  }
+
+  // ---------- PRNG determinístico baseado em hash (mundo estável e infinito-ish) ----------
+  // Usa Math.imul (multiplicação 32-bit exata) — sem perda de precisão/viés
+  function hash(x, y, salt = 0) {
+    let h = Math.imul((x | 0) ^ 0x9e3779b9, 0x85ebca6b);
+    h = Math.imul(h ^ (y | 0) ^ 0xc2b2ae35, 0x27d4eb2f);
+    h = Math.imul(h ^ (salt | 0) ^ 0x165667b1, 0x85ebca6b);
+    h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d); h ^= h >>> 13;
+    return (h >>> 0) / 4294967296;
+  }
+
+  // Tipos de célula
+  const T_GRASS = 0, T_FOREST = 1, T_MOUNT = 2, T_WATER = 3;
+
+  // Ruído suave (value noise) para agrupar biomas em vez de pixels aleatórios
+  function vnoise(x, y, salt, freq) {
+    const fx = x * freq, fy = y * freq;
+    const x0 = Math.floor(fx), y0 = Math.floor(fy);
+    const tx = fx - x0, ty = fy - y0;
+    const a = hash(x0, y0, salt), b = hash(x0 + 1, y0, salt);
+    const c = hash(x0, y0 + 1, salt), d = hash(x0 + 1, y0 + 1, salt);
+    const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+    return lerp(lerp(a, b, sx), lerp(c, d, sx), sy);
+  }
+
+  // Lagos pequenos e irregulares (sem oceanos): centros espalhados numa grade grossa
+  const LAKE_G = 16; // tamanho da região onde pode existir um lago
+  function lakeInfo(gx, gy) {
+    if (hash(gx, gy, 71) > 0.40) return null; // só ~40% das regiões têm lago
+    return {
+      cx: gx * LAKE_G + 3 + hash(gx, gy, 72) * (LAKE_G - 6),
+      cy: gy * LAKE_G + 3 + hash(gx, gy, 73) * (LAKE_G - 6),
+      rad: 1.8 + hash(gx, gy, 74) * 2.6,
+      seed: (gx & 1023) * 1024 + (gy & 1023),
+    };
+  }
+  function isWater(x, y) {
+    const gx0 = Math.floor(x / LAKE_G), gy0 = Math.floor(y / LAKE_G);
+    for (let gx = gx0 - 1; gx <= gx0 + 1; gx++) {
+      for (let gy = gy0 - 1; gy <= gy0 + 1; gy++) {
+        const lk = lakeInfo(gx, gy);
+        if (!lk) continue;
+        const dx = x + 0.5 - lk.cx, dy = y + 0.5 - lk.cy;
+        const wobble = 0.80 + hash(x, y, 75) * 0.45; // borda irregular
+        const rr = lk.rad * wobble;
+        if (dx * dx + dy * dy < rr * rr) return true;
+      }
+    }
+    return false;
+  }
+
+  function cellData(x, y) {
+    const r = hash(x, y, 1);
+    let type = T_GRASS;
+    if (isWater(x, y)) {
+      type = T_WATER;
+    } else {
+      const mt = vnoise(x, y, 7, 0.09);  // cordilheiras
+      const ft = vnoise(x, y, 9, 0.15);  // bosques
+      if (mt > 0.93 && hash(x, y, 5) > 0.70) type = T_MOUNT;
+      else if (ft > 0.56 && hash(x, y, 6) > 0.35) type = T_FOREST;
+    }
+
+    let village = false, tribe = 0, level = 1;
+    if (type === T_GRASS || type === T_FOREST) {
+      if (hash(x, y, 3) < 0.08) {   // bem menos vilas que antes
+        village = true;
+        tribe = Math.floor(hash(x, y, 4) * TRIBES.length);
+        level = 1 + Math.floor(hash(x, y, 6) * 5);
+      }
+    }
+    return { type, village, tribe, level, r };
+  }
+
+  // Tribos / cores de bandeira
+  const TRIBES = [
+    { c: "#d83b3b", n: "VERMELHA" },
+    { c: "#3b6bd8", n: "AZUL" },
+    { c: "#39a845", n: "VERDE" },
+    { c: "#e0a020", n: "DOURADA" },
+    { c: "#9b3bd8", n: "ROXA" },
+    { c: "#e0e0e0", n: "BRANCA" },
+  ];
+
+  // Nomes de vila proceduralmente
+  const SYL_A = ["Vald", "Nor", "Eich", "Stein", "Brun", "Hel", "Kal", "Mor", "Ast", "Dorn", "Falk", "Rab", "Wolf", "Gold"];
+  const SYL_B = ["heim", "burg", "feld", "stadt", "wald", "berg", "tal", "furt", "dorf", "hain", "see", "ried"];
+  function villageName(x, y) {
+    const a = SYL_A[Math.floor(hash(x, y, 11) * SYL_A.length)];
+    const b = SYL_B[Math.floor(hash(x, y, 12) * SYL_B.length)];
+    return a + b;
+  }
+
+  // ---------- Helpers de desenho ----------
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  // Cor de grama com variação suave de larga escala (sem xadrez por célula)
+  function grassColor(x, y) {
+    const v = vnoise(x, y, 21, 0.07);          // manchas grandes e suaves
+    const t = vnoise(x, y, 22, 0.30) * 0.30;   // textura leve
+    const m = v * 0.78 + t;
+    const g = Math.floor(lerp(126, 162, m));
+    const rr = Math.floor(lerp(82, 110, m));
+    return `rgb(${rr},${g},${Math.floor(g * 0.42)})`;
+  }
+
+  // Caminho de blob orgânico (arredondado/irregular) — caller define fillStyle e dá fill()
+  function blobPath(cx, cy, r, seed) {
+    const N = 16;
+    const pts = [];
+    for (let i = 0; i < N; i++) {
+      const a = (i / N) * Math.PI * 2;
+      const wob = 0.78 + hash(seed, i + 1, 88) * 0.34;
+      pts.push([cx + Math.cos(a) * r * wob, cy + Math.sin(a) * r * wob]);
+    }
+    const mid = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+    ctx.beginPath();
+    const m0 = mid(pts[N - 1], pts[0]);
+    ctx.moveTo(m0[0], m0[1]);
+    for (let i = 0; i < N; i++) {
+      const cur = pts[i], nxt = pts[(i + 1) % N];
+      const m = mid(cur, nxt);
+      ctx.quadraticCurveTo(cur[0], cur[1], m[0], m[1]);
+    }
+    ctx.closePath();
+  }
+
+  // ---------- Tiles de terreno (árvore, pinheiro, montanha) ----------
+  // Shapes/cores EXATAMENTE como fornecidos no SVG (viewBox 0..160), porém
+  // desenhados direto no canvas — sem depender de carregamento de imagem.
+  const VB = 160;            // espaço de coordenadas dos tiles
+  const ANCHOR_X = 80;       // âncora de chão (onde o tile "toca" o solo)
+  const ANCHOR_Y = 124;
+
+  // helpers de primitiva (coords locais 0..160)
+  function _circle(cx, cy, r, fill, a) {
+    ctx.globalAlpha = a == null ? 1 : a;
+    ctx.fillStyle = fill;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  function _ellipse(cx, cy, rx, ry, fill, a) {
+    ctx.globalAlpha = a == null ? 1 : a;
+    ctx.fillStyle = fill;
+    ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  function _rect(x, y, w, h, fill) { ctx.fillStyle = fill; ctx.fillRect(x, y, w, h); }
+  function _poly(pts, fill) {
+    ctx.fillStyle = fill;
+    ctx.beginPath(); ctx.moveTo(pts[0], pts[1]);
+    for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1]);
+    ctx.closePath(); ctx.fill();
+  }
+
+  const tileShapes = {
+    arvore() {
+      _ellipse(80, 120, 34, 10, "#4f7a30", 0.4);
+      _rect(74, 92, 12, 32, "#6b4a2b");
+      _circle(80, 78, 40, "#3f6b25");
+      _circle(58, 86, 26, "#4a7d2c");
+      _circle(102, 86, 26, "#4a7d2c");
+      _circle(80, 62, 30, "#558a33");
+      _circle(68, 74, 16, "#66a03d", 0.7);
+    },
+    pinheiro() {
+      _ellipse(80, 124, 26, 9, "#4f7a30", 0.4);
+      _rect(76, 96, 8, 30, "#5c4326");
+      _poly([80, 40, 108, 98, 52, 98], "#2f5a22");
+      _poly([80, 54, 102, 104, 58, 104], "#3a6b29");
+      _poly([80, 68, 98, 110, 62, 110], "#467e31");
+    },
+    montanha() {
+      _ellipse(80, 126, 50, 12, "#5a4d3a", 0.35);
+      _poly([80, 46, 132, 124, 28, 124], "#8a7a63");
+      _poly([80, 46, 106, 124, 54, 124], "#9c8c73");
+      _poly([80, 46, 96, 80, 64, 80], "#e8e4dc");
+      _poly([80, 46, 90, 72, 70, 72], "#ffffff");
+      _poly([116, 108, 132, 124, 100, 124], "#73654f");
+    },
+  };
+
+  // Desenha um tile com âncora de chão em (gx,gy), tamanho 'size' (px), rotação em rad
+  function drawTile(type, gx, gy, size, rot) {
+    const fn = tileShapes[type]; if (!fn) return;
+    const k = size / VB;
+    ctx.save();
+    ctx.translate(gx, gy);
+    if (rot) ctx.rotate(rot);
+    ctx.scale(k, k);
+    ctx.translate(-ANCHOR_X, -ANCHOR_Y); // (80,124) local -> (gx,gy) tela
+    fn();
+    ctx.restore();
+  }
+
+  // Casinha com telhado de duas águas
+  function house(hx, hy, hw, hh, roof) {
+    ctx.fillStyle = "#e8d6ac";                 // parede
+    ctx.fillRect(hx - hw / 2, hy - hh, hw, hh);
+    ctx.strokeStyle = "rgba(90,60,30,.5)"; ctx.lineWidth = Math.max(1, hw * 0.05);
+    ctx.strokeRect(hx - hw / 2, hy - hh, hw, hh);
+    ctx.fillStyle = roof;                      // telhado
+    ctx.beginPath();
+    ctx.moveTo(hx - hw * 0.62, hy - hh);
+    ctx.lineTo(hx, hy - hh - hw * 0.55);
+    ctx.lineTo(hx + hw * 0.62, hy - hh);
+    ctx.closePath(); ctx.fill();
+  }
+
+  // Vilarejo fortificado detalhado em (px,py), tamanho s, cor da tribo
+  function drawVillage(px, py, s, color) {
+    // sombra
+    ctx.fillStyle = "rgba(0,0,0,.20)";
+    ctx.beginPath();
+    ctx.ellipse(px, py + s * 0.78, s * 1.1, s * 0.42, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // montinho de terra
+    ctx.fillStyle = "#caa86a";
+    ctx.beginPath();
+    ctx.ellipse(px, py + s * 0.62, s * 1.05, s * 0.42, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#bb9858";
+    ctx.beginPath();
+    ctx.ellipse(px, py + s * 0.6, s * 0.82, s * 0.32, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // muralha de pedra ao redor (anel)
+    ctx.lineWidth = s * 0.18; ctx.strokeStyle = "#897f70";
+    ctx.beginPath(); ctx.ellipse(px, py + s * 0.5, s * 0.9, s * 0.46, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = s * 0.07; ctx.strokeStyle = "#aaa193";
+    ctx.beginPath(); ctx.ellipse(px, py + s * 0.5, s * 0.9, s * 0.46, 0, 0, Math.PI * 2); ctx.stroke();
+
+    // casas internas
+    const roofs = ["#9c3b2a", "#b5532f", "#7a3320", "#a8472b"];
+    house(px - s * 0.46, py + s * 0.56, s * 0.42, s * 0.34, roofs[0]);
+    house(px + s * 0.48, py + s * 0.52, s * 0.40, s * 0.30, roofs[1]);
+    house(px - s * 0.02, py + s * 0.66, s * 0.36, s * 0.26, roofs[2]);
+
+    // torre central (keep)
+    ctx.fillStyle = "#cabfac";
+    ctx.fillRect(px - s * 0.27, py - s * 0.55, s * 0.54, s * 0.95);
+    ctx.fillStyle = "#b3a892";
+    ctx.fillRect(px - s * 0.27, py - s * 0.66, s * 0.54, s * 0.13);
+    // ameias
+    ctx.fillStyle = "#938974";
+    for (let i = 0; i < 3; i++)
+      ctx.fillRect(px - s * 0.27 + i * s * 0.21, py - s * 0.78, s * 0.12, s * 0.13);
+    // janelas
+    ctx.fillStyle = "#5a4326";
+    ctx.fillRect(px - s * 0.14, py - s * 0.35, s * 0.1, s * 0.16);
+    ctx.fillRect(px + s * 0.04, py - s * 0.35, s * 0.1, s * 0.16);
+    // portão
+    ctx.fillStyle = "#5a3a1a";
+    ctx.fillRect(px - s * 0.1, py + s * 0.06, s * 0.2, s * 0.34);
+
+    // mastro + bandeira da tribo (grande, com contorno p/ destacar a cor do time)
+    const poleTop = py - s * 1.9;
+    ctx.strokeStyle = "#3a2a18"; ctx.lineWidth = Math.max(1.5, s * 0.07);
+    ctx.beginPath(); ctx.moveTo(px, py - s * 0.85); ctx.lineTo(px, poleTop); ctx.stroke();
+    // ponta dourada do mastro
+    ctx.fillStyle = "#e8cf86";
+    ctx.beginPath(); ctx.arc(px, poleTop, Math.max(1.5, s * 0.08), 0, Math.PI * 2); ctx.fill();
+
+    // banner (galhardete) grande com recorte em "rabo de andorinha"
+    const fw = s * 0.95, fh = s * 0.72;
+    ctx.beginPath();
+    ctx.moveTo(px, poleTop);
+    ctx.lineTo(px + fw, poleTop);
+    ctx.lineTo(px + fw * 0.72, poleTop + fh * 0.5);  // entalhe
+    ctx.lineTo(px + fw, poleTop + fh);
+    ctx.lineTo(px, poleTop + fh);
+    ctx.closePath();
+    ctx.fillStyle = color; ctx.fill();
+    // faixa de brilho clara no topo (dá volume)
+    ctx.fillStyle = "rgba(255,255,255,.28)";
+    ctx.fillRect(px + s * 0.04, poleTop + fh * 0.1, fw * 0.6, fh * 0.18);
+    // contorno escuro forte (visível contra qualquer terreno)
+    ctx.lineWidth = Math.max(1, s * 0.06); ctx.strokeStyle = "rgba(20,12,4,.7)";
+    ctx.beginPath();
+    ctx.moveTo(px, poleTop);
+    ctx.lineTo(px + fw, poleTop);
+    ctx.lineTo(px + fw * 0.72, poleTop + fh * 0.5);
+    ctx.lineTo(px + fw, poleTop + fh);
+    ctx.lineTo(px, poleTop + fh);
+    ctx.closePath(); ctx.stroke();
+  }
+
+  // ---------- Render principal ----------
+  function draw() {
+    clampPan();
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.clearRect(0, 0, VW, VH);
+
+    // céu/fundo de água profunda
+    ctx.fillStyle = "#6fa867";
+    ctx.fillRect(0, 0, VW, VH);
+
+    const cs = TILE * scale; // tamanho da célula na tela
+
+    // região visível em coordenadas de mundo
+    const x0 = Math.floor((-panX) / cs) - 1;
+    const y0 = Math.floor((-panY) / cs) - 1;
+    const x1 = Math.ceil((VW - panX) / cs) + 1;
+    const y1 = Math.ceil((VH - panY) / cs) + 1;
+
+    const cx0 = Math.max(0, x0), cy0 = Math.max(0, y0);
+    const cx1 = Math.min(WORLD, x1), cy1 = Math.min(WORLD, y1);
+
+    // Nível de detalhe (baseado no tamanho da célula em pixels)
+    const detailed = cs > 20;    // desenha vilas e árvores
+    const showNames = cs > 42;   // mostra nomes das vilas
+    const gridView = cs < 13;    // visão de grade (mapa afastado)
+
+    // 1) grama (variação suave; sem xadrez). Em zoom afastado usa blocos maiores.
+    const gstep = cs < 18 ? 2 : 1;
+    for (let y = cy0; y < cy1; y += gstep) {
+      for (let x = cx0; x < cx1; x += gstep) {
+        ctx.fillStyle = grassColor(x, y);
+        ctx.fillRect(x * cs + panX, y * cs + panY, cs * gstep + 1, cs * gstep + 1);
+      }
+    }
+
+    // 1b) lagos como blobs orgânicos arredondados
+    const lg0x = Math.floor(cx0 / LAKE_G) - 1, lg1x = Math.floor(cx1 / LAKE_G) + 1;
+    const lg0y = Math.floor(cy0 / LAKE_G) - 1, lg1y = Math.floor(cy1 / LAKE_G) + 1;
+    for (let gx = lg0x; gx <= lg1x; gx++) {
+      for (let gy = lg0y; gy <= lg1y; gy++) {
+        const lk = lakeInfo(gx, gy);
+        if (!lk) continue;
+        const scx = lk.cx * cs + panX, scy = lk.cy * cs + panY, srad = lk.rad * cs;
+        // margem clara (praia)
+        blobPath(scx, scy, srad * 1.12, lk.seed);
+        ctx.fillStyle = "#9fc18a"; ctx.fill();
+        // água com profundidade (gradiente radial)
+        const grad = ctx.createRadialGradient(scx, scy, srad * 0.1, scx, scy, srad);
+        grad.addColorStop(0, "#3f7fb0"); grad.addColorStop(1, "#2f6694");
+        blobPath(scx, scy, srad, lk.seed);
+        ctx.fillStyle = grad; ctx.fill();
+        // reflexo suave
+        ctx.fillStyle = "rgba(255,255,255,.12)";
+        blobPath(scx - srad * 0.2, scy - srad * 0.25, srad * 0.4, lk.seed + 7);
+        ctx.fill();
+      }
+    }
+
+    // 2) decoração de terreno (florestas e montanhas) — some só na visão de grade
+    if (!gridView) {
+      for (let y = cy0; y < cy1; y++) {
+        for (let x = cx0; x < cx1; x++) {
+          const d = cellData(x, y);
+          const sx = x * cs + panX, sy = y * cs + panY;
+          if (d.type === T_FOREST && !d.village) {
+            if (detailed) {
+              // mata: 1-2 árvores/pinheiros com variação natural de escala e rotação
+              const n = 1 + Math.floor(hash(x, y, 31) * 2);
+              for (let i = 0; i < n; i++) {
+                const ox = 0.25 + hash(x, y, 40 + i) * 0.5;
+                const oy = 0.55 + hash(x, y, 50 + i) * 0.35;
+                const tipo = hash(x, y, 60 + i) < 0.45 ? "pinheiro" : "arvore";
+                const sc = 0.85 + hash(x, y, 70 + i) * 0.30;        // 0.85..1.15
+                const rot = tipo === "arvore" ? (hash(x, y, 80 + i) - 0.5) * 0.28 : 0; // ~ ±8°
+                drawTile(tipo, sx + ox * cs, sy + oy * cs, cs * 1.25 * sc, rot);
+              }
+            } else {
+              // zoom médio: mancha verde-escura arredondada
+              ctx.fillStyle = "#2f6b2e";
+              blobPath(sx + cs * 0.5, sy + cs * 0.5, cs * 0.5, (x & 1023) * 31 + (y & 1023));
+              ctx.fill();
+            }
+          } else if (d.type === T_MOUNT) {
+            if (detailed) {
+              const sc = 0.9 + hash(x, y, 71) * 0.3;
+              drawTile("montanha", sx + cs * 0.5, sy + cs * 0.72, cs * 1.6 * sc, 0);
+            } else {
+              // zoom médio: mancha acinzentada
+              ctx.fillStyle = "#7d7163";
+              blobPath(sx + cs * 0.5, sy + cs * 0.5, cs * 0.5, (x & 1023) * 17 + (y & 1023));
+              ctx.fill();
+            }
+          }
+        }
+      }
+    }
+
+    // 3) vilas
+    for (let y = cy0; y < cy1; y++) {
+      for (let x = cx0; x < cx1; x++) {
+        const d = cellData(x, y);
+        if (!d.village) continue;
+        const sx = x * cs + panX, sy = y * cs + panY;
+        const tribe = TRIBES[d.tribe];
+
+        if (gridView) {
+          // ponto colorido por tribo
+          const r = Math.max(2, cs * 0.28);
+          ctx.fillStyle = tribe.c;
+          ctx.fillRect(sx + cs / 2 - r, sy + cs / 2 - r, r * 2, r * 2);
+          ctx.strokeStyle = "rgba(0,0,0,.5)"; ctx.lineWidth = 1;
+          ctx.strokeRect(sx + cs / 2 - r, sy + cs / 2 - r, r * 2, r * 2);
+        } else if (detailed) {
+          drawVillage(sx + cs * 0.5, sy + cs * 0.48, cs * 0.34, tribe.c);
+          if (showNames) {
+            const fs = Math.max(9, cs * 0.13);
+            ctx.font = `bold ${fs}px "Trebuchet MS", sans-serif`;
+            ctx.textAlign = "center";
+            const name = villageName(x, y);
+            const tw = ctx.measureText(name).width;
+            ctx.fillStyle = "rgba(30,20,10,.7)";
+            ctx.fillRect(sx + cs * 0.5 - tw / 2 - 3, sy + cs * 0.78, tw + 6, fs + 4);
+            ctx.fillStyle = "#ffe9b0";
+            ctx.fillText(name, sx + cs * 0.5, sy + cs * 0.78 + fs);
+          }
+        } else {
+          // nível intermediário: ícone simples
+          const r = cs * 0.22;
+          ctx.fillStyle = "#b9a489";
+          ctx.fillRect(sx + cs / 2 - r, sy + cs / 2 - r * 0.6, r * 2, r * 1.4);
+          ctx.fillStyle = tribe.c;
+          ctx.fillRect(sx + cs / 2 - r, sy + cs / 2 - r * 0.6, r * 2, r * 0.4);
+        }
+      }
+    }
+
+    // 4) grade de coordenadas (aparece ao afastar)
+    if (cs < 28) {
+      const alpha = Math.min(1, (28 - cs) / 16);
+      ctx.strokeStyle = `rgba(20,12,4,${0.35 * alpha})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let x = cx0; x <= cx1; x++) {
+        const sx = Math.round(x * cs + panX) + 0.5;
+        ctx.moveTo(sx, 0); ctx.lineTo(sx, VH);
+      }
+      for (let y = cy0; y <= cy1; y++) {
+        const sy = Math.round(y * cs + panY) + 0.5;
+        ctx.moveTo(0, sy); ctx.lineTo(VW, sy);
+      }
+      ctx.stroke();
+
+      // rótulos de coordenadas (a cada N células para não poluir)
+      const step = cs < 22 ? 5 : 1;
+      ctx.fillStyle = `rgba(255,233,176,${0.9 * alpha})`;
+      ctx.font = "10px Verdana";
+      ctx.textAlign = "left";
+      for (let x = cx0; x <= cx1; x++) {
+        if (x % step !== 0) continue;
+        ctx.fillText(x, x * cs + panX + 2, 12);
+      }
+      ctx.textAlign = "right";
+      for (let y = cy0; y <= cy1; y++) {
+        if (y % step !== 0) continue;
+        ctx.fillText(y, VW - 4, y * cs + panY + 12);
+      }
+    }
+
+    updateHUD();
+  }
+
+  // ---------- HUD ----------
+  let mouseSX = VW / 2, mouseSY = VH / 2;
+  function updateHUD() {
+    const cs = TILE * scale;
+    const wx = Math.floor((mouseSX - panX) / cs);
+    const wy = Math.floor((mouseSY - panY) / cs);
+    const inB = wx >= 0 && wy >= 0 && wx < WORLD && wy < WORLD;
+    document.getElementById("coord").textContent = inB ? `${wx} | ${wy}` : "—";
+    document.getElementById("zoom").textContent = scale.toFixed(2) + "x";
+    const hn = document.getElementById("hovername");
+    if (inB) {
+      const d = cellData(wx, wy);
+      hn.textContent = d.village
+        ? `Vila: ${villageName(wx, wy)} — Tribo ${TRIBES[d.tribe].n}`
+        : "";
+    } else hn.textContent = "";
+  }
+
+  // ---------- Interação ----------
+  let dragging = false, lastX = 0, lastY = 0, moved = 0;
+
+  canvas.addEventListener("mousedown", (e) => {
+    dragging = true; moved = 0; lastX = e.clientX; lastY = e.clientY;
+    canvas.classList.add("dragging");
+  });
+  window.addEventListener("mouseup", () => { dragging = false; canvas.classList.remove("dragging"); });
+  window.addEventListener("mousemove", (e) => {
+    mouseSX = e.clientX; mouseSY = e.clientY;
+    if (dragging) {
+      const dx = e.clientX - lastX, dy = e.clientY - lastY;
+      panX += dx; panY += dy; lastX = e.clientX; lastY = e.clientY;
+      moved += Math.abs(dx) + Math.abs(dy);
+    }
+    draw();
+  });
+
+  function zoomAt(sx, sy, factor) {
+    const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale * factor));
+    // mantém o ponto sob o cursor fixo
+    const wx = (sx - panX) / (TILE * scale);
+    const wy = (sy - panY) / (TILE * scale);
+    scale = newScale;
+    panX = sx - wx * TILE * scale;
+    panY = sy - wy * TILE * scale;
+    draw();
+  }
+
+  canvas.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+    zoomAt(e.clientX, e.clientY, factor);
+  }, { passive: false });
+
+  document.getElementById("zin").addEventListener("click", () => zoomAt(VW / 2, VH / 2, 1.3));
+  document.getElementById("zout").addEventListener("click", () => zoomAt(VW / 2, VH / 2, 1 / 1.3));
+
+  // ---------- Início ----------
+  resize();
+  centerOn(WORLD / 2, WORLD / 2);
+  draw();
+})();
+</script>
+</body>
+</html>
