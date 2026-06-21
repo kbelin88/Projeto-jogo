@@ -1,0 +1,127 @@
+===========================================================
+  SPEC V1 - PECA 2 DO REI - VERSAO PARA IMPLEMENTAR (qwen rodando)
+  Para: Claude Code (Opus 4.8) | Autor design: Lucas | 21/jun/2026
+  Decisoes de design fechadas em sessao com o aluno (Claude).
+===========================================================
+
+ESCOPO DESTA VERSAO: implementar os 3 pedacos de uma vez para POR O QWEN
+A RODAR e gerar dados. NAO e mais "construir na mao, um por vez" - essa
+fase de decisao de design ja foi feita com o aluno. Aqui o objetivo e
+ter o Rei(qwen) jogando contra o burro o quanto antes, PARA OBSERVAR OS
+ERROS. Sabemos que qwen2.5:3b vai falhar muito; isso e esperado e e o
+ponto. Esta versao prepara o terreno para quando entrar modelo via API.
+
+O QUE O ALUNO QUER DE VOLTA PRA ESTUDAR (entregavel real):
+  1. O PROMPT MONTADO de um turno, impresso e legivel (ver Pedaco 1).
+  2. O LOG CRU POR TURNO (ver Pedaco 3) - esse log E o eval.
+Tudo o mais (assinaturas, organizacao de arquivos) e encanamento: decida
+com bom senso, mantenha o padrao do projeto, nao pergunte ao aluno.
+
+CONTEXTO DO CODIGO: motor V0 completo; V1 peca 1 feita. Ja existem:
+montarVisao -> visao (a visao ja carrega de quem e: campo `minhas`,
+mais neutras/inimigo/transito; SEM coordenadas no relatorio de proposito);
+relatorioTexto(visao) -> string (testado, verde); executarOrdem tolerante
+a ordem invalida; teatro de 20 aldeias (18 neutras tipadas + 2 reis).
+Fronteira: decisores = { A: jogadorBurro, B: reiIA }.
+
+MODELO ALVO: qwen2.5:3b via Ollama (local), PRIMEIRO. Assumir que erra.
+Decisor AGNOSTICO AO BACKEND - isolar a chamada atras de uma interface
+simples pra trocar por API depois sem mexer no resto.
+
+-----------------------------------------------------------
+PEDACO 1 - PROMPT DO REI  (funcao pura montarPrompt(visao))
+-----------------------------------------------------------
+montarPrompt(visao) -> string. FUNCAO PURA: sem rede, sem efeito
+colateral, sem chamar modelo. So entra visao, sai string. (Isolada de
+proposito pra poder imprimir e ler o prompt sem disparar o Ollama.)
+
+ASSINATURA: montarPrompt(visao). NAO recebe `lado` - a visao ja carrega
+de quem e (campo `minhas`). A identidade NAO nomeia "lado A/B".
+
+ESTRUTURA DO PROMPT (ordem critica para modelo pequeno: tarefa -> dados
+-> formato, com o EXEMPLO de JSON como ULTIMA coisa do prompt):
+
+  [TOPO - identidade + tarefa, curto]
+    Voce e o Rei. As aldeias listadas em "SUAS ALDEIAS" pertencem a voce.
+    Seu objetivo e vencer eliminando o inimigo.
+
+  [MEIO - dados do turno]
+    <<< aqui injeta relatorioTexto(visao) integralmente >>>
+
+  [FIM - instrucao de formato, depois exemplo; exemplo por ultimo]
+    Instrucao curta: "Responda APENAS com um JSON valido no formato
+    abaixo. Nenhum texto antes ou depois do JSON."
+    Permissao neutra pro vazio (SEM a palavra "estrategico"):
+      "Listas vazias sao uma resposta valida. Se uma aldeia nao deve
+       atacar nem construir neste turno, simplesmente nao a inclua.
+       E melhor nao fazer nada do que enviar um ataque ruim ou construir
+       sem motivo."
+    EXEMPLO (ultima coisa do prompt, pra induzir primeiro token "{"):
+
+{
+  "construir": [
+    {"aldeiaId": 3, "tipo": "lanceiro"}
+  ],
+  "envios": [
+    {"origemId": 3, "destinoId": 7, "tropas": {"lanceiro": 20, "arqueiro": 0, "cavaleiro": 5}},
+    {"origemId": 3, "destinoId": 1, "tropas": {"lanceiro": 0, "arqueiro": 10, "cavaleiro": 0}}
+  ]
+}
+
+  O exemplo ensina por imitacao (sem explicar regra): aldeia 3 aparece
+  em construir E em envios no mesmo turno; envio 3->7 = ataque, 3->1 =
+  reforco (envio unificado: destino do proprio Rei = reforco, senao =
+  ataque); tropas SEMPRE com os 3 tipos preenchidos, inclusive zero
+  (forca o objeto completo, reduz JSON quebrado).
+
+  TESTE DO PEDACO 1 (entregavel): imprimir o prompt completo de um turno
+  real e deixar legivel pro aluno ler. Nada de Ollama aqui.
+
+-----------------------------------------------------------
+PEDACO 2 - CHAMADA AO MODELO (Ollama)
+-----------------------------------------------------------
+Funcao que recebe o prompt (string) e devolve a resposta CRUA do qwen.
+Backend isolado atras de interface simples (trocavel por API depois).
+reiIA(visao) faz: const prompt = montarPrompt(visao); manda pro modelo;
+recebe cru; passa pro parsing (pedaco 3).
+TESTE: um turno real -> imprimir a resposta CRUA do qwen (provavelmente
+com lixo/cercas ``` em volta do JSON). O aluno quer VER essa sujeira.
+
+-----------------------------------------------------------
+PEDACO 3 - PARSING + VALIDACAO  (sem retry, de proposito)
+-----------------------------------------------------------
+- Extrair o bloco {...} de dentro da resposta (qwen poe texto/cercas em
+  volta).
+- Parse seguro (try/catch). Se falhar: ORDEM VAZIA (Rei "passa" o turno)
+  + log do erro. NUNCA quebra o loop.
+- SEM RETRY nesta versao. Decisao de design do aluno: retry mascararia o
+  eval (esconderia quantos turnos o qwen quebrou). Primeiro MEDIR a taxa
+  crua de falha; so depois decidir se vale retry. Nao adicionar agora.
+- Validar contra o estado (executarOrdem ja e tolerante) mas LOGAR o que
+  foi rejeitado: id inexistente, tropa que nao tem, origem que nao e do Rei.
+
+OBSERVABILIDADE (ESSE LOG E O EVAL - entregavel principal):
+Logar por turno, legivel: prompt -> resposta crua -> ordem parseada ->
+o que foi aceito/rejeitado. E como o aluno le se o Rei joga bem e se
+respeita o formato.
+
+TESTE FINAL: rodar uma partida Rei(qwen) vs burro ate o fim. Medir:
+  - % de turnos com JSON valido
+  - com que frequencia o Rei manda counter certo contra neutra (ver achado)
+  - quem vence, duracao da partida
+
+>>> MEDIR DE PROPOSITO (achado em aberto da peca 1) <<<
+Regra de combate: "numero decide vencedor; triangulo so modula baixas".
+Logo, ler o tipo da neutra e mandar counter pode NAO mudar quem vence,
+so baratear. INSTRUMENTAR pra responder: o Rei le os tipos e manda
+counter? Isso muda resultados? Se o triangulo se mostrar irrelevante,
+NAO consertar agora - so reportar os dados. O ajuste e decisao de design
+do aluno (candidatos: triangulo decide vencedor / triangulo = bonus de
+forca em lutas equilibradas / ajustar forca das neutras).
+
+REGRAS DE OURO:
+- Decisor agnostico ao backend (Ollama hoje, API depois).
+- Resposta invalida e caso NORMAL: nunca quebra o loop; Rei passa o turno.
+- Sem retry nesta versao (medir primeiro).
+- Todo log que ajude a LER como o Rei joga = parte do entregavel.
+===========================================================

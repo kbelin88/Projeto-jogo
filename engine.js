@@ -682,6 +682,175 @@
     return L.join("\n");
   }
 
+  // ==========================================================
+  //  V1 PECA 2  —  O REI (IA): PROMPT + PARSING  (partes PURAS)
+  // ----------------------------------------------------------
+  //  A CHAMADA ao modelo (Ollama hoje, API depois) NAO mora aqui: fica
+  //  isolada em rei.js, atras de um "cliente" trocavel. Aqui so o que e
+  //  PURO e testavel sem rede: montar o prompt e parsear/validar a ordem.
+  // ==========================================================
+
+  // EXEMPLO de ordem — a ULTIMA coisa do prompt (induz o 1o token "{").
+  // ANCORADO nos ids REAIS da visao do turno (achado: o modelo pequeno copia
+  // o exemplo ao pe da letra; um exemplo fixo com ids 3/7/1 inexistentes p/
+  // ele gerava 100% de ordens rejeitadas). Aqui o exemplo ensina so o MOLDE:
+  //   - formato completo (construir + envios; tropas com os 3 tipos, com zero);
+  //   - QUAIS ids existem (origem = uma aldeia do `minhas`; destino = um alvo
+  //     presente na visao).
+  // NAO ensina a DECISAO: alvo e tropas sao genericos/arbitrarios (1a aldeia,
+  // 1o alvo, numero redondo qualquer), NAO a jogada otima.
+  function exemploAncorado(visao) {
+    const minhas = (visao && visao.minhas) || [];
+    const alvos = (visao && visao.alvos) || [];
+    const origem = minhas.length ? minhas[0].id : 0;       // id real de uma aldeia minha
+    const alvoAtk = alvos.length ? alvos[0].id : origem;   // id real de um alvo (neutra/inimigo)
+    const tropas = (l, a, c) => `{"lanceiro": ${l}, "arqueiro": ${a}, "cavaleiro": ${c}}`;
+
+    const envios = [
+      `    {"origemId": ${origem}, "destinoId": ${alvoAtk}, "tropas": ${tropas(10, 0, 0)}}`,
+    ];
+    // 2a linha mostra o molde com os 3 tipos preenchidos; destino = outro id real.
+    const segundoDestino = minhas.length >= 2 ? minhas[1].id : (alvos.length >= 2 ? alvos[1].id : null);
+    if (segundoDestino != null) {
+      envios.push(`    {"origemId": ${origem}, "destinoId": ${segundoDestino}, "tropas": ${tropas(0, 5, 0)}}`);
+    }
+    return [
+      "{",
+      '  "construir": [',
+      `    {"aldeiaId": ${origem}, "tipo": "lanceiro"}`,
+      "  ],",
+      '  "envios": [',
+      envios.join(",\n"),
+      "  ]",
+      "}",
+    ].join("\n");
+  }
+
+  // montarPrompt(visao) -> string. FUNCAO PURA: sem rede, sem efeito
+  // colateral, sem chamar modelo. NAO recebe `lado`: a visao ja carrega
+  // de quem e (campo `minhas`). Ordem critica p/ modelo pequeno:
+  // TAREFA -> DADOS -> FORMATO, com o EXEMPLO por ultimo.
+  function montarPrompt(visao) {
+    const L = [];
+    // TOPO: identidade + tarefa (curto)
+    L.push('Voce e o Rei. As aldeias listadas em "SUAS ALDEIAS" pertencem a voce.');
+    L.push("Seu objetivo e vencer eliminando o inimigo.");
+    L.push("");
+    // MEIO: dados do turno (relatorio integral)
+    L.push(relatorioTexto(visao));
+    L.push("");
+    // FIM: instrucao de formato -> permissao de vazio -> processo -> exemplo (ultimo)
+    L.push("Responda APENAS com um JSON valido no formato abaixo. Nenhum texto antes ou depois do JSON.");
+    L.push("");
+    L.push("Listas vazias sao uma resposta valida. Se uma aldeia nao deve atacar nem construir neste turno, simplesmente nao a inclua. E melhor nao fazer nada do que enviar um ataque ruim ou construir sem motivo.");
+    L.push("");
+    // INSTRUCAO DE PROCESSO (curta, logo antes do exemplo): forca o modelo a
+    // ancorar nos ids REAIS da visao em vez de copiar numeros do exemplo.
+    L.push("Antes de responder: em 'origemId' e em 'aldeiaId' use SOMENTE ids que aparecem na secao SUAS ALDEIAS. Escolha o 'destinoId' entre os ids das secoes ALDEIAS NEUTRAS e INIMIGO. Nao envie tropas que voce nao tem: se uma aldeia esta sem tropas, nao a use em 'envios'. O exemplo abaixo so mostra o FORMATO com ids reais deste turno; nao copie os numeros dele como se fossem sua jogada.");
+    L.push("");
+    L.push(exemploAncorado(visao));
+    return L.join("\n");
+  }
+
+  // Extrai o PRIMEIRO bloco {...} BALANCEADO de um texto (o qwen poe cercas
+  // ```json e texto em volta). Respeita aspas/escape p/ nao contar { } dentro
+  // de strings. null se nao houver bloco fechado.
+  function extrairBlocoJSON(texto) {
+    if (typeof texto !== "string") return null;
+    const ini = texto.indexOf("{");
+    if (ini < 0) return null;
+    let prof = 0, emString = false, escape = false;
+    for (let i = ini; i < texto.length; i++) {
+      const ch = texto[i];
+      if (emString) {
+        if (escape) escape = false;
+        else if (ch === "\\") escape = true;
+        else if (ch === '"') emString = false;
+        continue;
+      }
+      if (ch === '"') emString = true;
+      else if (ch === "{") prof++;
+      else if (ch === "}") { prof--; if (prof === 0) return texto.slice(ini, i + 1); }
+    }
+    return null; // bloco aberto sem fechar
+  }
+
+  // parsearOrdem(textoCru) -> { ok, ordem, erro, bloco }.
+  // SEM RETRY (decisao de design: medir a taxa CRUA de falha do qwen).
+  // Qualquer falha -> ORDEM VAZIA (o Rei "passa" o turno) + erro p/ o log.
+  // NUNCA lanca.
+  function parsearOrdem(textoCru) {
+    const vazia = { construir: [], envios: [] };
+    const bloco = extrairBlocoJSON(textoCru);
+    if (bloco == null) return { ok: false, ordem: vazia, erro: "nenhum bloco {...} na resposta", bloco: null };
+    let obj;
+    try { obj = JSON.parse(bloco); }
+    catch (e) { return { ok: false, ordem: vazia, erro: "JSON invalido: " + e.message, bloco }; }
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
+      return { ok: false, ordem: vazia, erro: "JSON nao e um objeto", bloco };
+    }
+    const construir = Array.isArray(obj.construir) ? obj.construir : [];
+    const envios = Array.isArray(obj.envios) ? obj.envios
+      : Array.isArray(obj.ataques) ? obj.ataques : []; // aceita nome antigo
+    return { ok: true, ordem: { construir, envios }, erro: null, bloco };
+  }
+
+  // diagnosticarOrdem(estado, dono, ordem) -> { aceitoConstruir, aceitoEnvios,
+  // rejeicoes }. NAO MUTA o estado: so antecipa o que executarOrdem faria, p/
+  // o LOG (o eval). Espelha as regras de tolerancia do motor:
+  //   - construir: aldeia existe e e sua; tipo valido; recurso suficiente
+  //     (depleta sequencialmente, como o motor faz no turno).
+  //   - envio: origem existe e e sua; destino existe; origem != destino;
+  //     TUDO-OU-NADA nas tropas (enviarExercito rejeita o envio inteiro se
+  //     faltar QUALQUER tipo); total > 0.
+  function diagnosticarOrdem(estado, dono, ordem) {
+    const rejeicoes = [];
+    const aceitoConstruir = [], aceitoEnvios = [];
+    const construir = (ordem && Array.isArray(ordem.construir)) ? ordem.construir : [];
+    const envios = (ordem && Array.isArray(ordem.envios)) ? ordem.envios : [];
+
+    const recSim = {}; // recursos restantes por aldeia (simula o gasto do turno)
+    for (const c of construir) {
+      if (!c || typeof c !== "object") { rejeicoes.push("construir: item nao e objeto"); continue; }
+      const a = aldeiaPorId(estado, c.aldeiaId);
+      if (!a) { rejeicoes.push(`construir: aldeia [${c.aldeiaId}] nao existe`); continue; }
+      if (a.dono !== dono) { rejeicoes.push(`construir: aldeia [${c.aldeiaId}] nao e sua`); continue; }
+      const def = estado.config.tropas[c.tipo];
+      if (!def) { rejeicoes.push(`construir [${c.aldeiaId}]: tipo invalido "${c.tipo}"`); continue; }
+      if (!(c.aldeiaId in recSim)) recSim[c.aldeiaId] = { madeira: a.recursos.madeira, ferro: a.recursos.ferro };
+      const r = recSim[c.aldeiaId];
+      if (r.madeira < def.custo.madeira || r.ferro < def.custo.ferro) {
+        rejeicoes.push(`construir [${c.aldeiaId}]: recurso insuficiente p/ ${c.tipo} (tem ${r.madeira}m/${r.ferro}f, custa ${def.custo.madeira}m/${def.custo.ferro}f)`);
+        continue;
+      }
+      r.madeira -= def.custo.madeira; r.ferro -= def.custo.ferro;
+      aceitoConstruir.push({ aldeiaId: c.aldeiaId, tipo: c.tipo });
+    }
+
+    for (const e of envios) {
+      if (!e || typeof e !== "object") { rejeicoes.push("envio: item nao e objeto"); continue; }
+      const o = aldeiaPorId(estado, e.origemId);
+      if (!o) { rejeicoes.push(`envio: origem [${e.origemId}] nao existe`); continue; }
+      if (o.dono !== dono) { rejeicoes.push(`envio: origem [${e.origemId}] nao e sua`); continue; }
+      const d = aldeiaPorId(estado, e.destinoId);
+      if (!d) { rejeicoes.push(`envio: destino [${e.destinoId}] nao existe`); continue; }
+      if (e.origemId === e.destinoId) { rejeicoes.push(`envio [${e.origemId}]: origem igual ao destino`); continue; }
+      const pedido = sanitizarTropas(e.tropas);
+      const faltam = TIPOS.filter((t) => pedido[t] > o.tropas[t]);
+      if (faltam.length) {
+        rejeicoes.push(`envio [${e.origemId}]->[${e.destinoId}]: tropa que nao tem (${faltam.map((t) => `pediu ${pedido[t]} ${t}, tem ${o.tropas[t]}`).join("; ")})`);
+        continue;
+      }
+      if (TIPOS.reduce((s, t) => s + pedido[t], 0) === 0) {
+        rejeicoes.push(`envio [${e.origemId}]->[${e.destinoId}]: zero tropas`);
+        continue;
+      }
+      aceitoEnvios.push({ origemId: e.origemId, destinoId: e.destinoId, tropas: pedido, alvo: d });
+    }
+
+    return { aceitoConstruir, aceitoEnvios, rejeicoes };
+  }
+
   // escolhe a tropa a construir: a mais "em falta" vs composicao_alvo,
   // entre as que cabem no recurso. null se nada cabe.
   function escolherTropa(rec, counts, config) {
@@ -894,6 +1063,12 @@
     jogadorBurro,
     executarOrdem,
     sanitizarTropas,
+    // V1 Peca 2 (Rei IA): partes puras (prompt + parsing)
+    montarPrompt,
+    exemploAncorado,
+    extrairBlocoJSON,
+    parsearOrdem,
+    diagnosticarOrdem,
     decidirEExecutar,
     checarVitoria,
     resumoTurno,
