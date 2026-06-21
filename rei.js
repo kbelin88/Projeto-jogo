@@ -17,6 +17,27 @@
 "use strict";
 const Engine = require("./engine.js");
 
+// ---- .env: carregador minimo (sem dependencia) — popula process.env ----
+// A chave NUNCA e hardcoded; mora no .env (protegido pelo .gitignore).
+// So define o que ainda nao existe no ambiente (ambiente real tem prioridade).
+function carregarEnv(caminho) {
+  caminho = caminho || require("path").join(__dirname, ".env");
+  try {
+    const txt = require("fs").readFileSync(caminho, "utf8");
+    for (let linha of txt.split(/\r?\n/)) {
+      linha = linha.replace(/^﻿/, "").trim();
+      if (!linha || linha.startsWith("#")) continue;
+      const i = linha.indexOf("=");
+      if (i < 0) continue;
+      const k = linha.slice(0, i).trim();
+      let v = linha.slice(i + 1).trim();
+      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
+      if (!(k in process.env)) process.env[k] = v;
+    }
+  } catch (_) { /* sem .env: segue; quem precisar de chave reclama na hora */ }
+  return process.env;
+}
+
 // ---- BACKEND: cliente Ollama (trocavel por um cliente de API depois) ----
 function clienteOllama(opcoes) {
   opcoes = opcoes || {};
@@ -36,6 +57,79 @@ function clienteOllama(opcoes) {
       return data.response || "";
     },
   };
+}
+
+// ---- BACKEND: cliente Gemini (API) — MESMA interface do clienteOllama ----
+// Mesma assinatura: { nome, gerar(prompt) -> Promise<string crua> }.
+// Trocar de backend = trocar o objeto cliente; prompt/parsing/loop/eval NAO mudam.
+function clienteGemini(opcoes) {
+  opcoes = opcoes || {};
+  const modelo = opcoes.modelo || "gemini-2.5-flash";
+  const temperatura = opcoes.temperatura != null ? opcoes.temperatura : 0;
+  carregarEnv();
+  const apiKey = opcoes.apiKey || process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY ausente (defina no .env desta pasta)");
+  const url =
+    opcoes.url ||
+    `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`;
+  // Backoff SO p/ throttle de transporte (429/503): o modelo nunca respondeu,
+  // entao esperar e repetir nao "esconde" decisao ruim — diferente de retry em
+  // resposta invalida (esse a gente NAO faz: o Rei passa o turno). Free tier =
+  // 5 req/min; respeitamos o retryDelay que a propria API devolve.
+  const maxTentativas = opcoes.maxTentativas != null ? opcoes.maxTentativas : 6;
+  const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+  function delayServidor(corpo) {
+    const m = /"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/.exec(corpo || "");
+    return m ? Math.ceil(parseFloat(m[1]) * 1000) : null;
+  }
+  // PACING: piso de intervalo entre chamadas p/ caber na janela do free tier
+  // (5 req/min -> >=12s). Evita o 429 ANTES de bater nele, deixando o eval
+  // limpo (turno "passa" = decisao do modelo, nao throttle). 0 desliga.
+  const minIntervaloMs = opcoes.minIntervaloMs != null ? opcoes.minIntervaloMs : 13000;
+  let ultimoEnvio = 0;
+  async function respeitarPiso() {
+    const faltam = minIntervaloMs - (Date.now() - ultimoEnvio);
+    if (faltam > 0) await espera(faltam);
+    ultimoEnvio = Date.now();
+  }
+  return {
+    nome: `gemini:${modelo}`,
+    async gerar(prompt) {
+      for (let tentativa = 1; ; tentativa++) {
+        await respeitarPiso();
+        const resp = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: temperatura },
+          }),
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          const cand = data.candidates && data.candidates[0];
+          const parts = cand && cand.content && cand.content.parts;
+          return (parts || []).map((p) => p.text || "").join("");
+        }
+        const corpo = await resp.text().catch(() => "");
+        const recuperavel = resp.status === 429 || resp.status === 503;
+        if (!recuperavel || tentativa >= maxTentativas) {
+          throw new Error(`Gemini HTTP ${resp.status}: ${corpo}`);
+        }
+        const ms = delayServidor(corpo) || Math.min(1000 * 2 ** tentativa, 40000);
+        await espera(ms + 500); // folga p/ a janela de quota virar
+      }
+    },
+  };
+}
+
+// criarCliente(backend) — ponto unico p/ trocar qual modelo roda.
+// "ollama" (local) | "gemini" (API). Mesma interface dos dois lados.
+function criarCliente(backend, opcoes) {
+  backend = (backend || "ollama").toLowerCase();
+  if (backend === "gemini") return clienteGemini(opcoes);
+  if (backend === "ollama") return clienteOllama(opcoes);
+  throw new Error(`backend desconhecido: "${backend}" (use "ollama" ou "gemini")`);
 }
 
 // criarReiIA(cliente) -> decisor ASSINCRONO reiIA(visao) -> Promise<ordem>.
@@ -153,4 +247,4 @@ async function rodarPartidaRei(opcoes) {
   };
 }
 
-module.exports = { clienteOllama, criarReiIA, decidirRei, avaliarCounter, rodarPartidaRei };
+module.exports = { clienteOllama, clienteGemini, criarCliente, carregarEnv, criarReiIA, decidirRei, avaliarCounter, rodarPartidaRei };

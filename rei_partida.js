@@ -17,8 +17,11 @@
 const Engine = require("./engine.js");
 const Rei = require("./rei.js");
 
+// uso: node rei_partida.js [maxTurnos] [backend]   backend = ollama | gemini
 const maxTurnos = parseInt(process.argv[2], 10) || 120;
-const cliente = Rei.clienteOllama({ modelo: "qwen2.5:3b", temperatura: 0 });
+const backend = (process.argv[3] || "ollama").toLowerCase();
+const cliente = Rei.criarCliente(backend, { temperatura: 0 });
+const etiqueta = cliente.nome; // p/ os rotulos do log ficarem honestos
 const ladoRei = "B";
 
 function compTxt(t) {
@@ -29,7 +32,7 @@ let primeiroTurnoRei = true;
 
 function imprimirTurno(reg) {
   console.log("\n############################################################");
-  console.log(`#  TURNO ${reg.turno}  —  REI ${reg.dono} (qwen)`);
+  console.log(`#  TURNO ${reg.turno}  —  REI ${reg.dono} (${etiqueta})`);
   console.log("############################################################");
 
   if (primeiroTurnoRei) {
@@ -38,7 +41,7 @@ function imprimirTurno(reg) {
     console.log(reg.prompt);
   }
 
-  console.log("\n----- RESPOSTA CRUA DO QWEN (com a sujeira que vier) -----");
+  console.log(`\n----- RESPOSTA CRUA DO MODELO (${etiqueta}, com a sujeira que vier) -----`);
   console.log(reg.erroRede ? "[ERRO DE REDE] " + reg.erroRede : JSON.stringify(reg.cru));
 
   console.log(`\n----- JSON valido? ${reg.jsonValido ? "SIM" : "NAO — " + reg.erroParse} -----`);
@@ -67,12 +70,13 @@ function imprimirTurno(reg) {
 }
 
 (async function main() {
-  // sanity check: Ollama no ar?
+  // sanity check: o backend responde?
   try {
     await cliente.gerar("responda apenas: ok");
   } catch (e) {
-    console.error("ERRO: nao consegui falar com o Ollama (" + e.message + ").");
-    console.error("Suba o Ollama e garanta o modelo: `ollama pull qwen2.5:3b`. Depois rode de novo.");
+    console.error(`ERRO: nao consegui falar com o backend "${backend}" (` + e.message + ").");
+    if (backend === "ollama") console.error("Suba o Ollama e garanta o modelo: `ollama pull qwen2.5:3b`. Depois rode de novo.");
+    else console.error("Confira a GEMINI_API_KEY no .env e a conexao. Depois rode de novo.");
     process.exit(2);
   }
 
