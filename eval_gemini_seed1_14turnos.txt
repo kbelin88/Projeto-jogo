@@ -1,0 +1,93 @@
+=== EVAL 4 — Rei B (gemini-2.5-flash) vs jogadorBurro | seed 1 | 14 turnos ===
+Rodado em 22/06/2026 22:04 pelo MODO GEMINI do index.html (browser, fetch direto
+a partir do file://). Contorna o teto de cota DIARIA do Node (uma partida curta de
+14 chamadas coube no free tier). NAO e baseline comparavel aos evals do Node — o
+proposito do setup mudou (reis com guarnicao inicial 10/10/10 = forca 550).
+
+------------------------------------------------------------------------
+LEITURA / METRICAS
+------------------------------------------------------------------------
+Mapa: A(burro) = casa [17] Dornstadt (82,92) | B(gemini) = casa [18] Eichsee (109,119).
+Resultado: LIMITE DE TURNOS (14). A 2 ald | B 2 ald | 16/18 neutras intactas. Empate tecnico.
+
+EIXO MECANICO (onde o Gemini foi BEM):
+- JSON valido: 14/14 (100%). Todas as respostas vieram em cerca-```json``` e parsearam.
+- Ancoragem: 0 ids inexistentes em 14 turnos (100% ids reais). Nunca copiou id do exemplo.
+- SEM residuo "tropa que nao tem" (a doenca do qwen): so 1 caso (T7, pediu 4 lanceiro/tinha 3).
+  Os envios vem pequenos e ancorados no que existe. Grounding = resolvido.
+
+EIXO ESTRATEGICO (onde esta o gap):
+1) ECONOMIA mal planejada — modo de falha dominante. ~10/14 turnos tem rejeicao
+   "recurso insuficiente p/ construir": pede 2 lanceiros tendo 10m (custa 15m cada),
+   pede cavaleiro (30m/30f) tendo 20m. Nao faz a conta do orcamento -> subconstroi ->
+   forca despencou de 550 (inicio) p/ faixa 30-135 o jogo todo.
+2) FRAGMENTACAO — depois do all-in inicial, manda gotas (1/1/1, 2/2/2, 1C). Pequeno
+   demais p/ tomar neutra forte (200+); so serve p/ trocar bases mal defendidas.
+3) ALVO ERRADO p/ medir o triangulo — TODOS os envios aceitos miraram aldeias PROPRIAS
+   ou ja conquistadas por A; NENHUM mirou uma NEUTRA TIPADA. => o counter do triangulo
+   CONTINUA NAO-MENSURAVEL mesmo neste run (0 amostras de envio-vs-neutra-tipada).
+4) ABERTURA ALL-IN (T1): mandou os 550 inteiros na CAPITAL INIMIGA distante [17]
+   (~7 turnos de marcha), deixando a propria casa [18] vazia. Chegou no T8 e tomou [17]
+   (def 20). Mas a economia secou e A retomou [18] no T11. Liquido: bases trocadas,
+   zero vantagem. Escolha de alta variancia que deu em empate.
+
+Combates do Rei B (so "atacante B"): T8 [17] conquista (550 vs 20) | T9 [3] perdeu
+(10 vs 35, gota de 1L) | T11 [3] conquista (110 vs 15) | T12 [8] conquista (55 vs 10)
+| T13 [17] conquista (110 vs 0). 4 vitorias, todas contra alvo fraquissimo (numero
+manda). Triangulo apareceu em m (1.5 / 0.667 / 1) mas nunca DECIDIU vencedor.
+
+NOTA DE LEITURA: o log intercala combates de A (burro) e B (gemini). So as linhas
+"atacante B" sao batalhas do Gemini; "atacante A" sao o burro (que tomou neutras 3 e 8
+cedo e chegou a tomar a casa de B). Nao confundir.
+
+VEREDITO: backend Gemini = solido no mecanico/grounding (era o objetivo da troca de
+backend). O que sobra agora e PLANEJAMENTO de ordem superior: orcamento de recursos,
+concentracao de forca e selecao de alvo (ignora as neutras tipadas, justo onde o
+triangulo importaria). O problema deixou de ser grounding (qwen) e virou estrategia.
+
+========================================================================
+LOG CRU (como baixado do browser)
+========================================================================
+=== PARTIDA Rei B (gemini-2.5-flash) vs jogadorBurro | seed 1 | maxTurnos 14 | 22/06/2026, 22:04:45 ===
+
+########## TURNO 1 — Rei B (gemini) ##########
+resposta crua: "```json\n{\n  \"construir\": [\n    {\"aldeiaId\": 18, \"tipo\": \"lanceiro\"},\n    {\"aldeiaId\": 18, \"tipo\": \"lanceiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 18, \"destinoId\": 17, \"tropas\": {\"lanceiro\": 10, \"arqueiro\": 10, \"cavaleiro\": 10}}\n  ]\n}\n```"
+ACEITO envio [18]->[17]: 10L+10A+10C
+REJEITADO: construir [18]: recurso insuficiente p/ lanceiro (tem 10m/6f, custa 15m/0f) (x2)
+placar: A 1 ald/forca 0 | B 1 ald/forca 0 | neutras 18 | transito 2
+
+########## TURNO 3 — Rei B (gemini) ##########
+ACEITO construir lanceiro em [18] | ACEITO envio [18]->[3]: 1L
+COMBATE [3] Kalsee: atacante A Fatk=550 Fdef=270 m=1.5 -> vence atacante (CONQUISTA)
+placar: A 2 ald/forca 10 | B 1 ald/forca 0 | neutras 17
+
+########## TURNO 7 ##########
+COMBATE [8] Kalried: atacante A Fatk=330 Fdef=290 m=1.5 -> vence atacante (CONQUISTA)
+REJEITADO: envio [18]->[8]: tropa que nao tem (pediu 4 lanceiro, tem 3)
+
+########## TURNO 8 — all-in chega ##########
+ACEITO envio [17]->[18]: 5L+5A+5C | ACEITO envio [17]->[8]: 1L+1A+1C
+COMBATE [17] Dornstadt: atacante B Fatk=550 Fdef=20 m=1.5 -> vence atacante (CONQUISTA)
+placar: A 2 ald/forca 20 | B 2 ald/forca 250
+
+########## TURNO 9 ##########
+COMBATE [3] Kalsee: atacante B Fatk=10 Fdef=35 m=1 -> vence defensor
+
+########## TURNO 11 ##########
+COMBATE [18] Eichsee: atacante A Fatk=20 Fdef=60 -> defensor | depois Fatk=110 Fdef=50 -> CONQUISTA (A toma casa de B)
+COMBATE [3] Kalsee: atacante B Fatk=110 Fdef=15 m=0.667 -> CONQUISTA
+
+########## TURNO 12 ##########
+COMBATE [8] Kalried: atacante B Fatk=55 Fdef=10 m=1.5 -> CONQUISTA
+COMBATE [17] Dornstadt: atacante A Fatk=35 Fdef=30 m=0.667 -> CONQUISTA
+
+########## TURNO 13 ##########
+COMBATE [17] Dornstadt: atacante B Fatk=110 Fdef=0 -> CONQUISTA
+placar: A 1 ald/forca 0 | B 3 ald/forca 135
+
+########## TURNO 14 ##########
+COMBATE [17] Dornstadt: atacante A Fatk=10 Fdef=110 m=1.5 -> vence defensor (B segura)
+COMBATE [3] Kalsee: atacante A Fatk=25 Fdef=0 -> CONQUISTA
+=== FIM === turno 14 | resultado: limite de turnos | A 2 ald | B 2 ald | neutras 16
+
+(log cru completo, turno-a-turno, salvo tambem em Downloads/partida_gemini_*.txt)

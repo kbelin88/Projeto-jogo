@@ -95,6 +95,13 @@
       margem_ataque: 1.2,
     },
 
+    // REI: guarnicao INICIAL de cada rei (V1). Sem ela o rei comeca com 0
+    // tropas e leva muitos turnos so produzindo -> nao ataca cedo. Numero
+    // ~ faixa das neutras (20-40 un.): forca 550 bate as fracas e PERDE para
+    // as cavaleiro fortes (sem dominacao). Os 3 tipos deixam o Rei ESCOLHER
+    // o counter do triangulo. PROVISORIO.
+    rei: { tropas_iniciais: { lanceiro: 10, arqueiro: 10, cavaleiro: 10 } },
+
     // RELATORIO DO REI (V1): velocidade usada para PRE-CALCULAR "turnos de
     // marcha" no relatorio (o modelo nao faz geometria). "media" = referencia
     // neutra entre lento (lanceiro) e rapido (cavaleiro).
@@ -213,6 +220,10 @@
         const n = rngInt(rng, config.neutra.forca_min, config.neutra.forca_max);
         ald.tipo = tipo;
         ald.tropas[tipo] = n;
+      } else {
+        // rei: guarnicao inicial (CONFIG.rei.tropas_iniciais) p/ poder atacar cedo.
+        const ti = (config.rei && config.rei.tropas_iniciais) || {};
+        for (const t of ["lanceiro", "arqueiro", "cavaleiro"]) ald.tropas[t] = ti[t] || 0;
       }
       return ald;
     });

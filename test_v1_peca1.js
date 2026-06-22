@@ -40,7 +40,7 @@ const umTipo = neutras.every((a) => {
 });
 checa("cada neutra tem UM tipo so (= seu a.tipo)", umTipo);
 checa(`quantidade do tipo na faixa [${fmin},${fmax}]`, neutras.every((a) => a.tropas[a.tipo] >= fmin && a.tropas[a.tipo] <= fmax));
-checa("reis sem tipo e sem tropas", reis.every((a) => a.tipo === null && Engine.forcaDe(a.tropas, CONFIG) === 0));
+checa("reis sem tipo e com a guarnicao inicial da CONFIG", reis.every((a) => a.tipo === null && Engine.forcaDe(a.tropas, CONFIG) === Engine.forcaDe(CONFIG.rei.tropas_iniciais, CONFIG)));
 
 // distribuicao de tipos (so para inspecao)
 const dist = { lanceiro: 0, arqueiro: 0, cavaleiro: 0 };

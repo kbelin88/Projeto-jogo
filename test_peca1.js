@@ -52,10 +52,12 @@ checa("cada neutra tem UM tipo so", umTipoSo);
 const naFaixa = neutras.every((a) => a.tropas[a.tipo] >= fmin && a.tropas[a.tipo] <= fmax);
 checa(`quantidade do tipo dentro de [${fmin}, ${fmax}]`, naFaixa);
 
-// reis comecam sem tropas e sem tipo
-checa("reis sem tropas iniciais e sem tipo",
-  reisA[0].tipo === null && Engine.forcaDe(reisA[0].tropas, CONFIG) === 0 &&
-  reisB[0].tipo === null && Engine.forcaDe(reisB[0].tropas, CONFIG) === 0);
+// reis comecam SEM tipo, mas COM a guarnicao inicial da CONFIG (rei.tropas_iniciais)
+const ti = CONFIG.rei.tropas_iniciais;
+const forcaTi = Engine.forcaDe(ti, CONFIG);
+checa("reis sem tipo e com a guarnicao inicial da CONFIG",
+  reisA[0].tipo === null && Engine.forcaDe(reisA[0].tropas, CONFIG) === forcaTi &&
+  reisB[0].tipo === null && Engine.forcaDe(reisB[0].tropas, CONFIG) === forcaTi);
 
 // aldeias dentro do teatro
 const t = CONFIG.teatro;

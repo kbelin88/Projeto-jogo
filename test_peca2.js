@@ -60,6 +60,9 @@ console.log(`     ex.: neutra #${exNeutra.id} ${guarnIni.get(exNeutra.id)} -> ${
 console.log("\nB) Construcao de tropas (timing e custo):");
 const e2 = Engine.criarEstadoInicial(CONFIG);
 const a = Engine.aldeiasDe(e2, "A")[0];
+// linha de base: o rei nasce com a guarnicao inicial (CONFIG.rei.tropas_iniciais);
+// os checks abaixo medem o INCREMENTO da construcao, nao a contagem absoluta.
+const baseL = a.tropas.lanceiro, baseC = a.tropas.cavaleiro;
 a.recursos.madeira = 100;
 a.recursos.ferro = 100;
 
@@ -72,13 +75,13 @@ checa("2 itens na fila", a.construindo.length === 2);
 
 // tick 1: lanceiro (1 turno) completa; cavaleiro (2 turnos) ainda nao
 Engine.tick(e2);
-checa("apos 1 turno: lanceiro pronto", a.tropas.lanceiro === 1, `L${a.tropas.lanceiro}`);
-checa("apos 1 turno: cavaleiro AINDA nao", a.tropas.cavaleiro === 0, `C${a.tropas.cavaleiro}`);
+checa("apos 1 turno: lanceiro pronto", a.tropas.lanceiro === baseL + 1, `L${a.tropas.lanceiro}`);
+checa("apos 1 turno: cavaleiro AINDA nao", a.tropas.cavaleiro === baseC, `C${a.tropas.cavaleiro}`);
 checa("apos 1 turno: 1 item na fila", a.construindo.length === 1);
 
 // tick 2: cavaleiro completa
 Engine.tick(e2);
-checa("apos 2 turnos: cavaleiro pronto", a.tropas.cavaleiro === 1, `C${a.tropas.cavaleiro}`);
+checa("apos 2 turnos: cavaleiro pronto", a.tropas.cavaleiro === baseC + 1, `C${a.tropas.cavaleiro}`);
 checa("apos 2 turnos: fila vazia", a.construindo.length === 0);
 
 // ---------------------------------------------------------
