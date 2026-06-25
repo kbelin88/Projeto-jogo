@@ -11,7 +11,7 @@
 //    - (extra) reis em lados opostos do teatro
 // ============================================================
 "use strict";
-const Engine = require("./engine.js");
+const Engine = require("../engine.js");
 
 const CONFIG = Engine.CONFIG;
 const estado = Engine.criarEstadoInicial(CONFIG);

@@ -1,0 +1,66 @@
+=== PARTIDA LOCAL: Rei A (jogadorBurro) vs Rei B (jogadorBurro) | seed 1 | maxTurnos 3 | 23/06/2026, 22:25:03 ===
+(jogadorBurro = heuristica deterministica do engine.js, NAO um modelo de IA)
+
+########## TURNO 1 ##########
+--- Rei A decide ---
+  ordem.construir: []
+  ordem.envios   : [{"origemId":17,"destinoId":13,"tropas":{"lanceiro":5,"arqueiro":4,"cavaleiro":3}}]
+  ACEITO envio [17]->[13]: 5L+4A+3C (ataque a neutra arqueiro)
+--- Rei B decide ---
+  ordem.construir: []
+  ordem.envios   : [{"origemId":18,"destinoId":10,"tropas":{"lanceiro":5,"arqueiro":4,"cavaleiro":3}}]
+  ACEITO envio [18]->[10]: 5L+4A+3C (ataque a neutra cavaleiro)
+placar: A 1 ald/forca 0 | B 1 ald/forca 0 | neutras 18 | transito 2
+
+########## TURNO 2 ##########
+--- Rei A decide ---
+  ordem.construir: [{"aldeiaId":17,"tipo":"lanceiro"}]
+  ordem.envios   : [{"origemId":13,"destinoId":3,"tropas":{"lanceiro":5,"arqueiro":4,"cavaleiro":3}}]
+  ACEITO construir lanceiro em [17]
+  ACEITO envio [13]->[3]: 5L+4A+3C (ataque a neutra lanceiro)
+--- Rei B decide ---
+  ordem.construir: [{"aldeiaId":18,"tipo":"lanceiro"}]
+  ordem.envios   : [{"origemId":10,"destinoId":11,"tropas":{"lanceiro":5,"arqueiro":4,"cavaleiro":3}}]
+  ACEITO construir lanceiro em [18]
+  ACEITO envio [10]->[11]: 5L+4A+3C (ataque a neutra arqueiro)
+--- eventos resolvidos neste turno (chegadas de envios anteriores) ---
+  COMBATE [13] Falktal: atacante A Fatk=200 Fdef=15 m=0.67 -> vence atacante (CONQUISTA) | baixas~5
+  COMBATE [10] Dorntal: atacante B Fatk=200 Fdef=30 m=1.00 -> vence atacante (CONQUISTA) | baixas~15
+placar: A 2 ald/forca 0 | B 2 ald/forca 0 | neutras 16 | transito 2
+
+########## TURNO 3 ##########
+--- Rei A decide ---
+  ordem.construir: [{"aldeiaId":17,"tipo":"lanceiro"}]
+  ordem.envios   : [{"origemId":17,"destinoId":10,"tropas":{"lanceiro":1,"arqueiro":0,"cavaleiro":0}}]
+  ACEITO construir lanceiro em [17]
+  ACEITO envio [17]->[10]: 1L (ataque ao Rei B)
+--- Rei B decide ---
+  ordem.construir: [{"aldeiaId":18,"tipo":"lanceiro"}]
+  ordem.envios   : [{"origemId":11,"destinoId":7,"tropas":{"lanceiro":5,"arqueiro":4,"cavaleiro":3}},{"origemId":18,"destinoId":13,"tropas":{"lanceiro":1,"arqueiro":0,"cavaleiro":0}}]
+  ACEITO construir lanceiro em [18]
+  ACEITO envio [11]->[7]: 5L+4A+3C (ataque a neutra cavaleiro)
+  ACEITO envio [18]->[13]: 1L (ataque ao Rei A)
+--- eventos resolvidos neste turno (chegadas de envios anteriores) ---
+  COMBATE [11] Valdhain: atacante B Fatk=200 Fdef=15 m=0.67 -> vence atacante (CONQUISTA) | baixas~5
+placar: A 2 ald/forca 0 | B 3 ald/forca 0 | neutras 15 | transito 4
+
+=== FIM === turno 3 | resultado: limite de turnos | A 2 ald | B 3 ald | neutras 15
+
+========================================================
+  DESFECHO DA PARTIDA
+========================================================
+Resultado : SEM DECISAO (bateu o limite de turnos)  [limite]
+Duracao   : 3 turnos  (alvo de design: 30)
+Placar    : Rei A 2 | Rei B 3 | neutras 15  (de 20 aldeias)
+
+FORCA FINAL:
+  Rei A: forca total 0 em 2 aldeia(s) | maior guarnicao 0 (teto 300: 0 aldeia(s) no teto)
+  Rei B: forca total 0 em 3 aldeia(s) | maior guarnicao 0 (teto 300: 0 aldeia(s) no teto)
+
+PICO DE FORCA (total do lado, ao longo da partida): Rei A 0 (T0) | Rei B 0 (T0)
+
+COMBATES  : 3 no total | 3 conquista(s)
+  T2: Rei A tomou [13] Falktal (Fatk 200 vs Fdef 15, m=0.67)
+  T2: Rei B tomou [10] Dorntal (Fatk 200 vs Fdef 30, m=1.00)
+  T3: Rei B tomou [11] Valdhain (Fatk 200 vs Fdef 15, m=0.67)
+========================================================

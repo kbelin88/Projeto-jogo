@@ -1,0 +1,531 @@
+diff --git a/engine.js b/engine.js
+index d5e5ad0..b393e3d 100644
+--- a/engine.js
++++ b/engine.js
+@@ -43,6 +43,13 @@
+     // PRODUCAO por aldeia, por turno.
+     producao: { madeira: 10, ferro: 6 },
+ 
++    // TETO DE FORCA POR ALDEIA: SO A PRODUCAO respeita. Aldeia cuja forca
++    // (em casa + ja na fila de construcao) atinge este valor PARA de construir
++    // tropas — mas segue juntando recurso. Reforco e conquista PODEM passar do
++    // teto: o limite morde so a fabricacao, p/ punir empilhar massa num lugar
++    // so sem travar quem reforca/conquista. null = sem teto. PROVISORIO.
++    limite_forca_aldeia: 300,
++
+     // TROPAS: custo / forca / velocidade / turnos para construir.
+     // A forca e quase proporcional ao custo de proposito: o
+     // cavaleiro paga a mais por velocidade, nao por forca bruta.
+@@ -74,9 +81,20 @@
+     //   tipos_sorteaveis : pool de onde sai o tipo dominante de cada neutra.
+     //   forca_min/max    : quantidade inicial (em UNIDADES do tipo sorteado).
+     //   endurecimento    : unidades do tipo dominante ganhas por turno.
++    // CORTE A 25% (era 20-40 -> forca 200-1200): com a guarnicao do rei capada
++    // em ~300, quase nenhuma neutra era conquistavel. 5-10 un. = forca 50-300,
++    // dentro do alcance de um exercito no teto.
++    //   endurecimento           : unidades do tipo ganhas por TICK de endurecimento.
++    //   endurecimento_intervalo : 1 tick a cada N turnos (maior = mais lento).
++    //   teto_forca              : a neutra PARA de endurecer ao atingir esta forca.
++    // NEUTRAS MUITO FACEIS: saem com 1 unidade (forca 10-30 por tipo) e sobem
++    // devagar (+1 a cada 5 turnos). O burro batia a IA local em parte porque as
++    // neutras endureciam rapido demais; comecar minusculo abre a janela de
++    // expansao p/ um Rei que envia tropa aos poucos (nao all-in).
+     neutra: {
+       tipos_sorteaveis: ["lanceiro", "arqueiro", "cavaleiro"],
+-      forca_min: 20, forca_max: 40, endurecimento: 1,
++      forca_min: 1, forca_max: 1,
++      endurecimento: 1, endurecimento_intervalo: 5, teto_forca: 300,
+     },
+ 
+     // TEATRO: regiao contida do mapa 200x200 onde rola a partida.
+@@ -96,11 +114,11 @@
+     },
+ 
+     // REI: guarnicao INICIAL de cada rei (V1). Sem ela o rei comeca com 0
+-    // tropas e leva muitos turnos so produzindo -> nao ataca cedo. Numero
+-    // ~ faixa das neutras (20-40 un.): forca 550 bate as fracas e PERDE para
+-    // as cavaleiro fortes (sem dominacao). Os 3 tipos deixam o Rei ESCOLHER
+-    // o counter do triangulo. PROVISORIO.
+-    rei: { tropas_iniciais: { lanceiro: 10, arqueiro: 10, cavaleiro: 10 } },
++    // tropas e leva muitos turnos so produzindo -> nao ataca cedo. Os 3 tipos
++    // deixam o Rei ESCOLHER o counter do triangulo. PROVISORIO.
++    // Forca = 5*10 + 4*15 + 3*30 = 50 + 60 + 90 = 200 (baixado de 550 p/ tirar
++    // o all-in da abertura: menos massa inicial torna o envio-total arriscado).
++    rei: { tropas_iniciais: { lanceiro: 5, arqueiro: 4, cavaleiro: 3 } },
+ 
+     // RELATORIO DO REI (V1): velocidade usada para PRE-CALCULAR "turnos de
+     // marcha" no relatorio (o modelo nao faz geometria). "media" = referencia
+@@ -312,6 +330,10 @@
+     if (!a || a.dono === null) return false;
+     const def = estado.config.tropas[tipo];
+     if (!def) return false;
++    // TETO DE PRODUCAO: aldeia que ja atingiu o limite de forca para de
++    // fabricar (segue com recurso, e pode receber reforco/conquista acima dele).
++    const limite = estado.config.limite_forca_aldeia;
++    if (limite != null && forcaComprometida(estado, a) >= limite) return false;
+     if (a.recursos.madeira < def.custo.madeira || a.recursos.ferro < def.custo.ferro) return false;
+     a.recursos.madeira -= def.custo.madeira;
+     a.recursos.ferro -= def.custo.ferro;
+@@ -334,11 +356,19 @@
+     }
+   }
+ 
+-  // (5) ENDURECIMENTO: cada neutra ganha +inc unidades do SEU tipo por turno.
++  // (5) ENDURECIMENTO: cada neutra ganha +inc unidades do SEU tipo, mas SO a
++  //     cada `endurecimento_intervalo` turnos (crescimento lento) e SO enquanto
++  //     sua forca esta abaixo de `teto_forca` (limite, como o dos reis).
+   function endurecer(estado) {
+-    const inc = estado.config.neutra.endurecimento;
++    const n = estado.config.neutra;
++    const intervalo = n.endurecimento_intervalo || 1;
++    if (estado.turno % intervalo !== 0) return;     // ainda nao e turno de endurecer
++    const inc = n.endurecimento;
++    const teto = n.teto_forca;
+     for (const a of estado.aldeias) {
+-      if (a.dono === null && a.tipo) a.tropas[a.tipo] += inc;
++      if (a.dono !== null || !a.tipo) continue;
++      if (teto != null && forcaTropas(estado, a.tropas) >= teto) continue; // no teto: para
++      a.tropas[a.tipo] += inc;
+     }
+   }
+ 
+@@ -358,6 +388,14 @@
+   function forcaDefesa(estado, aldeia) {
+     return forcaTropas(estado, aldeia.tropas);
+   }
++  // Forca COMPROMETIDA da aldeia = em casa + a que ja esta na fila de
++  // construcao. E isto que o teto de producao (limite_forca_aldeia) mede:
++  // contar a fila impede furar o teto enfileirando varias tropas num turno so.
++  function forcaComprometida(estado, aldeia) {
++    let f = forcaTropas(estado, aldeia.tropas);
++    for (const c of aldeia.construindo) f += estado.config.tropas[c.tipo].forca;
++    return f;
++  }
+   // Tipo que mais contribui em forca (matchup do triangulo). null se sem tipo.
+   function tipoDominante(estado, tropas) {
+     let best = null, bf = 0;
+@@ -820,7 +858,9 @@
+     const construir = (ordem && Array.isArray(ordem.construir)) ? ordem.construir : [];
+     const envios = (ordem && Array.isArray(ordem.envios)) ? ordem.envios : [];
+ 
+-    const recSim = {}; // recursos restantes por aldeia (simula o gasto do turno)
++    const recSim = {};   // recursos restantes por aldeia (simula o gasto do turno)
++    const forcaSim = {}; // forca comprometida por aldeia (simula o teto de producao)
++    const limite = estado.config.limite_forca_aldeia;
+     for (const c of construir) {
+       if (!c || typeof c !== "object") { rejeicoes.push("construir: item nao e objeto"); continue; }
+       const a = aldeiaPorId(estado, c.aldeiaId);
+@@ -828,6 +868,11 @@
+       if (a.dono !== dono) { rejeicoes.push(`construir: aldeia [${c.aldeiaId}] nao e sua`); continue; }
+       const def = estado.config.tropas[c.tipo];
+       if (!def) { rejeicoes.push(`construir [${c.aldeiaId}]: tipo invalido "${c.tipo}"`); continue; }
++      if (!(c.aldeiaId in forcaSim)) forcaSim[c.aldeiaId] = forcaComprometida(estado, a);
++      if (limite != null && forcaSim[c.aldeiaId] >= limite) {
++        rejeicoes.push(`construir [${c.aldeiaId}]: no teto de forca (${forcaSim[c.aldeiaId]}/${limite}) - producao parada`);
++        continue;
++      }
+       if (!(c.aldeiaId in recSim)) recSim[c.aldeiaId] = { madeira: a.recursos.madeira, ferro: a.recursos.ferro };
+       const r = recSim[c.aldeiaId];
+       if (r.madeira < def.custo.madeira || r.ferro < def.custo.ferro) {
+@@ -835,6 +880,7 @@
+         continue;
+       }
+       r.madeira -= def.custo.madeira; r.ferro -= def.custo.ferro;
++      forcaSim[c.aldeiaId] += def.forca;
+       aceitoConstruir.push({ aldeiaId: c.aldeiaId, tipo: c.tipo });
+     }
+ 
+@@ -1039,8 +1085,80 @@
+     };
+   }
+ 
++  // ==========================================================
++  //  RELATORIO DE DESFECHO (pos-partida)
++  // ----------------------------------------------------------
++  //  Le o RESULTADO de rodarPartida/rodarPartidaRei e resume COMO a
++  //  partida terminou. Texto PURO (sem rede). Foco no desfecho + nos
++  //  sinais das mecanicas: forca por aldeia vs teto, pico de massa
++  //  (mede o efeito de baixar a guarnicao inicial + o teto), conquistas.
++  // ==========================================================
++  function relatorioDesfecho(res, config) {
++    const cfg = config || (res.estado && res.estado.config) || CONFIG;
++    const est = res.estado;
++    const L = [];
++    const barra = "=".repeat(56);
++
++    L.push(barra);
++    L.push("  DESFECHO DA PARTIDA");
++    L.push(barra);
++
++    // 1) RESULTADO
++    const venc = res.vencedor;
++    const quem = venc === "A" ? "Rei A venceu" : venc === "B" ? "Rei B venceu"
++      : venc === "empate" ? "EMPATE (ambos eliminados)" : "SEM DECISAO (bateu o limite de turnos)";
++    L.push(`Resultado : ${quem}  [${res.motivo}]`);
++    const alvo = cfg.partida_alvo_turnos;
++    L.push(`Duracao   : ${res.turnos} turnos` + (alvo ? `  (alvo de design: ${alvo})` : ""));
++
++    // 2) PLACAR FINAL de aldeias
++    const A = aldeiasDe(est, "A"), B = aldeiasDe(est, "B"), N = aldeiasDe(est, null);
++    L.push(`Placar    : Rei A ${A.length} | Rei B ${B.length} | neutras ${N.length}  (de ${est.aldeias.length} aldeias)`);
++    L.push("");
++
++    // 3) FORCA FINAL + DISTRIBUICAO (o teto de producao deve aparecer aqui)
++    const teto = cfg.limite_forca_aldeia;
++    L.push("FORCA FINAL:");
++    const resumoLado = (lista, nome) => {
++      const forcas = lista.map((a) => forcaDe(a.tropas, cfg));
++      const total = forcas.reduce((s, f) => s + f, 0);
++      const maior = forcas.length ? Math.max.apply(null, forcas) : 0;
++      const noTeto = teto != null ? forcas.filter((f) => f >= teto).length : 0;
++      L.push(`  ${nome}: forca total ${total} em ${lista.length} aldeia(s) | maior guarnicao ${maior}` +
++        (teto != null ? ` (teto ${teto}: ${noTeto} aldeia(s) no teto)` : ""));
++    };
++    resumoLado(A, "Rei A");
++    resumoLado(B, "Rei B");
++    L.push("");
++
++    // 4) PICO DE MASSA ao longo da partida (efeito de 550->200 + teto de 300)
++    const hist = res.historico || [];
++    if (hist.length) {
++      let picoA = 0, picoB = 0, tA = 0, tB = 0;
++      for (const h of hist) {
++        if (h.forcaA > picoA) { picoA = h.forcaA; tA = h.turno; }
++        if (h.forcaB > picoB) { picoB = h.forcaB; tB = h.turno; }
++      }
++      L.push(`PICO DE FORCA (total do lado, ao longo da partida): Rei A ${picoA} (T${tA}) | Rei B ${picoB} (T${tB})`);
++      L.push("");
++    }
++
++    // 5) ATIVIDADE: combates e conquistas (quem tomou o que, e quando)
++    const combates = (est.log || []).filter((e) => e.tipo === "combate");
++    const conquistas = combates.filter((e) => e.conquista);
++    L.push(`COMBATES  : ${combates.length} no total | ${conquistas.length} conquista(s)`);
++    const MOSTRA = 15;
++    conquistas.slice(0, MOSTRA).forEach((c) => {
++      L.push(`  T${c.turno}: Rei ${c.atacante} tomou [${c.alvoId}] ${c.alvoNome} (Fatk ${c.Fatk} vs Fdef ${c.Fdef}, m=${c.m.toFixed(2)})`);
++    });
++    if (conquistas.length > MOSTRA) L.push(`  (+${conquistas.length - MOSTRA} conquista(s) nao listada(s))`);
++    L.push(barra);
++    return L.join("\n");
++  }
++
+   return {
+     CONFIG,
++    relatorioDesfecho,
+     criarRng, rngInt,
+     criarAldeia,
+     gerarTeatro,
+@@ -1057,6 +1175,7 @@
+     // Peca 3
+     forcaTropas,
+     forcaDefesa,
++    forcaComprometida,
+     tipoDominante,
+     vantagem,
+     resolverCombate,
+diff --git a/index.html b/index.html
+index ca8ac13..dfcbc74 100644
+--- a/index.html
++++ b/index.html
+@@ -90,8 +90,14 @@
+   <button id="greset">Reiniciar</button>
+   <label>vel <input id="gspeed" type="range" min="80" max="1200" value="500" style="width:90px"></label>
+   <label title="Rei B decidido pelo Gemini (API). Play roda a partida do Gemini no mapa."><input type="checkbox" id="ggemini"> Rei B = Gemini</label>
+-  <label>turnos <input id="gmax" type="number" min="1" max="20" value="6" style="width:48px"></label>
+-  <button id="glog" title="Baixar o .txt da ultima partida do Gemini">Baixar log</button>
++  <label title="Rei B decidido por um modelo LOCAL via Ollama (localhost:11434)."><input type="checkbox" id="gollama"> Rei B = Ollama
++    <select id="gomodel" style="font:12px 'Trebuchet MS',sans-serif">
++      <option value="qwen2.5:3b">qwen2.5:3b</option>
++      <option value="llama3.2:3b">llama3.2:3b</option>
++    </select>
++  </label>
++  <label>turnos <input id="gmax" type="number" min="1" max="80" value="6" style="width:48px"></label>
++  <button id="glog" title="Baixar o .txt da ultima partida do modelo">Baixar log</button>
+ </div>
+ 
+ <script src="world.js"></script>
+@@ -621,6 +627,7 @@
+   let geminiKey = "";
+   let ultimoEnvioG = 0;
+   let geminiLog = [];      // buffer textual da partida (p/ baixar e avaliar depois)
++  let etiquetaB = "gemini"; // rotulo do decisor do Rei B no log (gemini | ollama:<modelo>)
+   function lsGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
+   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
+   geminiKey = lsGet("GEMINI_API_KEY") || "";
+@@ -671,7 +678,7 @@
+   // combates do turno + placar. Esse buffer vira o .txt do eval.
+   function registrarTurnoGemini(cru, ordem, diag) {
+     const tn = game.turno, L = [];
+-    L.push("########## TURNO " + tn + " — Rei B (gemini) ##########");
++    L.push("########## TURNO " + tn + " — Rei B (" + etiquetaB + ") ##########");
+     L.push("resposta crua: " + JSON.stringify(cru));
+     L.push("ordem.construir: " + JSON.stringify(ordem.construir || []));
+     L.push("ordem.envios   : " + JSON.stringify(ordem.envios || []));
+@@ -705,12 +712,13 @@
+     const a = document.createElement("a");
+     const ts = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 16);
+     a.href = URL.createObjectURL(blob);
+-    a.download = "partida_gemini_" + ts + ".txt";
++    a.download = "partida_" + etiquetaB.replace(/[^a-z0-9.]/gi, "-") + "_" + ts + ".txt";
+     document.body.appendChild(a); a.click(); document.body.removeChild(a);
+     URL.revokeObjectURL(a.href);
+   }
+ 
+   async function passoTurnoGemini() {
++    etiquetaB = "gemini";
+     Engine.tick(game);
+     if (Engine.aldeiasDe(game, "A").length)
+       Engine.executarOrdem(game, "A", Engine.jogadorBurro(Engine.montarVisao(game, "A")));
+@@ -746,11 +754,80 @@
+     baixarLogGemini(); // baixa o .txt automaticamente no fim da partida
+   }
+ 
++  // ----- MODO OLLAMA: Rei B decidido por um modelo LOCAL, ao vivo no mapa -----
++  // Mesma logica do modo Gemini, mas SEM chave e SEM pacing (local, sem cota).
++  // POREM: a pagina abre via file:// (origin "null") e o Ollama bloqueia por
++  // CORS por padrao -> precisa subir o Ollama com OLLAMA_ORIGINS=* (o alerta
++  // de erro abaixo da a instrucao). Reusa o mesmo buffer/log do modo Gemini.
++  const OLLAMA_URL = "http://localhost:11434/api/generate";
++  async function gerarOllama(prompt, modelo) {
++    const resp = await fetch(OLLAMA_URL, {
++      method: "POST",
++      headers: { "Content-Type": "application/json" },
++      body: JSON.stringify({ model: modelo, prompt, stream: false, options: { temperature: 0 } }),
++    });
++    if (!resp.ok) throw new Error("Ollama HTTP " + resp.status);
++    const data = await resp.json();
++    return data.response || "";
++  }
++
++  async function passoTurnoOllama(modelo) {
++    modelo = modelo || document.getElementById("gomodel").value;
++    etiquetaB = "ollama:" + modelo;
++    Engine.tick(game);
++    if (Engine.aldeiasDe(game, "A").length)
++      Engine.executarOrdem(game, "A", Engine.jogadorBurro(Engine.montarVisao(game, "A")));
++    let cru = "", ordem = { construir: [], envios: [] }, diag = null;
++    if (Engine.aldeiasDe(game, "B").length) {
++      const prompt = Engine.montarPrompt(Engine.montarVisao(game, "B"));
++      try { cru = await gerarOllama(prompt, modelo); }
++      catch (e) { cru = "[ERRO DE REDE] " + e.message; }
++      ordem = Engine.parsearOrdem(cru).ordem;            // sem retry: resposta ruim = passa o turno
++      diag = Engine.diagnosticarOrdem(game, "B", ordem); // ANTES de executar (alvo ainda neutra)
++      Engine.executarOrdem(game, "B", ordem);
++    }
++    registrarTurnoGemini(cru, ordem, diag);
++    updateGameHUD();
++    draw();
++  }
++
++  async function runOllama() {
++    const modelo = document.getElementById("gomodel").value;
++    etiquetaB = "ollama:" + modelo;
++    // sanity check (e teste de CORS): se falhar, instrui a liberar o Ollama
++    try { await gerarOllama("responda apenas: ok", modelo); }
++    catch (e) {
++      pause();
++      alert("Nao consegui falar com o Ollama (" + e.message + ").\n\n" +
++        "Provavel CORS: a pagina abre via file:// e o Ollama bloqueia por padrao.\n" +
++        "Feche o Ollama (icone da bandeja) e rode no PowerShell:\n\n" +
++        "    $env:OLLAMA_ORIGINS=\"*\"; ollama serve\n\n" +
++        "Deixe essa janela aberta e tente o Play de novo.\n" +
++        "Confira tambem que o modelo existe:  ollama pull " + modelo);
++      return;
++    }
++    const maxT = Math.max(1, parseInt(document.getElementById("gmax").value, 10) || 6);
++    geminiLog = ["=== PARTIDA Rei B (ollama:" + modelo + ") vs jogadorBurro | seed " + game.config.seed +
++      " | maxTurnos " + maxT + " | " + new Date().toLocaleString() + " ===\n"];
++    while (playing && game && !Engine.checarVitoria(game) && game.turno < maxT) {
++      await passoTurnoOllama(modelo);
++    }
++    pause();
++    updateGameHUD();
++    const venc = Engine.checarVitoria(game);
++    geminiLog.push("=== FIM === turno " + game.turno + " | resultado: " +
++      (venc ? "vitoria " + venc : "limite de turnos") +
++      " | A " + Engine.aldeiasDe(game, "A").length + " ald | B " + Engine.aldeiasDe(game, "B").length +
++      " ald | neutras " + Engine.aldeiasDe(game, null).length);
++    baixarLogGemini(); // baixa o .txt automaticamente no fim da partida
++  }
++
+   function play() {
+     if (playing || !game || Engine.checarVitoria(game)) return;
+     playing = true;
+     document.getElementById("gplay").textContent = "⏸ Pausar";
+     if (document.getElementById("ggemini").checked) { runGemini(); return; } // Gemini gateia a cadencia
++    if (document.getElementById("gollama").checked) { runOllama(); return; } // Ollama gateia a cadencia
+     timer = setInterval(passoTurno, speed);
+   }
+   function pause() {
+@@ -831,10 +908,17 @@
+     if (document.getElementById("ggemini").checked) {
+       if (!pedirChave() || !game || Engine.checarVitoria(game)) return;
+       await passoTurnoGemini();
++    } else if (document.getElementById("gollama").checked) {
++      if (!game || Engine.checarVitoria(game)) return;
++      await passoTurnoOllama();
+     } else { passoTurno(); }
+   });
+   document.getElementById("greset").addEventListener("click", novaPartida);
+   document.getElementById("glog").addEventListener("click", baixarLogGemini);
++  // os dois modos "Rei B = modelo" sao mutuamente exclusivos
++  const cbGemini = document.getElementById("ggemini"), cbOllama = document.getElementById("gollama");
++  cbGemini.addEventListener("change", () => { if (cbGemini.checked) cbOllama.checked = false; });
++  cbOllama.addEventListener("change", () => { if (cbOllama.checked) cbGemini.checked = false; });
+   document.getElementById("gspeed").addEventListener("input", (e) => {
+     speed = +e.target.value;
+     if (playing) { pause(); play(); }
+diff --git a/rei.js b/rei.js
+index a93b0b9..3d9410e 100644
+--- a/rei.js
++++ b/rei.js
+@@ -123,12 +123,22 @@ function clienteGemini(opcoes) {
+   };
+ }
+ 
+-// criarCliente(backend) — ponto unico p/ trocar qual modelo roda.
+-// "ollama" (local) | "gemini" (API). Mesma interface dos dois lados.
+-function criarCliente(backend, opcoes) {
+-  backend = (backend || "ollama").toLowerCase();
+-  if (backend === "gemini") return clienteGemini(opcoes);
+-  if (backend === "ollama") return clienteOllama(opcoes);
++// criarCliente(id) — ponto unico p/ trocar qual modelo roda.
++// id = "backend:modelo" (ex.: "ollama:qwen2.5:3b", "ollama:llama3.2:3b",
++// "gemini:gemini-2.5-flash"). Split no PRIMEIRO ":" so: o backend e o
++// prefixo, o RESTO e o nome do modelo (que tambem tem ":" — qwen2.5:3b).
++// Sem o ":" o id inteiro vale como backend (cai no modelo default do cliente).
++// Sem argumento = "ollama:qwen2.5:3b" (comportamento de hoje).
++function criarCliente(id, opcoes) {
++  id = id || "ollama:qwen2.5:3b";
++  opcoes = opcoes || {};
++  const i = id.indexOf(":");
++  const backend = (i < 0 ? id : id.slice(0, i)).toLowerCase();
++  const modelo = i < 0 ? "" : id.slice(i + 1).trim();
++  // modelo do id tem prioridade; vazio => cliente usa o seu proprio default.
++  const opc = modelo ? Object.assign({}, opcoes, { modelo }) : opcoes;
++  if (backend === "gemini") return clienteGemini(opc);
++  if (backend === "ollama") return clienteOllama(opc);
+   throw new Error(`backend desconhecido: "${backend}" (use "ollama" ou "gemini")`);
+ }
+ 
+diff --git a/rei_partida.js b/rei_partida.js
+index 82493b2..6c62377 100644
+--- a/rei_partida.js
++++ b/rei_partida.js
+@@ -17,10 +17,13 @@
+ const Engine = require("./engine.js");
+ const Rei = require("./rei.js");
+ 
+-// uso: node rei_partida.js [maxTurnos] [backend]   backend = ollama | gemini
++// uso: node rei_partida.js [maxTurnos] [modeloId]
++//   modeloId = "backend:modelo" — ex.: ollama:qwen2.5:3b (default),
++//   ollama:llama3.2:3b, gemini:gemini-2.5-flash
+ const maxTurnos = parseInt(process.argv[2], 10) || 120;
+-const backend = (process.argv[3] || "ollama").toLowerCase();
+-const cliente = Rei.criarCliente(backend, { temperatura: 0 });
++const modeloId = process.argv[3] || "ollama:qwen2.5:3b";
++const backend = modeloId.split(":")[0].toLowerCase(); // so p/ as msgs de erro
++const cliente = Rei.criarCliente(modeloId, { temperatura: 0 });
+ const etiqueta = cliente.nome; // p/ os rotulos do log ficarem honestos
+ const ladoRei = "B";
+ 
+@@ -144,4 +147,7 @@ function imprimirTurno(reg) {
+   console.log("  (lembrete de design: NUMERO decide o vencedor; o triangulo so mexe em 'm'.");
+   console.log("   se vitorias nao mudam com m, o triangulo so barateia — dado p/ o Lucas decidir.)");
+   console.log("=====================================================");
++
++  // RELATORIO DE DESFECHO (mesma funcao da partida local): resumo do final.
++  console.log("\n" + Engine.relatorioDesfecho(res));
+ })();
+diff --git a/test_peca2.js b/test_peca2.js
+index 4be8efc..af4d5ac 100644
+--- a/test_peca2.js
++++ b/test_peca2.js
+@@ -45,12 +45,24 @@ const recursoNeutra = neutras.some((a) => a.recursos.madeira !== 0 || a.recursos
+ checa("neutras NAO acumulam recurso", !recursoNeutra);
+ 
+ const inc = CONFIG.neutra.endurecimento;
++const intervalo = CONFIG.neutra.endurecimento_intervalo || 1;
++const teto = CONFIG.neutra.teto_forca;
+ const TIPOS = ["lanceiro", "arqueiro", "cavaleiro"];
+-// endurece +inc do SEU tipo, e SO daquele tipo (os outros ficam em 0)
++// GABARITO: endurece +inc do SEU tipo a cada `intervalo` turnos, parando no teto.
++function esperadoNeutra(unidades, forcaUnit) {
++  let u = unidades;
++  for (let turno = 1; turno <= N; turno++) {
++    if (turno % intervalo !== 0) continue;
++    if (teto != null && u * forcaUnit >= teto) break;
++    u += inc;
++  }
++  return u;
++}
++// endurece no ritmo certo, do SEU tipo, e SO daquele tipo (os outros ficam em 0)
+ const endurOk = neutras.every((a) =>
+-  a.tropas[a.tipo] === guarnIni.get(a.id) + inc * N &&
++  a.tropas[a.tipo] === esperadoNeutra(guarnIni.get(a.id), CONFIG.tropas[a.tipo].forca) &&
+   TIPOS.filter((t) => t !== a.tipo).every((t) => a.tropas[t] === 0));
+-checa(`neutras endurecem +${inc}/turno do SEU tipo (e so dele)`, endurOk);
++checa(`neutras endurecem +${inc} a cada ${intervalo} turnos do SEU tipo (parando no teto ${teto})`, endurOk);
+ const exNeutra = neutras[0];
+ console.log(`     ex.: neutra #${exNeutra.id} ${guarnIni.get(exNeutra.id)} -> ${exNeutra.tropas[exNeutra.tipo]} ${exNeutra.tipo}(s)`);
+ 
+diff --git a/test_v1_peca1.js b/test_v1_peca1.js
+index be80f72..fe68639 100644
+--- a/test_v1_peca1.js
++++ b/test_v1_peca1.js
+@@ -55,24 +55,44 @@ const mesmaSeed = Engine.aldeiasDe(e2, null).every((a, i) =>
+ checa("mesma seed -> mesmos tipos e quantidades (deterministico)", mesmaSeed);
+ 
+ // ---------------------------------------------------------
+-//  2) ENDURECIMENTO TIPADO
++//  2) ENDURECIMENTO LENTO + TETO DE FORCA
+ // ---------------------------------------------------------
+-console.log("\n2) Endurecimento tipado (rodar turnos):");
++console.log("\n2) Endurecimento lento + teto (rodar turnos):");
++const n = CONFIG.neutra;
++const intervalo = n.endurecimento_intervalo || 1;
++const inc = n.endurecimento;
++const teto = n.teto_forca;
++
+ const e3 = Engine.criarEstadoInicial(CONFIG);
+-const ini = new Map(Engine.aldeiasDe(e3, null).map((a) => [a.id, { tipo: a.tipo, n: a.tropas[a.tipo] }]));
+-const N = 5;
+-const inc = CONFIG.neutra.endurecimento;
++const ini = new Map(Engine.aldeiasDe(e3, null).map((a) => [a.id, a.tropas[a.tipo]]));
++const N = intervalo * 5;             // 5 ticks de endurecimento
+ for (let i = 0; i < N; i++) Engine.tick(e3);
+ 
+-const neutras3 = Engine.aldeiasDe(e3, null); // as que nao foram conquistadas
++// GABARITO: simula o mesmo endurecimento (lento + teto) que o motor aplica.
++function esperado(unidades, forcaUnit) {
++  let u = unidades;
++  for (let turno = 1; turno <= N; turno++) {
++    if (turno % intervalo !== 0) continue;            // so endurece no tick
++    if (teto != null && u * forcaUnit >= teto) break; // no teto: para
++    u += inc;
++  }
++  return u;
++}
++
++const neutras3 = Engine.aldeiasDe(e3, null); // tick puro (sem decisao): nenhuma conquistada
+ const endurOk = neutras3.every((a) => {
+-  const base = ini.get(a.id);
++  const forcaUnit = CONFIG.tropas[a.tipo].forca;
+   const soDoTipo = TIPOS.filter((t) => t !== a.tipo).every((t) => a.tropas[t] === 0);
+-  return a.tropas[a.tipo] === base.n + inc * N && soDoTipo;
++  return a.tropas[a.tipo] === esperado(ini.get(a.id), forcaUnit) && soDoTipo;
+ });
+-checa(`cada neutra +${inc}/turno do SEU tipo (e so dele) apos ${N} turnos`, endurOk);
++checa(`endurece +${inc} a cada ${intervalo} turnos, do SEU tipo, respeitando o teto ${teto}`, endurOk);
++
++// prova explicita do TETO: ninguem passa do teto alem de um passo do tipo
++const tetoOk = neutras3.every((a) => Engine.forcaDe(a.tropas, CONFIG) <= teto + CONFIG.tropas[a.tipo].forca);
++checa(`nenhuma neutra ultrapassa o teto (${teto}) alem de um passo`, tetoOk);
++
+ const ex = neutras3[0];
+-console.log(`     ex.: neutra #${ex.id} ${ini.get(ex.id).n} -> ${ex.tropas[ex.tipo]} ${ex.tipo}(s)`);
++console.log(`     ex.: neutra #${ex.id} ${ini.get(ex.id)} -> ${ex.tropas[ex.tipo]} ${ex.tipo}(s) (forca ${Engine.forcaDe(ex.tropas, CONFIG)})`);
+ 
+ console.log("");
+ console.log(falhas === 0 ? "RESULTADO: TODOS OS TESTES PASSARAM ✔" : `RESULTADO: ${falhas} FALHA(S) ✘`);

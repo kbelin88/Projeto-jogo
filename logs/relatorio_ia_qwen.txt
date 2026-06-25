@@ -1,0 +1,89 @@
+============================================================
+ RELATORIO — comportamento da IA local (qwen2.5:3b)
+ Fonte: partida_ia_qwen2.txt (40 turnos, seed 1, neutras fracas)
+ vs jogadorBurro. Objetivo: entender ONDE a IA perde desempenho.
+============================================================
+
+-----------------------------------------------------------
+0. CORRECAO DE LEITURA (os "83%")
+-----------------------------------------------------------
+83% NAO foi "ela nao jogou". Foi o oposto: 83% (5 de 6) foi a taxa de
+COUNTER CERTO contra neutra — quando atacava, escolhia o tipo certo do
+triangulo. Isso e POSITIVO (antes era 0%).
+O que mede "nao jogou": passou 35% dos turnos + rejeicao em 96% deles.
+
+-----------------------------------------------------------
+1. NUMEROS DE EXECUCAO
+-----------------------------------------------------------
+JSON valido        : 100%   (formato OK)
+Ancoragem (ids)    : 100%   (grounding RESOLVIDO — 0 ids inventados)
+Passou o turno     : 35%    (8 de 23 turnos: ordem toda invalida)
+Turnos c/ rejeicao : 96%    (22 de 23)
+ENVIOS aceitos     : 6/31  (19%)  <== O GARGALO
+CONSTRUIR aceitos  : 13/24 (54%)
+
+-----------------------------------------------------------
+2. OS DOIS ERROS (concretos, com exemplo real do log)
+-----------------------------------------------------------
+ERRO #1 — ENVIAR TROPA QUE NAO TEM  (25 de 31 envios = 81%)
+  Pede tropa que a aldeia de origem nao possui.
+  Ex.: {"origemId":6,"destinoId":18,"tropas":{"arqueiro":4}}
+       mas a aldeia [6] tem 0 arqueiros.
+  AGRAVANTE: repete a MESMA ordem fracassada em T2, T3, T4...
+  (manda "4 arqueiros de [6]" varias vezes seguidas).
+
+ERRO #2 — CONSTRUIR SEM O CAMPO "tipo"  (10 casos)
+  Escreve o item de construcao sem dizer O QUE construir.
+  Ex.: {"construir":[{"aldeiaId":6}]}   -> "tipo" = undefined -> recusado.
+  (o exemplo do prompt mostra {"aldeiaId":18,"tipo":"lanceiro"}, mas
+   o modelo as vezes omite o "tipo".)
+
+NAO sao erros de grounding (ids 100% reais) nem de JSON (100% valido).
+Sao erros de ECONOMIA/CONTABILIDADE e de FORMATO.
+
+-----------------------------------------------------------
+3. A CAUSA-RAIZ (o insight principal)
+-----------------------------------------------------------
+Os dois erros tem uma origem comum: o modelo NAO RASTREIA o que cada
+aldeia realmente tem (tropas) nem o que ela e — e, crucial, NAO RECEBE
+NENHUM SINAL de que a ordem foi recusada.
+
+A secao "O QUE ACONTECEU NO ULTIMO TURNO" do relatorio so mostra
+combates e reforcos. Ordem REJEITADA nao vira evento do mundo, entao e
+INVISIVEL pro modelo no proximo turno. Resultado: ele ve o mesmo estado
+e RE-EMITE o mesmo erro em loop (T2=T3=T4: "4 arqueiros de [6]").
+
+Falta o ciclo de feedback: o modelo erra, nao sabe que errou, repete.
+
+-----------------------------------------------------------
+4. O QUE MEXER (alavancas — UMA POR VEZ, mecanica congelada)
+-----------------------------------------------------------
+Todas sao do lado PROMPT/OBSERVABILIDADE (nao mudam regra de jogo):
+
+(1) FEEDBACK DE REJEICAO  [maior alavanca, recomendada 1o]
+    Ecoar no proximo prompt: "sua ordem [6]->[18] foi recusada: a aldeia
+    [6] nao tem 4 arqueiros". Fecha o loop que hoje faz ele repetir o
+    erro. Mexe em montarVisao/relatorio (a "memoria" do Rei), nao no jogo.
+
+(2) ANTI-FRAGMENTACAO + "envie so o que a aldeia tem"
+    Instrucao explicita: 1 envio por aldeia/turno; so use tropas listadas
+    em "tropas em casa" DAQUELA aldeia. Opcional: mostrar inline um teto
+    "desta aldeia da p/ enviar no maximo: 5L/4A/3C".
+
+(3) ROBUSTEZ DO CONSTRUIR
+    Reforcar no exemplo/instrucao que todo item precisa de "tipo"; ou
+    tornar o parser tolerante (item de construir sem "tipo" = ignorar
+    em silencio, sem custar o turno).
+
+METODO: testar UMA por vez, mesma seed, e medir o delta nas metricas
+acima (envios aceitos %, passou %, rejeicao %). Nunca duas juntas.
+
+-----------------------------------------------------------
+5. LEITURA DE EVAL (resumo)
+-----------------------------------------------------------
+O degrau ja subiu: grounding (resolvido) -> agora ECONOMIA/EXECUCAO.
+O modelo "entende" o jogo (counter certo 83%, ids reais 100%), mas
+PERDE PONTO DE EXECUCAO: ordena o que nao pode pagar/enviar e nao
+aprende com a recusa. A melhoria de desempenho mora no ciclo de
+feedback, nao na inteligencia bruta do modelo.
+============================================================

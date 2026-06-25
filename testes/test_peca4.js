@@ -11,7 +11,7 @@
 //    - modo rapido roda VARIAS partidas e mede duracao/vencedor
 // ============================================================
 "use strict";
-const Engine = require("./engine.js");
+const Engine = require("../engine.js");
 const CONFIG = Engine.CONFIG;
 
 let falhas = 0;

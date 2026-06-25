@@ -8,7 +8,7 @@
 //  Rodar:  node eval_endurecimento.js
 // ============================================================
 "use strict";
-const Engine = require("./engine.js");
+const Engine = require("../engine.js");
 const base = Engine.CONFIG;
 const N = 30;                       // partidas por valor (seeds 1..N)
 const valores = [5, 4, 3, 2, 1, 0]; // endurecimento a testar

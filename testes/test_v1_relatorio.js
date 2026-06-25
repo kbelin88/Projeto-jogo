@@ -11,7 +11,7 @@
 //  (3) Imprime tambem o relatorio de um turno de uma partida real.
 // ============================================================
 "use strict";
-const Engine = require("./engine.js");
+const Engine = require("../engine.js");
 const CONFIG = Engine.CONFIG;
 
 // ---- cenario sintetico (controle total p/ exercitar TODAS as secoes) ----

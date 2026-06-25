@@ -1,0 +1,424 @@
+Partida: Rei B (ollama:qwen2.5:3b) vs jogadorBurro | maxTurnos=50
+(o log por turno abaixo E o eval — leitura crua de como o Rei joga)
+
+
+############################################################
+#  TURNO 1  —  REI B (ollama:qwen2.5:3b)
+############################################################
+
+----- PROMPT ENVIADO (so neste 1o turno, p/ referencia) -----
+Voce e o Rei. As aldeias listadas em "SUAS ALDEIAS" pertencem a voce.
+Seu objetivo e vencer eliminando o inimigo.
+
+TURNO 1 - Voce e o Rei B.
+
+=== SUAS ALDEIAS (1) ===
+[18] | recursos: 10 madeira, 6 ferro
+       tropas em casa: 5 lanceiros, 4 arqueiros, 3 cavaleiros
+       construindo: nada
+
+=== FORCA TOTAL ===
+Sua forca em casa: 200   |   Sua forca em transito: 0
+
+=== ALDEIAS NEUTRAS (18) - ordenadas por distancia da sua mais proxima ===
+[6] 5 lanceiros | 1 turnos de marcha
+[10] 8 cavaleiros | 1 turnos de marcha
+[0] 8 cavaleiros | 2 turnos de marcha
+[7] 7 cavaleiros | 2 turnos de marcha
+[11] 9 arqueiros | 2 turnos de marcha
+[16] 5 arqueiros | 2 turnos de marcha
+[4] 10 cavaleiros | 3 turnos de marcha
+[8] 5 lanceiros | 3 turnos de marcha
+[9] 6 cavaleiros | 3 turnos de marcha
+[1] 6 cavaleiros | 4 turnos de marcha
+[2] 6 arqueiros | 4 turnos de marcha
+[3] 6 lanceiros | 4 turnos de marcha
+[5] 6 lanceiros | 4 turnos de marcha
+[13] 9 arqueiros | 4 turnos de marcha
+[14] 5 cavaleiros | 4 turnos de marcha
+[15] 8 lanceiros | 4 turnos de marcha
+[19] 7 lanceiros | 4 turnos de marcha
+[12] 6 arqueiros | 5 turnos de marcha
+
+=== INIMIGO (Rei A) - 1 aldeia(s) ===
+[17] sem tropas | 5 turnos de marcha
+
+=== EXERCITOS EM TRANSITO ===
+SEUS:
+- nenhum
+INIMIGOS:
+- 5 lanceiros, 4 arqueiros, 3 cavaleiros: aldeia [17] -> aldeia [13] (NEUTRA), chega em 1 turnos
+
+=== O QUE ACONTECEU NO ULTIMO TURNO ===
+- nada de relevante
+
+Responda APENAS com um JSON valido no formato abaixo. Nenhum texto antes ou depois do JSON.
+
+Listas vazias sao uma resposta valida. Se uma aldeia nao deve atacar nem construir neste turno, simplesmente nao a inclua. E melhor nao fazer nada do que enviar um ataque ruim ou construir sem motivo.
+
+Antes de responder: em 'origemId' e em 'aldeiaId' use SOMENTE ids que aparecem na secao SUAS ALDEIAS. Escolha o 'destinoId' entre os ids das secoes ALDEIAS NEUTRAS e INIMIGO. Nao envie tropas que voce nao tem: se uma aldeia esta sem tropas, nao a use em 'envios'. O exemplo abaixo so mostra o FORMATO com ids reais deste turno; nao copie os numeros dele como se fossem sua jogada.
+
+{
+  "construir": [
+    {"aldeiaId": 18, "tipo": "lanceiro"}
+  ],
+  "envios": [
+    {"origemId": 18, "destinoId": 0, "tropas": {"lanceiro": 10, "arqueiro": 0, "cavaleiro": 0}},
+    {"origemId": 18, "destinoId": 1, "tropas": {"lanceiro": 0, "arqueiro": 5, "cavaleiro": 0}}
+  ]
+}
+
+----- RESPOSTA CRUA DO MODELO (ollama:qwen2.5:3b, com a sujeira que vier) -----
+"{\n  \"construir\": [\n    {\"aldeiaId\": 18, \"tipo\": \"lanceiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 18, \"destinoId\": 6, \"tropas\": {\"lanceiro\": 5}}\n  ]\n}"
+
+----- JSON valido? SIM -----
+----- ORDEM PARSEADA -----
+  construir: [{"aldeiaId":18,"tipo":"lanceiro"}]
+  envios   : [{"origemId":18,"destinoId":6,"tropas":{"lanceiro":5}}]
+----- IDS (ancoragem) ----- emitidos: [18,18,6] | inexistentes: []
+----- ACEITO PELO MOTOR -----
+  + envio [18]->[6]: 5 lanceiros
+----- REJEITADO (logado p/ o eval) -----
+  - construir [18]: recurso insuficiente p/ lanceiro (tem 10m/6f, custa 15m/0f)
+----- COUNTER vs NEUTRA (achado) -----
+  [6] neutra lanceiro <- enviei lanceiro (counter ideal: arqueiro) => nao-counter
+
+############################################################
+#  TURNO 2  —  REI B (ollama:qwen2.5:3b)
+############################################################
+
+----- RESPOSTA CRUA DO MODELO (ollama:qwen2.5:3b, com a sujeira que vier) -----
+"{\n  \"construir\": [\n    {\"aldeiaId\": 18, \"tipo\": \"lanceiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 18, \"destinoId\": 6, \"tropas\": {\"lanceiro\": 4, \"arqueiro\": 0, \"cavaleiro\": 3}},\n    {\"origemId\": 18, \"destinoId\": 7, \"tropas\": {\"lanceiro\": 7, \"arqueiro\": 0, \"cavaleiro\": 2}}\n  ]\n}"
+
+----- JSON valido? SIM -----
+----- ORDEM PARSEADA -----
+  construir: [{"aldeiaId":18,"tipo":"lanceiro"}]
+  envios   : [{"origemId":18,"destinoId":6,"tropas":{"lanceiro":4,"arqueiro":0,"cavaleiro":3}},{"origemId":18,"destinoId":7,"tropas":{"lanceiro":7,"arqueiro":0,"cavaleiro":2}}]
+----- IDS (ancoragem) ----- emitidos: [18,18,6,18,7] | inexistentes: []
+----- ACEITO PELO MOTOR -----
+  + construir lanceiro em [18]
+----- REJEITADO (logado p/ o eval) -----
+  - envio [18]->[6]: tropa que nao tem (pediu 4 lanceiro, tem 0)
+  - envio [18]->[7]: tropa que nao tem (pediu 7 lanceiro, tem 0)
+
+############################################################
+#  TURNO 3  —  REI B (ollama:qwen2.5:3b)
+############################################################
+
+----- RESPOSTA CRUA DO MODELO (ollama:qwen2.5:3b, com a sujeira que vier) -----
+"{\n  \"construir\": [\n    {\"aldeiaId\": 18, \"tipo\": \"lanceiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 18, \"destinoId\": 6, \"tropas\": {\"lanceiro\": 3}},\n    {\"origemId\": 18, \"destinoId\": 7, \"tropas\": {\"arqueiro\": 4}}\n  ]\n}"
+
+----- JSON valido? SIM -----
+----- ORDEM PARSEADA -----
+  construir: [{"aldeiaId":18,"tipo":"lanceiro"}]
+  envios   : [{"origemId":18,"destinoId":6,"tropas":{"lanceiro":3}},{"origemId":18,"destinoId":7,"tropas":{"arqueiro":4}}]
+----- IDS (ancoragem) ----- emitidos: [18,18,6,18,7] | inexistentes: []
+----- ACEITO PELO MOTOR -----
+  + construir lanceiro em [18]
+  + envio [18]->[7]: 4 arqueiros
+----- REJEITADO (logado p/ o eval) -----
+  - envio [18]->[6]: tropa que nao tem (pediu 3 lanceiro, tem 1)
+----- COUNTER vs NEUTRA (achado) -----
+  [7] neutra cavaleiro <- enviei arqueiro (counter ideal: lanceiro) => nao-counter
+
+############################################################
+#  TURNO 4  —  REI B (ollama:qwen2.5:3b)
+############################################################
+
+----- RESPOSTA CRUA DO MODELO (ollama:qwen2.5:3b, com a sujeira que vier) -----
+"{\n  \"construir\": [\n    {\"aldeiaId\": 18, \"tipo\": \"lanceiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 18, \"destinoId\": 4, \"tropas\": {\"lanceiro\": 3, \"arqueiro\": 0, \"cavaleiro\": 0}}\n  ]\n}"
+
+----- JSON valido? SIM -----
+----- ORDEM PARSEADA -----
+  construir: [{"aldeiaId":18,"tipo":"lanceiro"}]
+  envios   : [{"origemId":18,"destinoId":4,"tropas":{"lanceiro":3,"arqueiro":0,"cavaleiro":0}}]
+----- IDS (ancoragem) ----- emitidos: [18,18,4] | inexistentes: []
+----- ACEITO PELO MOTOR -----
+  (nada — o Rei passou o turno)
+----- REJEITADO (logado p/ o eval) -----
+  - construir [18]: recurso insuficiente p/ lanceiro (tem 10m/24f, custa 15m/0f)
+  - envio [18]->[4]: tropa que nao tem (pediu 3 lanceiro, tem 2)
+
+############################################################
+#  TURNO 5  —  REI B (ollama:qwen2.5:3b)
+############################################################
+
+----- RESPOSTA CRUA DO MODELO (ollama:qwen2.5:3b, com a sujeira que vier) -----
+"{\n  \"construir\": [\n    {\"aldeiaId\": 18, \"tipo\": \"lanceiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 18, \"destinoId\": 6, \"tropas\": {\"lanceiro\": 3}}\n  ]\n}"
+
+----- JSON valido? SIM -----
+----- ORDEM PARSEADA -----
+  construir: [{"aldeiaId":18,"tipo":"lanceiro"}]
+  envios   : [{"origemId":18,"destinoId":6,"tropas":{"lanceiro":3}}]
+----- IDS (ancoragem) ----- emitidos: [18,18,6] | inexistentes: []
+----- ACEITO PELO MOTOR -----
+  + construir lanceiro em [18]
+----- REJEITADO (logado p/ o eval) -----
+  - envio [18]->[6]: tropa que nao tem (pediu 3 lanceiro, tem 2)
+
+############################################################
+#  TURNO 6  —  REI B (ollama:qwen2.5:3b)
+############################################################
+
+----- RESPOSTA CRUA DO MODELO (ollama:qwen2.5:3b, com a sujeira que vier) -----
+"{\n  \"construir\": [\n    {\"aldeiaId\": 18, \"tipo\": \"lanceiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 18, \"destinoId\": 6, \"tropas\": {\"lanceiro\": 3}},\n    {\"origemId\": 18, \"destinoId\": 4, \"tropas\": {\"arqueiro\": 5}}\n  ]\n}"
+
+----- JSON valido? SIM -----
+----- ORDEM PARSEADA -----
+  construir: [{"aldeiaId":18,"tipo":"lanceiro"}]
+  envios   : [{"origemId":18,"destinoId":6,"tropas":{"lanceiro":3}},{"origemId":18,"destinoId":4,"tropas":{"arqueiro":5}}]
+----- IDS (ancoragem) ----- emitidos: [18,18,6,18,4] | inexistentes: []
+----- ACEITO PELO MOTOR -----
+  + construir lanceiro em [18]
+  + envio [18]->[6]: 3 lanceiros
+----- REJEITADO (logado p/ o eval) -----
+  - envio [18]->[4]: tropa que nao tem (pediu 5 arqueiro, tem 0)
+----- COUNTER vs NEUTRA (achado) -----
+  [6] neutra lanceiro <- enviei lanceiro (counter ideal: arqueiro) => nao-counter
+
+############################################################
+#  TURNO 7  —  REI B (ollama:qwen2.5:3b)
+############################################################
+
+----- RESPOSTA CRUA DO MODELO (ollama:qwen2.5:3b, com a sujeira que vier) -----
+"{\n  \"construir\": [\n    {\"aldeiaId\": 18}\n  ],\n  \"envios\": [\n    {\"origemId\": 18, \"destinoId\": 6, \"tropas\": {\"lanceiro\": 2}},\n    {\"origemId\": 18, \"destinoId\": 7, \"tropas\": {\"arqueiro\": 4}}\n  ]\n}"
+
+----- JSON valido? SIM -----
+----- ORDEM PARSEADA -----
+  construir: [{"aldeiaId":18}]
+  envios   : [{"origemId":18,"destinoId":6,"tropas":{"lanceiro":2}},{"origemId":18,"destinoId":7,"tropas":{"arqueiro":4}}]
+----- IDS (ancoragem) ----- emitidos: [18,18,6,18,7] | inexistentes: []
+----- ACEITO PELO MOTOR -----
+  (nada — o Rei passou o turno)
+----- REJEITADO (logado p/ o eval) -----
+  - construir [18]: tipo invalido "undefined"
+  - envio [18]->[6]: tropa que nao tem (pediu 2 lanceiro, tem 1)
+  - envio [18]->[7]: tropa que nao tem (pediu 4 arqueiro, tem 0)
+
+############################################################
+#  TURNO 8  —  REI B (ollama:qwen2.5:3b)
+############################################################
+
+----- RESPOSTA CRUA DO MODELO (ollama:qwen2.5:3b, com a sujeira que vier) -----
+"{\n  \"construir\": [\n    {\"aldeiaId\": 18}\n  ],\n  \"envios\": [\n    {\"origemId\": 18, \"destinoId\": 6, \"tropas\": {\"lanceiro\": 10, \"arqueiro\": 0, \"cavaleiro\": 3}},\n    {\"origemId\": 18, \"destinoId\": 4, \"tropas\": {\"lanceiro\": 0, \"arqueiro\": 5, \"cavaleiro\": 0}}\n  ]\n}"
+
+----- JSON valido? SIM -----
+----- ORDEM PARSEADA -----
+  construir: [{"aldeiaId":18}]
+  envios   : [{"origemId":18,"destinoId":6,"tropas":{"lanceiro":10,"arqueiro":0,"cavaleiro":3}},{"origemId":18,"destinoId":4,"tropas":{"lanceiro":0,"arqueiro":5,"cavaleiro":0}}]
+----- IDS (ancoragem) ----- emitidos: [18,18,6,18,4] | inexistentes: []
+----- ACEITO PELO MOTOR -----
+  (nada — o Rei passou o turno)
+----- REJEITADO (logado p/ o eval) -----
+  - construir [18]: tipo invalido "undefined"
+  - envio [18]->[6]: tropa que nao tem (pediu 10 lanceiro, tem 1)
+  - envio [18]->[4]: tropa que nao tem (pediu 5 arqueiro, tem 0)
+
+############################################################
+#  TURNO 9  —  REI B (ollama:qwen2.5:3b)
+############################################################
+
+----- RESPOSTA CRUA DO MODELO (ollama:qwen2.5:3b, com a sujeira que vier) -----
+"{\n  \"construir\": [\n    {\"aldeiaId\": 18, \"tipo\": \"lanceiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 18, \"destinoId\": 6, \"tropas\": {\"lanceiro\": 10, \"arqueiro\": 0, \"cavaleiro\": 0}}\n  ]\n}"
+
+----- JSON valido? SIM -----
+----- ORDEM PARSEADA -----
+  construir: [{"aldeiaId":18,"tipo":"lanceiro"}]
+  envios   : [{"origemId":18,"destinoId":6,"tropas":{"lanceiro":10,"arqueiro":0,"cavaleiro":0}}]
+----- IDS (ancoragem) ----- emitidos: [18,18,6] | inexistentes: []
+----- ACEITO PELO MOTOR -----
+  + construir lanceiro em [18]
+----- REJEITADO (logado p/ o eval) -----
+  - envio [18]->[6]: tropa que nao tem (pediu 10 lanceiro, tem 1)
+
+############################################################
+#  TURNO 10  —  REI B (ollama:qwen2.5:3b)
+############################################################
+
+----- RESPOSTA CRUA DO MODELO (ollama:qwen2.5:3b, com a sujeira que vier) -----
+"{\n  \"construir\": [\n    {\"aldeiaId\": 18, \"tipo\": \"lanceiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 18, \"destinoId\": 6, \"tropas\": {\"lanceiro\": 2, \"arqueiro\": 0, \"cavaleiro\": 3}}\n  ]\n}"
+
+----- JSON valido? SIM -----
+----- ORDEM PARSEADA -----
+  construir: [{"aldeiaId":18,"tipo":"lanceiro"}]
+  envios   : [{"origemId":18,"destinoId":6,"tropas":{"lanceiro":2,"arqueiro":0,"cavaleiro":3}}]
+----- IDS (ancoragem) ----- emitidos: [18,18,6] | inexistentes: []
+----- ACEITO PELO MOTOR -----
+  + construir lanceiro em [18]
+  + envio [18]->[6]: 2 lanceiros, 3 cavaleiros
+----- COUNTER vs NEUTRA (achado) -----
+  [6] neutra lanceiro <- enviei cavaleiro (counter ideal: arqueiro) => nao-counter
+
+############################################################
+#  TURNO 11  —  REI B (ollama:qwen2.5:3b)
+############################################################
+
+----- RESPOSTA CRUA DO MODELO (ollama:qwen2.5:3b, com a sujeira que vier) -----
+"{\n  \"construir\": [\n    {\"aldeiaId\": 6}\n  ],\n  \"envios\": [\n    {\"origemId\": 6, \"destinoId\": 18, \"tropas\": {\"lanceiro\": 0, \"arqueiro\": 5, \"cavaleiro\": 2}}\n  ]\n}"
+
+----- JSON valido? SIM -----
+----- ORDEM PARSEADA -----
+  construir: [{"aldeiaId":6}]
+  envios   : [{"origemId":6,"destinoId":18,"tropas":{"lanceiro":0,"arqueiro":5,"cavaleiro":2}}]
+----- IDS (ancoragem) ----- emitidos: [6,6,18] | inexistentes: []
+----- ACEITO PELO MOTOR -----
+  (nada — o Rei passou o turno)
+----- REJEITADO (logado p/ o eval) -----
+  - construir [6]: tipo invalido "undefined"
+  - envio [6]->[18]: tropa que nao tem (pediu 5 arqueiro, tem 0)
+
+############################################################
+#  TURNO 12  —  REI B (ollama:qwen2.5:3b)
+############################################################
+
+----- RESPOSTA CRUA DO MODELO (ollama:qwen2.5:3b, com a sujeira que vier) -----
+"{\n  \"construir\": [\n    {\"aldeiaId\": 6}\n  ],\n  \"envios\": [\n    {\"origemId\": 6, \"destinoId\": 18, \"tropas\": {\"lanceiro\": 0, \"arqueiro\": 5, \"cavaleiro\": 0}}\n  ]\n}"
+
+----- JSON valido? SIM -----
+----- ORDEM PARSEADA -----
+  construir: [{"aldeiaId":6}]
+  envios   : [{"origemId":6,"destinoId":18,"tropas":{"lanceiro":0,"arqueiro":5,"cavaleiro":0}}]
+----- IDS (ancoragem) ----- emitidos: [6,6,18] | inexistentes: []
+----- ACEITO PELO MOTOR -----
+  (nada — o Rei passou o turno)
+----- REJEITADO (logado p/ o eval) -----
+  - construir [6]: tipo invalido "undefined"
+  - envio [6]->[18]: tropa que nao tem (pediu 5 arqueiro, tem 0)
+
+############################################################
+#  TURNO 13  —  REI B (ollama:qwen2.5:3b)
+############################################################
+
+----- RESPOSTA CRUA DO MODELO (ollama:qwen2.5:3b, com a sujeira que vier) -----
+"{\n  \"construir\": [\n    {\"aldeiaId\": 6}\n  ],\n  \"envios\": [\n    {\"origemId\": 6, \"destinoId\": 18, \"tropas\": {\"lanceiro\": 0, \"arqueiro\": 5, \"cavaleiro\": 0}}\n  ]\n}"
+
+----- JSON valido? SIM -----
+----- ORDEM PARSEADA -----
+  construir: [{"aldeiaId":6}]
+  envios   : [{"origemId":6,"destinoId":18,"tropas":{"lanceiro":0,"arqueiro":5,"cavaleiro":0}}]
+----- IDS (ancoragem) ----- emitidos: [6,6,18] | inexistentes: []
+----- ACEITO PELO MOTOR -----
+  (nada — o Rei passou o turno)
+----- REJEITADO (logado p/ o eval) -----
+  - construir [6]: tipo invalido "undefined"
+  - envio [6]->[18]: tropa que nao tem (pediu 5 arqueiro, tem 0)
+
+############################################################
+#  TURNO 14  —  REI B (ollama:qwen2.5:3b)
+############################################################
+
+----- RESPOSTA CRUA DO MODELO (ollama:qwen2.5:3b, com a sujeira que vier) -----
+"{\n  \"construir\": [\n    {\"aldeiaId\": 6, \"tipo\": \"lanceiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 6, \"destinoId\": 18, \"tropas\": {\"lanceiro\": 0, \"arqueiro\": 5, \"cavaleiro\": 0}}\n  ]\n}"
+
+----- JSON valido? SIM -----
+----- ORDEM PARSEADA -----
+  construir: [{"aldeiaId":6,"tipo":"lanceiro"}]
+  envios   : [{"origemId":6,"destinoId":18,"tropas":{"lanceiro":0,"arqueiro":5,"cavaleiro":0}}]
+----- IDS (ancoragem) ----- emitidos: [6,6,18] | inexistentes: []
+----- ACEITO PELO MOTOR -----
+  + construir lanceiro em [6]
+----- REJEITADO (logado p/ o eval) -----
+  - envio [6]->[18]: tropa que nao tem (pediu 5 arqueiro, tem 0)
+
+############################################################
+#  TURNO 15  —  REI B (ollama:qwen2.5:3b)
+############################################################
+
+----- RESPOSTA CRUA DO MODELO (ollama:qwen2.5:3b, com a sujeira que vier) -----
+"{\n  \"construir\": [\n    {\"aldeiaId\": 6}\n  ],\n  \"envios\": [\n    {\"origemId\": 6, \"destinoId\": 18, \"tropas\": {\"lanceiro\": 0, \"arqueiro\": 5, \"cavaleiro\": 0}}\n  ]\n}"
+
+----- JSON valido? SIM -----
+----- ORDEM PARSEADA -----
+  construir: [{"aldeiaId":6}]
+  envios   : [{"origemId":6,"destinoId":18,"tropas":{"lanceiro":0,"arqueiro":5,"cavaleiro":0}}]
+----- IDS (ancoragem) ----- emitidos: [6,6,18] | inexistentes: []
+----- ACEITO PELO MOTOR -----
+  (nada — o Rei passou o turno)
+----- REJEITADO (logado p/ o eval) -----
+  - construir [6]: tipo invalido "undefined"
+  - envio [6]->[18]: tropa que nao tem (pediu 5 arqueiro, tem 0)
+
+############################################################
+#  TURNO 16  —  REI B (ollama:qwen2.5:3b)
+############################################################
+
+----- RESPOSTA CRUA DO MODELO (ollama:qwen2.5:3b, com a sujeira que vier) -----
+"{\n  \"construir\": [\n    {\"aldeiaId\": 6, \"tipo\": \"lanceiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 6, \"destinoId\": 14, \"tropas\": {\"lanceiro\": 10, \"arqueiro\": 0, \"cavaleiro\": 0}}\n  ]\n}"
+
+----- JSON valido? SIM -----
+----- ORDEM PARSEADA -----
+  construir: [{"aldeiaId":6,"tipo":"lanceiro"}]
+  envios   : [{"origemId":6,"destinoId":14,"tropas":{"lanceiro":10,"arqueiro":0,"cavaleiro":0}}]
+----- IDS (ancoragem) ----- emitidos: [6,6,14] | inexistentes: []
+----- ACEITO PELO MOTOR -----
+  + construir lanceiro em [6]
+----- REJEITADO (logado p/ o eval) -----
+  - envio [6]->[14]: tropa que nao tem (pediu 10 lanceiro, tem 1)
+
+############################################################
+#  TURNO 17  —  REI B (ollama:qwen2.5:3b)
+############################################################
+
+----- RESPOSTA CRUA DO MODELO (ollama:qwen2.5:3b, com a sujeira que vier) -----
+"{\n  \"construir\": [\n    {\"aldeiaId\": 6, \"tipo\": \"lanceiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 6, \"destinoId\": 14, \"tropas\": {\"lanceiro\": 10, \"arqueiro\": 0, \"cavaleiro\": 0}}\n  ]\n}"
+
+----- JSON valido? SIM -----
+----- ORDEM PARSEADA -----
+  construir: [{"aldeiaId":6,"tipo":"lanceiro"}]
+  envios   : [{"origemId":6,"destinoId":14,"tropas":{"lanceiro":10,"arqueiro":0,"cavaleiro":0}}]
+----- IDS (ancoragem) ----- emitidos: [6,6,14] | inexistentes: []
+----- ACEITO PELO MOTOR -----
+  + construir lanceiro em [6]
+----- REJEITADO (logado p/ o eval) -----
+  - envio [6]->[14]: tropa que nao tem (pediu 10 lanceiro, tem 2)
+
+
+================== METRICAS DO EVAL ==================
+Vencedor: A (eliminacao) | duracao: 18 turnos | tempo real: 40.3s
+Aldeias finais — A(burro): 6 | B(rei): 0
+
+Turnos do Rei: 17
+  JSON valido            : 17/17 (100%)
+  erro de rede           : 0
+  turnos em que "passou" : 7 (41%)
+  turnos com >=1 rejeicao: 16 (94%)
+
+ANCORAGEM (metrica-chave da iteracao):
+  turnos que emitiram algum id     : 17 (100%)
+  turnos SO com ids reais da visao : 17 (100%)
+  turnos com >=1 id INEXISTENTE    : 0 (0%)
+  turnos com >=1 ordem ACEITA      : 10 (59%)
+
+Counter vs neutra (achado):
+  envios aceitos contra neutra : 4
+  com counter CERTO            : 0 (0%)
+
+Triangulo muda o resultado? (combates do Rei: 4)
+  vitorias do Rei            : 1 (25%)
+  baixas baratas (m<1, vantagem): 1
+  baixas neutras (m=1)          : 3
+  baixas caras (m>1, desvantagem): 0
+  (lembrete de design: NUMERO decide o vencedor; o triangulo so mexe em 'm'.
+   se vitorias nao mudam com m, o triangulo so barateia — dado p/ o Lucas decidir.)
+=====================================================
+
+========================================================
+  DESFECHO DA PARTIDA
+========================================================
+Resultado : Rei A venceu  [eliminacao]
+Duracao   : 18 turnos  (alvo de design: 30)
+Placar    : Rei A 6 | Rei B 0 | neutras 14  (de 20 aldeias)
+
+FORCA FINAL:
+  Rei A: forca total 235 em 6 aldeia(s) | maior guarnicao 80 (teto 300: 0 aldeia(s) no teto)
+  Rei B: forca total 0 em 0 aldeia(s) | maior guarnicao 0 (teto 300: 0 aldeia(s) no teto)
+
+COMBATES  : 12 no total | 7 conquista(s)
+  T2: Rei A tomou [13] Falktal (Fatk 200 vs Fdef 135, m=0.67)
+  T4: Rei A tomou [3] Kalsee (Fatk 145 vs Fdef 70, m=1.50)
+  T8: Rei A tomou [8] Kalried (Fatk 90 vs Fdef 70, m=1.00)
+  T11: Rei A tomou [6] Rabsee (Fatk 65 vs Fdef 30, m=1.50)
+  T11: Rei B tomou [6] Rabsee (Fatk 110 vs Fdef 55, m=1.00)
+  T16: Rei A tomou [18] Eichsee (Fatk 15 vs Fdef 10, m=0.67)
+  T18: Rei A tomou [6] Rabsee (Fatk 115 vs Fdef 60, m=1.00)
+========================================================

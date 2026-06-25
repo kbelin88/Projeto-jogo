@@ -9,7 +9,7 @@
 //  NADA de Ollama.
 // ============================================================
 "use strict";
-const Engine = require("./engine.js");
+const Engine = require("../engine.js");
 const CONFIG = Engine.CONFIG;
 
 let falhas = 0;

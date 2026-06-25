@@ -8,7 +8,7 @@
 //  Depois confere a estrutura exigida pela spec.
 // ============================================================
 "use strict";
-const Engine = require("./engine.js");
+const Engine = require("../engine.js");
 const CONFIG = Engine.CONFIG;
 
 // turno real de uma partida burro-vs-burro (visao do Rei B)

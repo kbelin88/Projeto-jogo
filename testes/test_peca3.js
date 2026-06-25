@@ -10,7 +10,7 @@
 //    velocidade_passo: lenta 6, media 9, rapida 14
 // ============================================================
 "use strict";
-const Engine = require("./engine.js");
+const Engine = require("../engine.js");
 const CONFIG = Engine.CONFIG;
 
 let falhas = 0;
