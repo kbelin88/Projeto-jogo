@@ -43,6 +43,13 @@
     // PRODUCAO por aldeia, por turno.
     producao: { madeira: 10, ferro: 6 },
 
+    // TETO DE FORCA POR ALDEIA: SO A PRODUCAO respeita. Aldeia cuja forca
+    // (em casa + ja na fila de construcao) atinge este valor PARA de construir
+    // tropas — mas segue juntando recurso. Reforco e conquista PODEM passar do
+    // teto: o limite morde so a fabricacao, p/ punir empilhar massa num lugar
+    // so sem travar quem reforca/conquista. null = sem teto. PROVISORIO.
+    limite_forca_aldeia: 300,
+
     // TROPAS: custo / forca / velocidade / turnos para construir.
     // A forca e quase proporcional ao custo de proposito: o
     // cavaleiro paga a mais por velocidade, nao por forca bruta.
@@ -74,9 +81,20 @@
     //   tipos_sorteaveis : pool de onde sai o tipo dominante de cada neutra.
     //   forca_min/max    : quantidade inicial (em UNIDADES do tipo sorteado).
     //   endurecimento    : unidades do tipo dominante ganhas por turno.
+    // CORTE A 25% (era 20-40 -> forca 200-1200): com a guarnicao do rei capada
+    // em ~300, quase nenhuma neutra era conquistavel. 5-10 un. = forca 50-300,
+    // dentro do alcance de um exercito no teto.
+    //   endurecimento           : unidades do tipo ganhas por TICK de endurecimento.
+    //   endurecimento_intervalo : 1 tick a cada N turnos (maior = mais lento).
+    //   teto_forca              : a neutra PARA de endurecer ao atingir esta forca.
+    // NEUTRAS MUITO FACEIS: saem com 1 unidade (forca 10-30 por tipo) e sobem
+    // devagar (+1 a cada 5 turnos). O burro batia a IA local em parte porque as
+    // neutras endureciam rapido demais; comecar minusculo abre a janela de
+    // expansao p/ um Rei que envia tropa aos poucos (nao all-in).
     neutra: {
       tipos_sorteaveis: ["lanceiro", "arqueiro", "cavaleiro"],
-      forca_min: 20, forca_max: 40, endurecimento: 1,
+      forca_min: 1, forca_max: 1,
+      endurecimento: 1, endurecimento_intervalo: 5, teto_forca: 300,
     },
 
     // TEATRO: regiao contida do mapa 200x200 onde rola a partida.
@@ -96,11 +114,11 @@
     },
 
     // REI: guarnicao INICIAL de cada rei (V1). Sem ela o rei comeca com 0
-    // tropas e leva muitos turnos so produzindo -> nao ataca cedo. Numero
-    // ~ faixa das neutras (20-40 un.): forca 550 bate as fracas e PERDE para
-    // as cavaleiro fortes (sem dominacao). Os 3 tipos deixam o Rei ESCOLHER
-    // o counter do triangulo. PROVISORIO.
-    rei: { tropas_iniciais: { lanceiro: 10, arqueiro: 10, cavaleiro: 10 } },
+    // tropas e leva muitos turnos so produzindo -> nao ataca cedo. Os 3 tipos
+    // deixam o Rei ESCOLHER o counter do triangulo. PROVISORIO.
+    // Forca = 5*10 + 4*15 + 3*30 = 50 + 60 + 90 = 200 (baixado de 550 p/ tirar
+    // o all-in da abertura: menos massa inicial torna o envio-total arriscado).
+    rei: { tropas_iniciais: { lanceiro: 5, arqueiro: 4, cavaleiro: 3 } },
 
     // RELATORIO DO REI (V1): velocidade usada para PRE-CALCULAR "turnos de
     // marcha" no relatorio (o modelo nao faz geometria). "media" = referencia
@@ -312,6 +330,10 @@
     if (!a || a.dono === null) return false;
     const def = estado.config.tropas[tipo];
     if (!def) return false;
+    // TETO DE PRODUCAO: aldeia que ja atingiu o limite de forca para de
+    // fabricar (segue com recurso, e pode receber reforco/conquista acima dele).
+    const limite = estado.config.limite_forca_aldeia;
+    if (limite != null && forcaComprometida(estado, a) >= limite) return false;
     if (a.recursos.madeira < def.custo.madeira || a.recursos.ferro < def.custo.ferro) return false;
     a.recursos.madeira -= def.custo.madeira;
     a.recursos.ferro -= def.custo.ferro;
@@ -334,11 +356,19 @@
     }
   }
 
-  // (5) ENDURECIMENTO: cada neutra ganha +inc unidades do SEU tipo por turno.
+  // (5) ENDURECIMENTO: cada neutra ganha +inc unidades do SEU tipo, mas SO a
+  //     cada `endurecimento_intervalo` turnos (crescimento lento) e SO enquanto
+  //     sua forca esta abaixo de `teto_forca` (limite, como o dos reis).
   function endurecer(estado) {
-    const inc = estado.config.neutra.endurecimento;
+    const n = estado.config.neutra;
+    const intervalo = n.endurecimento_intervalo || 1;
+    if (estado.turno % intervalo !== 0) return;     // ainda nao e turno de endurecer
+    const inc = n.endurecimento;
+    const teto = n.teto_forca;
     for (const a of estado.aldeias) {
-      if (a.dono === null && a.tipo) a.tropas[a.tipo] += inc;
+      if (a.dono !== null || !a.tipo) continue;
+      if (teto != null && forcaTropas(estado, a.tropas) >= teto) continue; // no teto: para
+      a.tropas[a.tipo] += inc;
     }
   }
 
@@ -357,6 +387,14 @@
   // Forca defensiva da aldeia: todas (reis E neutras) usam tropas tipadas.
   function forcaDefesa(estado, aldeia) {
     return forcaTropas(estado, aldeia.tropas);
+  }
+  // Forca COMPROMETIDA da aldeia = em casa + a que ja esta na fila de
+  // construcao. E isto que o teto de producao (limite_forca_aldeia) mede:
+  // contar a fila impede furar o teto enfileirando varias tropas num turno so.
+  function forcaComprometida(estado, aldeia) {
+    let f = forcaTropas(estado, aldeia.tropas);
+    for (const c of aldeia.construindo) f += estado.config.tropas[c.tipo].forca;
+    return f;
   }
   // Tipo que mais contribui em forca (matchup do triangulo). null se sem tipo.
   function tipoDominante(estado, tropas) {
@@ -820,14 +858,27 @@
     const construir = (ordem && Array.isArray(ordem.construir)) ? ordem.construir : [];
     const envios = (ordem && Array.isArray(ordem.envios)) ? ordem.envios : [];
 
-    const recSim = {}; // recursos restantes por aldeia (simula o gasto do turno)
+    const recSim = {};   // recursos restantes por aldeia (simula o gasto do turno)
+    const forcaSim = {}; // forca comprometida por aldeia (simula o teto de producao)
+    const limite = estado.config.limite_forca_aldeia;
     for (const c of construir) {
       if (!c || typeof c !== "object") { rejeicoes.push("construir: item nao e objeto"); continue; }
       const a = aldeiaPorId(estado, c.aldeiaId);
       if (!a) { rejeicoes.push(`construir: aldeia [${c.aldeiaId}] nao existe`); continue; }
       if (a.dono !== dono) { rejeicoes.push(`construir: aldeia [${c.aldeiaId}] nao e sua`); continue; }
       const def = estado.config.tropas[c.tipo];
-      if (!def) { rejeicoes.push(`construir [${c.aldeiaId}]: tipo invalido "${c.tipo}"`); continue; }
+      if (!def) {
+        const motivo = c.tipo == null
+          ? `faltou o campo "tipo" (escreva "lanceiro", "arqueiro" ou "cavaleiro")`
+          : `tipo invalido "${c.tipo}" (use "lanceiro", "arqueiro" ou "cavaleiro")`;
+        rejeicoes.push(`construir [${c.aldeiaId}]: ${motivo}`);
+        continue;
+      }
+      if (!(c.aldeiaId in forcaSim)) forcaSim[c.aldeiaId] = forcaComprometida(estado, a);
+      if (limite != null && forcaSim[c.aldeiaId] >= limite) {
+        rejeicoes.push(`construir [${c.aldeiaId}]: no teto de forca (${forcaSim[c.aldeiaId]}/${limite}) - producao parada`);
+        continue;
+      }
       if (!(c.aldeiaId in recSim)) recSim[c.aldeiaId] = { madeira: a.recursos.madeira, ferro: a.recursos.ferro };
       const r = recSim[c.aldeiaId];
       if (r.madeira < def.custo.madeira || r.ferro < def.custo.ferro) {
@@ -835,6 +886,7 @@
         continue;
       }
       r.madeira -= def.custo.madeira; r.ferro -= def.custo.ferro;
+      forcaSim[c.aldeiaId] += def.forca;
       aceitoConstruir.push({ aldeiaId: c.aldeiaId, tipo: c.tipo });
     }
 
@@ -1039,8 +1091,80 @@
     };
   }
 
+  // ==========================================================
+  //  RELATORIO DE DESFECHO (pos-partida)
+  // ----------------------------------------------------------
+  //  Le o RESULTADO de rodarPartida/rodarPartidaRei e resume COMO a
+  //  partida terminou. Texto PURO (sem rede). Foco no desfecho + nos
+  //  sinais das mecanicas: forca por aldeia vs teto, pico de massa
+  //  (mede o efeito de baixar a guarnicao inicial + o teto), conquistas.
+  // ==========================================================
+  function relatorioDesfecho(res, config) {
+    const cfg = config || (res.estado && res.estado.config) || CONFIG;
+    const est = res.estado;
+    const L = [];
+    const barra = "=".repeat(56);
+
+    L.push(barra);
+    L.push("  DESFECHO DA PARTIDA");
+    L.push(barra);
+
+    // 1) RESULTADO
+    const venc = res.vencedor;
+    const quem = venc === "A" ? "Rei A venceu" : venc === "B" ? "Rei B venceu"
+      : venc === "empate" ? "EMPATE (ambos eliminados)" : "SEM DECISAO (bateu o limite de turnos)";
+    L.push(`Resultado : ${quem}  [${res.motivo}]`);
+    const alvo = cfg.partida_alvo_turnos;
+    L.push(`Duracao   : ${res.turnos} turnos` + (alvo ? `  (alvo de design: ${alvo})` : ""));
+
+    // 2) PLACAR FINAL de aldeias
+    const A = aldeiasDe(est, "A"), B = aldeiasDe(est, "B"), N = aldeiasDe(est, null);
+    L.push(`Placar    : Rei A ${A.length} | Rei B ${B.length} | neutras ${N.length}  (de ${est.aldeias.length} aldeias)`);
+    L.push("");
+
+    // 3) FORCA FINAL + DISTRIBUICAO (o teto de producao deve aparecer aqui)
+    const teto = cfg.limite_forca_aldeia;
+    L.push("FORCA FINAL:");
+    const resumoLado = (lista, nome) => {
+      const forcas = lista.map((a) => forcaDe(a.tropas, cfg));
+      const total = forcas.reduce((s, f) => s + f, 0);
+      const maior = forcas.length ? Math.max.apply(null, forcas) : 0;
+      const noTeto = teto != null ? forcas.filter((f) => f >= teto).length : 0;
+      L.push(`  ${nome}: forca total ${total} em ${lista.length} aldeia(s) | maior guarnicao ${maior}` +
+        (teto != null ? ` (teto ${teto}: ${noTeto} aldeia(s) no teto)` : ""));
+    };
+    resumoLado(A, "Rei A");
+    resumoLado(B, "Rei B");
+    L.push("");
+
+    // 4) PICO DE MASSA ao longo da partida (efeito de 550->200 + teto de 300)
+    const hist = res.historico || [];
+    if (hist.length) {
+      let picoA = 0, picoB = 0, tA = 0, tB = 0;
+      for (const h of hist) {
+        if (h.forcaA > picoA) { picoA = h.forcaA; tA = h.turno; }
+        if (h.forcaB > picoB) { picoB = h.forcaB; tB = h.turno; }
+      }
+      L.push(`PICO DE FORCA (total do lado, ao longo da partida): Rei A ${picoA} (T${tA}) | Rei B ${picoB} (T${tB})`);
+      L.push("");
+    }
+
+    // 5) ATIVIDADE: combates e conquistas (quem tomou o que, e quando)
+    const combates = (est.log || []).filter((e) => e.tipo === "combate");
+    const conquistas = combates.filter((e) => e.conquista);
+    L.push(`COMBATES  : ${combates.length} no total | ${conquistas.length} conquista(s)`);
+    const MOSTRA = 15;
+    conquistas.slice(0, MOSTRA).forEach((c) => {
+      L.push(`  T${c.turno}: Rei ${c.atacante} tomou [${c.alvoId}] ${c.alvoNome} (Fatk ${c.Fatk} vs Fdef ${c.Fdef}, m=${c.m.toFixed(2)})`);
+    });
+    if (conquistas.length > MOSTRA) L.push(`  (+${conquistas.length - MOSTRA} conquista(s) nao listada(s))`);
+    L.push(barra);
+    return L.join("\n");
+  }
+
   return {
     CONFIG,
+    relatorioDesfecho,
     criarRng, rngInt,
     criarAldeia,
     gerarTeatro,
@@ -1057,6 +1181,7 @@
     // Peca 3
     forcaTropas,
     forcaDefesa,
+    forcaComprometida,
     tipoDominante,
     vantagem,
     resolverCombate,

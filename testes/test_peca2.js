@@ -12,7 +12,7 @@
 //    - o custo e debitado ao enfileirar; sem recurso, nao constroi
 // ============================================================
 "use strict";
-const Engine = require("./engine.js");
+const Engine = require("../engine.js");
 const CONFIG = Engine.CONFIG;
 
 let falhas = 0;
@@ -45,12 +45,24 @@ const recursoNeutra = neutras.some((a) => a.recursos.madeira !== 0 || a.recursos
 checa("neutras NAO acumulam recurso", !recursoNeutra);
 
 const inc = CONFIG.neutra.endurecimento;
+const intervalo = CONFIG.neutra.endurecimento_intervalo || 1;
+const teto = CONFIG.neutra.teto_forca;
 const TIPOS = ["lanceiro", "arqueiro", "cavaleiro"];
-// endurece +inc do SEU tipo, e SO daquele tipo (os outros ficam em 0)
+// GABARITO: endurece +inc do SEU tipo a cada `intervalo` turnos, parando no teto.
+function esperadoNeutra(unidades, forcaUnit) {
+  let u = unidades;
+  for (let turno = 1; turno <= N; turno++) {
+    if (turno % intervalo !== 0) continue;
+    if (teto != null && u * forcaUnit >= teto) break;
+    u += inc;
+  }
+  return u;
+}
+// endurece no ritmo certo, do SEU tipo, e SO daquele tipo (os outros ficam em 0)
 const endurOk = neutras.every((a) =>
-  a.tropas[a.tipo] === guarnIni.get(a.id) + inc * N &&
+  a.tropas[a.tipo] === esperadoNeutra(guarnIni.get(a.id), CONFIG.tropas[a.tipo].forca) &&
   TIPOS.filter((t) => t !== a.tipo).every((t) => a.tropas[t] === 0));
-checa(`neutras endurecem +${inc}/turno do SEU tipo (e so dele)`, endurOk);
+checa(`neutras endurecem +${inc} a cada ${intervalo} turnos do SEU tipo (parando no teto ${teto})`, endurOk);
 const exNeutra = neutras[0];
 console.log(`     ex.: neutra #${exNeutra.id} ${guarnIni.get(exNeutra.id)} -> ${exNeutra.tropas[exNeutra.tipo]} ${exNeutra.tipo}(s)`);
 
