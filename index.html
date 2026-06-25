@@ -90,8 +90,14 @@
   <button id="greset">Reiniciar</button>
   <label>vel <input id="gspeed" type="range" min="80" max="1200" value="500" style="width:90px"></label>
   <label title="Rei B decidido pelo Gemini (API). Play roda a partida do Gemini no mapa."><input type="checkbox" id="ggemini"> Rei B = Gemini</label>
-  <label>turnos <input id="gmax" type="number" min="1" max="20" value="6" style="width:48px"></label>
-  <button id="glog" title="Baixar o .txt da ultima partida do Gemini">Baixar log</button>
+  <label title="Rei B decidido por um modelo LOCAL via Ollama (localhost:11434)."><input type="checkbox" id="gollama"> Rei B = Ollama
+    <select id="gomodel" style="font:12px 'Trebuchet MS',sans-serif">
+      <option value="qwen2.5:3b">qwen2.5:3b</option>
+      <option value="llama3.2:3b">llama3.2:3b</option>
+    </select>
+  </label>
+  <label>turnos <input id="gmax" type="number" min="1" max="80" value="6" style="width:48px"></label>
+  <button id="glog" title="Baixar o .txt da ultima partida do modelo">Baixar log</button>
 </div>
 
 <script src="world.js"></script>
@@ -621,6 +627,7 @@
   let geminiKey = "";
   let ultimoEnvioG = 0;
   let geminiLog = [];      // buffer textual da partida (p/ baixar e avaliar depois)
+  let etiquetaB = "gemini"; // rotulo do decisor do Rei B no log (gemini | ollama:<modelo>)
   function lsGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
   geminiKey = lsGet("GEMINI_API_KEY") || "";
@@ -671,7 +678,7 @@
   // combates do turno + placar. Esse buffer vira o .txt do eval.
   function registrarTurnoGemini(cru, ordem, diag) {
     const tn = game.turno, L = [];
-    L.push("########## TURNO " + tn + " — Rei B (gemini) ##########");
+    L.push("########## TURNO " + tn + " — Rei B (" + etiquetaB + ") ##########");
     L.push("resposta crua: " + JSON.stringify(cru));
     L.push("ordem.construir: " + JSON.stringify(ordem.construir || []));
     L.push("ordem.envios   : " + JSON.stringify(ordem.envios || []));
@@ -705,12 +712,13 @@
     const a = document.createElement("a");
     const ts = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 16);
     a.href = URL.createObjectURL(blob);
-    a.download = "partida_gemini_" + ts + ".txt";
+    a.download = "partida_" + etiquetaB.replace(/[^a-z0-9.]/gi, "-") + "_" + ts + ".txt";
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(a.href);
   }
 
   async function passoTurnoGemini() {
+    etiquetaB = "gemini";
     Engine.tick(game);
     if (Engine.aldeiasDe(game, "A").length)
       Engine.executarOrdem(game, "A", Engine.jogadorBurro(Engine.montarVisao(game, "A")));
@@ -746,11 +754,80 @@
     baixarLogGemini(); // baixa o .txt automaticamente no fim da partida
   }
 
+  // ----- MODO OLLAMA: Rei B decidido por um modelo LOCAL, ao vivo no mapa -----
+  // Mesma logica do modo Gemini, mas SEM chave e SEM pacing (local, sem cota).
+  // POREM: a pagina abre via file:// (origin "null") e o Ollama bloqueia por
+  // CORS por padrao -> precisa subir o Ollama com OLLAMA_ORIGINS=* (o alerta
+  // de erro abaixo da a instrucao). Reusa o mesmo buffer/log do modo Gemini.
+  const OLLAMA_URL = "http://localhost:11434/api/generate";
+  async function gerarOllama(prompt, modelo) {
+    const resp = await fetch(OLLAMA_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: modelo, prompt, stream: false, options: { temperature: 0 } }),
+    });
+    if (!resp.ok) throw new Error("Ollama HTTP " + resp.status);
+    const data = await resp.json();
+    return data.response || "";
+  }
+
+  async function passoTurnoOllama(modelo) {
+    modelo = modelo || document.getElementById("gomodel").value;
+    etiquetaB = "ollama:" + modelo;
+    Engine.tick(game);
+    if (Engine.aldeiasDe(game, "A").length)
+      Engine.executarOrdem(game, "A", Engine.jogadorBurro(Engine.montarVisao(game, "A")));
+    let cru = "", ordem = { construir: [], envios: [] }, diag = null;
+    if (Engine.aldeiasDe(game, "B").length) {
+      const prompt = Engine.montarPrompt(Engine.montarVisao(game, "B"));
+      try { cru = await gerarOllama(prompt, modelo); }
+      catch (e) { cru = "[ERRO DE REDE] " + e.message; }
+      ordem = Engine.parsearOrdem(cru).ordem;            // sem retry: resposta ruim = passa o turno
+      diag = Engine.diagnosticarOrdem(game, "B", ordem); // ANTES de executar (alvo ainda neutra)
+      Engine.executarOrdem(game, "B", ordem);
+    }
+    registrarTurnoGemini(cru, ordem, diag);
+    updateGameHUD();
+    draw();
+  }
+
+  async function runOllama() {
+    const modelo = document.getElementById("gomodel").value;
+    etiquetaB = "ollama:" + modelo;
+    // sanity check (e teste de CORS): se falhar, instrui a liberar o Ollama
+    try { await gerarOllama("responda apenas: ok", modelo); }
+    catch (e) {
+      pause();
+      alert("Nao consegui falar com o Ollama (" + e.message + ").\n\n" +
+        "Provavel CORS: a pagina abre via file:// e o Ollama bloqueia por padrao.\n" +
+        "Feche o Ollama (icone da bandeja) e rode no PowerShell:\n\n" +
+        "    $env:OLLAMA_ORIGINS=\"*\"; ollama serve\n\n" +
+        "Deixe essa janela aberta e tente o Play de novo.\n" +
+        "Confira tambem que o modelo existe:  ollama pull " + modelo);
+      return;
+    }
+    const maxT = Math.max(1, parseInt(document.getElementById("gmax").value, 10) || 6);
+    geminiLog = ["=== PARTIDA Rei B (ollama:" + modelo + ") vs jogadorBurro | seed " + game.config.seed +
+      " | maxTurnos " + maxT + " | " + new Date().toLocaleString() + " ===\n"];
+    while (playing && game && !Engine.checarVitoria(game) && game.turno < maxT) {
+      await passoTurnoOllama(modelo);
+    }
+    pause();
+    updateGameHUD();
+    const venc = Engine.checarVitoria(game);
+    geminiLog.push("=== FIM === turno " + game.turno + " | resultado: " +
+      (venc ? "vitoria " + venc : "limite de turnos") +
+      " | A " + Engine.aldeiasDe(game, "A").length + " ald | B " + Engine.aldeiasDe(game, "B").length +
+      " ald | neutras " + Engine.aldeiasDe(game, null).length);
+    baixarLogGemini(); // baixa o .txt automaticamente no fim da partida
+  }
+
   function play() {
     if (playing || !game || Engine.checarVitoria(game)) return;
     playing = true;
     document.getElementById("gplay").textContent = "⏸ Pausar";
     if (document.getElementById("ggemini").checked) { runGemini(); return; } // Gemini gateia a cadencia
+    if (document.getElementById("gollama").checked) { runOllama(); return; } // Ollama gateia a cadencia
     timer = setInterval(passoTurno, speed);
   }
   function pause() {
@@ -831,10 +908,17 @@
     if (document.getElementById("ggemini").checked) {
       if (!pedirChave() || !game || Engine.checarVitoria(game)) return;
       await passoTurnoGemini();
+    } else if (document.getElementById("gollama").checked) {
+      if (!game || Engine.checarVitoria(game)) return;
+      await passoTurnoOllama();
     } else { passoTurno(); }
   });
   document.getElementById("greset").addEventListener("click", novaPartida);
   document.getElementById("glog").addEventListener("click", baixarLogGemini);
+  // os dois modos "Rei B = modelo" sao mutuamente exclusivos
+  const cbGemini = document.getElementById("ggemini"), cbOllama = document.getElementById("gollama");
+  cbGemini.addEventListener("change", () => { if (cbGemini.checked) cbOllama.checked = false; });
+  cbOllama.addEventListener("change", () => { if (cbOllama.checked) cbGemini.checked = false; });
   document.getElementById("gspeed").addEventListener("input", (e) => {
     speed = +e.target.value;
     if (playing) { pause(); play(); }

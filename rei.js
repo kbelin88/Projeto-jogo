@@ -123,12 +123,22 @@ function clienteGemini(opcoes) {
   };
 }
 
-// criarCliente(backend) — ponto unico p/ trocar qual modelo roda.
-// "ollama" (local) | "gemini" (API). Mesma interface dos dois lados.
-function criarCliente(backend, opcoes) {
-  backend = (backend || "ollama").toLowerCase();
-  if (backend === "gemini") return clienteGemini(opcoes);
-  if (backend === "ollama") return clienteOllama(opcoes);
+// criarCliente(id) — ponto unico p/ trocar qual modelo roda.
+// id = "backend:modelo" (ex.: "ollama:qwen2.5:3b", "ollama:llama3.2:3b",
+// "gemini:gemini-2.5-flash"). Split no PRIMEIRO ":" so: o backend e o
+// prefixo, o RESTO e o nome do modelo (que tambem tem ":" — qwen2.5:3b).
+// Sem o ":" o id inteiro vale como backend (cai no modelo default do cliente).
+// Sem argumento = "ollama:qwen2.5:3b" (comportamento de hoje).
+function criarCliente(id, opcoes) {
+  id = id || "ollama:qwen2.5:3b";
+  opcoes = opcoes || {};
+  const i = id.indexOf(":");
+  const backend = (i < 0 ? id : id.slice(0, i)).toLowerCase();
+  const modelo = i < 0 ? "" : id.slice(i + 1).trim();
+  // modelo do id tem prioridade; vazio => cliente usa o seu proprio default.
+  const opc = modelo ? Object.assign({}, opcoes, { modelo }) : opcoes;
+  if (backend === "gemini") return clienteGemini(opc);
+  if (backend === "ollama") return clienteOllama(opc);
   throw new Error(`backend desconhecido: "${backend}" (use "ollama" ou "gemini")`);
 }
 

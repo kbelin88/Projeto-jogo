@@ -14,13 +14,16 @@
 //    - quem vence, duracao da partida
 // ============================================================
 "use strict";
-const Engine = require("./engine.js");
-const Rei = require("./rei.js");
+const Engine = require("../engine.js");
+const Rei = require("../rei.js");
 
-// uso: node rei_partida.js [maxTurnos] [backend]   backend = ollama | gemini
+// uso: node rei_partida.js [maxTurnos] [modeloId]
+//   modeloId = "backend:modelo" — ex.: ollama:qwen2.5:3b (default),
+//   ollama:llama3.2:3b, gemini:gemini-2.5-flash
 const maxTurnos = parseInt(process.argv[2], 10) || 120;
-const backend = (process.argv[3] || "ollama").toLowerCase();
-const cliente = Rei.criarCliente(backend, { temperatura: 0 });
+const modeloId = process.argv[3] || "ollama:qwen2.5:3b";
+const backend = modeloId.split(":")[0].toLowerCase(); // so p/ as msgs de erro
+const cliente = Rei.criarCliente(modeloId, { temperatura: 0 });
 const etiqueta = cliente.nome; // p/ os rotulos do log ficarem honestos
 const ladoRei = "B";
 
@@ -144,4 +147,7 @@ function imprimirTurno(reg) {
   console.log("  (lembrete de design: NUMERO decide o vencedor; o triangulo so mexe em 'm'.");
   console.log("   se vitorias nao mudam com m, o triangulo so barateia — dado p/ o Lucas decidir.)");
   console.log("=====================================================");
+
+  // RELATORIO DE DESFECHO (mesma funcao da partida local): resumo do final.
+  console.log("\n" + Engine.relatorioDesfecho(res));
 })();
