@@ -1,0 +1,118 @@
+===========================================================
+  BENCHMARK DE MODELOS - PROJETO JOGO
+  Como cada modelo joga o jogo de conquista (Rei B vs jogadorBurro).
+  Aluno: Lucas | Interlocutor: Claude
+  Este arquivo CRESCE: uma entrada por modelo testado. Versionar no git.
+  Atualizado: 25/jun/2026
+===========================================================
+
+COMO USAR: cada modelo testado vira um bloco abaixo. Mesma estrutura sempre,
+pra comparar maca-com-maca. A regra de eval do projeto vale aqui: uma
+variavel por vez (mesma seed, mesma mecanica, mesmo prompt; so muda o modelo).
+O VALOR do projeto e esta tabela: "modelo X resolve grounding mas falha em
+economia; modelo Y nem grounding resolve". Isso e design de eval - o
+diferencial de carreira declarado.
+
+-----------------------------------------------------------
+ESCALA DE MODO DE FALHA (o "degrau" que cada modelo alcanca)
+-----------------------------------------------------------
+Degrau 0 - FORMATO: nao produz JSON valido / formato quebrado.
+Degrau 1 - GROUNDING: JSON ok, mas inventa ids, copia numeros do exemplo,
+           pede tropa que nao existe. Nao liga a resposta ao mundo.
+Degrau 2 - ECONOMIA/PLANEJAMENTO: grounded, mas nao rastreia o proprio
+           orcamento (pede build que nao pode pagar) nem aloca tropa bem.
+Degrau 3 - ESTRATEGIA: economia ok, mas decisao estrategica fraca
+           (timing, foco, defesa). [nenhum modelo chegou aqui ainda]
+
+Quanto mais alto o degrau de falha, mais capaz o modelo. O objetivo do
+benchmark e dizer, com dado, em que degrau cada modelo trava.
+
+===========================================================
+  ENTRADA 1 - qwen2.5:3b (local, Ollama)  | 23/jun
+===========================================================
+Setup: seed 1, neutras fracas+lentas (1 un., +1/5 turnos, teto 300), tropas
+iniciais 200, teto de producao 300, feedback de rejeicao ATIVO no relatorio.
+Resultado: PERDEU por eliminacao (burro venceu; ~6-0 a 16-0 conforme partida).
+
+DEGRAU ALCANCADO: 1 (grounding tecnico OK, mas trava na EXECUCAO).
+  - JSON valido: 100%. Ancoragem (ids reais): 100%.
+  - MAS pede tropa que nao tem em 81% dos envios; constroi sem campo "tipo"
+    (-> undefined). Envios aceitos: so 19%. Passou o turno em branco: 35%.
+
+ACHADO CENTRAL (experimento do feedback de rejeicao):
+  Com o feedback ATIVO ("sua ordem foi recusada porque [6] nao tem 4
+  arqueiros"), a repeticao da MESMA ordem invalida NAO caiu - SUBIU
+  (52% -> 76%). O modelo tinha a informacao duas vezes (o relatorio ja
+  mostrava "0 arqueiros em casa" E o aviso de rejeicao) e ainda repetiu.
+  CONCLUSAO: o gargalo do qwen2.5:3b NAO e o ambiente - a informacao estava
+  toda la. E CAPACIDADE DE RACIOCINIO. Um 3B nao conecta "nao tenho a tropa
+  -> nao mando", mesmo avisado. Isto resolve a bifurcacao modelo-vs-ambiente
+  do lado do MODELO (achado de eval mais valioso ate aqui).
+  HIPOTESE A VIGIAR (nao confirmada): encher o prompt de avisos pode ter
+  PIORADO o 3B (mais texto = atencao consumida). Em modelo fraco, mais
+  feedback pode degradar. Confirmar com modelo maior.
+
+Triangulo/counter: subiu de 0% -> 83% de counter certo quando as neutras
+  ficaram fracas e de tipo legivel. O qwen LE o tipo e escolhe o counter -
+  isso destravou a mensurabilidade do triangulo (era o criterio de Fase A).
+  (Obs: counter alto + execucao ruim coexistem - ele escolhe o tipo certo
+   mas erra a quantidade/posse da tropa.)
+
+VEREDITO: 3B local nao basta como JOGADOR de Fase A/B. Serve como piso do
+  benchmark ("ate onde um 3B chega"). Mecanica nao conserta - e teto de modelo.
+
+===========================================================
+  ENTRADA 2 - gemini-2.5-flash (API, free tier)  | 25/jun
+===========================================================
+Setup: seed 1, mesma mecanica acima, 20 turnos. Rei B = Gemini vs burro.
+Resultado: EMPATE no limite de turnos (placar A 6 x B 5 aldeias) - MAS o
+  Gemini terminou com FORCA MILITAR muito maior (~190 vs ~40). Estava
+  ganhando a corrida de exercito quando o relogio/cota bateram.
+  NOTA: turno 20 deu 429 (cota free tier = 20 req/dia estourada). Lembrete
+  fisico de por que a Fase A roda LOCAL: o Gemini nao da pra iterar.
+
+DEGRAU ALCANCADO: 2 (ECONOMIA/PLANEJAMENTO). Subiu um degrau sobre o qwen.
+  - Grounding: resolvido. Ids reais, sem residuo de "tropa que nao tem"
+    cronico, usa counter do triangulo (T8/T9 m=0.67 vitoria barata = atacou
+    com vantagem; T12 m=1.5 = atacou em desvantagem e pagou).
+  - FALHA DOMINANTE = orcamento. Enfileira 6-8 construcoes/turno, metade
+    rejeitada por "recurso insuficiente". Retrato no T18: 78 de ferro PARADO
+    e 10 de madeira, e ele insistindo em construir o que pede madeira. Nao
+    rastreia o proprio caixa por recurso.
+
+Triangulo/counter: ATIVO e visivel nos dois sentidos (m<1 e m>1). A mecanica
+  do triangulo esta funcionando como projetada (modula baixas).
+
+VEREDITO: grounding e counter resolvidos; trava na gestao de economia. E o
+  jogador mais forte testado, mas inviavel pra iterar (cota). Bom como
+  "teto de referencia" pontual, nao como motor de Fase A/B.
+
+-----------------------------------------------------------
+TABELA-RESUMO (atualizar a cada entrada)
+-----------------------------------------------------------
+  modelo            | degrau | grounding | counter | economia | viavel iterar?
+  ------------------|--------|-----------|---------|----------|---------------
+  qwen2.5:3b        |   1    |    ok     |  83%    |  falha   | sim (local)
+  gemini-2.5-flash  |   2    |    ok     |  ativo  |  falha   | nao (cota)
+  llama3.2:3b       |   ?    |    ?      |   ?     |    ?     | provavel (local)
+  llama3 8B         |   ?    |    ?      |   ?     |    ?     | so pontual (vaza p/ CPU)
+
+-----------------------------------------------------------
+PROXIMO A TESTAR
+-----------------------------------------------------------
+Modelo local de 3-4B (cabe nos ~4GB de VRAM da RTX 3050 Ti). Candidatos:
+llama3.2:3b (ja instalado) ou phi3 (forte em raciocinio pro tamanho).
+Pergunta de eval: um 3-4B mais novo que o qwen sobe pro degrau 2 (economia)
+ou trava no mesmo lugar? Se subir, ha jogador local viavel pra Fase A/B sem
+depender da cota do Gemini. Mesma seed, mesma mecanica, mesmo prompt: so o
+modelo muda.
+NOTA HARDWARE (MEDIDO 25/jun): 8B (llama3) carrega 5.3GB e VAZA - ollama ps
+mostrou 58%/42% CPU/GPU (so 42% coube nos ~4GB de VRAM da RTX 3050 Ti).
+RESPONDE (nao trava), mas mais lento - viavel so pra rodadas PONTUAIS, nao
+pra iterar. Ponto-doce confirmado = 3-4B (cabem 100% na GPU).
+3 candidatos locais de ~2GB ja instalados: qwen2.5:3b (testado, degrau 1),
+llama3.2:3b (novo), phi3 (novo, otimizado p/ raciocinio).
+SUGESTAO proxima sessao: testar phi3 PRIMEIRO (pergunta afiada: raciocinio
+denso pequeno sobe pro degrau 2 onde o qwen travou?), depois llama3.2:3b.
+OBS: llama3 puxa forte p/ ingles (leu "cores" PT como "cores" EN no teste).
+===========================================================
