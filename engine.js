@@ -256,6 +256,9 @@
         B: { id: "B", nome: "Rei B" },
       },
       log: [],
+      // FEEDBACK (memoria): ordens RECUSADAS no ultimo turno, por dono. O
+      // relatorio do turno seguinte ecoa isto p/ o Rei nao repetir o erro.
+      rejeicoesAnteriores: { A: [], B: [] },
     };
   }
 
@@ -600,6 +603,8 @@
       })),
       // o que aconteceu NESTE turno (combates/reforcos) — a memoria do Rei
       eventos: estado.log.filter((ev) => ev.turno === estado.turno),
+      // ordens que o motor RECUSOU no turno anterior (memoria anti-loop)
+      rejeicoesAnteriores: (estado.rejeicoesAnteriores && estado.rejeicoesAnteriores[dono]) || [],
     };
   }
 
@@ -664,6 +669,16 @@
     // cabecalho
     L.push(`TURNO ${visao.turno} - Voce e o Rei ${me}.`);
     L.push("");
+
+    // FEEDBACK DE REJEICAO (memoria anti-loop): ecoa as ordens que o motor
+    // RECUSOU no turno anterior, p/ o modelo corrigir e nao repetir o erro.
+    // So aparece se houve rejeicao. Sem retry: e apenas memoria no relatorio.
+    if (visao.rejeicoesAnteriores && visao.rejeicoesAnteriores.length) {
+      L.push("=== ATENCAO: SUAS ORDENS RECUSADAS NO TURNO ANTERIOR ===");
+      L.push("As ordens abaixo NAO foram executadas (foram recusadas pelo motor). Corrija estes erros nesta jogada e NAO repita a mesma ordem:");
+      for (const r of visao.rejeicoesAnteriores) L.push(`- ${r}`);
+      L.push("");
+    }
 
     // SUAS ALDEIAS
     L.push(`=== SUAS ALDEIAS (${visao.minhas.length}) ===`);
@@ -997,7 +1012,12 @@
   //   ordem = { construir:[{aldeiaId,tipo}], envios:[{origemId,destinoId,tropas}] }
   //   ENVIO UNIFICADO: o motor decide pelo DONO do destino (reforco vs ataque).
   function executarOrdem(estado, dono, ordem) {
-    if (!ordem || typeof ordem !== "object") return;
+    // FEEDBACK (memoria, sem retry): guarda as ordens RECUSADAS desta jogada
+    // p/ o relatorio do PROXIMO turno (montarVisao le isto). Ordem invalida
+    // continua sendo "passa o turno" — aqui so registramos o porque.
+    if (!estado.rejeicoesAnteriores) estado.rejeicoesAnteriores = {};
+    if (!ordem || typeof ordem !== "object") { estado.rejeicoesAnteriores[dono] = []; return; }
+    estado.rejeicoesAnteriores[dono] = diagnosticarOrdem(estado, dono, ordem).rejeicoes;
     const construir = Array.isArray(ordem.construir) ? ordem.construir : [];
     const envios = Array.isArray(ordem.envios) ? ordem.envios
       : Array.isArray(ordem.ataques) ? ordem.ataques : []; // aceita nome antigo
