@@ -49,6 +49,13 @@ checa("prompt TERMINA com '}' (exemplo e a ultima coisa)", prompt.trimEnd().ends
 checa("exemplo: tropas com os 3 tipos (inclusive zero)", /"lanceiro": 0|"arqueiro": 0|"cavaleiro": 0/.test(prompt));
 checa('topo NAO nomeia "lado A/B"', !/lado [AB]/i.test(prompt));
 
+// REGRAS DE COMBATE (triangulo v2): bloco gerado da CONFIG, entre topo e dados
+const iRegras = prompt.indexOf("=== REGRAS DE COMBATE ===");
+checa("REGRAS: bloco presente entre topo e dados", iRegras > iTopo && iRegras < iDados);
+checa("REGRAS: bonus vem da CONFIG", prompt.includes(`multiplicada por ${CONFIG.bonus_forca_triangulo}`));
+checa("REGRAS: triangulo por extenso", prompt.includes("lanceiro vence cavaleiro"));
+checa("REGRAS: exemplo numerico presente", /-> o atacante vence/.test(prompt));
+
 // EXEMPLO ANCORADO: origem = id real de SUAS ALDEIAS; destino = id real de um alvo.
 const exemplo = Engine.exemploAncorado(visao);
 const origemReal = visao.minhas[0].id;

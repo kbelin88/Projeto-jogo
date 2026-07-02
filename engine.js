@@ -796,11 +796,33 @@
   // colateral, sem chamar modelo. NAO recebe `lado`: a visao ja carrega
   // de quem e (campo `minhas`). Ordem critica p/ modelo pequeno:
   // TAREFA -> DADOS -> FORMATO, com o EXEMPLO por ultimo.
+  // REGRAS DE COMBATE em texto, GERADAS da CONFIG: se o eval varrer o bonus,
+  // o prompt conta a verdade automaticamente. Regra no prompt divergindo da
+  // regra no motor e o pior bug possivel num benchmark.
+  function regrasCombateTexto(cfg) {
+    const B = cfg.bonus_forca_triangulo;
+    const L = [];
+    L.push("=== REGRAS DE COMBATE ===");
+    L.push(`Triangulo de counters: ${TIPOS.map((t) => `${t} vence ${cfg.triangulo[t]}`).join("; ")}.`);
+    L.push(`No combate, o tipo com MAIS FORCA em cada exercito define o matchup. O lado com o counter certo luta com sua forca multiplicada por ${B}. Vence quem tiver a maior forca efetiva; empate favorece o defensor.`);
+    if (B > 1) {
+      const def = 300;
+      const atk = Math.ceil((def + 30) / B); // sempre: atk*B > def
+      if (atk < def) {
+        const atkEf = Math.round(atk * B);
+        L.push(`Exemplo: ${atk} de forca em arqueiros atacando ${def} de forca em lanceiros: ${atk} x ${B} = ${atkEf} contra ${def} -> o atacante vence, mesmo com menos forca. Com o counter errado, aconteceria o inverso.`);
+      }
+    }
+    return L.join("\n");
+  }
+
   function montarPrompt(visao) {
     const L = [];
     // TOPO: identidade + tarefa (curto)
     L.push('Voce e o Rei. As aldeias listadas em "SUAS ALDEIAS" pertencem a voce.');
     L.push("Seu objetivo e vencer eliminando o inimigo.");
+    L.push("");
+    L.push(regrasCombateTexto(visao.config));
     L.push("");
     // MEIO: dados do turno (relatorio integral)
     L.push(relatorioTexto(visao));
@@ -1205,6 +1227,7 @@
     forcaDefesa,
     forcaComprometida,
     tipoDominante,
+    regrasCombateTexto,
     vantagem,
     resolverCombate,
     distancia,
