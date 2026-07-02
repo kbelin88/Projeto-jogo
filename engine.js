@@ -61,9 +61,9 @@
 
     // TRIANGULO pedra-papel-tesoura: cada tropa VENCE a indicada.
     //   lanceiro > cavaleiro > arqueiro > lanceiro
-    // bonus_triangulo: eficiencia da tropa com vantagem (1.5x).
-    // (O numero ainda decide o vencedor; o triangulo modula baixas.)
-    bonus_triangulo: 1.5,
+    // TRIANGULO v2: o counter multiplica a FORCA EFETIVA no combate
+    // (decide o vencedor), nao mais so as baixas. Knob varrivel no eval.
+    bonus_forca_triangulo: 1.5,
     triangulo: { lanceiro: "cavaleiro", cavaleiro: "arqueiro", arqueiro: "lanceiro" },
 
     // COMBATE: atrito_base = fracao da forca do PERDEDOR que o vencedor
@@ -440,27 +440,29 @@
     const atkType = tipoDominante(estado, exercito.tropas);
     const defType = tipoDominante(estado, alvo.tropas); // neutra agora e tipada
 
-    // numero decide: atacante so vence se SUPERA (empate -> defensor segura)
-    const atacanteVence = Fatk > Fdef;
-    const Fwin = atacanteVence ? Fatk : Fdef;
-    const Flose = atacanteVence ? Fdef : Fatk;
+    // TRIANGULO v2: counter multiplica a forca EFETIVA -> decide o vencedor.
+    const v = vantagem(estado, atkType, defType); // +1 atk tem counter, -1 def tem
+    const B = cfg.bonus_forca_triangulo;
+    const FatkEf = Fatk * (v > 0 ? B : 1);
+    const FdefEf = Fdef * (v < 0 ? B : 1);
 
-    // vantagem do VENCEDOR sobre o perdedor -> multiplicador de baixas
-    const vWin = atacanteVence
-      ? vantagem(estado, atkType, defType)
-      : vantagem(estado, defType, atkType);
-    const m = vWin > 0 ? 1 / cfg.bonus_triangulo : vWin < 0 ? cfg.bonus_triangulo : 1;
+    const atacanteVence = FatkEf > FdefEf; // empate -> defensor segura
+    const FwinEf = atacanteVence ? FatkEf : FdefEf;
+    const FloseEf = atacanteVence ? FdefEf : FatkEf;
 
-    let baixasForca = Flose * cfg.combate.atrito_base * m;
-    baixasForca = Math.min(baixasForca, Fwin); // nunca mais do que o vencedor tem
-    const fracao = Fwin > 0 ? baixasForca / Fwin : 0;
+    let baixasEf = FloseEf * cfg.combate.atrito_base;
+    baixasEf = Math.min(baixasEf, FwinEf);
+    const fracao = FwinEf > 0 ? baixasEf / FwinEf : 0;
+    // baixas reportadas em forca REAL (fracao aplicada sobre a forca real do vencedor)
+    const baixasForca = fracao * (atacanteVence ? Fatk : Fdef);
 
     const rep = {
       tipo: "combate",
       turno: estado.turno,
       alvoId: alvo.id, alvoNome: alvo.nome,
       atacante: exercito.dono,
-      Fatk, Fdef, m,
+      Fatk, Fdef, FatkEf: Math.round(FatkEf), FdefEf: Math.round(FdefEf),
+      vantagem: v, // +1 atacante tinha counter, -1 defensor, 0 neutro
       vencedor: atacanteVence ? "atacante" : "defensor",
       baixasForca: Math.round(baixasForca),
       conquista: false,

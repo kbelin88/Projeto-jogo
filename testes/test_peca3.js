@@ -5,7 +5,7 @@
 //
 //  Cenarios FIXOS conferidos contra calculo a mao. CONFIG:
 //    forca: lanceiro 10, arqueiro 15, cavaleiro 30
-//    bonus_triangulo 1.5 ; atrito_base 0.5
+//    bonus_forca_triangulo 1.5 ; atrito_base 0.5 (TRIANGULO v2: counter decide)
 //    triangulo: lanceiro>cavaleiro>arqueiro>lanceiro
 //    velocidade_passo: lenta 6, media 9, rapida 14
 // ============================================================
@@ -53,7 +53,7 @@ console.log("A) Atacante vence neutra tipada + conquista (matchup neutro):");
   const rep = Engine.resolverCombate(e, { dono: "A", tropas: { lanceiro: 100 } }, alvo);
   checa("vencedor = atacante", rep.vencedor === "atacante");
   checa("Fatk=1000 Fdef=200", rep.Fatk === 1000 && rep.Fdef === 200);
-  checa("m = 1 (lanceiro vs lanceiro)", rep.m === 1);
+  checa("vantagem = 0 (lanceiro vs lanceiro)", rep.vantagem === 0);
   checa("baixasForca = 100", rep.baixasForca === 100, `${rep.baixasForca}`);
   checa("conquista = true", rep.conquista === true);
   checa("aldeia agora e do A", alvo.dono === "A");
@@ -152,6 +152,32 @@ console.log("\nE) Fluxo completo (enviar -> ticks -> chegada/combate):");
   checa("conquistou a neutra", d.dono === "A", `dono ${d.dono}`);
   checa("log registrou o combate", e.log.some((l) => l.tipo === "combate" && l.conquista));
   console.log(`     guarnicao tomada: C${d.tropas.cavaleiro} (sobreviventes)`);
+}
+
+
+// ---------------------------------------------------------
+//  F) TRIANGULO v2: o counter DECIDE o vencedor
+//     neutra = 30 lanceiros (F=300, tipo lanceiro)
+//     F1: 18 arqueiros (F=270, counter CERTO): 270*1.5=405 > 300 -> VENCE
+//         baixasEf = 300*0.5 = 150 ; frac = 150/405 ; baixas reais = 100
+//     F2: 10 cavaleiros (F=300, IGUAL, counter ERRADO): 300 vs 300*1.5=450 -> PERDE
+// ---------------------------------------------------------
+console.log("\nF) Triangulo v2 decide o vencedor:");
+{
+  const e1 = estadoTeste();
+  const alvo1 = ald(10, 0, 0, null, { lanceiro: 30 });
+  e1.aldeias.push(alvo1);
+  const r1 = Engine.resolverCombate(e1, { dono: "A", tropas: { arqueiro: 18 } }, alvo1);
+  checa("F1 counter certo VENCE com menos forca (270 vs 300)", r1.vencedor === "atacante");
+  checa("F1 FatkEf = 405", r1.FatkEf === 405, `FatkEf ${r1.FatkEf}`);
+  checa("F1 baixas reais = 100", Math.round(r1.baixasForca) === 100, `baixas ${Math.round(r1.baixasForca)}`);
+
+  const e2 = estadoTeste();
+  const alvo2 = ald(11, 0, 0, null, { lanceiro: 30 });
+  e2.aldeias.push(alvo2);
+  const r2 = Engine.resolverCombate(e2, { dono: "A", tropas: { cavaleiro: 10 } }, alvo2);
+  checa("F2 counter errado PERDE mesmo com forca IGUAL (300 vs 450 ef)", r2.vencedor === "defensor");
+  checa("F2 FdefEf = 450", r2.FdefEf === 450, `FdefEf ${r2.FdefEf}`);
 }
 
 console.log("");

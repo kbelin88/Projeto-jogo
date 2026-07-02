@@ -113,9 +113,9 @@ function imprimirTurno(reg) {
   // achado do triangulo: combates do Rei vs neutra (numero decide; m modula baixas)
   const combatesRei = res.estado.log.filter((l) => l.tipo === "combate" && l.atacante === ladoRei);
   const vitoriasRei = combatesRei.filter((l) => l.vencedor === "atacante");
-  const mComVantagem = combatesRei.filter((l) => l.m < 1).length; // baixas mais baratas (triangulo a favor)
-  const mNeutro = combatesRei.filter((l) => l.m === 1).length;
-  const mDesvantagem = combatesRei.filter((l) => l.m > 1).length;
+  const mComVantagem = combatesRei.filter((l) => l.vantagem > 0).length; // counter a favor
+  const mNeutro = combatesRei.filter((l) => l.vantagem === 0).length;
+  const mDesvantagem = combatesRei.filter((l) => l.vantagem < 0).length;
 
   const pct = (n, d) => (d ? ((100 * n) / d).toFixed(0) + "%" : "—");
 

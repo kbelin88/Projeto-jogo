@@ -89,13 +89,12 @@
   <button id="gstep">Passo</button>
   <button id="greset">Reiniciar</button>
   <label>vel <input id="gspeed" type="range" min="80" max="1200" value="500" style="width:90px"></label>
-  <label title="Rei B decidido pelo Gemini (API). Play roda a partida do Gemini no mapa."><input type="checkbox" id="ggemini"> Rei B = Gemini</label>
-  <label title="Rei B decidido por um modelo LOCAL via Ollama (localhost:11434)."><input type="checkbox" id="gollama"> Rei B = Ollama
-    <select id="gomodel" style="font:12px 'Trebuchet MS',sans-serif">
-      <option value="qwen2.5:3b">qwen2.5:3b</option>
-      <option value="llama3.2:3b">llama3.2:3b</option>
+  <label title="Cerebro do Rei B: Gemini (API) ou um modelo LOCAL do Ollama (descoberto em localhost:11434).">Rei B =
+    <select id="gmodelo" style="font:12px 'Trebuchet MS',sans-serif">
+      <option value="gemini:gemini-2.5-flash">gemini-2.5-flash</option>
     </select>
   </label>
+  <button id="grefresh" title="Re-descobrir modelos do Ollama (sem recarregar a pagina)">↻</button>
   <label>turnos <input id="gmax" type="number" min="1" max="80" value="6" style="width:48px"></label>
   <button id="glog" title="Baixar o .txt da ultima partida do modelo">Baixar log</button>
 </div>
@@ -771,8 +770,65 @@
     return data.response || "";
   }
 
+  // ----- SELETOR UNICO DE MODELO (barra) -----
+  // O value de cada <option> e o id "backend:modelo" que o codigo ja entende.
+  // Split no PRIMEIRO ":" (igual ao criarCliente do rei.js): "ollama:qwen2.5:3b"
+  // -> backend "ollama", modelo "qwen2.5:3b".
+  function modeloSelecionado() {
+    const v = document.getElementById("gmodelo").value || "gemini:gemini-2.5-flash";
+    const i = v.indexOf(":");
+    return {
+      backend: (i < 0 ? v : v.slice(0, i)).toLowerCase(),
+      modelo: i < 0 ? "" : v.slice(i + 1),
+      id: v,
+    };
+  }
+
+  // DESCOBERTA: GET /api/tags -> { models:[{name,...}] }. Popula o seletor com
+  // Gemini (FIXO, primeiro) + os modelos do Ollama (sem os de embedding).
+  // Ollama offline/timeout/CORS: mostra so Gemini + 1 linha desabilitada de
+  // aviso, SEM travar a pagina e SEM alert no carregamento.
+  const OLLAMA_TAGS = "http://localhost:11434/api/tags";
+  async function descobrirModelos() {
+    const sel = document.getElementById("gmodelo");
+    const anterior = sel.value;            // preserva a escolha atual (refresh em partida)
+    let modelos = null;
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 1500);  // timeout curto: nao trava o load
+      const resp = await fetch(OLLAMA_TAGS, { signal: ctrl.signal });
+      clearTimeout(t);
+      if (resp.ok) {
+        const data = await resp.json();
+        modelos = (data.models || [])
+          .map((m) => m.name)
+          .filter((n) => n && !/embed/i.test(n));      // fora os de embedding (nao jogam)
+      }
+    } catch (e) { modelos = null; }        // offline/timeout/CORS -> caso "so Gemini + aviso"
+
+    sel.innerHTML = "";
+    const og = document.createElement("option");
+    og.value = "gemini:gemini-2.5-flash"; og.textContent = "gemini-2.5-flash";
+    sel.appendChild(og);                   // Gemini SEMPRE presente, primeiro
+
+    if (modelos && modelos.length) {
+      for (const n of modelos) {
+        const o = document.createElement("option");
+        o.value = "ollama:" + n; o.textContent = n;
+        sel.appendChild(o);
+      }
+    } else {
+      const o = document.createElement("option");
+      o.value = ""; o.disabled = true;
+      o.textContent = "(Ollama offline - inicie com OLLAMA_ORIGINS=*)";
+      sel.appendChild(o);
+    }
+    // mantem a escolha anterior se ela ainda existir na nova lista
+    if (anterior && [...sel.options].some((o) => o.value === anterior)) sel.value = anterior;
+  }
+
   async function passoTurnoOllama(modelo) {
-    modelo = modelo || document.getElementById("gomodel").value;
+    modelo = modelo || modeloSelecionado().modelo;
     etiquetaB = "ollama:" + modelo;
     Engine.tick(game);
     if (Engine.aldeiasDe(game, "A").length)
@@ -792,7 +848,7 @@
   }
 
   async function runOllama() {
-    const modelo = document.getElementById("gomodel").value;
+    const modelo = modeloSelecionado().modelo;
     etiquetaB = "ollama:" + modelo;
     // sanity check (e teste de CORS): se falhar, instrui a liberar o Ollama
     try { await gerarOllama("responda apenas: ok", modelo); }
@@ -826,9 +882,9 @@
     if (playing || !game || Engine.checarVitoria(game)) return;
     playing = true;
     document.getElementById("gplay").textContent = "⏸ Pausar";
-    if (document.getElementById("ggemini").checked) { runGemini(); return; } // Gemini gateia a cadencia
-    if (document.getElementById("gollama").checked) { runOllama(); return; } // Ollama gateia a cadencia
-    timer = setInterval(passoTurno, speed);
+    // sempre ha um modelo escolhido: Gemini ou Ollama gateiam a propria cadencia
+    if (modeloSelecionado().backend === "gemini") runGemini();
+    else runOllama();
   }
   function pause() {
     playing = false;
@@ -905,20 +961,17 @@
   document.getElementById("gplay").addEventListener("click", () => (playing ? pause() : play()));
   document.getElementById("gstep").addEventListener("click", async () => {
     pause();
-    if (document.getElementById("ggemini").checked) {
+    if (modeloSelecionado().backend === "gemini") {
       if (!pedirChave() || !game || Engine.checarVitoria(game)) return;
       await passoTurnoGemini();
-    } else if (document.getElementById("gollama").checked) {
+    } else {
       if (!game || Engine.checarVitoria(game)) return;
       await passoTurnoOllama();
-    } else { passoTurno(); }
+    }
   });
   document.getElementById("greset").addEventListener("click", novaPartida);
   document.getElementById("glog").addEventListener("click", baixarLogGemini);
-  // os dois modos "Rei B = modelo" sao mutuamente exclusivos
-  const cbGemini = document.getElementById("ggemini"), cbOllama = document.getElementById("gollama");
-  cbGemini.addEventListener("change", () => { if (cbGemini.checked) cbOllama.checked = false; });
-  cbOllama.addEventListener("change", () => { if (cbOllama.checked) cbGemini.checked = false; });
+  document.getElementById("grefresh").addEventListener("click", descobrirModelos);
   document.getElementById("gspeed").addEventListener("input", (e) => {
     speed = +e.target.value;
     if (playing) { pause(); play(); }
@@ -927,6 +980,7 @@
   // ---------- Início ----------
   resize();
   novaPartida();
+  descobrirModelos(); // popula o seletor com os modelos do Ollama (nao bloqueia o load)
 })();
 </script>
 </body>
