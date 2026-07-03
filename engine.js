@@ -408,6 +408,26 @@
     }
     return best;
   }
+  // Nucleo da conta do combate (v2): usado pelo resolverCombate E pela
+  // previsao de confronto da UI — uma conta so, impossivel divergir.
+  function preverCombateTipos(estado, Fatk, atkType, Fdef, defType) {
+    const v = vantagem(estado, atkType, defType); // +1 atk tem counter, -1 def tem
+    const B = estado.config.bonus_forca_triangulo;
+    const FatkEf = Fatk * (v > 0 ? B : 1);
+    const FdefEf = Fdef * (v < 0 ? B : 1);
+    return { v, FatkEf, FdefEf, atacanteVence: FatkEf > FdefEf }; // empate -> defensor segura
+  }
+
+  // Previsao a partir de tropas cruas (p/ a UI: exercito em marcha vs alvo).
+  function preverCombate(estado, tropasAtk, alvo) {
+    const cfg = estado.config;
+    const Fatk = forcaDe(tropasAtk, cfg), Fdef = forcaDe(alvo.tropas, cfg);
+    const atkType = tipoDominante(estado, tropasAtk);
+    const defType = alvo.dono === null ? alvo.tipo : tipoDominante(estado, alvo.tropas);
+    return Object.assign({ Fatk, Fdef, atkType, defType },
+      preverCombateTipos(estado, Fatk, atkType, Fdef, defType));
+  }
+
   // +1 se atkType vence defType; -1 se defType vence atkType; 0 neutro/sem tipo.
   function vantagem(estado, atkType, defType) {
     if (!atkType || !defType) return 0;
@@ -441,12 +461,9 @@
     const defType = tipoDominante(estado, alvo.tropas); // neutra agora e tipada
 
     // TRIANGULO v2: counter multiplica a forca EFETIVA -> decide o vencedor.
-    const v = vantagem(estado, atkType, defType); // +1 atk tem counter, -1 def tem
-    const B = cfg.bonus_forca_triangulo;
-    const FatkEf = Fatk * (v > 0 ? B : 1);
-    const FdefEf = Fdef * (v < 0 ? B : 1);
-
-    const atacanteVence = FatkEf > FdefEf; // empate -> defensor segura
+    // A conta vive em preverCombateTipos p/ NUNCA divergir da previsao da UI.
+    const { v, FatkEf, FdefEf, atacanteVence } =
+      preverCombateTipos(estado, Fatk, atkType, Fdef, defType);
     const FwinEf = atacanteVence ? FatkEf : FdefEf;
     const FloseEf = atacanteVence ? FdefEf : FatkEf;
 
@@ -461,6 +478,7 @@
       turno: estado.turno,
       alvoId: alvo.id, alvoNome: alvo.nome,
       atacante: exercito.dono,
+      atkType, defType,
       Fatk, Fdef, FatkEf: Math.round(FatkEf), FdefEf: Math.round(FdefEf),
       vantagem: v, // +1 atacante tinha counter, -1 defensor, 0 neutro
       vencedor: atacanteVence ? "atacante" : "defensor",
@@ -1251,6 +1269,7 @@
     tipoDominante,
     regrasCombateTexto,
     regrasEconomiaTexto,
+    preverCombate,
     vantagem,
     resolverCombate,
     distancia,

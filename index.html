@@ -72,6 +72,9 @@
   .bd.certo  { background: #2f5a23; color: #a8e58c; }
   .bd.errado { background: #5a2323; color: #f0a49a; }
   .bd.neutro { background: #4a4232; color: #cfc4a4; }
+  .ent .ev { border-left: 3px solid #6b4a22; padding-left: 7px; margin: 2px 0; font-size: 13px; }
+  .ent .evA { border-left-color: #5d8cf0; }
+  .ent .evB { border-left-color: #ef5d5d; }
   #sb-toggle {
     position: fixed; top: 12px; right: 312px; z-index: 7; width: 34px; height: 34px;
     font-size: 15px; color: #f5e9c8; background: linear-gradient(#7a5226,#523414);
@@ -118,6 +121,9 @@
     white-space: nowrap;
   }
   #pt-fbar { display: flex; height: 8px; background: #14100a; }
+  #pt-pips { display: flex; justify-content: center; gap: 3px; padding: 4px 8px 6px; background: rgba(0,0,0,.18); }
+  .pip { width: 9px; height: 9px; border-radius: 2px; background: #5a5244; }
+  .pip.A { background: #5d8cf0; } .pip.B { background: #ef5d5d; }
   #pt-fa { background: linear-gradient(#5d8cf0,#3b63c4); transition: flex-grow .5s; }
   #pt-fb { background: linear-gradient(#ef5d5d,#c43b3b); transition: flex-grow .5s; }
   body.replay #banner, body.cinema #banner { top: 104px; }
@@ -232,6 +238,7 @@
     </div>
   </div>
   <div id="pt-fbar"><div id="pt-fa"></div><div id="pt-fb"></div></div>
+  <div id="pt-pips"></div>
 </div>
 <div id="banner"></div>
 <div id="replaybar">
@@ -545,6 +552,7 @@
     return m;
   }
   const COR_INF = { A: "70,110,220", B: "216,74,74" };
+  const GLIFO = { lanceiro: "\uD83D\uDEE1", arqueiro: "\uD83C\uDFF9", cavaleiro: "\uD83D\uDC0E" }; // escudo/arco/cavalo
 
   function draw() {
     clampPan();
@@ -714,6 +722,15 @@
       }
     }
 
+    // FUNDO SILENCIADO: um veu neutro sobre o terreno abaixa o contraste
+    // da decoracao (arvores/montanhas) p/ a camada de batalha dominar.
+    if (game) {
+      const cine = document.body.classList.contains("replay") ||
+                   document.body.classList.contains("cinema");
+      ctx.fillStyle = `rgba(28,22,12,${cine ? 0.16 : 0.10})`;
+      ctx.fillRect(0, 0, VW, VH);
+    }
+
     // ===== TERRITORIO: tingir a area de influencia dos reis =====
     if (game) {
       const inf = mapaInfluencia();
@@ -721,7 +738,7 @@
         const [tx, ty] = k.split(",").map(Number);
         if (tx < cx0 || tx >= cx1 || ty < cy0 || ty >= cy1) continue;
         const perto = v.d2 <= 2;
-        ctx.fillStyle = `rgba(${COR_INF[v.dono]},${perto ? 0.26 : 0.14})`;
+        ctx.fillStyle = `rgba(${COR_INF[v.dono]},${perto ? 0.30 : 0.18})`;
         ctx.fillRect(tx * cs + panX, ty * cs + panY, cs + 1, cs + 1);
       }
     }
@@ -835,10 +852,23 @@
     etiquetaB = fr.etiqueta;
     document.getElementById("sb-modelo").textContent = "REPLAY \u00b7 " + fr.etiqueta;
 
-    // cronica do frame
-    const cs2 = linhasCombates(fr.turno);
-    if (cs2.length) addEntrada(`<div class="ent-t">Turno ${fr.turno} ` +
-      `<span class="ent-m">${esc(fr.etiqueta)}</span></div>` + cs2.join("") + linhaPlacar());
+    // cronica em DIALETO DE ESPECTADOR: uma frase-icone por evento,
+    // borda na cor de quem agiu. (O modo analista segue fora do replay.)
+    const linhasEsp = [];
+    for (const e of fr.eventos) {
+      if (e.tipo !== "combate") continue;
+      const gA = e.atkType ? GLIFO[e.atkType] : "";
+      const gD = e.defType ? GLIFO[e.defType] : "";
+      const selo = e.vantagem > 0 ? '<span class="bd certo">counter &#10003;</span>'
+                 : e.vantagem < 0 ? '<span class="bd errado">counter &#10007;</span>' : "";
+      const res = e.vencedor === "atacante"
+        ? (e.conquista ? "&#9876; conquistada" : "vencida")
+        : "&#128737; resistiu";
+      linhasEsp.push(`<div class="ev ev${e.atacante}">${gA} <b class="mono">${e.Fatk}</b>` +
+        ` &#10142; ${esc(e.alvoNome)} ${gD} &mdash; ${res} ${selo}</div>`);
+    }
+    if (linhasEsp.length) addEntrada(`<div class="ent-t">Turno ${fr.turno} ` +
+      `<span class="ent-m">${esc(fr.etiqueta)}</span></div>` + linhasEsp.join("") + linhaPlacar());
 
     // banners + escolha do alvo da camera
     let alvoCam = null;
@@ -861,6 +891,10 @@
     registrarEfeitosTurno(fr.turno);
     updateGameHUD();
     const venc = Engine.checarVitoria(game);
+    if (venc && venc !== "empate" && !REDUZ_MOV) {
+      efeitos.push({ fim: true, t0: performance.now(), dur: 3500, cor: COR[venc] });
+      ligarAnimacao();
+    }
     if (venc) mostrarBanner("\ud83c\udfc6 " + (venc === "empate" ? "EMPATE" : "VIT\u00d3RIA DO REI " + venc), "#d9a441");
     draw();
   }
@@ -1047,6 +1081,11 @@
         x: a.x, y: a.y, t0: performance.now(), conq: !!e.conquista,
         cor: e.conquista ? (COR[a.dono] || COR.neutra) : "#ffd56b",
       });
+      if (e.baixasForca > 0) { // dano do vencedor: flutua sobre a aldeia
+        const corD = e.vencedor === "atacante" ? COR[e.atacante] : "#f0e3c0";
+        efeitos.push({ x: a.x, y: a.y, t0: performance.now(), dur: 1400,
+          dano: "-" + e.baixasForca, cor: corD });
+      }
     }
     if (efeitos.length && !efeitoLoop) { efeitoLoop = true; requestAnimationFrame(tickEfeitos); }
   }
@@ -1439,15 +1478,21 @@
         ctx.fillText(val, sx, sy - r - 3);
 
         // glifo do TIPO dentro do circulo: o matchup do triangulo legivel
-        // no ponto de contato (neutra: tipo fixo; rei: tipo dominante)
+        // no ponto de contato. cs>=24: icone; abaixo: letra (fallback).
         const tg = a.dono === null ? a.tipo : Engine.tipoDominante(game, a.tropas);
         if (tg) {
-          const fg = Math.max(9, cs * 0.30);
-          ctx.font = `bold ${fg}px Verdana`;
-          ctx.lineWidth = Math.max(2, fg * 0.25); ctx.strokeStyle = "rgba(20,12,4,.9)";
-          ctx.strokeText(LET[tg], sx, sy + fg * 0.36);
-          ctx.fillStyle = "#f5e9c8";
-          ctx.fillText(LET[tg], sx, sy + fg * 0.36);
+          if (cs >= 24) {
+            const fg = Math.max(11, cs * 0.34);
+            ctx.font = `${fg}px serif`;
+            ctx.fillText(GLIFO[tg], sx, sy + fg * 0.36);
+          } else {
+            const fg = Math.max(9, cs * 0.30);
+            ctx.font = `bold ${fg}px Verdana`;
+            ctx.lineWidth = Math.max(2, fg * 0.25); ctx.strokeStyle = "rgba(20,12,4,.9)";
+            ctx.strokeText(LET[tg], sx, sy + fg * 0.36);
+            ctx.fillStyle = "#f5e9c8";
+            ctx.fillText(LET[tg], sx, sy + fg * 0.36);
+          }
         }
       }
     }
@@ -1462,10 +1507,43 @@
       const dx = d.x * cs + panX + cs / 2, dy = d.y * cs + panY + cs / 2;
       const col = COR[m.dono];
 
-      ctx.setLineDash([5, 5]); ctx.lineWidth = 1; ctx.strokeStyle = "rgba(0,0,0,.25)";
-      ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(dx, dy); ctx.stroke(); ctx.setLineDash([]);
+      // fio fino ate o destino (intencao) + RASTRO esmaecente atras (movimento)
+      ctx.lineWidth = 1; ctx.strokeStyle = "rgba(0,0,0,.15)";
+      ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(dx, dy); ctx.stroke();
+      const ox = o.x * cs + panX + cs / 2, oy = o.y * cs + panY + cs / 2;
+      const angT = Math.atan2(my - oy, mx - ox);
+      const compR = Math.min(Math.hypot(mx - ox, my - oy), cs * 2.0);
+      const tx = mx - Math.cos(angT) * compR, ty = my - Math.sin(angT) * compR;
+      const gradR = ctx.createLinearGradient(tx, ty, mx, my);
+      const rgbR = m.dono === "A" ? "93,140,240" : "239,93,93";
+      gradR.addColorStop(0, `rgba(${rgbR},0)`);
+      gradR.addColorStop(1, `rgba(${rgbR},.55)`);
+      ctx.lineWidth = Math.max(2, cs * 0.10); ctx.lineCap = "round";
+      ctx.strokeStyle = gradR;
+      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(mx, my); ctx.stroke();
+      ctx.lineCap = "butt";
 
-      const r = Math.max(3, cs * 0.20);
+      // PREVISAO DE CONFRONTO: a 1 turno de chegar, halo no alvo diz o
+      // desfecho (verde vence / vermelho perde / ambar parelho). Usa a
+      // MESMA conta do motor (Engine.preverCombate) — nunca diverge.
+      if (m.turnosRestantes === 1 && d.dono !== m.dono && cs > 13) {
+        const pv = Engine.preverCombate(game, m.tropas, d);
+        const folga = 1.2;
+        const corH = pv.atacanteVence
+          ? (pv.FatkEf > pv.FdefEf * folga ? "#7dc95e" : "#e0b84a")
+          : (pv.FdefEf > pv.FatkEf * folga ? "#e05a4a" : "#e0b84a");
+        const rh = Math.max(8, cs * 0.52);
+        ctx.save();
+        ctx.shadowColor = corH; ctx.shadowBlur = Math.max(6, cs * 0.35);
+        ctx.lineWidth = Math.max(2, cs * 0.09); ctx.strokeStyle = corH;
+        ctx.globalAlpha = 0.9;
+        ctx.beginPath(); ctx.arc(dx, dy, rh, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+      }
+
+      // FORCA COMO TAMANHO: area do marcador ~ forca (comparavel de relance)
+      const Fm = Engine.forcaDe(m.tropas, game.config);
+      const r = Math.min(cs * 0.45, Math.max(3, cs * 0.14 * Math.sqrt(Fm / 50)));
       ctx.fillStyle = col;
       ctx.beginPath(); ctx.arc(mx, my, r, 0, Math.PI * 2); ctx.fill();
       ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(0,0,0,.65)"; ctx.stroke();
@@ -1480,25 +1558,49 @@
       ctx.closePath(); ctx.fill();
       ctx.lineWidth = 1; ctx.strokeStyle = "rgba(0,0,0,.5)"; ctx.stroke();
 
-      // rotulo do exercito: forca + tipo dominante ("45C")
-      if (cs > 20) {
-        const LETm = { lanceiro: "L", arqueiro: "A", cavaleiro: "C" };
+      // rotulo do exercito: icone do tipo sempre que da; NUMERO so de perto
+      // (de longe, o TAMANHO do marcador ja conta a forca)
+      if (cs > 16) {
         const td = Engine.tipoDominante(game, m.tropas);
-        const rot = Engine.forcaDe(m.tropas, game.config) + (td ? LETm[td] : "");
-        const fm = Math.max(9, cs * 0.26);
-        ctx.font = `bold ${fm}px Verdana`; ctx.textAlign = "center";
-        ctx.lineWidth = Math.max(2, fm * 0.26); ctx.strokeStyle = "rgba(20,12,4,.85)";
-        ctx.strokeText(rot, mx, my - r - 4);
+        const rot = (cs > 28 ? Fm + " " : "") + (td ? GLIFO[td] : "");
+        const fm = Math.max(10, cs * 0.26);
+        ctx.font = `bold ${fm}px serif`; ctx.textAlign = "center";
+        ctx.lineWidth = Math.max(2, fm * 0.24); ctx.strokeStyle = "rgba(20,12,4,.85)";
+        if (cs > 28) ctx.strokeText(rot, mx, my - r - 4);
         ctx.fillStyle = col === COR.A ? "#bcd0ff" : "#ffc4c4";
         ctx.fillText(rot, mx, my - r - 4);
       }
     }
 
-    // ===== EFEITOS: anel de impacto (combate) e pulso de conquista =====
+    // ===== EFEITOS: anel, pulso de conquista, dano flutuante, fim =====
     const agora = performance.now();
-    efeitos = efeitos.filter((e) => agora - e.t0 < EFEITO_DUR);
+    efeitos = efeitos.filter((e) => agora - e.t0 < (e.dur || EFEITO_DUR));
     for (const e of efeitos) {
-      const p = (agora - e.t0) / EFEITO_DUR;                 // 0 -> 1
+      const p = (agora - e.t0) / (e.dur || EFEITO_DUR);      // 0 -> 1
+
+      if (e.fim) { // FIM DE PARTIDA: o mapa escurece e o vencedor domina a tela
+        ctx.globalAlpha = Math.min(0.38, p * 1.2);
+        ctx.fillStyle = "#0d0903";
+        ctx.fillRect(0, 0, VW, VH);
+        ctx.globalAlpha = Math.min(0.20, p * 0.6);
+        ctx.fillStyle = e.cor;
+        ctx.fillRect(0, 0, VW, VH);
+        ctx.globalAlpha = 1;
+        continue;
+      }
+      if (e.dano) { // numero de dano flutuante: sobe e esmaece
+        const ex2 = e.x * cs + panX + cs / 2, ey2 = e.y * cs + panY + cs / 2;
+        const fd = Math.max(11, cs * 0.30);
+        ctx.globalAlpha = 1 - p;
+        ctx.font = `bold ${fd}px Verdana`; ctx.textAlign = "center";
+        ctx.lineWidth = Math.max(2, fd * 0.25); ctx.strokeStyle = "rgba(20,12,4,.9)";
+        const yy = ey2 - cs * 0.6 - p * cs * 0.9;
+        ctx.strokeText(e.dano, ex2, yy);
+        ctx.fillStyle = e.cor;
+        ctx.fillText(e.dano, ex2, yy);
+        ctx.globalAlpha = 1;
+        continue;
+      }
       const ex = e.x * cs + panX + cs / 2, ey = e.y * cs + panY + cs / 2;
       const raio = Math.max(8, cs * 0.45) * (1 + p * 1.6);
       ctx.globalAlpha = (1 - p) * 0.9;
@@ -1539,6 +1641,8 @@
     document.getElementById("pt-b-mod").textContent = etiquetaB || "-";
     document.getElementById("pt-fa").style.flexGrow = Math.max(fA, 1);
     document.getElementById("pt-fb").style.flexGrow = Math.max(fB, 1);
+    document.getElementById("pt-pips").innerHTML = game.aldeias
+      .map((a) => `<span class="pip ${a.dono || ""}"></span>`).join("");
   }
 
   // controles

@@ -178,6 +178,17 @@ console.log("\nF) Triangulo v2 decide o vencedor:");
   const r2 = Engine.resolverCombate(e2, { dono: "A", tropas: { cavaleiro: 10 } }, alvo2);
   checa("F2 counter errado PERDE mesmo com forca IGUAL (300 vs 450 ef)", r2.vencedor === "defensor");
   checa("F2 FdefEf = 450", r2.FdefEf === 450, `FdefEf ${r2.FdefEf}`);
+
+  // F3: preverCombate (UI) coincide com o resolverCombate (motor)
+  const e3 = estadoTeste();
+  const alvo3 = ald(12, 0, 0, null, { lanceiro: 30 });
+  e3.aldeias.push(alvo3);
+  const prev = Engine.preverCombate(e3, { arqueiro: 18 }, alvo3);
+  const real = Engine.resolverCombate(e3, { dono: "A", tropas: { arqueiro: 18 } },
+    JSON.parse(JSON.stringify(alvo3)));
+  checa("F3 previsao acerta o vencedor", prev.atacanteVence === (real.vencedor === "atacante"));
+  checa("F3 previsao acerta as forcas efetivas",
+    Math.round(prev.FatkEf) === real.FatkEf && Math.round(prev.FdefEf) === real.FdefEf);
 }
 
 console.log("");
