@@ -15,52 +15,36 @@
     position: fixed; pointer-events: none; color: #f5e9c8;
     text-shadow: 1px 1px 2px #000; font-size: 13px; user-select: none;
   }
-  #info {
-    top: 10px; left: 10px;
-    background: rgba(40,28,14,.78); border: 2px solid #6b4a22; border-radius: 6px;
-    padding: 8px 12px; line-height: 1.5;
-  }
-  #info b { color: #ffd56b; }
-  #help {
-    bottom: 10px; left: 10px;
-    background: rgba(40,28,14,.78); border: 2px solid #6b4a22; border-radius: 6px;
-    padding: 8px 12px; line-height: 1.5; max-width: 260px;
-  }
   #zoombar {
     bottom: 10px; right: 10px; pointer-events: auto;
     display: flex; flex-direction: column; gap: 6px;
   }
-  /* ===== CRONICA DA PARTIDA (barra lateral) ===== */
-  #sidebar {
-    position: fixed; top: 0; right: 0; width: 300px; height: 100vh; z-index: 6;
+  /* ===== PAINEIS DOS REIS (um de cada lado) ===== */
+  .painel {
+    position: fixed; top: 0; width: 272px; height: 100vh; z-index: 6;
     display: flex; flex-direction: column;
     background: linear-gradient(180deg, #2a1f12 0%, #1e1509 100%);
-    border-left: 2px solid #6b4a22; box-shadow: -8px 0 22px rgba(0,0,0,.5);
     color: #f0e3c0; transition: transform .25s ease;
   }
-  body.sb-closed #sidebar { transform: translateX(100%); }
-  #sb-head { padding: 12px 14px 10px; border-bottom: 2px solid #6b4a22; background: rgba(0,0,0,.18); }
-  #sb-title {
+  #sidebar  { right: 0; border-left: 2px solid #6b4a22; box-shadow: -8px 0 22px rgba(0,0,0,.5); }
+  #sidebarA { left: 0;  border-right: 2px solid #6b4a22; box-shadow: 8px 0 22px rgba(0,0,0,.5); }
+  body.sb-closed #sidebar  { transform: translateX(100%); }
+  body.sb-closed #sidebarA { transform: translateX(-100%); }
+  .p-head { padding: 12px 14px 10px; border-bottom: 2px solid #6b4a22; background: rgba(0,0,0,.18); }
+  .p-head.a { border-top: 4px solid #4a7ce0; }
+  .p-head.b { border-top: 4px solid #d84a4a; }
+  .p-title {
     font-variant: small-caps; letter-spacing: .1em; font-weight: bold;
-    font-size: 16px; color: #d9a441; text-shadow: 1px 1px 2px #000;
+    font-size: 16px; text-shadow: 1px 1px 2px #000;
   }
-  #sb-modelo { font: 11px Consolas, monospace; color: #b0a58a; margin-top: 2px; }
-  #sb-placar { padding: 10px 14px; border-bottom: 1px solid rgba(107,74,34,.55); }
-  .sb-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
+  .p-head.a .p-title { color: #9db8f5; }
+  .p-head.b .p-title { color: #f59d9d; }
+  .p-modelo { font: 11px Consolas, monospace; color: #b0a58a; margin-top: 2px; }
+  .p-stats { font-size: 12px; color: #d9a441; margin-top: 5px; }
   .mono { font-family: Consolas, monospace; }
-  .fbar {
-    display: flex; height: 13px; border-radius: 7px; overflow: hidden;
-    border: 1px solid rgba(0,0,0,.7); background: #14100a;
-  }
-  #sb-fa { background: linear-gradient(#5d8cf0,#3b63c4); transition: flex-grow .4s; }
-  #sb-fb { background: linear-gradient(#ef5d5d,#c43b3b); transition: flex-grow .4s; }
-  .fleg { display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px; }
-  .fleg .ca { color: #9db8f5; } .fleg .cb { color: #f59d9d; }
-  .sb-sub { font-size: 11px; color: #b0a58a; margin-top: 5px; }
-  #sb-venc { font-weight: bold; color: #ffd56b; margin-top: 4px; font-size: 13px; }
-  #sb-feed { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #6b4a22 #1e1509; }
-  #sb-feed:empty::after {
-    content: "A cr\00F4nica registra as ordens e combates de cada turno. Aperte Play.";
+  .p-feed { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #6b4a22 #1e1509; }
+  .p-feed:empty::after {
+    content: "As jogadas deste rei aparecem aqui.";
     display: block; padding: 14px; font-size: 12px; color: #8f8468; font-style: italic;
   }
   .ent { border-bottom: 1px solid rgba(107,74,34,.35); padding: 8px 12px; font-size: 12px; line-height: 1.55; }
@@ -68,7 +52,10 @@
   .ent-m { color: #8f8468; font: 10px Consolas, monospace; letter-spacing: 0; }
   .ent .rej { color: #e08a7a; }
   .ent .plc { color: #b0a58a; font-size: 11px; margin-top: 3px; }
-  .bd { font: bold 10px Consolas, monospace; padding: 1px 5px; border-radius: 4px; white-space: nowrap; }
+  .bd {
+    font: bold 10px Consolas, monospace; padding: 1px 5px; border-radius: 4px;
+    white-space: nowrap;
+  }
   .bd.certo  { background: #2f5a23; color: #a8e58c; }
   .bd.errado { background: #5a2323; color: #f0a49a; }
   .bd.neutro { background: #4a4232; color: #cfc4a4; }
@@ -98,13 +85,13 @@
   /* ===== PLACAR DE TRANSMISSAO (esports, replay/cinema) ===== */
   #placarTop {
     position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
-    z-index: 7; display: none; flex-direction: column; min-width: 520px;
+    z-index: 7; flex-direction: column; min-width: 520px;
     background: linear-gradient(180deg, rgba(43,32,20,.95), rgba(30,21,9,.95));
     border: 2px solid #6b4a22; border-radius: 10px; overflow: hidden;
     box-shadow: 0 6px 24px rgba(0,0,0,.55); color: #f0e3c0;
     font: 14px 'Trebuchet MS', sans-serif;
   }
-  body.replay #placarTop, body.cinema #placarTop { display: flex; }
+  #placarTop { display: flex; } /* placar sempre visivel: e o estado da batalha */
   .pt-linha { display: flex; align-items: stretch; }
   .pt-lado { flex: 1; display: flex; align-items: center; gap: 10px; padding: 8px 14px; }
   .pt-lado.b { flex-direction: row-reverse; text-align: right; }
@@ -122,6 +109,8 @@
   }
   #pt-fbar { display: flex; height: 8px; background: #14100a; }
   #pt-pips { display: flex; justify-content: center; gap: 3px; padding: 4px 8px 6px; background: rgba(0,0,0,.18); }
+  #sb-status { text-align: center; font: 11px Consolas, monospace; color: #d9a441; padding: 0 8px 5px; background: rgba(0,0,0,.18); }
+  #sb-status:empty { display: none; }
   .pip { width: 9px; height: 9px; border-radius: 2px; background: #5a5244; }
   .pip.A { background: #5d8cf0; } .pip.B { background: #ef5d5d; }
   #pt-fa { background: linear-gradient(#5d8cf0,#3b63c4); transition: flex-grow .5s; }
@@ -156,18 +145,20 @@
   body.replay #gamebar { display: none; }  /* no replay, o cockpit e o replaybar */
 
   /* ===== MODO CINEMA: esconde o chrome de dev p/ gravar ===== */
-  body.cinema #info, body.cinema #zoombar, body.cinema #sb-toggle { display: none; }
+  body.cinema #zoombar, body.cinema #sb-toggle { display: none; }
   body.cinema #gamebar { opacity: .12; transition: opacity .2s; }
   body.cinema #gamebar:hover { opacity: 1; }
 
   #zoombar { transition: right .25s ease; }
   body:not(.sb-closed) #zoombar { right: 316px; }
   #gamebar {
-    position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
+    position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
     pointer-events: auto; display: flex; align-items: center; gap: 8px;
     background: rgba(40,28,14,.82); border: 2px solid #6b4a22; border-radius: 8px;
     padding: 6px 10px; color: #f5e9c8; text-shadow: 1px 1px 2px #000; user-select: none;
   }
+  .selrei { font: 12px 'Trebuchet MS', sans-serif; background: #2b1a0a; color: #f0e3c0;
+    border: 1px solid #6b4a22; border-radius: 5px; padding: 2px; }
   #gamebar button {
     font: bold 14px "Trebuchet MS", sans-serif; color: #f5e9c8;
     background: linear-gradient(#7a5226,#523414); border: 2px solid #2b1a0a;
@@ -189,39 +180,27 @@
 <body>
 <canvas id="map"></canvas>
 
-<div id="info" class="hud">
-  <div>Coordenada: <b id="coord">—</b></div>
-  <div>Zoom: <b id="zoom">—</b></div>
-  <div id="hovername" style="color:#ffd56b"></div>
-</div>
-
-<div id="help" class="hud">
-  <b>Como navegar</b><br>
-  • Arraste para mover o mapa<br>
-  • Roda do mouse = zoom (+ / −)<br>
-  • Afaste para ver a grade de coordenadas<br>
-  • Aproxime para ver as vilas
-</div>
 
 <div id="zoombar">
   <button id="zin" title="Aproximar">+</button>
   <button id="zout" title="Afastar">−</button>
 </div>
 
-<div id="sidebar">
-  <div id="sb-head">
-    <div id="sb-title">Crônica da Partida</div>
-    <div id="sb-modelo">burro vs burro</div>
+<div id="sidebarA" class="painel">
+  <div class="p-head a">
+    <div class="p-title">Rei A</div>
+    <div class="p-modelo" id="sbA-modelo">burro</div>
+    <div class="p-stats mono" id="sbA-stats">—</div>
   </div>
-  <div id="sb-placar">
-    <div class="sb-row"><span>Turno</span><b id="sb-turno" class="mono">0</b></div>
-    <div class="fbar"><div id="sb-fa"></div><div id="sb-fb"></div></div>
-    <div class="fleg"><span class="ca">■ Rei A <b id="sb-a" class="mono"></b></span><span class="cb"><b id="sb-b" class="mono"></b> Rei B ■</span></div>
-    <div class="sb-sub" id="sb-extra"></div>
-    <div class="sb-sub" id="sb-status" style="color:#d9a441"></div>
-    <div id="sb-venc"></div>
+  <div class="p-feed" id="sb-feedA"></div>
+</div>
+<div id="sidebar" class="painel">
+  <div class="p-head b">
+    <div class="p-title">Rei B</div>
+    <div class="p-modelo" id="sb-modelo">burro</div>
+    <div class="p-stats mono" id="sbB-stats">—</div>
   </div>
-  <div id="sb-feed"></div>
+  <div class="p-feed" id="sb-feed"></div>
 </div>
 <div id="placarTop">
   <div class="pt-linha">
@@ -239,6 +218,7 @@
   </div>
   <div id="pt-fbar"><div id="pt-fa"></div><div id="pt-fb"></div></div>
   <div id="pt-pips"></div>
+  <div id="sb-status"></div>
 </div>
 <div id="banner"></div>
 <div id="replaybar">
@@ -261,12 +241,22 @@
   <button id="gstep">Passo</button>
   <button id="greset">Reiniciar</button>
   <label>vel <input id="gspeed" type="range" min="80" max="1200" value="500" style="width:90px"></label>
-  <label title="Rei B decidido pelo Gemini (API). Play roda a partida do Gemini no mapa."><input type="checkbox" id="ggemini"> Rei B = Gemini</label>
-  <label title="Rei B decidido por um modelo LOCAL via Ollama (localhost:11434)."><input type="checkbox" id="gollama"> Rei B = Ollama
-    <select id="gomodel" style="font:12px 'Trebuchet MS',sans-serif">
-      <option value="qwen2.5:3b">qwen2.5:3b</option>
-      <option value="llama3.2:3b">llama3.2:3b</option>
-      <option value="llama3:latest">llama3 8B</option>
+  <label title="Quem decide pelo Rei A">Rei A
+    <select id="gmodA" class="selrei">
+      <option value="burro" selected>burro</option>
+      <option value="gemini">Gemini</option>
+      <option value="ollama:qwen2.5:3b">qwen2.5:3b</option>
+      <option value="ollama:llama3.2:3b">llama3.2:3b</option>
+      <option value="ollama:llama3:latest">llama3 8B</option>
+    </select>
+  </label>
+  <label title="Quem decide pelo Rei B">Rei B
+    <select id="gmodB" class="selrei">
+      <option value="burro" selected>burro</option>
+      <option value="gemini">Gemini</option>
+      <option value="ollama:qwen2.5:3b">qwen2.5:3b</option>
+      <option value="ollama:llama3.2:3b">llama3.2:3b</option>
+      <option value="ollama:llama3:latest">llama3 8B</option>
     </select>
   </label>
   <label>turnos <input id="gmax" type="number" min="1" max="80" value="6" style="width:48px"></label>
@@ -758,26 +748,7 @@
   // ---------- HUD ----------
   let mouseSX = VW / 2, mouseSY = VH / 2;
   function updateHUD() {
-    const cs = TILE * scale;
-    const wx = Math.floor((mouseSX - panX) / cs);
-    const wy = Math.floor((mouseSY - panY) / cs);
-    const inB = wx >= 0 && wy >= 0 && wx < WORLD && wy < WORLD;
-    document.getElementById("coord").textContent = inB ? `${wx} | ${wy}` : "—";
-    document.getElementById("zoom").textContent = scale.toFixed(2) + "x";
-    const hn = document.getElementById("hovername");
-    if (inB) {
-      const gv = game && game.aldeias.find((a) => a.x === wx && a.y === wy);
-      if (gv) {
-        const dono = gv.dono === null ? "neutra (" + gv.tipo + ")" : "Rei " + gv.dono;
-        const tro = `L${gv.tropas.lanceiro}/A${gv.tropas.arqueiro}/C${gv.tropas.cavaleiro} (força ${Engine.forcaDe(gv.tropas, game.config)})`;
-        hn.textContent = `${gv.nome} — ${dono} · ${tro}`;
-      } else {
-        const d = cellData(wx, wy);
-        hn.textContent = d.village
-          ? `Vila: ${villageName(wx, wy)} — Tribo ${TRIBES[d.tribe].n}`
-          : "";
-      }
-    } else hn.textContent = "";
+    // caixas de coordenada/ajuda removidas: o mapa fala por si (espectador).
   }
 
   // ---------- Interação ----------
@@ -837,7 +808,9 @@
     if (emReplay || !game) return;
     replay.frames.push(JSON.parse(JSON.stringify({
       turno: game.turno,
-      etiqueta: etiquetaB || "burro",
+      etiqueta: etiquetaB || "burro", // compat replays v1
+      etiquetaA: etiquetaA || "burro",
+      etiquetaB: etiquetaB || "burro",
       aldeias: game.aldeias,
       movimentos: game.movimentos,
       eventos: game.log.filter((e) => e.turno === game.turno),
@@ -849,14 +822,14 @@
     game.aldeias = fr.aldeias;
     game.movimentos = fr.movimentos;
     game.log = fr.eventos; // efeitos/cronica leem daqui
-    etiquetaB = fr.etiqueta;
-    document.getElementById("sb-modelo").textContent = "REPLAY \u00b7 " + fr.etiqueta;
+    etiquetaA = fr.etiquetaA || "burro";
+    etiquetaB = fr.etiquetaB || fr.etiqueta || "?";
 
     // cronica em DIALETO DE ESPECTADOR: uma frase-icone por evento,
     // borda na cor de quem agiu. (O modo analista segue fora do replay.)
-    const linhasEsp = [];
+    const espPorLado = { A: [], B: [] };
     for (const e of fr.eventos) {
-      if (e.tipo !== "combate") continue;
+      if (e.tipo !== "combate" || !espPorLado[e.atacante]) continue;
       const gA = e.atkType ? GLIFO[e.atkType] : "";
       const gD = e.defType ? GLIFO[e.defType] : "";
       const selo = e.vantagem > 0 ? '<span class="bd certo">counter &#10003;</span>'
@@ -864,11 +837,15 @@
       const res = e.vencedor === "atacante"
         ? (e.conquista ? "&#9876; conquistada" : "vencida")
         : "&#128737; resistiu";
-      linhasEsp.push(`<div class="ev ev${e.atacante}">${gA} <b class="mono">${e.Fatk}</b>` +
+      espPorLado[e.atacante].push(`<div class="ev ev${e.atacante}">${gA} <b class="mono">${e.Fatk}</b>` +
         ` &#10142; ${esc(e.alvoNome)} ${gD} &mdash; ${res} ${selo}</div>`);
     }
-    if (linhasEsp.length) addEntrada(`<div class="ent-t">Turno ${fr.turno} ` +
-      `<span class="ent-m">${esc(fr.etiqueta)}</span></div>` + linhasEsp.join("") + linhaPlacar());
+    for (const lado of ["A", "B"]) {
+      if (!espPorLado[lado].length) continue;
+      addEntrada(feedDe(lado), `<div class="ent-t">Turno ${fr.turno} ` +
+        `<span class="ent-m">${esc(lado === "A" ? etiquetaA : etiquetaB)}</span></div>` +
+        espPorLado[lado].join("") + linhaPlacar());
+    }
 
     // banners + escolha do alvo da camera
     let alvoCam = null;
@@ -913,10 +890,9 @@
     document.body.classList.add("replay");
     camAuto = true;
     document.getElementById("grepCam").classList.add("ativo");
-    sbFeed.innerHTML = "";
+    limparFeeds();
     efeitos = [];
     limparBanners();
-    document.getElementById("sb-venc").textContent = "";
     apontarCamera(WORLD / 2, WORLD / 2, Math.max(MIN_SCALE, VW / (WORLD * TILE)));
     playing = true;
     while (emReplay && runId === meuRun) {
@@ -970,7 +946,10 @@
   }
 
   // ===== CRONICA DA PARTIDA (barra lateral) =====
-  const sbFeed = document.getElementById("sb-feed");
+  const sbFeedB = document.getElementById("sb-feed");
+  const sbFeedA = document.getElementById("sb-feedA");
+  const feedDe = (lado) => (lado === "A" ? sbFeedA : sbFeedB);
+  const limparFeeds = () => { sbFeedA.innerHTML = ""; sbFeedB.innerHTML = ""; };
   const REDUZ_MOV = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
   const esc = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const chip = (cls, txt) => `<span class="bd ${cls}">${txt}</span>`;
@@ -985,13 +964,13 @@
     return chip("neutro", "neutro");
   }
 
-  function addEntrada(html) {
+  function addEntrada(feed, html) {
     const div = document.createElement("div");
     div.className = "ent";
     div.innerHTML = html;
-    sbFeed.appendChild(div);
-    while (sbFeed.children.length > 60) sbFeed.removeChild(sbFeed.firstChild);
-    sbFeed.scrollTop = sbFeed.scrollHeight;
+    feed.appendChild(div);
+    while (feed.children.length > 60) feed.removeChild(feed.firstChild);
+    feed.scrollTop = feed.scrollHeight;
   }
 
   function linhaPlacar() {
@@ -1000,25 +979,10 @@
            `B ${Engine.aldeiasDe(game, "B").length} ald / ${f("B")}</div>`;
   }
 
-  function linhasCombates(tn) {
-    const L = [];
-    for (const e of game.log) {
-      if (e.turno !== tn || e.tipo !== "combate") continue;
-      const selo = e.vantagem > 0 ? chip("certo", "counter certo")
-                 : e.vantagem < 0 ? chip("errado", "counter errado")
-                 : chip("neutro", "neutro");
-      const res = e.vencedor === "atacante"
-        ? (e.conquista ? `Rei ${e.atacante} CONQUISTOU` : `Rei ${e.atacante} venceu`)
-        : "defesa segurou";
-      L.push(`<div>&#9876; [${e.alvoId}] ${esc(e.alvoNome)} &mdash; ` +
-        `<span class="mono">${e.FatkEf} vs ${e.FdefEf} ef</span> &rarr; ${res} ${selo}</div>`);
-    }
-    return L;
-  }
-
-  // turno de um MODELO (gemini/ollama): ordens aceitas, rejeicoes, combates
-  function cronicaTurnoModelo(tn, diag) {
-    const L = [`<div class="ent-t">Turno ${tn} <span class="ent-m">${esc(etiquetaB)}</span></div>`];
+  // ordens/rejeicoes de UM rei -> painel DELE
+  function cronicaTurnoLado(lado, tn, diag) {
+    const rotulo = lado === "A" ? etiquetaA : etiquetaB;
+    const L = [`<div class="ent-t">Turno ${tn} <span class="ent-m">${esc(rotulo)}</span></div>`];
     if (diag) {
       for (const e of diag.aceitoEnvios) {
         const atkT = Engine.tipoDominante(game, e.tropas);
@@ -1035,36 +999,38 @@
       if (!diag.aceitoEnvios.length && !desc) L.push(`<div style="color:#8f8468">passou o turno</div>`);
       for (const r of diag.rejeicoes) L.push(`<div class="rej">&#10007; ${esc(r)}</div>`);
     }
-    L.push(...linhasReforcos(tn));
-    L.push(...linhasCombates(tn));
-    L.push(linhaPlacar());
-    addEntrada(L.join(""));
+    addEntrada(feedDe(lado), L.join(""));
+  }
+
+  // combates/reforcos do turno -> painel de quem AGIU (atacante/dono)
+  function cronicaEventos(tn) {
+    const porLado = { A: [], B: [] };
+    for (const e of game.log) {
+      if (e.turno !== tn) continue;
+      if (e.tipo === "combate" && (e.atacante === "A" || e.atacante === "B")) {
+        const selo = e.vantagem > 0 ? chip("certo", "counter certo")
+                   : e.vantagem < 0 ? chip("errado", "counter errado")
+                   : chip("neutro", "neutro");
+        const res = e.vencedor === "atacante"
+          ? (e.conquista ? "CONQUISTOU" : "venceu")
+          : "defesa segurou";
+        porLado[e.atacante].push(`<div>&#9876; [${e.alvoId}] ${esc(e.alvoNome)} &mdash; ` +
+          `<span class="mono">${e.FatkEf} vs ${e.FdefEf} ef</span> &rarr; ${res} ${selo}</div>`);
+      } else if (e.tipo === "reforco" && porLado[e.dono]) {
+        porLado[e.dono].push(`<div style="color:#8f8468">reforco em [${e.alvoId}] ${esc(e.alvoNome)}: ` +
+          `<span class="mono">${compStrG(e.tropas)}</span></div>`);
+      }
+    }
+    for (const lado of ["A", "B"]) {
+      if (!porLado[lado].length) continue;
+      addEntrada(feedDe(lado),
+        `<div class="ent-t">Turno ${tn}</div>` + porLado[lado].join("") + linhaPlacar());
+    }
   }
 
   // reforcos do turno agrupados por aldeia: 1 linha em vez de N gotas
-  function linhasReforcos(tn) {
-    const porAldeia = new Map();
-    for (const e of game.log) {
-      if (e.turno !== tn || e.tipo !== "reforco") continue;
-      const g = porAldeia.get(e.alvoId) || { nome: e.alvoNome, n: 0,
-        tropas: { lanceiro: 0, arqueiro: 0, cavaleiro: 0 } };
-      g.n++;
-      for (const t in g.tropas) g.tropas[t] += e.tropas[t] || 0;
-      porAldeia.set(e.alvoId, g);
-    }
-    const L = [];
-    for (const [id, g] of porAldeia)
-      L.push(`<div style="color:#8f8468">reforcos em [${id}] ${esc(g.nome)}: ` +
-        `<span class="mono">${compStrG(g.tropas)}</span> (${g.n} chegada${g.n > 1 ? "s" : ""})</div>`);
-    return L;
-  }
 
   // turno burro-vs-burro: so registra quando ha combate (evita inundar o feed)
-  function cronicaTurnoBurro(tn) {
-    const cs = linhasCombates(tn);
-    if (!cs.length) return;
-    addEntrada(`<div class="ent-t">Turno ${tn}</div>` + cs.join("") + linhaPlacar());
-  }
 
   // ===== EFEITOS DE MAPA (anel de impacto / pulso de conquista) =====
   let efeitos = [];
@@ -1175,14 +1141,15 @@
 
   function novaPartida() {
     pause();
-    sbFeed.innerHTML = "";
+    limparFeeds();
     efeitos = [];
     emReplay = false;
     rep = null;
     replay = { frames: [] };
     document.body.classList.remove("cinema");
     document.body.classList.remove("replay");
-    document.getElementById("sb-modelo").textContent = "burro vs burro";
+    etiquetaA = document.getElementById("gmodA").value;
+    etiquetaB = document.getElementById("gmodB").value;
     game = Engine.criarEstadoInicial(Engine.CONFIG);
     // indice celula -> aldeia (posicoes fixas): filtro rapido no render
     game.byCell = new Map(game.aldeias.map((a) => [a.x + "," + a.y, a]));
@@ -1195,7 +1162,7 @@
     if (!game || Engine.checarVitoria(game)) { pause(); return; }
     Engine.rodarTurno(game, null);
     registrarEfeitosTurno(game.turno);
-    cronicaTurnoBurro(game.turno);
+    cronicaEventos(game.turno);
     gravarFrame();
     updateGameHUD();
     draw();
@@ -1259,19 +1226,26 @@
 
   // registra UM turno no buffer: resposta crua + ordem + aceito/rejeitado +
   // combates do turno + placar. Esse buffer vira o .txt do eval.
-  function registrarTurnoGemini(cru, ordem, diag) {
-    const tn = game.turno, L = [];
-    L.push("########## TURNO " + tn + " — Rei B (" + etiquetaB + ") ##########");
-    L.push("resposta crua: " + JSON.stringify(cru));
-    L.push("ordem.construir: " + JSON.stringify(ordem.construir || []));
-    L.push("ordem.envios   : " + JSON.stringify(ordem.envios || []));
+  function registrarTurnoLado(lado, rotulo, r) {
+    const L = [];
+    L.push("########## TURNO " + game.turno + " \u2014 Rei " + lado + " (" + rotulo + ") ##########");
+    L.push("resposta crua: " + JSON.stringify(r.cru));
+    L.push("ordem.construir: " + JSON.stringify(r.ordem.construir || []));
+    L.push("ordem.envios   : " + JSON.stringify(r.ordem.envios || []));
+    const diag = r.diag;
     if (diag) {
-      if (!diag.aceitoConstruir.length && !diag.aceitoEnvios.length) L.push("ACEITO: (nada — passou o turno)");
+      if (!diag.aceitoConstruir.length && !diag.aceitoEnvios.length) L.push("ACEITO: (nada \u2014 passou o turno)");
       diag.aceitoConstruir.forEach((c) => L.push("ACEITO construir " + c.tipo + " em [" + c.aldeiaId + "]"));
       diag.aceitoEnvios.forEach((e) => L.push("ACEITO envio [" + e.origemId + "]->[" + e.destinoId + "]: " + compStrG(e.tropas) +
         (e.alvo && e.alvo.dono === null ? " (alvo neutra " + e.alvo.tipo + ")" : "")));
       diag.rejeicoes.forEach((m) => L.push("REJEITADO: " + m));
     }
+    geminiLog.push(L.join("\n"));
+  }
+
+  // eventos do turno (combates/reforcos) + placar: UMA vez por turno no .txt
+  function registrarEventosTurno() {
+    const tn = game.turno, L = [];
     game.log.filter((x) => x.turno === tn).forEach((e) => {
       if (e.tipo === "combate")
         L.push("COMBATE [" + e.alvoId + "] " + e.alvoNome + ": atacante " + e.atacante +
@@ -1280,7 +1254,7 @@
       else if (e.tipo === "reforco")
         L.push("REFORCO [" + e.alvoId + "] " + e.alvoNome + " dono " + e.dono + ": " + compStrG(e.tropas));
     });
-    const f = (d) => Engine.aldeiasDe(game, d).reduce((s, a) => s + Engine.forcaDe(a.tropas, game.config), 0);
+    const f = (d) => Engine.aldeiasDe(game, d).reduce((s2, a) => s2 + Engine.forcaDe(a.tropas, game.config), 0);
     L.push("placar: A " + Engine.aldeiasDe(game, "A").length + " ald/forca " + f("A") +
       " | B " + Engine.aldeiasDe(game, "B").length + " ald/forca " + f("B") +
       " | neutras " + Engine.aldeiasDe(game, null).length + " | transito " + game.movimentos.length);
@@ -1295,62 +1269,15 @@
     const a = document.createElement("a");
     const ts = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 16);
     a.href = URL.createObjectURL(blob);
-    a.download = "partida_" + etiquetaB.replace(/[^a-z0-9.]/gi, "-") + "_" + ts + ".txt";
+    const nomeAB = (etiquetaA + "_vs_" + etiquetaB).replace(/[^a-z0-9._]/gi, "-");
+    a.download = "partida_" + nomeAB + "_" + ts + ".txt";
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(a.href);
   }
 
-  async function passoTurnoGemini(meuRun) {
-    if (meuRun === undefined) meuRun = ++runId;          // passo manual ganha token proprio
-    etiquetaB = "gemini";
-    Engine.tick(game);
-    if (Engine.aldeiasDe(game, "A").length)
-      Engine.executarOrdem(game, "A", Engine.jogadorBurro(Engine.montarVisao(game, "A")));
-    let cru = "", ordem = { construir: [], envios: [] }, diag = null;
-    if (Engine.aldeiasDe(game, "B").length) {
-      const prompt = Engine.montarPrompt(Engine.montarVisao(game, "B"));
-      setStatus("Rei B pensando... (gemini)");
-      try { cru = await gerarGemini(prompt); }
-      catch (e) { cru = "[ERRO DE REDE] " + e.message; }
-      setStatus("");
-      if (runId !== meuRun) return;                      // resposta atrasada de run antigo: descarta
-      ordem = Engine.parsearOrdem(cru).ordem;            // sem retry: resposta ruim = passa o turno
-      diag = Engine.diagnosticarOrdem(game, "B", ordem); // ANTES de executar (alvo ainda neutra)
-      Engine.executarOrdem(game, "B", ordem);
-    }
-    registrarTurnoGemini(cru, ordem, diag);
-    document.getElementById("sb-modelo").textContent = etiquetaB;
-    registrarEfeitosTurno(game.turno);
-    cronicaTurnoModelo(game.turno, diag);
-    gravarFrame();
-    updateGameHUD();
-    draw();
-  }
-
-  async function runGemini(meuRun) {
-    if (!pedirChave()) { pause(); alert("Sem GEMINI_API_KEY: nao da pra rodar o Gemini."); return; }
-    const maxT = Math.max(1, parseInt(document.getElementById("gmax").value, 10) || 6);
-    geminiLog = ["=== PARTIDA Rei B (gemini-2.5-flash) vs jogadorBurro | seed " + game.config.seed +
-      " | maxTurnos " + maxT + " | " + new Date().toLocaleString() + " ===\n"];
-    while (playing && runId === meuRun && game && !Engine.checarVitoria(game) && game.turno < maxT) {
-      await passoTurnoGemini(meuRun);
-    }
-    if (runId !== meuRun) return; // run antigo: nao fecha nem baixa o log do run novo
-    pause();
-    updateGameHUD();
-    const venc = Engine.checarVitoria(game);
-    geminiLog.push("=== FIM === turno " + game.turno + " | resultado: " +
-      (venc ? "vitoria " + venc : "limite de turnos") +
-      " | A " + Engine.aldeiasDe(game, "A").length + " ald | B " + Engine.aldeiasDe(game, "B").length +
-      " ald | neutras " + Engine.aldeiasDe(game, null).length);
-    baixarLogGemini(); // baixa o .txt automaticamente no fim da partida
-  }
-
-  // ----- MODO OLLAMA: Rei B decidido por um modelo LOCAL, ao vivo no mapa -----
-  // Mesma logica do modo Gemini, mas SEM chave e SEM pacing (local, sem cota).
-  // POREM: a pagina abre via file:// (origin "null") e o Ollama bloqueia por
-  // CORS por padrao -> precisa subir o Ollama com OLLAMA_ORIGINS=* (o alerta
-  // de erro abaixo da a instrucao). Reusa o mesmo buffer/log do modo Gemini.
+  // ----- OLLAMA: geracao local (localhost:11434), sem chave e sem pacing.
+  // A pagina abre via file:// (origin "null") e o Ollama bloqueia por CORS
+  // por padrao -> precisa de OLLAMA_ORIGINS=* (o alerta do runDuelo instrui).
   const OLLAMA_URL = "http://localhost:11434/api/generate";
   async function gerarOllama(prompt, modelo) {
     const resp = await fetch(OLLAMA_URL, {
@@ -1363,56 +1290,83 @@
     return data.response || "";
   }
 
-  async function passoTurnoOllama(modelo, meuRun) {
-    if (meuRun === undefined) meuRun = ++runId;          // passo manual ganha token proprio
-    modelo = modelo || document.getElementById("gomodel").value;
-    etiquetaB = "ollama:" + modelo;
-    Engine.tick(game);
-    if (Engine.aldeiasDe(game, "A").length)
-      Engine.executarOrdem(game, "A", Engine.jogadorBurro(Engine.montarVisao(game, "A")));
-    let cru = "", ordem = { construir: [], envios: [] }, diag = null;
-    if (Engine.aldeiasDe(game, "B").length) {
-      const prompt = Engine.montarPrompt(Engine.montarVisao(game, "B"));
-      setStatus("Rei B pensando... (ollama:" + modelo + ")");
-      try { cru = await gerarOllama(prompt, modelo); }
-      catch (e) { cru = "[ERRO DE REDE] " + e.message; }
-      setStatus("");
-      if (runId !== meuRun) return;                      // resposta atrasada de run antigo: descarta
-      ordem = Engine.parsearOrdem(cru).ordem;            // sem retry: resposta ruim = passa o turno
-      diag = Engine.diagnosticarOrdem(game, "B", ordem); // ANTES de executar (alvo ainda neutra)
-      Engine.executarOrdem(game, "B", ordem);
+  // ===== DUELO: qualquer combinacao de reis (burro / gemini / ollama) =====
+  let etiquetaA = "burro";
+
+  function fabricarGerador(valor) {
+    if (valor === "burro") return null; // burro decide sem rede
+    if (valor === "gemini") return (p) => gerarGemini(p);
+    const modelo = valor.slice("ollama:".length);
+    return (p) => gerarOllama(p, modelo);
+  }
+
+  // Decide e executa a ordem de UM lado. Retorna "abort" se o run mudou.
+  async function decidirLado(lado, gerador, rotulo, meuRun) {
+    if (!Engine.aldeiasDe(game, lado).length) return null;
+    if (!gerador) {
+      Engine.executarOrdem(game, lado, Engine.jogadorBurro(Engine.montarVisao(game, lado)));
+      return null;
     }
-    registrarTurnoGemini(cru, ordem, diag);
-    document.getElementById("sb-modelo").textContent = etiquetaB;
+    const prompt = Engine.montarPrompt(Engine.montarVisao(game, lado));
+    setStatus("Rei " + lado + " pensando... (" + rotulo + ")");
+    let cru = "";
+    try { cru = await gerador(prompt); }
+    catch (e) { cru = "[ERRO DE REDE] " + e.message; }
+    setStatus("");
+    if (runId !== meuRun) return "abort"; // resposta atrasada de run antigo
+    const ordem = Engine.parsearOrdem(cru).ordem;            // sem retry (benchmark)
+    const diag = Engine.diagnosticarOrdem(game, lado, ordem); // ANTES de executar
+    Engine.executarOrdem(game, lado, ordem);
+    return { cru, ordem, diag };
+  }
+
+  async function passoTurnoDuelo(meuRun) {
+    if (meuRun === undefined) meuRun = ++runId;
+    const vA = document.getElementById("gmodA").value, vB = document.getElementById("gmodB").value;
+    etiquetaA = vA; etiquetaB = vB;
+    Engine.tick(game);
+    const rA = await decidirLado("A", fabricarGerador(vA), vA, meuRun);
+    if (rA === "abort") return;
+    const rB = await decidirLado("B", fabricarGerador(vB), vB, meuRun);
+    if (rB === "abort") return;
+    if (rA) registrarTurnoLado("A", vA, rA);
+    if (rB) registrarTurnoLado("B", vB, rB);
+    if (rA || rB) registrarEventosTurno();
     registrarEfeitosTurno(game.turno);
-    cronicaTurnoModelo(game.turno, diag);
+    if (rA) cronicaTurnoLado("A", game.turno, rA.diag);
+    if (rB) cronicaTurnoLado("B", game.turno, rB.diag);
+    cronicaEventos(game.turno);
     gravarFrame();
     updateGameHUD();
     draw();
   }
 
-  async function runOllama(meuRun) {
-    const modelo = document.getElementById("gomodel").value;
-    etiquetaB = "ollama:" + modelo;
-    // sanity check (e teste de CORS): se falhar, instrui a liberar o Ollama
-    setStatus("testando conexao com o Ollama...");
-    try { await gerarOllama("responda apenas: ok", modelo); setStatus(""); }
-    catch (e) {
-      setStatus("");
-      pause();
-      alert("Nao consegui falar com o Ollama (" + e.message + ").\n\n" +
-        "Provavel CORS: a pagina abre via file:// e o Ollama bloqueia por padrao.\n" +
-        "Feche o Ollama (icone da bandeja) e rode no PowerShell:\n\n" +
-        "    $env:OLLAMA_ORIGINS=\"*\"; ollama serve\n\n" +
-        "Deixe essa janela aberta e tente o Play de novo.\n" +
-        "Confira tambem que o modelo existe:  ollama pull " + modelo);
-      return;
+  async function runDuelo(meuRun) {
+    const vA = document.getElementById("gmodA").value, vB = document.getElementById("gmodB").value;
+    if ((vA === "gemini" || vB === "gemini") && !pedirChave()) {
+      pause(); alert("Sem GEMINI_API_KEY: nao da pra rodar o Gemini."); return;
+    }
+    const usaOllama = [vA, vB].find((v) => v.startsWith("ollama:"));
+    if (usaOllama) { // sanity check (e teste de CORS)
+      const modelo = usaOllama.slice("ollama:".length);
+      setStatus("testando conexao com o Ollama...");
+      try { await gerarOllama("responda apenas: ok", modelo); setStatus(""); }
+      catch (e) {
+        setStatus(""); pause();
+        alert("Nao consegui falar com o Ollama (" + e.message + ").\n\n" +
+          "Provavel CORS: a pagina abre via file:// e o Ollama bloqueia por padrao.\n" +
+          "Feche o Ollama (icone da bandeja) e rode no PowerShell:\n\n" +
+          "    $env:OLLAMA_ORIGINS=\"*\"; ollama serve\n\n" +
+          "Deixe essa janela aberta e tente o Play de novo.\n" +
+          "Confira tambem que o modelo existe:  ollama pull " + modelo);
+        return;
+      }
     }
     const maxT = Math.max(1, parseInt(document.getElementById("gmax").value, 10) || 6);
-    geminiLog = ["=== PARTIDA Rei B (ollama:" + modelo + ") vs jogadorBurro | seed " + game.config.seed +
+    geminiLog = ["=== PARTIDA Rei A (" + vA + ") vs Rei B (" + vB + ") | seed " + game.config.seed +
       " | maxTurnos " + maxT + " | " + new Date().toLocaleString() + " ===\n"];
     while (playing && runId === meuRun && game && !Engine.checarVitoria(game) && game.turno < maxT) {
-      await passoTurnoOllama(modelo, meuRun);
+      await passoTurnoDuelo(meuRun);
     }
     if (runId !== meuRun) return; // run antigo: nao fecha nem baixa o log do run novo
     pause();
@@ -1431,8 +1385,8 @@
     playing = true;
     const meuRun = ++runId; // este Play e o unico dono da partida a partir daqui
     document.getElementById("gplay").textContent = "⏸ Pausar";
-    if (document.getElementById("ggemini").checked) { runGemini(meuRun); return; } // Gemini gateia a cadencia
-    if (document.getElementById("gollama").checked) { runOllama(meuRun); return; } // Ollama gateia a cadencia
+    const vA = document.getElementById("gmodA").value, vB = document.getElementById("gmodB").value;
+    if (vA !== "burro" || vB !== "burro") { runDuelo(meuRun); return; } // modelos gateiam a cadencia
     timer = setInterval(passoTurno, speed);
   }
   function pause() {
@@ -1440,6 +1394,40 @@
     if (timer) { clearInterval(timer); timer = null; }
     const b = document.getElementById("gplay");
     if (b) b.textContent = "▶ Play";
+  }
+
+  // torreao de pedra com bandeira do dono (aldeias de rei)
+  function desenharTorreao(sx, sy, r, col) {
+    const w = r * 1.05, h = r * 0.80, x = sx - w / 2, y = sy - h * 0.28;
+    ctx.lineWidth = Math.max(1, r * 0.07); ctx.strokeStyle = "rgba(20,12,4,.85)";
+    ctx.fillStyle = "#6e5c46";                       // corpo de pedra
+    ctx.fillRect(x, y, w, h); ctx.strokeRect(x, y, w, h);
+    ctx.fillStyle = "#7d6a51";                       // ameias
+    const d = w / 5;
+    for (let i = 0; i < 3; i++) ctx.fillRect(x + d * (2 * i) * 0.85 + d * 0.15, y - h * 0.22, d, h * 0.22);
+    ctx.fillStyle = "#241a10";                       // porta
+    ctx.beginPath(); ctx.arc(sx, y + h, r * 0.18, Math.PI, 0); ctx.fill();
+    ctx.strokeStyle = "#3a2c1c"; ctx.lineWidth = Math.max(1, r * 0.08); // mastro
+    ctx.beginPath(); ctx.moveTo(sx, y - h * 0.20); ctx.lineTo(sx, y - h * 0.78); ctx.stroke();
+    ctx.fillStyle = col;                             // bandeira do rei
+    ctx.beginPath();
+    ctx.moveTo(sx, y - h * 0.78); ctx.lineTo(sx + r * 0.52, y - h * 0.62); ctx.lineTo(sx, y - h * 0.46);
+    ctx.closePath(); ctx.fill();
+    ctx.lineWidth = 1; ctx.strokeStyle = "rgba(20,12,4,.6)"; ctx.stroke();
+  }
+
+  // cabana com telhado de palha (aldeias neutras)
+  function desenharCabana(sx, sy, r) {
+    const w = r * 0.95, h = r * 0.55, x = sx - w / 2, y = sy - h * 0.1;
+    ctx.lineWidth = Math.max(1, r * 0.07); ctx.strokeStyle = "rgba(20,12,4,.8)";
+    ctx.fillStyle = "#7a6248";
+    ctx.fillRect(x, y, w, h); ctx.strokeRect(x, y, w, h);
+    ctx.fillStyle = "#9a7d45";                       // telhado
+    ctx.beginPath();
+    ctx.moveTo(x - w * 0.12, y); ctx.lineTo(sx, y - h * 0.85); ctx.lineTo(x + w * 1.12, y);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#241a10";                       // porta
+    ctx.fillRect(sx - r * 0.10, y + h * 0.35, r * 0.20, h * 0.65);
   }
 
   // desenha aldeias do jogo (cor do dono) + exercitos em transito
@@ -1477,22 +1465,27 @@
         ctx.fillStyle = a.dono === null ? "#fff" : col === COR.A ? "#bcd0ff" : "#ffc4c4";
         ctx.fillText(val, sx, sy - r - 3);
 
-        // glifo do TIPO dentro do circulo: o matchup do triangulo legivel
-        // no ponto de contato. cs>=24: icone; abaixo: letra (fallback).
+        // predio no centro (torreao com bandeira / cabana) + selo do tipo
+        // na borda: o matchup segue legivel sem esconder a construcao
         const tg = a.dono === null ? a.tipo : Engine.tipoDominante(game, a.tropas);
-        if (tg) {
-          if (cs >= 24) {
-            const fg = Math.max(11, cs * 0.34);
-            ctx.font = `${fg}px serif`;
-            ctx.fillText(GLIFO[tg], sx, sy + fg * 0.36);
-          } else {
-            const fg = Math.max(9, cs * 0.30);
-            ctx.font = `bold ${fg}px Verdana`;
-            ctx.lineWidth = Math.max(2, fg * 0.25); ctx.strokeStyle = "rgba(20,12,4,.9)";
-            ctx.strokeText(LET[tg], sx, sy + fg * 0.36);
-            ctx.fillStyle = "#f5e9c8";
-            ctx.fillText(LET[tg], sx, sy + fg * 0.36);
+        if (cs >= 26) {
+          if (a.dono === null) desenharCabana(sx, sy, r);
+          else desenharTorreao(sx, sy, r, col);
+          if (tg) {
+            const rb = Math.max(6, r * 0.34);
+            ctx.fillStyle = "rgba(24,17,8,.92)";
+            ctx.beginPath(); ctx.arc(sx + r * 0.68, sy + r * 0.68, rb, 0, Math.PI * 2); ctx.fill();
+            ctx.lineWidth = 1; ctx.strokeStyle = "rgba(217,164,65,.55)"; ctx.stroke();
+            ctx.font = `${rb * 1.35}px serif`;
+            ctx.fillText(GLIFO[tg], sx + r * 0.68, sy + r * 0.68 + rb * 0.48);
           }
+        } else if (tg) {
+          const fg = Math.max(9, cs * 0.30);
+          ctx.font = `bold ${fg}px Verdana`;
+          ctx.lineWidth = Math.max(2, fg * 0.25); ctx.strokeStyle = "rgba(20,12,4,.9)";
+          ctx.strokeText(LET[tg], sx, sy + fg * 0.36);
+          ctx.fillStyle = "#f5e9c8";
+          ctx.fillText(LET[tg], sx, sy + fg * 0.36);
         }
       }
     }
@@ -1622,22 +1615,23 @@
     const f = (lista) => lista.reduce((s, a) => s + Engine.forcaDe(a.tropas, game.config), 0);
     const fA = f(A), fB = f(B);
     const venc = Engine.checarVitoria(game);
-    document.getElementById("sb-turno").textContent = game.turno;
-    document.getElementById("sb-a").textContent = `${A.length} ald · ${fA}`;
-    document.getElementById("sb-b").textContent = `${fB} · ${B.length} ald`;
-    document.getElementById("sb-fa").style.flexGrow = Math.max(fA, 1);
-    document.getElementById("sb-fb").style.flexGrow = Math.max(fB, 1);
-    document.getElementById("sb-extra").textContent =
-      `neutras ${Engine.aldeiasDe(game, null).length} · em trânsito ${game.movimentos.length}`;
-    document.getElementById("sb-venc").textContent =
-      venc ? (venc === "empate" ? "Empate" : "Vitória do Rei " + venc) : "";
 
-    // placar de transmissao (so visivel em replay/cinema; barato manter sempre)
-    document.getElementById("pt-turno").textContent = "TURNO " + game.turno;
+    // paineis dos reis (updateGameHUD e o UNICO dono destes rotulos)
+    const pre = emReplay ? "REPLAY \u00b7 " : "";
+    document.getElementById("sbA-modelo").textContent = pre + etiquetaA;
+    document.getElementById("sb-modelo").textContent = pre + etiquetaB;
+    document.getElementById("sbA-stats").textContent = "forca " + fA + " \u00b7 " + A.length + " ald";
+    document.getElementById("sbB-stats").textContent = "forca " + fB + " \u00b7 " + B.length + " ald";
+
+    // placar de transmissao (topo, sempre visivel)
+    document.getElementById("pt-turno").textContent = venc
+      ? (venc === "empate" ? "EMPATE" : "\uD83C\uDFC6 REI " + venc)
+      : "TURNO " + game.turno;
     document.getElementById("pt-a-f").textContent = fA;
     document.getElementById("pt-b-f").textContent = fB;
     document.getElementById("pt-a-ald").textContent = A.length + " ald";
     document.getElementById("pt-b-ald").textContent = B.length + " ald";
+    document.getElementById("pt-a-mod").textContent = etiquetaA || "-";
     document.getElementById("pt-b-mod").textContent = etiquetaB || "-";
     document.getElementById("pt-fa").style.flexGrow = Math.max(fA, 1);
     document.getElementById("pt-fb").style.flexGrow = Math.max(fB, 1);
@@ -1649,13 +1643,11 @@
   document.getElementById("gplay").addEventListener("click", () => (playing ? pause() : play()));
   document.getElementById("gstep").addEventListener("click", async () => {
     pause();
-    if (document.getElementById("ggemini").checked) {
-      if (!pedirChave() || !game || Engine.checarVitoria(game)) return;
-      await passoTurnoGemini();
-    } else if (document.getElementById("gollama").checked) {
-      if (!game || Engine.checarVitoria(game)) return;
-      await passoTurnoOllama();
-    } else { passoTurno(); }
+    if (!game || Engine.checarVitoria(game)) return;
+    const vA = document.getElementById("gmodA").value, vB = document.getElementById("gmodB").value;
+    if (vA === "gemini" || vB === "gemini") { if (!pedirChave()) return; }
+    if (vA !== "burro" || vB !== "burro") await passoTurnoDuelo();
+    else passoTurno();
   });
   document.getElementById("greset").addEventListener("click", novaPartida);
   document.getElementById("sb-toggle").addEventListener("click", () => document.body.classList.toggle("sb-closed"));
@@ -1678,13 +1670,13 @@
   }
   document.getElementById("grepPlay").addEventListener("click", () => {
     if (!rep) return;
-    if (!playing && rep.idx >= rep.dados.frames.length) { rep.idx = 0; sbFeed.innerHTML = ""; limparBanners(); }
+    if (!playing && rep.idx >= rep.dados.frames.length) { rep.idx = 0; limparFeeds(); limparBanners(); }
     playing = !playing;
     atualizarProgresso();
   });
   document.getElementById("grepRestart").addEventListener("click", () => {
     if (!rep) return;
-    rep.idx = 0; sbFeed.innerHTML = ""; limparBanners(); efeitos = [];
+    rep.idx = 0; limparFeeds(); limparBanners(); efeitos = [];
     camAuto = true; document.getElementById("grepCam").classList.add("ativo");
     playing = true;
     atualizarProgresso();
@@ -1696,9 +1688,8 @@
   });
   document.getElementById("grepSair").addEventListener("click", sairReplay);
   // os dois modos "Rei B = modelo" sao mutuamente exclusivos
-  const cbGemini = document.getElementById("ggemini"), cbOllama = document.getElementById("gollama");
-  cbGemini.addEventListener("change", () => { pause(); if (cbGemini.checked) cbOllama.checked = false; });
-  cbOllama.addEventListener("change", () => { pause(); if (cbOllama.checked) cbGemini.checked = false; });
+  document.getElementById("gmodA").addEventListener("change", pause);
+  document.getElementById("gmodB").addEventListener("change", pause);
   document.getElementById("gspeed").addEventListener("input", (e) => {
     speed = +e.target.value;
     if (playing) { pause(); play(); }
