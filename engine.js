@@ -816,6 +816,26 @@
     return L.join("\n");
   }
 
+  // REGRAS DE ECONOMIA em texto, GERADAS da CONFIG (mesmo principio do
+  // bloco de combate): custo/forca/tempo por tropa, producao e teto.
+  // Sem isso o modelo so aprende os precos errando (51 rejeicoes do
+  // gemini na partida de 02/07 — todas de construcao).
+  function regrasEconomiaTexto(cfg) {
+    const L = [];
+    L.push("=== REGRAS DE ECONOMIA ===");
+    for (const t of TIPOS) {
+      const d = cfg.tropas[t];
+      L.push(`${t}: custa ${d.custo.madeira} madeira + ${d.custo.ferro} ferro, ` +
+        `forca ${d.forca}, fica pronto em ${d.turnos} turno${d.turnos > 1 ? "s" : ""}, velocidade ${d.vel}.`);
+    }
+    L.push(`Cada aldeia sua produz ${cfg.producao.madeira} madeira e ${cfg.producao.ferro} ferro por turno.`);
+    if (cfg.limite_forca_aldeia)
+      L.push(`Teto por aldeia: quando a forca das tropas em casa atinge ${cfg.limite_forca_aldeia}, ` +
+        `a aldeia PARA de construir (mas segue produzindo recursos e pode receber reforcos).`);
+    L.push("So ordene construir se a aldeia tem recursos para pagar o custo AGORA.");
+    return L.join("\n");
+  }
+
   function montarPrompt(visao) {
     const L = [];
     // TOPO: identidade + tarefa (curto)
@@ -823,6 +843,8 @@
     L.push("Seu objetivo e vencer eliminando o inimigo.");
     L.push("");
     L.push(regrasCombateTexto(visao.config));
+    L.push("");
+    L.push(regrasEconomiaTexto(visao.config));
     L.push("");
     // MEIO: dados do turno (relatorio integral)
     L.push(relatorioTexto(visao));
@@ -1228,6 +1250,7 @@
     forcaComprometida,
     tipoDominante,
     regrasCombateTexto,
+    regrasEconomiaTexto,
     vantagem,
     resolverCombate,
     distancia,

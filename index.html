@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mapa - Projeto Jogo (estilo Tribal Wars)</title>
+<title>Projeto Jogo - Arena de Benchmark</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100%; height: 100%; overflow: hidden; background: #2b2014; font-family: "Trebuchet MS", Verdana, sans-serif; }
@@ -30,12 +30,132 @@
     bottom: 10px; right: 10px; pointer-events: auto;
     display: flex; flex-direction: column; gap: 6px;
   }
-  /* HUD da partida (motor) */
-  #game {
-    top: 10px; right: 10px;
-    background: rgba(40,28,14,.82); border: 2px solid #6b4a22; border-radius: 6px;
-    padding: 8px 12px; line-height: 1.55; min-width: 190px;
+  /* ===== CRONICA DA PARTIDA (barra lateral) ===== */
+  #sidebar {
+    position: fixed; top: 0; right: 0; width: 300px; height: 100vh; z-index: 6;
+    display: flex; flex-direction: column;
+    background: linear-gradient(180deg, #2a1f12 0%, #1e1509 100%);
+    border-left: 2px solid #6b4a22; box-shadow: -8px 0 22px rgba(0,0,0,.5);
+    color: #f0e3c0; transition: transform .25s ease;
   }
+  body.sb-closed #sidebar { transform: translateX(100%); }
+  #sb-head { padding: 12px 14px 10px; border-bottom: 2px solid #6b4a22; background: rgba(0,0,0,.18); }
+  #sb-title {
+    font-variant: small-caps; letter-spacing: .1em; font-weight: bold;
+    font-size: 16px; color: #d9a441; text-shadow: 1px 1px 2px #000;
+  }
+  #sb-modelo { font: 11px Consolas, monospace; color: #b0a58a; margin-top: 2px; }
+  #sb-placar { padding: 10px 14px; border-bottom: 1px solid rgba(107,74,34,.55); }
+  .sb-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
+  .mono { font-family: Consolas, monospace; }
+  .fbar {
+    display: flex; height: 13px; border-radius: 7px; overflow: hidden;
+    border: 1px solid rgba(0,0,0,.7); background: #14100a;
+  }
+  #sb-fa { background: linear-gradient(#5d8cf0,#3b63c4); transition: flex-grow .4s; }
+  #sb-fb { background: linear-gradient(#ef5d5d,#c43b3b); transition: flex-grow .4s; }
+  .fleg { display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px; }
+  .fleg .ca { color: #9db8f5; } .fleg .cb { color: #f59d9d; }
+  .sb-sub { font-size: 11px; color: #b0a58a; margin-top: 5px; }
+  #sb-venc { font-weight: bold; color: #ffd56b; margin-top: 4px; font-size: 13px; }
+  #sb-feed { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #6b4a22 #1e1509; }
+  #sb-feed:empty::after {
+    content: "A cr\00F4nica registra as ordens e combates de cada turno. Aperte Play.";
+    display: block; padding: 14px; font-size: 12px; color: #8f8468; font-style: italic;
+  }
+  .ent { border-bottom: 1px solid rgba(107,74,34,.35); padding: 8px 12px; font-size: 12px; line-height: 1.55; }
+  .ent-t { font-variant: small-caps; letter-spacing: .06em; color: #d9a441; font-weight: bold; margin-bottom: 2px; }
+  .ent-m { color: #8f8468; font: 10px Consolas, monospace; letter-spacing: 0; }
+  .ent .rej { color: #e08a7a; }
+  .ent .plc { color: #b0a58a; font-size: 11px; margin-top: 3px; }
+  .bd { font: bold 10px Consolas, monospace; padding: 1px 5px; border-radius: 4px; white-space: nowrap; }
+  .bd.certo  { background: #2f5a23; color: #a8e58c; }
+  .bd.errado { background: #5a2323; color: #f0a49a; }
+  .bd.neutro { background: #4a4232; color: #cfc4a4; }
+  #sb-toggle {
+    position: fixed; top: 12px; right: 312px; z-index: 7; width: 34px; height: 34px;
+    font-size: 15px; color: #f5e9c8; background: linear-gradient(#7a5226,#523414);
+    border: 2px solid #2b1a0a; border-radius: 8px 0 0 8px; cursor: pointer;
+    transition: right .25s ease;
+  }
+  body.sb-closed #sb-toggle { right: 0; }
+  /* ===== BANNER DE EVENTO (replay) ===== */
+  #banner {
+    position: fixed; top: 64px; left: 50%; transform: translateX(-50%) translateY(-16px);
+    z-index: 8; padding: 10px 26px; opacity: 0; pointer-events: none;
+    background: linear-gradient(180deg, rgba(43,32,20,.94), rgba(30,21,9,.94));
+    border: 2px solid #d9a441; border-radius: 8px;
+    color: #f5e9c8; font: bold 17px 'Trebuchet MS', sans-serif;
+    font-variant: small-caps; letter-spacing: .06em;
+    text-shadow: 1px 1px 2px #000; box-shadow: 0 6px 24px rgba(0,0,0,.5);
+    transition: opacity .3s ease, transform .3s ease;
+  }
+  #banner.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ===== PLACAR DE TRANSMISSAO (esports, replay/cinema) ===== */
+  #placarTop {
+    position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
+    z-index: 7; display: none; flex-direction: column; min-width: 520px;
+    background: linear-gradient(180deg, rgba(43,32,20,.95), rgba(30,21,9,.95));
+    border: 2px solid #6b4a22; border-radius: 10px; overflow: hidden;
+    box-shadow: 0 6px 24px rgba(0,0,0,.55); color: #f0e3c0;
+    font: 14px 'Trebuchet MS', sans-serif;
+  }
+  body.replay #placarTop, body.cinema #placarTop { display: flex; }
+  .pt-linha { display: flex; align-items: stretch; }
+  .pt-lado { flex: 1; display: flex; align-items: center; gap: 10px; padding: 8px 14px; }
+  .pt-lado.b { flex-direction: row-reverse; text-align: right; }
+  .pt-lado.a { background: linear-gradient(90deg, rgba(59,99,196,.34), transparent); }
+  .pt-lado.b { background: linear-gradient(270deg, rgba(196,59,59,.34), transparent); }
+  .pt-nome { font-weight: bold; font-variant: small-caps; letter-spacing: .05em; font-size: 16px; }
+  .pt-nome small { display: block; font: 10px Consolas, monospace; letter-spacing: 0; color: #b0a58a; text-transform: none; }
+  .pt-num { font: bold 18px Consolas, monospace; }
+  .pt-ald { font: 11px Consolas, monospace; color: #cfc4a4; }
+  #pt-turno {
+    align-self: center; padding: 6px 14px; margin: 0 4px;
+    font: bold 15px Consolas, monospace; color: #d9a441;
+    border-left: 1px solid rgba(107,74,34,.6); border-right: 1px solid rgba(107,74,34,.6);
+    white-space: nowrap;
+  }
+  #pt-fbar { display: flex; height: 8px; background: #14100a; }
+  #pt-fa { background: linear-gradient(#5d8cf0,#3b63c4); transition: flex-grow .5s; }
+  #pt-fb { background: linear-gradient(#ef5d5d,#c43b3b); transition: flex-grow .5s; }
+  body.replay #banner, body.cinema #banner { top: 104px; }
+
+  /* ===== REPLAYBAR: cockpit do replay ===== */
+  #replaybar {
+    position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+    z-index: 7; display: none; gap: 8px; align-items: center;
+    background: linear-gradient(180deg, rgba(43,32,20,.94), rgba(30,21,9,.94));
+    border: 2px solid #6b4a22; border-radius: 10px; padding: 8px 12px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.5); color: #f0e3c0;
+    font: 13px 'Trebuchet MS', sans-serif;
+  }
+  body.replay #replaybar { display: flex; }
+  #replaybar button {
+    font: bold 13px 'Trebuchet MS', sans-serif; color: #f5e9c8; cursor: pointer;
+    background: linear-gradient(#7a5226,#523414); border: 2px solid #2b1a0a;
+    border-radius: 7px; padding: 5px 12px;
+  }
+  #replaybar button:hover { background: linear-gradient(#946530,#5f3c16); }
+  #replaybar select {
+    font: 13px 'Trebuchet MS', sans-serif; background: #2b1a0a; color: #f0e3c0;
+    border: 1px solid #6b4a22; border-radius: 5px; padding: 3px;
+  }
+  #grepProg { font-family: Consolas, monospace; color: #d9a441; min-width: 92px; text-align: center; }
+  #grepCam.ativo, #gcinema.ativo {
+    border-color: #d9a441; box-shadow: 0 0 8px rgba(217,164,65,.6);
+    background: linear-gradient(#946530,#5f3c16);
+  }
+  body.replay #gamebar { display: none; }  /* no replay, o cockpit e o replaybar */
+
+  /* ===== MODO CINEMA: esconde o chrome de dev p/ gravar ===== */
+  body.cinema #info, body.cinema #zoombar, body.cinema #sb-toggle { display: none; }
+  body.cinema #gamebar { opacity: .12; transition: opacity .2s; }
+  body.cinema #gamebar:hover { opacity: 1; }
+
+  #zoombar { transition: right .25s ease; }
+  body:not(.sb-closed) #zoombar { right: 316px; }
   #gamebar {
     position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
     pointer-events: auto; display: flex; align-items: center; gap: 8px;
@@ -82,21 +202,71 @@
   <button id="zout" title="Afastar">−</button>
 </div>
 
-<div id="game" class="hud"></div>
+<div id="sidebar">
+  <div id="sb-head">
+    <div id="sb-title">Crônica da Partida</div>
+    <div id="sb-modelo">burro vs burro</div>
+  </div>
+  <div id="sb-placar">
+    <div class="sb-row"><span>Turno</span><b id="sb-turno" class="mono">0</b></div>
+    <div class="fbar"><div id="sb-fa"></div><div id="sb-fb"></div></div>
+    <div class="fleg"><span class="ca">■ Rei A <b id="sb-a" class="mono"></b></span><span class="cb"><b id="sb-b" class="mono"></b> Rei B ■</span></div>
+    <div class="sb-sub" id="sb-extra"></div>
+    <div class="sb-sub" id="sb-status" style="color:#d9a441"></div>
+    <div id="sb-venc"></div>
+  </div>
+  <div id="sb-feed"></div>
+</div>
+<div id="placarTop">
+  <div class="pt-linha">
+    <div class="pt-lado a">
+      <div class="pt-nome">Rei A<small id="pt-a-mod">burro</small></div>
+      <div class="pt-num" id="pt-a-f">0</div>
+      <div class="pt-ald" id="pt-a-ald">0 ald</div>
+    </div>
+    <div id="pt-turno">TURNO 0</div>
+    <div class="pt-lado b">
+      <div class="pt-nome">Rei B<small id="pt-b-mod">-</small></div>
+      <div class="pt-num" id="pt-b-f">0</div>
+      <div class="pt-ald" id="pt-b-ald">0 ald</div>
+    </div>
+  </div>
+  <div id="pt-fbar"><div id="pt-fa"></div><div id="pt-fb"></div></div>
+</div>
+<div id="banner"></div>
+<div id="replaybar">
+  <button id="grepRestart" title="Recomecar o replay">&#9198;</button>
+  <button id="grepPlay" title="Pausar/continuar">&#9208;</button>
+  <select id="grepVel" title="Velocidade do replay">
+    <option value="4000">0.5x</option>
+    <option value="2000" selected>1x</option>
+    <option value="1000">2x</option>
+    <option value="500">4x</option>
+  </select>
+  <span id="grepProg">turno 0/0</span>
+  <button id="grepCam" class="ativo" title="Camera automatica segue os combates. Arraste/role o mapa p/ assumir; clique p/ devolver.">&#127919; cam auto</button>
+  <button id="grepSair" title="Sair do replay">&#10005; sair</button>
+</div>
+<button id="sb-toggle" title="Mostrar/esconder a crônica">&#128220;</button>
 
 <div id="gamebar">
   <button id="gplay">▶ Play</button>
   <button id="gstep">Passo</button>
   <button id="greset">Reiniciar</button>
   <label>vel <input id="gspeed" type="range" min="80" max="1200" value="500" style="width:90px"></label>
-  <label title="Cerebro do Rei B: Gemini (API) ou um modelo LOCAL do Ollama (descoberto em localhost:11434).">Rei B =
-    <select id="gmodelo" style="font:12px 'Trebuchet MS',sans-serif">
-      <option value="gemini:gemini-2.5-flash">gemini-2.5-flash</option>
+  <label title="Rei B decidido pelo Gemini (API). Play roda a partida do Gemini no mapa."><input type="checkbox" id="ggemini"> Rei B = Gemini</label>
+  <label title="Rei B decidido por um modelo LOCAL via Ollama (localhost:11434)."><input type="checkbox" id="gollama"> Rei B = Ollama
+    <select id="gomodel" style="font:12px 'Trebuchet MS',sans-serif">
+      <option value="qwen2.5:3b">qwen2.5:3b</option>
+      <option value="llama3.2:3b">llama3.2:3b</option>
+      <option value="llama3:latest">llama3 8B</option>
     </select>
   </label>
-  <button id="grefresh" title="Re-descobrir modelos do Ollama (sem recarregar a pagina)">↻</button>
   <label>turnos <input id="gmax" type="number" min="1" max="80" value="6" style="width:48px"></label>
   <button id="glog" title="Baixar o .txt da ultima partida do modelo">Baixar log</button>
+  <button id="greplaysave" title="Baixar o replay .json da partida gravada">&#127909; Salvar replay</button>
+  <label class="botao-arquivo" title="Reproduzir um replay .json gravado"><button id="greplayload_visual" onclick="document.getElementById('greplayload').click()">&#9654; Ver replay</button><input type="file" id="greplayload" accept=".json" style="display:none"></label>
+  <button id="gcinema" title="Esconde os controles p/ gravar video (passe o mouse aqui p/ voltar)">&#127916; Cinema</button>
 </div>
 
 <script src="world.js"></script>
@@ -347,6 +517,35 @@
   }
 
   // ---------- Render principal ----------
+  // ===== PINTURA DE TERRITORIO: area de influencia de cada rei =====
+  // Cada aldeia com dono tinge os tiles ao redor (raio em tiles); o dono
+  // mais proximo vence. Recalcula so quando o turno/posse muda.
+  const RAIO_INF = 4;
+  const infCache = { stamp: "", mapa: new Map() };
+  function mapaInfluencia() {
+    if (!game) return infCache.mapa;
+    const stamp = game.turno + "|" + game.aldeias.map((a) => a.dono || "n").join("");
+    if (stamp === infCache.stamp) return infCache.mapa;
+    const m = new Map();
+    for (const a of game.aldeias) {
+      if (!a.dono) continue;
+      for (let dy = -RAIO_INF; dy <= RAIO_INF; dy++) {
+        for (let dx = -RAIO_INF; dx <= RAIO_INF; dx++) {
+          const d2 = dx * dx + dy * dy;
+          if (d2 > RAIO_INF * RAIO_INF) continue;
+          const x = a.x + dx, y = a.y + dy;
+          if (x < 0 || y < 0 || x >= WORLD || y >= WORLD || isWater(x, y)) continue;
+          const k = x + "," + y;
+          const atual = m.get(k);
+          if (!atual || d2 < atual.d2) m.set(k, { dono: a.dono, d2 });
+        }
+      }
+    }
+    infCache.stamp = stamp; infCache.mapa = m;
+    return m;
+  }
+  const COR_INF = { A: "70,110,220", B: "216,74,74" };
+
   function draw() {
     clampPan();
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
@@ -515,6 +714,26 @@
       }
     }
 
+    // ===== TERRITORIO: tingir a area de influencia dos reis =====
+    if (game) {
+      const inf = mapaInfluencia();
+      for (const [k, v] of inf) {
+        const [tx, ty] = k.split(",").map(Number);
+        if (tx < cx0 || tx >= cx1 || ty < cy0 || ty >= cy1) continue;
+        const perto = v.d2 <= 2;
+        ctx.fillStyle = `rgba(${COR_INF[v.dono]},${perto ? 0.26 : 0.14})`;
+        ctx.fillRect(tx * cs + panX, ty * cs + panY, cs + 1, cs + 1);
+      }
+    }
+
+    // vinheta sutil: escurece as bordas, foca o teatro
+    const vg = ctx.createRadialGradient(VW / 2, VH / 2, Math.min(VW, VH) * 0.50,
+                                        VW / 2, VH / 2, Math.max(VW, VH) * 0.78);
+    vg.addColorStop(0, "rgba(0,0,0,0)");
+    vg.addColorStop(1, "rgba(18,11,4,.26)");
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, VW, VH);
+
     drawGame();   // camada do motor por cima do mapa
     updateHUD();
   }
@@ -548,6 +767,7 @@
   let dragging = false, lastX = 0, lastY = 0, moved = 0;
 
   canvas.addEventListener("mousedown", (e) => {
+    usuarioAssumiuCamera();
     dragging = true; moved = 0; lastX = e.clientX; lastY = e.clientY;
     canvas.classList.add("dragging");
   });
@@ -574,6 +794,7 @@
   }
 
   canvas.addEventListener("wheel", (e) => {
+    usuarioAssumiuCamera();
     e.preventDefault();
     const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
     zoomAt(e.clientX, e.clientY, factor);
@@ -591,6 +812,319 @@
   let playing = false;
   let speed = 500;        // ms por turno
   let timer = null;
+  let runId = 0;          // token de geracao: invalida loops/respostas de runs antigos
+  let replay = { frames: [] };   // gravacao da partida atual (p/ replay/YouTube)
+  let emReplay = false;          // reproduzindo um replay carregado
+
+  function gravarFrame() {
+    if (emReplay || !game) return;
+    replay.frames.push(JSON.parse(JSON.stringify({
+      turno: game.turno,
+      etiqueta: etiquetaB || "burro",
+      aldeias: game.aldeias,
+      movimentos: game.movimentos,
+      eventos: game.log.filter((e) => e.turno === game.turno),
+    })));
+  }
+  // ===== REPRODUCAO: aplica um frame gravado ao estado visivel =====
+  function aplicarFrame(fr) {
+    game.turno = fr.turno;
+    game.aldeias = fr.aldeias;
+    game.movimentos = fr.movimentos;
+    game.log = fr.eventos; // efeitos/cronica leem daqui
+    etiquetaB = fr.etiqueta;
+    document.getElementById("sb-modelo").textContent = "REPLAY \u00b7 " + fr.etiqueta;
+
+    // cronica do frame
+    const cs2 = linhasCombates(fr.turno);
+    if (cs2.length) addEntrada(`<div class="ent-t">Turno ${fr.turno} ` +
+      `<span class="ent-m">${esc(fr.etiqueta)}</span></div>` + cs2.join("") + linhaPlacar());
+
+    // banners + escolha do alvo da camera
+    let alvoCam = null;
+    for (const e of fr.eventos) {
+      if (e.tipo !== "combate") continue;
+      if (!alvoCam) alvoCam = e;
+      if (e.conquista) {
+        const dono = e.atacante === "A" ? "Rei A" : "Rei B";
+        mostrarBanner("\u2694 " + e.alvoNome + " caiu para o " + dono,
+          e.atacante === "A" ? "#5d8cf0" : "#ef5d5d");
+      } else if (e.vencedor === "defensor") {
+        mostrarBanner("\ud83d\udee1 " + e.alvoNome + " resistiu ao ataque", "#b0a58a");
+      }
+    }
+    if (alvoCam) {
+      const a = game.aldeias.find((v) => v.id === alvoCam.alvoId);
+      if (a) apontarCamera(a.x, a.y, 1.9);
+    }
+
+    registrarEfeitosTurno(fr.turno);
+    updateGameHUD();
+    const venc = Engine.checarVitoria(game);
+    if (venc) mostrarBanner("\ud83c\udfc6 " + (venc === "empate" ? "EMPATE" : "VIT\u00d3RIA DO REI " + venc), "#d9a441");
+    draw();
+  }
+
+  let rep = null; // { dados, idx } quando em replay
+
+  function atualizarProgresso() {
+    if (!rep) return;
+    document.getElementById("grepProg").textContent =
+      "turno " + Math.min(rep.idx, rep.dados.frames.length) + "/" + rep.dados.frames.length;
+    document.getElementById("grepPlay").innerHTML = playing ? "&#9208;" : "&#9654;";
+  }
+
+  async function runReplay(meuRun) {
+    emReplay = true;
+    document.body.classList.add("replay");
+    camAuto = true;
+    document.getElementById("grepCam").classList.add("ativo");
+    sbFeed.innerHTML = "";
+    efeitos = [];
+    limparBanners();
+    document.getElementById("sb-venc").textContent = "";
+    apontarCamera(WORLD / 2, WORLD / 2, Math.max(MIN_SCALE, VW / (WORLD * TILE)));
+    playing = true;
+    while (emReplay && runId === meuRun) {
+      atualizarProgresso();
+      if (!playing || rep.idx >= rep.dados.frames.length) {
+        if (rep.idx >= rep.dados.frames.length) playing = false; // fim: espera restart/sair
+        await new Promise((r) => setTimeout(r, 140));
+        continue;
+      }
+      aplicarFrame(rep.dados.frames[rep.idx++]);
+      atualizarProgresso();
+      const cadencia = parseInt(document.getElementById("grepVel").value, 10) || 2000;
+      await new Promise((r) => setTimeout(r, cadencia));
+    }
+  }
+
+  function sairReplay() {
+    emReplay = false;
+    playing = false;
+    rep = null;
+    limparBanners();
+    document.body.classList.remove("replay");
+    novaPartida();
+  }
+
+  function carregarReplay(file) {
+    const rd = new FileReader();
+    rd.onload = () => {
+      try {
+        const dados = JSON.parse(rd.result);
+        if (!dados.frames || !dados.frames.length) throw new Error("replay vazio");
+        pause();
+        if (!game) game = Engine.criarEstadoInicial(Engine.CONFIG);
+        rep = { dados, idx: 0 };
+        const meuRun = ++runId;
+        runReplay(meuRun);
+      } catch (e) { alert("Replay invalido: " + e.message); }
+    };
+    rd.readAsText(file);
+  }
+
+  function baixarReplay() {
+    if (!replay.frames.length) { alert("Nenhuma partida gravada ainda."); return; }
+    const blob = new Blob([JSON.stringify({ v: 1, frames: replay.frames })],
+      { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "replay_" + new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-") + ".json";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  }
+
+  // ===== CRONICA DA PARTIDA (barra lateral) =====
+  const sbFeed = document.getElementById("sb-feed");
+  const REDUZ_MOV = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const esc = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const chip = (cls, txt) => `<span class="bd ${cls}">${txt}</span>`;
+  const setStatus = (t) => { document.getElementById("sb-status").textContent = t || ""; };
+
+  // selo do matchup do triangulo (perspectiva do ATACANTE)
+  function seloMatchup(atkT, defT) {
+    if (!atkT || !defT) return "";
+    const tri = game.config.triangulo;
+    if (tri[atkT] === defT) return chip("certo", "counter certo");
+    if (tri[defT] === atkT) return chip("errado", "counter errado");
+    return chip("neutro", "neutro");
+  }
+
+  function addEntrada(html) {
+    const div = document.createElement("div");
+    div.className = "ent";
+    div.innerHTML = html;
+    sbFeed.appendChild(div);
+    while (sbFeed.children.length > 60) sbFeed.removeChild(sbFeed.firstChild);
+    sbFeed.scrollTop = sbFeed.scrollHeight;
+  }
+
+  function linhaPlacar() {
+    const f = (d) => Engine.aldeiasDe(game, d).reduce((s, a) => s + Engine.forcaDe(a.tropas, game.config), 0);
+    return `<div class="plc">placar A ${Engine.aldeiasDe(game, "A").length} ald / ${f("A")} &middot; ` +
+           `B ${Engine.aldeiasDe(game, "B").length} ald / ${f("B")}</div>`;
+  }
+
+  function linhasCombates(tn) {
+    const L = [];
+    for (const e of game.log) {
+      if (e.turno !== tn || e.tipo !== "combate") continue;
+      const selo = e.vantagem > 0 ? chip("certo", "counter certo")
+                 : e.vantagem < 0 ? chip("errado", "counter errado")
+                 : chip("neutro", "neutro");
+      const res = e.vencedor === "atacante"
+        ? (e.conquista ? `Rei ${e.atacante} CONQUISTOU` : `Rei ${e.atacante} venceu`)
+        : "defesa segurou";
+      L.push(`<div>&#9876; [${e.alvoId}] ${esc(e.alvoNome)} &mdash; ` +
+        `<span class="mono">${e.FatkEf} vs ${e.FdefEf} ef</span> &rarr; ${res} ${selo}</div>`);
+    }
+    return L;
+  }
+
+  // turno de um MODELO (gemini/ollama): ordens aceitas, rejeicoes, combates
+  function cronicaTurnoModelo(tn, diag) {
+    const L = [`<div class="ent-t">Turno ${tn} <span class="ent-m">${esc(etiquetaB)}</span></div>`];
+    if (diag) {
+      for (const e of diag.aceitoEnvios) {
+        const atkT = Engine.tipoDominante(game, e.tropas);
+        const defT = e.alvo
+          ? (e.alvo.dono === null ? e.alvo.tipo : Engine.tipoDominante(game, e.alvo.tropas))
+          : null;
+        L.push(`<div>&rarr; [${e.origemId}]&#8594;[${e.destinoId}] ` +
+          `<span class="mono">${compStrG(e.tropas)}</span> ${seloMatchup(atkT, defT)}</div>`);
+      }
+      const cont = {};
+      for (const c of diag.aceitoConstruir) cont[c.tipo] = (cont[c.tipo] || 0) + 1;
+      const desc = Object.keys(cont).map((t) => `${cont[t]} ${t}`).join(", ");
+      if (desc) L.push(`<div>&#9874; construir: ${desc}</div>`);
+      if (!diag.aceitoEnvios.length && !desc) L.push(`<div style="color:#8f8468">passou o turno</div>`);
+      for (const r of diag.rejeicoes) L.push(`<div class="rej">&#10007; ${esc(r)}</div>`);
+    }
+    L.push(...linhasReforcos(tn));
+    L.push(...linhasCombates(tn));
+    L.push(linhaPlacar());
+    addEntrada(L.join(""));
+  }
+
+  // reforcos do turno agrupados por aldeia: 1 linha em vez de N gotas
+  function linhasReforcos(tn) {
+    const porAldeia = new Map();
+    for (const e of game.log) {
+      if (e.turno !== tn || e.tipo !== "reforco") continue;
+      const g = porAldeia.get(e.alvoId) || { nome: e.alvoNome, n: 0,
+        tropas: { lanceiro: 0, arqueiro: 0, cavaleiro: 0 } };
+      g.n++;
+      for (const t in g.tropas) g.tropas[t] += e.tropas[t] || 0;
+      porAldeia.set(e.alvoId, g);
+    }
+    const L = [];
+    for (const [id, g] of porAldeia)
+      L.push(`<div style="color:#8f8468">reforcos em [${id}] ${esc(g.nome)}: ` +
+        `<span class="mono">${compStrG(g.tropas)}</span> (${g.n} chegada${g.n > 1 ? "s" : ""})</div>`);
+    return L;
+  }
+
+  // turno burro-vs-burro: so registra quando ha combate (evita inundar o feed)
+  function cronicaTurnoBurro(tn) {
+    const cs = linhasCombates(tn);
+    if (!cs.length) return;
+    addEntrada(`<div class="ent-t">Turno ${tn}</div>` + cs.join("") + linhaPlacar());
+  }
+
+  // ===== EFEITOS DE MAPA (anel de impacto / pulso de conquista) =====
+  let efeitos = [];
+  let efeitoLoop = false;
+  const EFEITO_DUR = 900; // ms
+
+  function registrarEfeitosTurno(tn) {
+    if (REDUZ_MOV) return;
+    for (const e of game.log) {
+      if (e.turno !== tn || e.tipo !== "combate") continue;
+      const a = game.aldeias.find((v) => v.id === e.alvoId);
+      if (!a) continue;
+      efeitos.push({
+        x: a.x, y: a.y, t0: performance.now(), conq: !!e.conquista,
+        cor: e.conquista ? (COR[a.dono] || COR.neutra) : "#ffd56b",
+      });
+    }
+    if (efeitos.length && !efeitoLoop) { efeitoLoop = true; requestAnimationFrame(tickEfeitos); }
+  }
+  // ===== CAMERA CINEMATOGRAFICA (so no replay) =====
+  let camAlvo = null;    // { panX, panY, scale }
+  let camAuto = true;    // no replay: false = usuario assumiu a camera
+  function usuarioAssumiuCamera() {
+    if (!emReplay || !camAuto) return;
+    camAuto = false; camAlvo = null;
+    const b = document.getElementById("grepCam");
+    if (b) b.classList.remove("ativo");
+  }
+  function apontarCamera(cx, cy, alvoScale) {
+    if (emReplay && !camAuto) return; // usuario esta no comando
+    if (REDUZ_MOV) { scale = alvoScale; centerOn(cx, cy); draw(); return; }
+    const sNovo = Math.max(MIN_SCALE, Math.min(MAX_SCALE, alvoScale));
+    camAlvo = {
+      scale: sNovo,
+      panX: VW / 2 - (cx + 0.5) * TILE * sNovo,
+      panY: VH / 2 - (cy + 0.5) * TILE * sNovo,
+    };
+    ligarAnimacao();
+  }
+  function passoCamera() {
+    if (!camAlvo) return false;
+    const f = 0.10; // suavizacao
+    scale += (camAlvo.scale - scale) * f;
+    panX += (camAlvo.panX - panX) * f;
+    panY += (camAlvo.panY - panY) * f;
+    const perto = Math.abs(camAlvo.scale - scale) < 0.002 &&
+      Math.abs(camAlvo.panX - panX) < 0.6 && Math.abs(camAlvo.panY - panY) < 0.6;
+    if (perto) { scale = camAlvo.scale; panX = camAlvo.panX; panY = camAlvo.panY; camAlvo = null; }
+    return true;
+  }
+
+  function tickEfeitos() {
+    const camAtiva = passoCamera();
+    if (!efeitos.length && !camAtiva) { efeitoLoop = false; return; }
+    draw();
+    requestAnimationFrame(tickEfeitos);
+  }
+  function ligarAnimacao() {
+    if (!efeitoLoop) { efeitoLoop = true; requestAnimationFrame(tickEfeitos); }
+  }
+
+  // ===== BANNERS DE EVENTO (fila; um de cada vez) =====
+  const filaBanner = [];
+  let bannerAtivo = false;
+  function mostrarBanner(txt, cor, prioridade) {
+    // fila curta: banner atrasado e banner errado. Sem prioridade, cai
+    // primeiro quando a fila enche; com fila cheia, o mais velho sai.
+    if (filaBanner.length >= 3) {
+      const i = filaBanner.findIndex((b) => !b.prioridade);
+      filaBanner.splice(i >= 0 ? i : 0, 1);
+    }
+    filaBanner.push({ txt, cor, prioridade: !!prioridade });
+    if (!bannerAtivo) proximoBanner();
+  }
+  function limparBanners() {
+    filaBanner.length = 0;
+    document.getElementById("banner").classList.remove("show");
+    bannerAtivo = false;
+  }
+  function proximoBanner() {
+    const b = filaBanner.shift();
+    if (!b) { bannerAtivo = false; return; }
+    bannerAtivo = true;
+    const el = document.getElementById("banner");
+    el.textContent = b.txt;
+    el.style.borderColor = b.cor || "#d9a441";
+    el.classList.add("show");
+    const dur = REDUZ_MOV ? 2600 : (filaBanner.length ? 1100 : 1900); // fila cheia = mais rapido
+    setTimeout(() => {
+      el.classList.remove("show");
+      setTimeout(proximoBanner, 250);
+    }, dur);
+  }
+
 
   // enquadra a camera no teatro da partida
   function enquadrarTeatro() {
@@ -602,6 +1136,14 @@
 
   function novaPartida() {
     pause();
+    sbFeed.innerHTML = "";
+    efeitos = [];
+    emReplay = false;
+    rep = null;
+    replay = { frames: [] };
+    document.body.classList.remove("cinema");
+    document.body.classList.remove("replay");
+    document.getElementById("sb-modelo").textContent = "burro vs burro";
     game = Engine.criarEstadoInicial(Engine.CONFIG);
     // indice celula -> aldeia (posicoes fixas): filtro rapido no render
     game.byCell = new Map(game.aldeias.map((a) => [a.x + "," + a.y, a]));
@@ -613,6 +1155,9 @@
   function passoTurno() {
     if (!game || Engine.checarVitoria(game)) { pause(); return; }
     Engine.rodarTurno(game, null);
+    registrarEfeitosTurno(game.turno);
+    cronicaTurnoBurro(game.turno);
+    gravarFrame();
     updateGameHUD();
     draw();
     if (Engine.checarVitoria(game)) pause();
@@ -691,7 +1236,7 @@
     game.log.filter((x) => x.turno === tn).forEach((e) => {
       if (e.tipo === "combate")
         L.push("COMBATE [" + e.alvoId + "] " + e.alvoNome + ": atacante " + e.atacante +
-          " Fatk=" + e.Fatk + " Fdef=" + e.Fdef + " m=" + e.m + " -> vence " + e.vencedor +
+          " Fatk=" + e.Fatk + " (ef " + e.FatkEf + ") Fdef=" + e.Fdef + " (ef " + e.FdefEf + ") vant=" + e.vantagem + " -> vence " + e.vencedor +
           (e.conquista ? " (CONQUISTA)" : "") + " | baixas~" + e.baixasForca);
       else if (e.tipo === "reforco")
         L.push("REFORCO [" + e.alvoId + "] " + e.alvoNome + " dono " + e.dono + ": " + compStrG(e.tropas));
@@ -716,7 +1261,8 @@
     URL.revokeObjectURL(a.href);
   }
 
-  async function passoTurnoGemini() {
+  async function passoTurnoGemini(meuRun) {
+    if (meuRun === undefined) meuRun = ++runId;          // passo manual ganha token proprio
     etiquetaB = "gemini";
     Engine.tick(game);
     if (Engine.aldeiasDe(game, "A").length)
@@ -724,25 +1270,33 @@
     let cru = "", ordem = { construir: [], envios: [] }, diag = null;
     if (Engine.aldeiasDe(game, "B").length) {
       const prompt = Engine.montarPrompt(Engine.montarVisao(game, "B"));
+      setStatus("Rei B pensando... (gemini)");
       try { cru = await gerarGemini(prompt); }
       catch (e) { cru = "[ERRO DE REDE] " + e.message; }
+      setStatus("");
+      if (runId !== meuRun) return;                      // resposta atrasada de run antigo: descarta
       ordem = Engine.parsearOrdem(cru).ordem;            // sem retry: resposta ruim = passa o turno
       diag = Engine.diagnosticarOrdem(game, "B", ordem); // ANTES de executar (alvo ainda neutra)
       Engine.executarOrdem(game, "B", ordem);
     }
     registrarTurnoGemini(cru, ordem, diag);
+    document.getElementById("sb-modelo").textContent = etiquetaB;
+    registrarEfeitosTurno(game.turno);
+    cronicaTurnoModelo(game.turno, diag);
+    gravarFrame();
     updateGameHUD();
     draw();
   }
 
-  async function runGemini() {
+  async function runGemini(meuRun) {
     if (!pedirChave()) { pause(); alert("Sem GEMINI_API_KEY: nao da pra rodar o Gemini."); return; }
     const maxT = Math.max(1, parseInt(document.getElementById("gmax").value, 10) || 6);
     geminiLog = ["=== PARTIDA Rei B (gemini-2.5-flash) vs jogadorBurro | seed " + game.config.seed +
       " | maxTurnos " + maxT + " | " + new Date().toLocaleString() + " ===\n"];
-    while (playing && game && !Engine.checarVitoria(game) && game.turno < maxT) {
-      await passoTurnoGemini();
+    while (playing && runId === meuRun && game && !Engine.checarVitoria(game) && game.turno < maxT) {
+      await passoTurnoGemini(meuRun);
     }
+    if (runId !== meuRun) return; // run antigo: nao fecha nem baixa o log do run novo
     pause();
     updateGameHUD();
     const venc = Engine.checarVitoria(game);
@@ -770,65 +1324,9 @@
     return data.response || "";
   }
 
-  // ----- SELETOR UNICO DE MODELO (barra) -----
-  // O value de cada <option> e o id "backend:modelo" que o codigo ja entende.
-  // Split no PRIMEIRO ":" (igual ao criarCliente do rei.js): "ollama:qwen2.5:3b"
-  // -> backend "ollama", modelo "qwen2.5:3b".
-  function modeloSelecionado() {
-    const v = document.getElementById("gmodelo").value || "gemini:gemini-2.5-flash";
-    const i = v.indexOf(":");
-    return {
-      backend: (i < 0 ? v : v.slice(0, i)).toLowerCase(),
-      modelo: i < 0 ? "" : v.slice(i + 1),
-      id: v,
-    };
-  }
-
-  // DESCOBERTA: GET /api/tags -> { models:[{name,...}] }. Popula o seletor com
-  // Gemini (FIXO, primeiro) + os modelos do Ollama (sem os de embedding).
-  // Ollama offline/timeout/CORS: mostra so Gemini + 1 linha desabilitada de
-  // aviso, SEM travar a pagina e SEM alert no carregamento.
-  const OLLAMA_TAGS = "http://localhost:11434/api/tags";
-  async function descobrirModelos() {
-    const sel = document.getElementById("gmodelo");
-    const anterior = sel.value;            // preserva a escolha atual (refresh em partida)
-    let modelos = null;
-    try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 1500);  // timeout curto: nao trava o load
-      const resp = await fetch(OLLAMA_TAGS, { signal: ctrl.signal });
-      clearTimeout(t);
-      if (resp.ok) {
-        const data = await resp.json();
-        modelos = (data.models || [])
-          .map((m) => m.name)
-          .filter((n) => n && !/embed/i.test(n));      // fora os de embedding (nao jogam)
-      }
-    } catch (e) { modelos = null; }        // offline/timeout/CORS -> caso "so Gemini + aviso"
-
-    sel.innerHTML = "";
-    const og = document.createElement("option");
-    og.value = "gemini:gemini-2.5-flash"; og.textContent = "gemini-2.5-flash";
-    sel.appendChild(og);                   // Gemini SEMPRE presente, primeiro
-
-    if (modelos && modelos.length) {
-      for (const n of modelos) {
-        const o = document.createElement("option");
-        o.value = "ollama:" + n; o.textContent = n;
-        sel.appendChild(o);
-      }
-    } else {
-      const o = document.createElement("option");
-      o.value = ""; o.disabled = true;
-      o.textContent = "(Ollama offline - inicie com OLLAMA_ORIGINS=*)";
-      sel.appendChild(o);
-    }
-    // mantem a escolha anterior se ela ainda existir na nova lista
-    if (anterior && [...sel.options].some((o) => o.value === anterior)) sel.value = anterior;
-  }
-
-  async function passoTurnoOllama(modelo) {
-    modelo = modelo || modeloSelecionado().modelo;
+  async function passoTurnoOllama(modelo, meuRun) {
+    if (meuRun === undefined) meuRun = ++runId;          // passo manual ganha token proprio
+    modelo = modelo || document.getElementById("gomodel").value;
     etiquetaB = "ollama:" + modelo;
     Engine.tick(game);
     if (Engine.aldeiasDe(game, "A").length)
@@ -836,23 +1334,32 @@
     let cru = "", ordem = { construir: [], envios: [] }, diag = null;
     if (Engine.aldeiasDe(game, "B").length) {
       const prompt = Engine.montarPrompt(Engine.montarVisao(game, "B"));
+      setStatus("Rei B pensando... (ollama:" + modelo + ")");
       try { cru = await gerarOllama(prompt, modelo); }
       catch (e) { cru = "[ERRO DE REDE] " + e.message; }
+      setStatus("");
+      if (runId !== meuRun) return;                      // resposta atrasada de run antigo: descarta
       ordem = Engine.parsearOrdem(cru).ordem;            // sem retry: resposta ruim = passa o turno
       diag = Engine.diagnosticarOrdem(game, "B", ordem); // ANTES de executar (alvo ainda neutra)
       Engine.executarOrdem(game, "B", ordem);
     }
     registrarTurnoGemini(cru, ordem, diag);
+    document.getElementById("sb-modelo").textContent = etiquetaB;
+    registrarEfeitosTurno(game.turno);
+    cronicaTurnoModelo(game.turno, diag);
+    gravarFrame();
     updateGameHUD();
     draw();
   }
 
-  async function runOllama() {
-    const modelo = modeloSelecionado().modelo;
+  async function runOllama(meuRun) {
+    const modelo = document.getElementById("gomodel").value;
     etiquetaB = "ollama:" + modelo;
     // sanity check (e teste de CORS): se falhar, instrui a liberar o Ollama
-    try { await gerarOllama("responda apenas: ok", modelo); }
+    setStatus("testando conexao com o Ollama...");
+    try { await gerarOllama("responda apenas: ok", modelo); setStatus(""); }
     catch (e) {
+      setStatus("");
       pause();
       alert("Nao consegui falar com o Ollama (" + e.message + ").\n\n" +
         "Provavel CORS: a pagina abre via file:// e o Ollama bloqueia por padrao.\n" +
@@ -865,9 +1372,10 @@
     const maxT = Math.max(1, parseInt(document.getElementById("gmax").value, 10) || 6);
     geminiLog = ["=== PARTIDA Rei B (ollama:" + modelo + ") vs jogadorBurro | seed " + game.config.seed +
       " | maxTurnos " + maxT + " | " + new Date().toLocaleString() + " ===\n"];
-    while (playing && game && !Engine.checarVitoria(game) && game.turno < maxT) {
-      await passoTurnoOllama(modelo);
+    while (playing && runId === meuRun && game && !Engine.checarVitoria(game) && game.turno < maxT) {
+      await passoTurnoOllama(modelo, meuRun);
     }
+    if (runId !== meuRun) return; // run antigo: nao fecha nem baixa o log do run novo
     pause();
     updateGameHUD();
     const venc = Engine.checarVitoria(game);
@@ -879,12 +1387,14 @@
   }
 
   function play() {
+    if (emReplay) return; // no replay, os controles sao os do replaybar
     if (playing || !game || Engine.checarVitoria(game)) return;
     playing = true;
+    const meuRun = ++runId; // este Play e o unico dono da partida a partir daqui
     document.getElementById("gplay").textContent = "⏸ Pausar";
-    // sempre ha um modelo escolhido: Gemini ou Ollama gateiam a propria cadencia
-    if (modeloSelecionado().backend === "gemini") runGemini();
-    else runOllama();
+    if (document.getElementById("ggemini").checked) { runGemini(meuRun); return; } // Gemini gateia a cadencia
+    if (document.getElementById("gollama").checked) { runOllama(meuRun); return; } // Ollama gateia a cadencia
+    timer = setInterval(passoTurno, speed);
   }
   function pause() {
     playing = false;
@@ -904,6 +1414,12 @@
       const col = a.dono === null ? COR.neutra : COR[a.dono];
       const r = Math.max(5, cs * 0.40);
 
+      // tintura sutil da cor do dono (le-se o territorio de relance)
+      ctx.globalAlpha = a.dono === null ? 0.10 : 0.18;
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+
       ctx.lineWidth = 1; ctx.strokeStyle = "rgba(0,0,0,.55)";
       ctx.beginPath(); ctx.arc(sx, sy, r + 2, 0, Math.PI * 2); ctx.stroke();
       ctx.lineWidth = Math.max(2.5, cs * 0.11); ctx.strokeStyle = col;
@@ -921,6 +1437,18 @@
         ctx.strokeText(val, sx, sy - r - 3);
         ctx.fillStyle = a.dono === null ? "#fff" : col === COR.A ? "#bcd0ff" : "#ffc4c4";
         ctx.fillText(val, sx, sy - r - 3);
+
+        // glifo do TIPO dentro do circulo: o matchup do triangulo legivel
+        // no ponto de contato (neutra: tipo fixo; rei: tipo dominante)
+        const tg = a.dono === null ? a.tipo : Engine.tipoDominante(game, a.tropas);
+        if (tg) {
+          const fg = Math.max(9, cs * 0.30);
+          ctx.font = `bold ${fg}px Verdana`;
+          ctx.lineWidth = Math.max(2, fg * 0.25); ctx.strokeStyle = "rgba(20,12,4,.9)";
+          ctx.strokeText(LET[tg], sx, sy + fg * 0.36);
+          ctx.fillStyle = "#f5e9c8";
+          ctx.fillText(LET[tg], sx, sy + fg * 0.36);
+        }
       }
     }
 
@@ -941,6 +1469,48 @@
       ctx.fillStyle = col;
       ctx.beginPath(); ctx.arc(mx, my, r, 0, Math.PI * 2); ctx.fill();
       ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(0,0,0,.65)"; ctx.stroke();
+
+      // seta: para onde o exercito esta indo
+      const ang = Math.atan2(dy - my, dx - mx);
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.moveTo(mx + Math.cos(ang) * (r + 7), my + Math.sin(ang) * (r + 7));
+      ctx.lineTo(mx + Math.cos(ang + 2.5) * (r + 1), my + Math.sin(ang + 2.5) * (r + 1));
+      ctx.lineTo(mx + Math.cos(ang - 2.5) * (r + 1), my + Math.sin(ang - 2.5) * (r + 1));
+      ctx.closePath(); ctx.fill();
+      ctx.lineWidth = 1; ctx.strokeStyle = "rgba(0,0,0,.5)"; ctx.stroke();
+
+      // rotulo do exercito: forca + tipo dominante ("45C")
+      if (cs > 20) {
+        const LETm = { lanceiro: "L", arqueiro: "A", cavaleiro: "C" };
+        const td = Engine.tipoDominante(game, m.tropas);
+        const rot = Engine.forcaDe(m.tropas, game.config) + (td ? LETm[td] : "");
+        const fm = Math.max(9, cs * 0.26);
+        ctx.font = `bold ${fm}px Verdana`; ctx.textAlign = "center";
+        ctx.lineWidth = Math.max(2, fm * 0.26); ctx.strokeStyle = "rgba(20,12,4,.85)";
+        ctx.strokeText(rot, mx, my - r - 4);
+        ctx.fillStyle = col === COR.A ? "#bcd0ff" : "#ffc4c4";
+        ctx.fillText(rot, mx, my - r - 4);
+      }
+    }
+
+    // ===== EFEITOS: anel de impacto (combate) e pulso de conquista =====
+    const agora = performance.now();
+    efeitos = efeitos.filter((e) => agora - e.t0 < EFEITO_DUR);
+    for (const e of efeitos) {
+      const p = (agora - e.t0) / EFEITO_DUR;                 // 0 -> 1
+      const ex = e.x * cs + panX + cs / 2, ey = e.y * cs + panY + cs / 2;
+      const raio = Math.max(8, cs * 0.45) * (1 + p * 1.6);
+      ctx.globalAlpha = (1 - p) * 0.9;
+      ctx.lineWidth = Math.max(2, cs * 0.08);
+      ctx.strokeStyle = e.cor;
+      ctx.beginPath(); ctx.arc(ex, ey, raio, 0, Math.PI * 2); ctx.stroke();
+      if (e.conq) {  // conquista: pulso preenchido na cor do novo dono
+        ctx.globalAlpha = (1 - p) * 0.30;
+        ctx.fillStyle = e.cor;
+        ctx.beginPath(); ctx.arc(ex, ey, raio * 0.75, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
     }
   }
 
@@ -948,30 +1518,83 @@
     if (!game) return;
     const A = Engine.aldeiasDe(game, "A"), B = Engine.aldeiasDe(game, "B");
     const f = (lista) => lista.reduce((s, a) => s + Engine.forcaDe(a.tropas, game.config), 0);
+    const fA = f(A), fB = f(B);
     const venc = Engine.checarVitoria(game);
-    document.getElementById("game").innerHTML =
-      `<b>Turno ${game.turno}</b><br>` +
-      `<span style="color:#7aa0ff">■ Rei A</span>: ${A.length} aldeias · força ${f(A)}<br>` +
-      `<span style="color:#ff7a7a">■ Rei B</span>: ${B.length} aldeias · força ${f(B)}<br>` +
-      `neutras ${Engine.aldeiasDe(game, null).length} · em trânsito ${game.movimentos.length}` +
-      (venc ? `<br><b style="color:#ffd56b">🏆 ${venc === "empate" ? "Empate" : "Vitória do Rei " + venc}</b>` : "");
+    document.getElementById("sb-turno").textContent = game.turno;
+    document.getElementById("sb-a").textContent = `${A.length} ald · ${fA}`;
+    document.getElementById("sb-b").textContent = `${fB} · ${B.length} ald`;
+    document.getElementById("sb-fa").style.flexGrow = Math.max(fA, 1);
+    document.getElementById("sb-fb").style.flexGrow = Math.max(fB, 1);
+    document.getElementById("sb-extra").textContent =
+      `neutras ${Engine.aldeiasDe(game, null).length} · em trânsito ${game.movimentos.length}`;
+    document.getElementById("sb-venc").textContent =
+      venc ? (venc === "empate" ? "Empate" : "Vitória do Rei " + venc) : "";
+
+    // placar de transmissao (so visivel em replay/cinema; barato manter sempre)
+    document.getElementById("pt-turno").textContent = "TURNO " + game.turno;
+    document.getElementById("pt-a-f").textContent = fA;
+    document.getElementById("pt-b-f").textContent = fB;
+    document.getElementById("pt-a-ald").textContent = A.length + " ald";
+    document.getElementById("pt-b-ald").textContent = B.length + " ald";
+    document.getElementById("pt-b-mod").textContent = etiquetaB || "-";
+    document.getElementById("pt-fa").style.flexGrow = Math.max(fA, 1);
+    document.getElementById("pt-fb").style.flexGrow = Math.max(fB, 1);
   }
 
   // controles
   document.getElementById("gplay").addEventListener("click", () => (playing ? pause() : play()));
   document.getElementById("gstep").addEventListener("click", async () => {
     pause();
-    if (modeloSelecionado().backend === "gemini") {
+    if (document.getElementById("ggemini").checked) {
       if (!pedirChave() || !game || Engine.checarVitoria(game)) return;
       await passoTurnoGemini();
-    } else {
+    } else if (document.getElementById("gollama").checked) {
       if (!game || Engine.checarVitoria(game)) return;
       await passoTurnoOllama();
-    }
+    } else { passoTurno(); }
   });
   document.getElementById("greset").addEventListener("click", novaPartida);
+  document.getElementById("sb-toggle").addEventListener("click", () => document.body.classList.toggle("sb-closed"));
   document.getElementById("glog").addEventListener("click", baixarLogGemini);
-  document.getElementById("grefresh").addEventListener("click", descobrirModelos);
+  document.getElementById("greplaysave").addEventListener("click", baixarReplay);
+  document.getElementById("greplayload").addEventListener("change", (ev) => {
+    if (ev.target.files && ev.target.files[0]) { carregarReplay(ev.target.files[0]); ev.target.value = ""; }
+  });
+  document.getElementById("gcinema").addEventListener("click", alternarCinema);
+  function alternarCinema() {
+    const ligar = !document.body.classList.contains("cinema");
+    document.body.classList.toggle("cinema", ligar);
+    document.getElementById("gcinema").classList.toggle("ativo", ligar);
+    // tela cheia deixa o modo obvio e e o que gravacao pede; se o navegador
+    // negar (precisa de gesto), o modo segue valendo so com o chrome oculto
+    try {
+      if (ligar && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+      else if (!ligar && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+    } catch (e) {}
+  }
+  document.getElementById("grepPlay").addEventListener("click", () => {
+    if (!rep) return;
+    if (!playing && rep.idx >= rep.dados.frames.length) { rep.idx = 0; sbFeed.innerHTML = ""; limparBanners(); }
+    playing = !playing;
+    atualizarProgresso();
+  });
+  document.getElementById("grepRestart").addEventListener("click", () => {
+    if (!rep) return;
+    rep.idx = 0; sbFeed.innerHTML = ""; limparBanners(); efeitos = [];
+    camAuto = true; document.getElementById("grepCam").classList.add("ativo");
+    playing = true;
+    atualizarProgresso();
+  });
+  document.getElementById("grepCam").addEventListener("click", () => {
+    camAuto = !camAuto;
+    document.getElementById("grepCam").classList.toggle("ativo", camAuto);
+    if (!camAuto) camAlvo = null;
+  });
+  document.getElementById("grepSair").addEventListener("click", sairReplay);
+  // os dois modos "Rei B = modelo" sao mutuamente exclusivos
+  const cbGemini = document.getElementById("ggemini"), cbOllama = document.getElementById("gollama");
+  cbGemini.addEventListener("change", () => { pause(); if (cbGemini.checked) cbOllama.checked = false; });
+  cbOllama.addEventListener("change", () => { pause(); if (cbOllama.checked) cbGemini.checked = false; });
   document.getElementById("gspeed").addEventListener("input", (e) => {
     speed = +e.target.value;
     if (playing) { pause(); play(); }
@@ -980,7 +1603,6 @@
   // ---------- Início ----------
   resize();
   novaPartida();
-  descobrirModelos(); // popula o seletor com os modelos do Ollama (nao bloqueia o load)
 })();
 </script>
 </body>

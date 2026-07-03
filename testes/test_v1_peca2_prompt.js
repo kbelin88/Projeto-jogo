@@ -56,6 +56,16 @@ checa("REGRAS: bonus vem da CONFIG", prompt.includes(`multiplicada por ${CONFIG.
 checa("REGRAS: triangulo por extenso", prompt.includes("lanceiro vence cavaleiro"));
 checa("REGRAS: exemplo numerico presente", /-> o atacante vence/.test(prompt));
 
+// REGRAS DE ECONOMIA: bloco gerado da CONFIG, entre topo e dados
+const iEco = prompt.indexOf("=== REGRAS DE ECONOMIA ===");
+checa("ECONOMIA: bloco presente entre topo e dados", iEco > iTopo && iEco < iDados);
+checa("ECONOMIA: custo do lanceiro vem da CONFIG",
+  prompt.includes(`lanceiro: custa ${CONFIG.tropas.lanceiro.custo.madeira} madeira`));
+checa("ECONOMIA: producao por turno vem da CONFIG",
+  prompt.includes(`produz ${CONFIG.producao.madeira} madeira e ${CONFIG.producao.ferro} ferro`));
+checa("ECONOMIA: teto de forca presente",
+  !CONFIG.limite_forca_aldeia || prompt.includes(`atinge ${CONFIG.limite_forca_aldeia}`));
+
 // EXEMPLO ANCORADO: origem = id real de SUAS ALDEIAS; destino = id real de um alvo.
 const exemplo = Engine.exemploAncorado(visao);
 const origemReal = visao.minhas[0].id;
