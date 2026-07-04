@@ -381,6 +381,19 @@
 
   const TIPOS = ["lanceiro", "arqueiro", "cavaleiro"];
 
+  // normalizarTipo(t) -> tipo canonico OU o valor cru intacto.
+  // H3 (partida 3B vs 3B de 03/07): "arqueiros" perdeu a jogada por UMA
+  // letra. Escopo Degrau 0->1 APENAS: espaco, caixa, acento, plural.
+  // Traducao ("archer") e tipo inventado sao erro REAL: ficam crus para
+  // a rejeicao nomear o que o modelo escreveu e o eval contar o desvio.
+  function normalizarTipo(t) {
+    if (typeof t !== "string") return t;
+    let s = t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+    if (TIPOS.indexOf(s) >= 0) return s;
+    if (s.endsWith("s") && TIPOS.indexOf(s.slice(0, -1)) >= 0) return s.slice(0, -1);
+    return t; // fora do escopo: devolve o cru
+  }
+
   // ---- Forca ----
   function forcaTropas(estado, tropas) {
     let f = 0;
@@ -668,10 +681,11 @@
   }
 
   // RELATORIO EM TEXTO de uma visao.
-  function relatorioTexto(visao) {
+  function relatorioTexto(visao, opcoes) {
     const cfg = visao.config;
     const me = visao.dono;
     const inimigo = me === "A" ? "B" : "A";
+    const semRejeicoes = !!(opcoes && opcoes.semRejeicoes); // H2: bloco vai p/ o fim do prompt
     const L = [];
 
     const passoRef = cfg.velocidade_passo[cfg.relatorio.velocidade_referencia];
@@ -693,7 +707,7 @@
     // FEEDBACK DE REJEICAO (memoria anti-loop): ecoa as ordens que o motor
     // RECUSOU no turno anterior, p/ o modelo corrigir e nao repetir o erro.
     // So aparece se houve rejeicao. Sem retry: e apenas memoria no relatorio.
-    if (visao.rejeicoesAnteriores && visao.rejeicoesAnteriores.length) {
+    if (!semRejeicoes && visao.rejeicoesAnteriores && visao.rejeicoesAnteriores.length) {
       L.push("=== ATENCAO: SUAS ORDENS RECUSADAS NO TURNO ANTERIOR ===");
       L.push("As ordens abaixo NAO foram executadas (foram recusadas pelo motor). Corrija estes erros nesta jogada e NAO repita a mesma ordem:");
       for (const r of visao.rejeicoesAnteriores) L.push(`- ${r}`);
@@ -854,7 +868,14 @@
     return L.join("\n");
   }
 
-  function montarPrompt(visao) {
+  // opcoes (H2, experimento de POSICAO do feedback — uma variavel):
+  //   { rejeicaoNoFim: true } MOVE o bloco de rejeicoes do meio do relatorio
+  //   para o FIM ABSOLUTO do prompt (depois do exemplo), com a instrucao
+  //   anti-repeticao do handoff. Sem opcoes ou sem rejeicoes: prompt
+  //   BYTE-IGUAL ao de sempre — o benchmark antigo segue comparavel.
+  function montarPrompt(visao, opcoes) {
+    const rejNoFim = !!(opcoes && opcoes.rejeicaoNoFim) &&
+      !!(visao.rejeicoesAnteriores && visao.rejeicoesAnteriores.length);
     const L = [];
     // TOPO: identidade + tarefa (curto)
     L.push('Voce e o Rei. As aldeias listadas em "SUAS ALDEIAS" pertencem a voce.');
@@ -865,7 +886,7 @@
     L.push(regrasEconomiaTexto(visao.config));
     L.push("");
     // MEIO: dados do turno (relatorio integral)
-    L.push(relatorioTexto(visao));
+    L.push(relatorioTexto(visao, rejNoFim ? { semRejeicoes: true } : undefined));
     L.push("");
     // FIM: instrucao de formato -> permissao de vazio -> processo -> exemplo (ultimo)
     L.push("Responda APENAS com um JSON valido no formato abaixo. Nenhum texto antes ou depois do JSON.");
@@ -877,6 +898,14 @@
     L.push("Antes de responder: em 'origemId' e em 'aldeiaId' use SOMENTE ids que aparecem na secao SUAS ALDEIAS. Escolha o 'destinoId' entre os ids das secoes ALDEIAS NEUTRAS e INIMIGO. Nao envie tropas que voce nao tem: se uma aldeia esta sem tropas, nao a use em 'envios'. O exemplo abaixo so mostra o FORMATO com ids reais deste turno; nao copie os numeros dele como se fossem sua jogada.");
     L.push("");
     L.push(exemploAncorado(visao));
+    if (rejNoFim) {
+      // FIM ABSOLUTO (H2): modelos pequenos pesam mais o rabo do prompt.
+      L.push("");
+      L.push("=== ATENCAO: SUAS ORDENS RECUSADAS NO TURNO ANTERIOR ===");
+      L.push("As ordens abaixo foram RECUSADAS pelo motor:");
+      for (const r of visao.rejeicoesAnteriores) L.push(`- ${r}`);
+      L.push("NAO repita a mesma ordem. Os numeros de tropas e recursos DISPONIVEIS estao no relatorio acima: use-os.");
+    }
     return L.join("\n");
   }
 
@@ -903,24 +932,49 @@
     return null; // bloco aberto sem fechar
   }
 
-  // parsearOrdem(textoCru) -> { ok, ordem, erro, bloco }.
+  // parsearOrdem(textoCru) -> { ok, ordem, erro, bloco, normalizacoes }.
   // SEM RETRY (decisao de design: medir a taxa CRUA de falha do qwen).
   // Qualquer falha -> ORDEM VAZIA (o Rei "passa" o turno) + erro p/ o log.
   // NUNCA lanca.
+  // H3: normaliza variacao TRIVIAL (normalizarTipo) no `tipo` de construir
+  // e nas CHAVES de `tropas` dos envios — choke point unico: motor,
+  // diagnostico e log consomem a MESMA ordem. Cada correcao vira uma linha
+  // em `normalizacoes` p/ o txt registrar "normalizado:" (mede-se cru E
+  // normalizado; a normalizacao nao esconde o desvio, so impede que uma
+  // letra mate a partida).
   function parsearOrdem(textoCru) {
     const vazia = { construir: [], envios: [] };
     const bloco = extrairBlocoJSON(textoCru);
-    if (bloco == null) return { ok: false, ordem: vazia, erro: "nenhum bloco {...} na resposta", bloco: null };
+    if (bloco == null) return { ok: false, ordem: vazia, erro: "nenhum bloco {...} na resposta", bloco: null, normalizacoes: [] };
     let obj;
     try { obj = JSON.parse(bloco); }
-    catch (e) { return { ok: false, ordem: vazia, erro: "JSON invalido: " + e.message, bloco }; }
+    catch (e) { return { ok: false, ordem: vazia, erro: "JSON invalido: " + e.message, bloco, normalizacoes: [] }; }
     if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
-      return { ok: false, ordem: vazia, erro: "JSON nao e um objeto", bloco };
+      return { ok: false, ordem: vazia, erro: "JSON nao e um objeto", bloco, normalizacoes: [] };
     }
     const construir = Array.isArray(obj.construir) ? obj.construir : [];
     const envios = Array.isArray(obj.envios) ? obj.envios
       : Array.isArray(obj.ataques) ? obj.ataques : []; // aceita nome antigo
-    return { ok: true, ordem: { construir, envios }, erro: null, bloco };
+    const normalizacoes = [];
+    for (const c of construir) {
+      if (!c || typeof c !== "object" || typeof c.tipo !== "string") continue;
+      const n = normalizarTipo(c.tipo);
+      if (n !== c.tipo) {
+        normalizacoes.push(`construir [${c.aldeiaId}]: tipo "${c.tipo}" -> "${n}"`);
+        c.tipo = n;
+      }
+    }
+    for (const e of envios) {
+      if (!e || typeof e !== "object" || !e.tropas || typeof e.tropas !== "object") continue;
+      for (const k of Object.keys(e.tropas)) {
+        const n = normalizarTipo(k);
+        if (n === k) continue;
+        normalizacoes.push(`envio [${e.origemId}]->[${e.destinoId}]: tropa "${k}" -> "${n}"`);
+        e.tropas[n] = (Number(e.tropas[n]) || 0) + (Number(e.tropas[k]) || 0); // colisao: soma
+        delete e.tropas[k];
+      }
+    }
+    return { ok: true, ordem: { construir, envios }, erro: null, bloco, normalizacoes };
   }
 
   // diagnosticarOrdem(estado, dono, ordem) -> { aceitoConstruir, aceitoEnvios,
@@ -978,14 +1032,26 @@
       if (!d) { rejeicoes.push(`envio: destino [${e.destinoId}] nao existe`); continue; }
       if (e.origemId === e.destinoId) { rejeicoes.push(`envio [${e.origemId}]: origem igual ao destino`); continue; }
       const pedido = sanitizarTropas(e.tropas);
+      // FEEDBACK HONESTO (H3): sanitizarTropas descarta chave desconhecida
+      // em silencio. Antes, {"archer":5} virava rejeicao "zero tropas" —
+      // mensagem que NAO descreve o erro e alimenta o loop de perseveracao
+      // (o modelo nao tem como corrigir o que ninguem nomeou).
+      const desconhecidas = (e.tropas && typeof e.tropas === "object")
+        ? Object.keys(e.tropas).filter((k) => TIPOS.indexOf(k) < 0 && Number(e.tropas[k]) > 0)
+        : [];
       const faltam = TIPOS.filter((t) => pedido[t] > o.tropas[t]);
       if (faltam.length) {
         rejeicoes.push(`envio [${e.origemId}]->[${e.destinoId}]: tropa que nao tem (${faltam.map((t) => `pediu ${pedido[t]} ${t}, tem ${o.tropas[t]}`).join("; ")})`);
         continue;
       }
       if (TIPOS.reduce((s, t) => s + pedido[t], 0) === 0) {
-        rejeicoes.push(`envio [${e.origemId}]->[${e.destinoId}]: zero tropas`);
+        rejeicoes.push(desconhecidas.length
+          ? `envio [${e.origemId}]->[${e.destinoId}]: tipo de tropa desconhecido (${desconhecidas.map((k) => `"${k}"`).join(", ")}) - use "lanceiro", "arqueiro" ou "cavaleiro"`
+          : `envio [${e.origemId}]->[${e.destinoId}]: zero tropas`);
         continue;
+      }
+      if (desconhecidas.length) { // misto: a parte valida VAI (espelha o motor), mas o descarte e avisado
+        rejeicoes.push(`envio [${e.origemId}]->[${e.destinoId}]: tipo desconhecido ignorado (${desconhecidas.map((k) => `"${k}"`).join(", ")}) - enviado so o que e valido`);
       }
       aceitoEnvios.push({ origemId: e.origemId, destinoId: e.destinoId, tropas: pedido, alvo: d });
     }
@@ -1285,7 +1351,7 @@
     eventoTexto,
     jogadorBurro,
     executarOrdem,
-    sanitizarTropas,
+    sanitizarTropas, normalizarTipo,
     // V1 Peca 2 (Rei IA): partes puras (prompt + parsing)
     montarPrompt,
     exemploAncorado,

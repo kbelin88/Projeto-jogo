@@ -58,12 +58,18 @@ eval(html.slice(html.lastIndexOf("<script>") + 8, html.lastIndexOf("</script>"))
   console.log("gravacao ok:", dados.frames.length, "frames;",
     "eventos no ultimo:", dados.frames[14].eventos.length);
 
-  // carregar e reproduzir (replay REAL do Lucas: 33 frames do gemini)
-  const realJson = require("fs").readFileSync("/home/claude/replay_2026-07-03-13-15.json", "utf-8");
+  // carregar e reproduzir uma fixture do repo (gerada pelo PROPRIO codigo de
+  // gravacao da arena — node testes_arena/fixtures/gerar_fixture.js). Sem
+  // caminho de maquina e sem numero magico: frames/etiquetas vem do arquivo.
+  // Para testar contra um replay de partida REAL, e so sobrescrever o .json.
+  const realJson = require("fs").readFileSync("testes_arena/fixtures/replay_duelo.json", "utf-8");
+  const fx = JSON.parse(realJson);
+  const NF = fx.frames.length;
+  const modBFx = fx.frames[NF - 1].etiquetaB;
   els["sb-feed"].children.length = 0;
   global.document.getElementById("grepVel").value = "2000";
   listeners["greplayload"].change({ target: { files: [{ __txt: realJson }], value: "" } });
-  await dorme(1500); // setTimeout encurtado: 33 frames passam rapido
+  await dorme(1500); // setTimeout encurtado: os frames passam rapido
   // usuario assume a camera no meio (nao deve quebrar nada)
   listeners && els["grepCam"] && listeners["grepCam"] && listeners["grepCam"].click();
   await dorme(300);
@@ -72,7 +78,7 @@ eval(html.slice(html.lastIndexOf("<script>") + 8, html.lastIndexOf("</script>"))
   if (!els["sb-feed"].children.length && !els["sb-feedA"].children.length) throw new Error("cronica vazia no replay");
   if (!els["banner"].textContent) throw new Error("nenhum banner de evento apareceu");
   const prog = els["grepProg"].textContent;
-  if (!/turno 33\/33/.test(prog)) throw new Error("progresso nao chegou ao fim: " + prog);
+  if (!new RegExp("turno " + NF + "/" + NF).test(prog)) throw new Error("progresso nao chegou ao fim: " + prog);
   // restart deve voltar ao inicio e limpar a cronica
   listeners["grepRestart"].click();
   await dorme(120);
@@ -84,7 +90,7 @@ eval(html.slice(html.lastIndexOf("<script>") + 8, html.lastIndexOf("</script>"))
   listeners["greplayload"].change({ target: { files: [{ __txt: realJson }], value: "" } });
   await dorme(400);
   if (!/TURNO \d+/.test(els["pt-turno"].textContent)) throw new Error("placar sem turno: " + els["pt-turno"].textContent);
-  if (els["pt-b-mod"].textContent !== "gemini") throw new Error("placar sem modelo B: " + els["pt-b-mod"].textContent);
+  if (els["pt-b-mod"].textContent !== modBFx) throw new Error("placar sem modelo B (esperava " + modBFx + "): " + els["pt-b-mod"].textContent);
   console.log("placar ok:", els["pt-turno"].textContent, "| B:", els["pt-b-mod"].textContent, "forca", els["pt-b-f"].textContent);
   if (!/class="pip/.test(els["pt-pips"].innerHTML)) throw new Error("pips ausentes no placar");
   const todos = els["sb-feed"].children.concat(els["sb-feedA"].children);

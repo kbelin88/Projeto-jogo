@@ -1,0 +1,88 @@
+================================================================
+PROTOCOLO DE EXPERIMENTOS — H1 (temperatura) e H2 (posicao do
+feedback de rejeicao). Projeto Jogo / Arena v2 — 04/07/2026.
+Pre-requisito: H3 (normalizacao) ja esta no motor e vale para
+TODAS as condicoes abaixo — sem ele, rejeicao por uma letra
+contaminaria a metrica de agencia.
+================================================================
+
+INSTRUMENTO
+-----------
+runners/exp_perseveracao.js — Rei (modelo) vs burro, mesma seed,
+UMA variavel por rodada. Ollama precisa estar no ar (Node fala
+direto com localhost:11434, OLLAMA_ORIGINS nao importa aqui).
+
+Rodar da RAIZ do repo (PowerShell usa ; e nao &&):
+
+  node runners/exp_perseveracao.js ollama:llama3.2:3b --temp 0 --turnos 30
+
+Cada rodada grava o log completo em logs/exp/ e acrescenta UMA
+linha em logs/exp/resumo.txt — e essa linha que voce compara.
+
+METRICAS (o que cada uma responde)
+----------------------------------
+seqMax / repetidos  -> PERSEVERACAO (H1/H2): o modelo travou num
+                       atrator de resposta identica byte a byte?
+agencia             -> ENVIOS ACEITOS POR TURNO: o modelo JOGA?
+                       (separada de validade: o llama3 8B provou
+                       validade perfeita com agencia zero)
+validade            -> JSON valido / turnos (Degrau basico)
+normalizacoes       -> quantas vezes o H3 salvou uma jogada de
+                       morrer por grafia (o desvio segue contado)
+
+H1 — TEMPERATURA (temp 0 cria atrator?)
+---------------------------------------
+Condicoes (mesma seed, mesmo modelo, SO a temp muda):
+
+  node runners/exp_perseveracao.js ollama:llama3.2:3b --temp 0   --turnos 30 --tag h1
+  node runners/exp_perseveracao.js ollama:llama3.2:3b --temp 0.3 --turnos 30 --tag h1
+  node runners/exp_perseveracao.js ollama:llama3.2:3b --temp 0.7 --turnos 30 --tag h1
+
+ATENCAO: com temp > 0 a saida NAO e deterministica -> rodar CADA
+condicao 3x e comparar MEDIANAS (temp 0 e deterministica, 1x basta
+por condicao/modelo).
+
+Leitura:
+- Se seqMax despenca com temp>0 MAS agencia nao sobe: temperatura
+  quebra o atrator sem devolver jogo — H1 explica a repeticao, nao
+  a paralisia. A paralisia vira problema de H2/capacidade.
+- Se seqMax cai E agencia sobe: temp 0 era o gargalo dominante.
+- Se seqMax continua alto com temp 0.7: perseveracao nao e amostragem,
+  e o feedback/contexto (peso p/ H2) ou capacidade.
+
+H2 — POSICAO DO FEEDBACK (bloco no FIM do prompt)
+-------------------------------------------------
+Par minimo (temp fixa em 0 p/ isolar a variavel):
+
+  node runners/exp_perseveracao.js ollama:llama3.2:3b --temp 0 --turnos 30 --tag h2
+  node runners/exp_perseveracao.js ollama:llama3.2:3b --temp 0 --rejfim --turnos 30 --tag h2
+
+O --rejfim MOVE o bloco de rejeicoes do meio do relatorio para o
+FIM ABSOLUTO do prompt (depois do exemplo), com a instrucao
+anti-repeticao do handoff. Sem rejeicao no turno, os dois prompts
+sao byte-iguais — a variavel so age quando ha o que corrigir.
+
+Leitura:
+- repetidos cai com --rejfim -> posicao importa (hipotese confirmada).
+- repetidos igual, rejeicoes DIFERENTES -> o modelo leu mas nao
+  consegue agir (capacidade, nao prompt) — mesma classe do achado
+  do Modulo 1 (feedback nao conserta falta de state-tracking).
+
+DEPOIS DO PAR H2, se quiser cruzar: temp 0.3 + --rejfim vs temp 0.3
+sem — mas SO depois de fechar as leituras isoladas.
+
+ORDEM SUGERIDA (mais barata primeiro)
+-------------------------------------
+1. H1 com llama3.2:3b (rapido na 3050 Ti). 5 rodadas: 1x temp 0,
+   3x temp 0.3... na real: 1 + 3 + 3 = 7 rodadas de ~30 turnos.
+2. H2 com llama3.2:3b: 2 rodadas (temp 0 e deterministica).
+3. Repetir o vencedor no qwen2.5:3b p/ ver se generaliza.
+4. Gemini SO depois de tudo testado local (regra do free tier).
+
+NA ARENA (browser), se quiser VER uma partida com temperatura:
+  index.html?temp=0.7   (o knob vale p/ Ollama e Gemini; default 0)
+
+CLAMP (knob extra do handoff, NAO default): ainda nao implementado
+— decisao consciente: primeiro medir H1/H2 limpos; clamp muda o
+benchmark e entra depois, medido separado.
+================================================================

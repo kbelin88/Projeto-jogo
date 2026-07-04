@@ -1150,6 +1150,7 @@
     document.body.classList.remove("replay");
     etiquetaA = document.getElementById("gmodA").value;
     etiquetaB = document.getElementById("gmodB").value;
+    contadores = { A: cont0(), B: cont0() }; // metricas por partida
     game = Engine.criarEstadoInicial(Engine.CONFIG);
     // indice celula -> aldeia (posicoes fixas): filtro rapido no render
     game.byCell = new Map(game.aldeias.map((a) => [a.x + "," + a.y, a]));
@@ -1177,6 +1178,11 @@
   let geminiKey = "";
   let ultimoEnvioG = 0;
   let geminiLog = [];      // buffer textual da partida (p/ baixar e avaliar depois)
+  // METRICA NOVA (handoff 03/07): ENVIOS/TURNO (agencia) separada de
+  // validade — o llama3 8B teve validade perfeita e agencia ZERO. Contado
+  // por rei, zera em novaPartida, vira bloco RESUMO no fim do .txt.
+  const cont0 = () => ({ turnos: 0, valido: 0, enviosAceitos: 0, constrAceitas: 0, rejeicoes: 0, normalizacoes: 0 });
+  let contadores = { A: cont0(), B: cont0() };
   let etiquetaB = "gemini"; // rotulo do decisor do Rei B no log (gemini | ollama:<modelo>)
   function lsGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
@@ -1199,7 +1205,7 @@
       const resp = await fetch(GEMINI_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0 } }),
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: tempLLM } }),
       });
       if (resp.ok) {
         const data = await resp.json();
@@ -1227,11 +1233,24 @@
   // registra UM turno no buffer: resposta crua + ordem + aceito/rejeitado +
   // combates do turno + placar. Esse buffer vira o .txt do eval.
   function registrarTurnoLado(lado, rotulo, r) {
+    const ct = contadores[lado];
+    ct.turnos++;
+    if (r.ok) ct.valido++;
+    ct.normalizacoes += (r.normalizacoes || []).length;
+    if (r.diag) {
+      ct.enviosAceitos += r.diag.aceitoEnvios.length;
+      ct.constrAceitas += r.diag.aceitoConstruir.length;
+      ct.rejeicoes += r.diag.rejeicoes.length;
+    }
     const L = [];
     L.push("########## TURNO " + game.turno + " \u2014 Rei " + lado + " (" + rotulo + ") ##########");
     L.push("resposta crua: " + JSON.stringify(r.cru));
     L.push("ordem.construir: " + JSON.stringify(r.ordem.construir || []));
     L.push("ordem.envios   : " + JSON.stringify(r.ordem.envios || []));
+    // H3: a normalizacao NAO esconde o desvio — cada correcao vira linha no
+    // txt, p/ o eval contar "quantas vezes o modelo errou a grafia" separado
+    // de "quantas ordens valeram".
+    (r.normalizacoes || []).forEach((n) => L.push("NORMALIZADO: " + n));
     const diag = r.diag;
     if (diag) {
       if (!diag.aceitoConstruir.length && !diag.aceitoEnvios.length) L.push("ACEITO: (nada \u2014 passou o turno)");
@@ -1265,7 +1284,19 @@
   // baixa o buffer como .txt simples (vai p/ a pasta Downloads do navegador)
   function baixarLogGemini() {
     if (!geminiLog.length) { alert("Sem log ainda — rode o Gemini primeiro."); return; }
-    const blob = new Blob([geminiLog.join("\n")], { type: "text/plain;charset=utf-8" });
+    // RESUMO por rei no rabo do .txt (calculado no download, nao polui o buffer)
+    const resumo = ["", "================== RESUMO =================="];
+    for (const lado of ["A", "B"]) {
+      const c = contadores[lado], rot = lado === "A" ? etiquetaA : etiquetaB;
+      if (!c.turnos) continue;
+      const ag = (c.enviosAceitos / c.turnos).toFixed(2);
+      resumo.push("Rei " + lado + " (" + rot + "): " + c.turnos + " turnos | " +
+        "AGENCIA " + ag + " envios/turno (" + c.enviosAceitos + " envios, " + c.constrAceitas + " constr) | " +
+        "validade " + c.valido + "/" + c.turnos + " | rejeicoes " + c.rejeicoes +
+        " | normalizacoes " + c.normalizacoes);
+    }
+    resumo.push("============================================");
+    const blob = new Blob([geminiLog.concat(resumo).join("\n")], { type: "text/plain;charset=utf-8" });
     const a = document.createElement("a");
     const ts = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 16);
     a.href = URL.createObjectURL(blob);
@@ -1275,6 +1306,15 @@
     URL.revokeObjectURL(a.href);
   }
 
+  // ----- TEMPERATURA (H1): knob via URL — abrir index.html?temp=0.7.
+  // Default 0 (benchmark de sempre). Sem UI nova de proposito: cirurgia de
+  // HTML foi onde a sessao de 03/07 sangrou. Vale p/ Ollama E Gemini.
+  let tempLLM = 0;
+  try {
+    const q = new URLSearchParams((window.location && window.location.search) || "");
+    if (q.has("temp")) { const v = parseFloat(q.get("temp")); if (isFinite(v) && v >= 0) tempLLM = v; }
+  } catch (e) {}
+
   // ----- OLLAMA: geracao local (localhost:11434), sem chave e sem pacing.
   // A pagina abre via file:// (origin "null") e o Ollama bloqueia por CORS
   // por padrao -> precisa de OLLAMA_ORIGINS=* (o alerta do runDuelo instrui).
@@ -1283,7 +1323,7 @@
     const resp = await fetch(OLLAMA_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: modelo, prompt, stream: false, options: { temperature: 0 } }),
+      body: JSON.stringify({ model: modelo, prompt, stream: false, options: { temperature: tempLLM } }),
     });
     if (!resp.ok) throw new Error("Ollama HTTP " + resp.status);
     const data = await resp.json();
@@ -1314,10 +1354,11 @@
     catch (e) { cru = "[ERRO DE REDE] " + e.message; }
     setStatus("");
     if (runId !== meuRun) return "abort"; // resposta atrasada de run antigo
-    const ordem = Engine.parsearOrdem(cru).ordem;            // sem retry (benchmark)
+    const p = Engine.parsearOrdem(cru);                       // sem retry (benchmark)
+    const ordem = p.ordem;
     const diag = Engine.diagnosticarOrdem(game, lado, ordem); // ANTES de executar
     Engine.executarOrdem(game, lado, ordem);
-    return { cru, ordem, diag };
+    return { cru, ordem, diag, ok: p.ok, normalizacoes: p.normalizacoes || [] }; // H3: p/ o txt
   }
 
   async function passoTurnoDuelo(meuRun) {

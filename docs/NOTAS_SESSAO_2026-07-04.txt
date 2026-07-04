@@ -1,0 +1,103 @@
+================================================================
+NOTAS DA SESSAO — 04/07/2026 (Claude Fable 5)
+Foco A do handoff: por que os modelos fracos jogam tao mal.
+Estado final: 10/10 testes do motor + 4/4 smokes da arena VERDES.
+Auditoria de ids: OK. Nenhuma linha do motor de combate tocada.
+================================================================
+
+ACHADO NOVO DA SESSAO (nao estava no handoff)
+---------------------------------------------
+O caminho de ENVIOS escondia o erro de tipo: sanitizarTropas
+descarta chave desconhecida em silencio, entao {"arqueiros": 5}
+virava rejeicao "zero tropas" — mensagem que NAO descreve o erro.
+Feedback mentiroso alimenta perseveracao: o modelo nao corrige o
+que ninguem nomeou. Corrigido junto com o H3 (ver abaixo). Isso
+importa p/ a leitura do H2: ate hoje, parte do "feedback fraco"
+era feedback ERRADO.
+
+H3 — NORMALIZACAO (implementado, testado)
+------------------------------------------
+- engine.js: normalizarTipo() — escopo Degrau 0->1 APENAS
+  (espaco, caixa, acento, plural). "archer"/tipo inventado ficam
+  CRUS (erro real segue contado e nomeado).
+- parsearOrdem normaliza `tipo` (construir) e CHAVES de `tropas`
+  (envios) no choke point unico; devolve `normalizacoes: []`.
+  Colisao (ex. "arqueiro" + "arqueiros") SOMA e registra.
+- diagnosticarOrdem: envio zerado por chave desconhecida agora
+  nomeia a chave ("tipo de tropa desconhecido (\"archer\") - use...");
+  envio misto valido passa (espelha o motor) com AVISO do descarte.
+- Log do duelo (.txt): linhas "NORMALIZADO: cru -> canonico" por
+  turno — mede-se cru E normalizado, nada escondido.
+- Gabarito: testes/test_v1_normalizacao.js (20 checagens).
+
+H2 — VARIANTE DE PROMPT (implementado, testado; experimento e teu)
+------------------------------------------------------------------
+- montarPrompt(visao, { rejeicaoNoFim: true }) MOVE o bloco de
+  rejeicoes do meio do relatorio p/ o FIM ABSOLUTO (depois do
+  exemplo), com a instrucao anti-repeticao do handoff.
+- Garantias testadas: default byte-igual ao de sempre (benchmark
+  antigo comparavel); sem rejeicoes, variante tambem byte-igual
+  (variavel unica de verdade).
+- Gabarito: testes/test_v1_prompt_h2.js.
+
+H1 — TEMPERATURA (knob pronto; experimento e teu)
+--------------------------------------------------
+- Headless: criarCliente(id, { temperatura }) ja existia; o runner
+  novo expoe via --temp.
+- Arena browser: index.html?temp=0.7 (Ollama E Gemini; default 0).
+  Sem UI nova de proposito — cirurgia de HTML foi onde 03/07 sangrou.
+
+INSTRUMENTO — runners/exp_perseveracao.js
+------------------------------------------
+Rei (modelo) vs burro, seed fixa, uma variavel por rodada. Mede:
+seqMax e repetidos (perseveracao byte a byte), AGENCIA (envios
+aceitos/turno — separada de validade, licao do 8B), validade,
+rejeicoes, normalizacoes. Log completo por rodada em logs/exp/
+(escrita atomica) + linha acumulada em logs/exp/resumo.txt.
+Validado aqui com um Ollama FALSO que persevera de proposito:
+o instrumento reproduziu a assinatura exata do caso real
+(seqMax alto, validade 100%, agencia 0.00, normalizacoes contadas).
+Protocolo completo: docs/PROTOCOLO_EXPERIMENTOS_H1_H2.txt.
+
+METRICA NOVA NO TXT DO DUELO
+-----------------------------
+Bloco RESUMO no fim do log baixado: por rei, AGENCIA (envios/turno),
+validade, rejeicoes, normalizacoes. Contadores zeram em novaPartida.
+
+SMOKE2 CONSERTADO (pendencia do handoff)
+-----------------------------------------
+- Fixture testes_arena/fixtures/replay_duelo.json: gerada pelo
+  PROPRIO codigo de gravacao da arena (duelo com fetch falso que
+  ataca de verdade — le os ids do relatorio no prompt). 20 frames,
+  8 com eventos.
+- Smoke2 agora le frames/etiquetas DO ARQUIVO (sem caminho de
+  maquina, sem numero magico). Para testar contra um replay REAL:
+  sobrescrever o .json — o teste se adapta.
+- Gerador: node testes_arena/fixtures/gerar_fixture.js.
+
+PENDENCIAS / DECISOES ABERTAS (Lucas decide)
+---------------------------------------------
+1. geminiLog NUNCA zera em novaPartida(): duas partidas seguidas
+   (reset no meio) acumulam no MESMO .txt com nome so da ultima.
+   Os contadores novos zeram; o buffer nao. Bug ou feature?
+   Nao mexi sem combinar.
+2. clamp_envios (knob do handoff): nao implementado de proposito
+   — medir H1/H2 limpos primeiro; clamp muda o benchmark.
+3. Foco B (graficos do mapa): nada codado — as direcoes do handoff
+   (bioma, agua, contorno de territorio, mini-mapa, tipografia)
+   sao decisao tua antes de codigo, pelo metodo.
+4. Nota metodologica: comparacoes ANTES/DEPOIS do H3 com partidas
+   antigas devem usar a coluna "normalizacoes" p/ separar o efeito
+   do parser do efeito do modelo.
+
+LICAO DE PROCESSO DESTA SESSAO
+-------------------------------
+- Regra dos stubs mantida (getElementById ESTRITO) em tudo novo.
+- Toda edicao de arquivo grande: python com assert de unicidade da
+  ancora + escrita atomica (tmp + os.replace). Zero truncamento.
+- Bug meu pego pelo metodo: o fatiador de secao do modelo falso da
+  fixture cortava no "===" de fecho do proprio cabecalho -> secao
+  vazia -> modelo passava todos os turnos. O gerador ja valida
+  "frames com eventos > 0" e recusou a fixture inutil. Verificador
+  barato no gerador pagou na primeira rodada.
+================================================================

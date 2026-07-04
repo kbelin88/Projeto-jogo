@@ -155,9 +155,9 @@ function criarReiIA(cliente) {
 
 // Decisao do Rei num turno + REGISTRO completo p/ o eval (o entregavel):
 // prompt -> resposta crua -> ordem parseada -> aceito/rejeitado.
-async function decidirRei(estado, dono, cliente) {
+async function decidirRei(estado, dono, cliente, opcoesPrompt) {
   const visao = Engine.montarVisao(estado, dono);
-  const prompt = Engine.montarPrompt(visao);
+  const prompt = Engine.montarPrompt(visao, opcoesPrompt); // H2: variante opcional
   let cru = "", erroRede = null;
   try { cru = await cliente.gerar(prompt); }
   catch (e) { erroRede = e.message; }
@@ -169,6 +169,7 @@ async function decidirRei(estado, dono, cliente) {
       turno: estado.turno, dono, prompt, cru,
       erroRede,
       jsonValido: p.ok, erroParse: p.erro,
+      normalizacoes: p.normalizacoes || [], // H3: cru -> canonico, p/ o log contar o desvio
       ordemParseada: p.ordem,
       ids: classificarIds(estado, p.ordem), // ancoragem: ids reais x inexistentes
       aceito: { construir: diag.aceitoConstruir, envios: diag.aceitoEnvios },
@@ -224,6 +225,7 @@ async function rodarPartidaRei(opcoes) {
   const ladoRei = opcoes.ladoRei || "B"; // fronteira da spec: A=burro, B=rei
   const maxTurnos = opcoes.maxTurnos || config.max_turnos || 500;
   const onTurno = opcoes.onTurno || function () {};
+  const opcoesPrompt = opcoes.opcoesPrompt || undefined; // H2: { rejeicaoNoFim: true }
 
   const estado = Engine.criarEstadoInicial(config);
   const registros = [];
@@ -234,7 +236,7 @@ async function rodarPartidaRei(opcoes) {
     for (const dono of ["A", "B"]) {
       if (!Engine.aldeiasDe(estado, dono).length) continue; // morto nao decide
       if (dono === ladoRei) {
-        const { ordem, registro } = await decidirRei(estado, dono, cliente);
+        const { ordem, registro } = await decidirRei(estado, dono, cliente, opcoesPrompt);
         Engine.executarOrdem(estado, dono, ordem);
         registros.push(registro);
         onTurno(registro, estado);
