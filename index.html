@@ -1151,6 +1151,7 @@
     etiquetaA = document.getElementById("gmodA").value;
     etiquetaB = document.getElementById("gmodB").value;
     contadores = { A: cont0(), B: cont0() }; // metricas por partida
+    geminiLog = []; // log zera AQUI (ponto unico, junto dos contadores) — nunca no Play/resume
     game = Engine.criarEstadoInicial(Engine.CONFIG);
     // indice celula -> aldeia (posicoes fixas): filtro rapido no render
     game.byCell = new Map(game.aldeias.map((a) => [a.x + "," + a.y, a]));
@@ -1404,8 +1405,14 @@
       }
     }
     const maxT = Math.max(1, parseInt(document.getElementById("gmax").value, 10) || 6);
-    geminiLog = ["=== PARTIDA Rei A (" + vA + ") vs Rei B (" + vB + ") | seed " + game.config.seed +
-      " | maxTurnos " + maxT + " | " + new Date().toLocaleString() + " ===\n"];
+    // BUG de 04/07: zerar o log AQUI apagava os turnos anteriores a cada
+    // resume (Play depois de pausa), dessincronizando log e contadores.
+    // Agora o reset vive em novaPartida; o Play so abre o cabecalho se a
+    // partida esta comecando (log vazio).
+    if (!geminiLog.length) {
+      geminiLog.push("=== PARTIDA Rei A (" + vA + ") vs Rei B (" + vB + ") | seed " + game.config.seed +
+        " | maxTurnos " + maxT + " | " + new Date().toLocaleString() + " ===\n");
+    }
     while (playing && runId === meuRun && game && !Engine.checarVitoria(game) && game.turno < maxT) {
       await passoTurnoDuelo(meuRun);
     }

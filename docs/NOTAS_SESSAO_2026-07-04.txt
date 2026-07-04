@@ -101,3 +101,33 @@ LICAO DE PROCESSO DESTA SESSAO
   "frames com eventos > 0" e recusou a fixture inutil. Verificador
   barato no gerador pagou na primeira rodada.
 ================================================================
+
+================================================================
+ADENDO (mesma data, apos a primeira partida real do Lucas)
+================================================================
+CORRECAO da pendencia 1: o diagnostico "geminiLog nunca zera" estava
+IMPRECISO. A verdade era pior: runDuelo zerava o log a CADA Play —
+inclusive no resume apos pausa — enquanto os contadores so zeram em
+novaPartida. Efeitos observados na partida real de 04/07 (qwen2.5:3b
+vs llama3:latest): log comecando no turno 3 (turnos 1-2 apagados pelo
+resume), RESUMO com 17 turnos contra 16 blocos no arquivo, e o fim da
+partida (turnos 19-20 + FIM) caindo num SEGUNDO arquivo.
+FIX: reset do log movido p/ novaPartida (mesmo ponto unico dos
+contadores — sincronia por construcao); runDuelo so abre o cabecalho
+se o log esta vazio. Gabarito: testes_arena/Smoke4pausa.js (pausa no
+meio, resume, fim: TURNO 1 presente, RESUMO == blocos, FIM no mesmo
+arquivo, 1 cabecalho so).
+NOTA que fica: o "turno fantasma" (decisao em voo abortada pelo
+++runId do resume DEPOIS do tick) e inerente a protecao de corrida —
+o turno avanca sem log nem contador. Log e RESUMO seguem em sincronia
+entre si; apenas o numero do turno pode pular 1 num resume. Preco
+aceito, documentado.
+PRIMEIRA PARTIDA REAL com a metrica nova (log no repo do Lucas):
+- llama3:latest (8B): validade 17/17, AGENCIA 0.00 — zero envios na
+  partida inteira; construiu lanceiro em [18] ate o teto de 300 e
+  CONTINUOU emitindo a mesma ordem contra rejeicoes de "producao
+  parada". Perseveracao sobre acao que era valida e deixou de ser.
+- qwen2.5:3b: joga (3 aldeias, agencia 0.29~0.31) mas 17 de 20
+  rejeicoes sao "pediu X, tem Y" — supercomprometimento cronico,
+  falha de state-tracking. Caso ideal p/ H2 e, depois, p/ o clamp.
+- normalizacoes: 0 nesta partida (contador armado e calado).
