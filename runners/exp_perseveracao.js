@@ -69,16 +69,52 @@ log(`data: ${new Date().toISOString()}`);
 log("");
 
 let cruAnterior = null, seqAtual = 0, seqMax = 0, turnosRepetidos = 0;
+// REINCIDENCIA (achado da partida de 04/07, qwen vs llama3.2): perseveracao
+// pode ser SEMANTICA — o llama3.2 tentou construir na aldeia [10] (que nao
+// e dele) em 19 de 20 turnos, variando o texto. Byte a byte (seqMax) nao ve.
+// Assinatura da acao rejeitada: "construir@id" / "envio@origem>destino".
+// Reincidir = a MESMA assinatura rejeitada em turnos consecutivos.
+let sigsAnteriores = new Set(), reincidencias = 0, reincMax = 0, reincSig = "-";
+const streaks = new Map();
+function assinaturasRejeitadas(rejeicoes) {
+  // Dois formatos no motor: "construir [18]: motivo" E "construir: aldeia [18]
+  // nao e sua" (idem envio, com ou sem destino). Regra robusta: prefixo da
+  // acao + todos os ids entre colchetes, na ordem.
+  const sigs = new Set();
+  for (const r of rejeicoes) {
+    const ids = [...r.matchAll(/\[(\d+)\]/g)].map((m) => m[1]);
+    if (!ids.length) continue;
+    if (r.startsWith("construir")) sigs.add("construir@" + ids[0]);
+    else if (r.startsWith("envio")) sigs.add("envio@" + ids.join(">"));
+  }
+  return sigs;
+}
 function onTurno(reg) {
   const repetiu = cruAnterior !== null && reg.cru === cruAnterior && !reg.erroRede;
   if (repetiu) { turnosRepetidos++; seqAtual++; seqMax = Math.max(seqMax, seqAtual); }
   else seqAtual = 0;
   cruAnterior = reg.erroRede ? cruAnterior : reg.cru;
 
+  // reincidencia: mesma acao rejeitada de novo, mesmo com texto diferente
+  const sigs = assinaturasRejeitadas(reg.rejeicoes);
+  const reincididas = [];
+  for (const s of sigs) {
+    if (sigsAnteriores.has(s)) {
+      reincidencias++;
+      const n = (streaks.get(s) || 0) + 1;
+      streaks.set(s, n);
+      if (n > reincMax) { reincMax = n; reincSig = s; }
+      reincididas.push(s);
+    } else streaks.set(s, 0);
+  }
+  for (const s of sigsAnteriores) if (!sigs.has(s)) streaks.delete(s);
+  sigsAnteriores = sigs;
+
   log(`########## TURNO ${reg.turno} — Rei ${reg.dono} (${cliente.nome}) ##########`);
   if (reg.erroRede) log("ERRO DE REDE: " + reg.erroRede);
   log("resposta crua: " + JSON.stringify(reg.cru));
   if (repetiu) log(">>> REPETIDA (identica byte a byte a do turno anterior)");
+  reincididas.forEach((s) => log(">>> REINCIDIU: " + s + " rejeitada de novo (streak " + streaks.get(s) + ")"));
   log(`JSON valido: ${reg.jsonValido ? "SIM" : "NAO — " + reg.erroParse}`);
   (reg.normalizacoes || []).forEach((n) => log("NORMALIZADO: " + n));
   reg.aceito.construir.forEach((c) => log(`ACEITO construir ${c.tipo} em [${c.aldeiaId}]`));
@@ -125,6 +161,9 @@ function onTurno(reg) {
   R.push(`PERSEVERACAO:`);
   R.push(`  maior sequencia de respostas identicas : ${seqMax}`);
   R.push(`  turnos com resposta repetida           : ${turnosRepetidos} (${pct(turnosRepetidos)})`);
+  R.push(`  REINCIDENCIA (mesma acao rejeitada em turnos seguidos, texto livre):`);
+  R.push(`    total de reincidencias               : ${reincidencias}`);
+  R.push(`    maior streak de uma acao             : ${reincMax} (${reincSig})`);
   R.push(`AGENCIA (separada de validade — licao do 8B):`);
   R.push(`  envios aceitos                         : ${enviosAceitos}  ->  ${agencia} envios/turno`);
   R.push(`  construcoes aceitas                    : ${constrAceitas}`);
@@ -151,6 +190,7 @@ function onTurno(reg) {
   // linha unica acumulada p/ comparar condicoes lado a lado
   const linha = [ts, cliente.nome, `temp=${temp}`, rejfim ? "rejfim=1" : "rejfim=0", `seed=${seed}`,
     `turnosRei=${n}`, `seqMax=${seqMax}`, `repetidos=${turnosRepetidos}`,
+    `reincid=${reincidencias}`, `reincMax=${reincMax}(${reincSig})`,
     `enviosAceitos=${enviosAceitos}`, `agencia=${agencia}`, `validade=${nValido}/${n}`,
     `rejeicoes=${nRejeicoes}`, `normalizacoes=${nNormalizacoes}`,
     `resultado=${res.vencedor}/${res.turnos}t`].join(" | ");

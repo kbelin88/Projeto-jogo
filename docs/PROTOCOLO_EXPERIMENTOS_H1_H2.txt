@@ -21,8 +21,15 @@ linha em logs/exp/resumo.txt — e essa linha que voce compara.
 
 METRICAS (o que cada uma responde)
 ----------------------------------
-seqMax / repetidos  -> PERSEVERACAO (H1/H2): o modelo travou num
-                       atrator de resposta identica byte a byte?
+seqMax / repetidos  -> PERSEVERACAO BYTE A BYTE (H1/H2): o modelo
+                       travou num atrator de resposta identica?
+reincid / reincMax  -> PERSEVERACAO SEMANTICA: mesma ACAO rejeitada
+                       em turnos consecutivos, mesmo com texto
+                       diferente (achado da partida de 04/07: o
+                       llama3.2 insistiu na aldeia [10], que nao era
+                       dele, em 19 de 20 turnos, variando o tipo —
+                       seqMax nao enxerga; reincMax sim). As DUAS
+                       dimensoes sao independentes: leia sempre o par.
 agencia             -> ENVIOS ACEITOS POR TURNO: o modelo JOGA?
                        (separada de validade: o llama3 8B provou
                        validade perfeita com agencia zero)
@@ -42,7 +49,11 @@ ATENCAO: com temp > 0 a saida NAO e deterministica -> rodar CADA
 condicao 3x e comparar MEDIANAS (temp 0 e deterministica, 1x basta
 por condicao/modelo).
 
-Leitura:
+Leitura (agora com as duas dimensoes):
+- Temperatura so mexe na AMOSTRAGEM: espera-se que derrube seqMax
+  (byte a byte). Se reincMax NAO cair junto, a perseveracao e de
+  RACIOCINIO (o modelo re-decide o mesmo erro) — e temp nao conserta
+  raciocinio. Essa dissociacao e o resultado mais informativo do H1.
 - Se seqMax despenca com temp>0 MAS agencia nao sobe: temperatura
   quebra o atrator sem devolver jogo — H1 explica a repeticao, nao
   a paralisia. A paralisia vira problema de H2/capacidade.

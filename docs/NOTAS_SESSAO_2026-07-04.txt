@@ -131,3 +131,30 @@ PRIMEIRA PARTIDA REAL com a metrica nova (log no repo do Lucas):
   rejeicoes sao "pediu X, tem Y" — supercomprometimento cronico,
   falha de state-tracking. Caso ideal p/ H2 e, depois, p/ o clamp.
 - normalizacoes: 0 nesta partida (contador armado e calado).
+
+================================================================
+ADENDO 2 (mesma data — metrica de REINCIDENCIA)
+================================================================
+Partida qwen2.5:3b vs llama3.2:3b (fix do log confirmado em producao:
+TURNO 1 presente, FIM + RESUMO no mesmo arquivo, contagens 20/20).
+H3 salvou 2 jogadas ("cavaleiros" do llama3.2 no turno 1, "lanceiros"
+do qwen) — antes, mortas por uma letra.
+ACHADO: das 43 rejeicoes do llama3.2, 19 sao "aldeia [10] nao e sua"
+— construir numa aldeia que NAO E DELE, quase todo turno, VARIANDO o
+texto (cavaleiros -> lanceiro -> cavaleiro). Perseveracao SEMANTICA:
+seqMax (byte a byte) marcou so 3 e nao enxerga o fenomeno. As outras
+23 sao "pediu tropa que nao tem" (mesma classe do qwen).
+METRICA NOVA no runner: reincid/reincMax — mesma assinatura de acao
+(construir@id, envio@origem>destino) rejeitada em turnos consecutivos,
+independente da superficie. Validada com dois fakes: o byte-identico
+(seqMax=5, reincMax=5) e o semantico que alterna o tipo mas insiste
+na mesma aldeia (seqMax=0, reincMax=6 — dissociacao limpa).
+CONSEQUENCIA P/ O H1: baseline de temp 0 do Lucas (seqMax=3,
+repetidos=8, agencia=0.03, 60 rejeicoes/30 turnos) foi gravado SEM a
+coluna nova -> refazer a rodada temp 0 (3 min) p/ todas as linhas do
+resumo.txt sairem comparaveis.
+NOTA: o seqMax=3 do baseline vs os 11 turnos identicos de 03/07 NAO e
+comparavel diretamente — desde entao mudaram o feedback (H3 + mensagens
+honestas alteram o texto do prompt turno a turno) e o oponente (burro
+perturba o estado). Registrado p/ nao virar conclusao indevida.
+================================================================
