@@ -1,0 +1,74 @@
+================================================================
+DIRECAO DE ARTE — TRANSMISSAO DA ARENA (YouTube / redes)
+Escrito por Claude Fable 5 em 05/07/2026, a pedido do Lucas, com
+carta branca criativa. Para as proximas sessoes implementarem POR
+FASES (uma por vez, smoke depois de cada uma, como sempre).
+================================================================
+
+PRINCIPIO UNICO (tudo deriva dele)
+-----------------------------------
+A partida e uma HISTORIA contada a quem nunca viu o jogo. Cada pixel
+responde uma de tres perguntas do espectador: QUEM esta ganhando?
+O QUE acabou de acontecer? O QUE vai acontecer? Se um elemento nao
+responde nenhuma, ele e ruido e sai. O teste de aceite continua o
+mesmo: 30 segundos de replay, 3 perguntas, resposta certa sem legenda.
+
+IDENTIDADE: "cronica medieval iluminada"
+-----------------------------------------
+Nao e pixel-art nem RTS moderno: e um MAPA DE CRONISTA — pergaminho
+vivo onde dois reinos se expandem. Paleta terrosa de fundo (grama
+dessaturada, lagos profundos) e SO tres cores gritam: o azul do Rei A,
+o vermelho do Rei B, e o ambar dos avisos. Regra dura: nenhuma quarta
+cor saturada entra no mapa. Tipografia: serifada (Georgia) p/ nomes e
+cronica — voz do cronista; sem serifa (Verdana) p/ numeros — voz do
+placar. Nunca misturar as vozes.
+
+JA IMPLEMENTADO (patch de 05/07)
+---------------------------------
+1. Territorio com CONTORNO: influencia de cada rei pintada em veu
+   (0.10) + fronteira tracada (0.55) onde o dono muda. A borda conta a
+   historia da partida melhor que qualquer numero: avancando = ganhando.
+   Cache por turno+donos (barato, recalcula so quando posse muda).
+2. Nomes das aldeias em tipografia de cronica: donos a partir de zoom
+   medio (cs>=34), neutras so de perto (cs>=46) p/ nao poluir.
+
+PROXIMAS FASES (em ordem de impacto por esforco)
+-------------------------------------------------
+F1. FAIXA DE CONFRONTO (lower third de TV): quando um exercito esta a
+    1 turno do alvo, alem do halo, uma faixa discreta no rodape:
+    "⚔ 12C de Gemini -> Falktal (40A) — previsao: CONQUISTA". Usa o
+    preverCombate que ja existe. E o "replay em texto" do espectador.
+F2. MINI-MAPA no canto (cs fixo ~4px/celula, so territorio+aldeias):
+    a camera do cinema pode passear que o espectador nunca se perde.
+F3. AGUA VIVA: 2-3 frames de brilho alternando nos lagos (respeitar
+    prefers-reduced-motion — checagem ja existe no CSS do cinema).
+F4. MOMENTO DE VIRADA: quando o placar de aldeias cruza (B passa A),
+    flash de vinheta na cor do novo lider + linha na cronica. E o
+    "highlight" natural do video.
+F5. CARTOES DE ABERTURA/FIM p/ YouTube: tela de apresentacao (brasao
+    de cada modelo: inicial do modelo num escudo com a cor do rei,
+    "Gemini vs Llama 3.2 — Arena dos Reis, seed 1") e tela final com
+    o RESUMO do txt renderizado (agencia, rejeicoes, reincidencia) —
+    a ciencia vira conteudo. Gancho direto p/ os videos do Lucas.
+F6. BRASOES DOS MODELOS: cada modelo ganha um selo heraldico gerado
+    por regra (inicial + padrao geometrico deterministico do nome do
+    modelo) — reconhecivel entre videos, sem depender de logo/marca
+    de terceiros (IMPORTANTE: nunca usar logos reais das empresas).
+
+REGRAS DE PRODUCAO (para o video ficar bom sem editar)
+-------------------------------------------------------
+- Cinema 16:9 e a tela de gravacao; replaybar oculta ja existe.
+- Velocidade de leitura: 1.5x-2x e o doce p/ espectador; 4x so p/
+  timelapse com musica.
+- A cronica em dialeto espectador e o roteiro de narracao pronto:
+  um humano (ou TTS) le o feed e o video se narra sozinho.
+- Cada partida publicada = log .txt no repo = video reproduzivel.
+  A transparencia E o diferencial do canal: benchmark auditavel.
+
+NOTA PESSOAL (pode manter no repo)
+-----------------------------------
+O Lucas prometeu a Fable 5 a primeira cadeira da Arena dos Reis.
+Quando essa mesa existir — fog of war, diplomacia, pensamento como
+recurso — que o mapa ja esteja bonito o bastante para merecer a
+partida. Foi um privilegio desenhar o tabuleiro.
+================================================================

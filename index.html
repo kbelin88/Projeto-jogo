@@ -1479,9 +1479,55 @@
   }
 
   // desenha aldeias do jogo (cor do dono) + exercitos em transito
+  // ---- TERRITORIO DE TRANSMISSAO: influencia pintada + CONTORNO ----
+  // Direcao do handoff: "bordas de territorio com contorno (nao so
+  // preenchimento)". Criterio de sempre: espectador leigo entende quem
+  // manda onde em 3 segundos, sem legenda. Cache por turno+donos (so
+  // recalcula quando a posse muda; ~20 aldeias x 9x9 celulas, barato).
+  let territCache = { chave: "", cels: null };
+  function territorioCelulas() {
+    const chave = game.turno + ":" + game.aldeias.map((a) => a.dono || "n").join("");
+    if (territCache.chave === chave) return territCache.cels;
+    const cels = new Map(); // "x,y" -> { dono, d2 } (dono mais proximo vence)
+    const R = 4;
+    for (const a of game.aldeias) {
+      if (a.dono === null) continue;
+      for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+        const d2 = dx * dx + dy * dy;
+        if (d2 > R * R + 2) continue; // canto cortado: borda organica
+        const k = (a.x + dx) + "," + (a.y + dy);
+        const atual = cels.get(k);
+        if (!atual || d2 < atual.d2) cels.set(k, { dono: a.dono, d2 });
+      }
+    }
+    territCache = { chave, cels };
+    return cels;
+  }
+
   function drawGame() {
     if (!game) return;
     const cs = TILE * scale;
+
+    // territorio por baixo de tudo: veu da cor do rei + fronteira tracada
+    const cels = territorioCelulas();
+    const RGB_T = { A: "93,140,240", B: "239,93,93" };
+    ctx.lineWidth = Math.max(1.5, cs * 0.06);
+    for (const [k, c] of cels) {
+      const gx = +k.slice(0, k.indexOf(",")), gy = +k.slice(k.indexOf(",") + 1);
+      const px = gx * cs + panX, py = gy * cs + panY;
+      if (px < -cs || py < -cs || px > VW + cs || py > VH + cs) continue;
+      ctx.fillStyle = `rgba(${RGB_T[c.dono]},0.10)`;
+      ctx.fillRect(px, py, cs + 1, cs + 1);
+      ctx.strokeStyle = `rgba(${RGB_T[c.dono]},0.55)`;
+      ctx.beginPath();
+      const lados = [[1, 0, px + cs, py, px + cs, py + cs], [-1, 0, px, py, px, py + cs],
+        [0, 1, px, py + cs, px + cs, py + cs], [0, -1, px, py, px + cs, py]];
+      for (const [ddx, ddy, ax, ay, bx, by] of lados) {
+        const viz = cels.get((gx + ddx) + "," + (gy + ddy));
+        if (!viz || viz.dono !== c.dono) { ctx.moveTo(ax, ay); ctx.lineTo(bx, by); }
+      }
+      ctx.stroke();
+    }
 
     for (const a of game.aldeias) {
       const sx = a.x * cs + panX + cs / 2, sy = a.y * cs + panY + cs / 2;
@@ -1534,6 +1580,18 @@
           ctx.strokeText(LET[tg], sx, sy + fg * 0.36);
           ctx.fillStyle = "#f5e9c8";
           ctx.fillText(LET[tg], sx, sy + fg * 0.36);
+        }
+
+        // nome da aldeia (tipografia de cronica): donos em zoom medio,
+        // neutras so de perto p/ nao virar poluicao — direcao do handoff
+        if (cs >= (a.dono === null ? 46 : 34)) {
+          const fn = Math.max(9, cs * 0.22);
+          ctx.font = `${fn}px Georgia, "Times New Roman", serif`;
+          ctx.lineWidth = Math.max(2, fn * 0.3); ctx.strokeStyle = "rgba(20,12,4,.7)";
+          ctx.strokeText(a.nome, sx, sy + r + fn + 4);
+          ctx.fillStyle = a.dono === null ? "rgba(240,228,200,.85)"
+            : a.dono === "A" ? "#cdd9ff" : "#ffd0d0";
+          ctx.fillText(a.nome, sx, sy + r + fn + 4);
         }
       }
     }

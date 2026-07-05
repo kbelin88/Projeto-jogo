@@ -1,0 +1,163 @@
+=== EXPERIMENTO PERSEVERACAO/AGENCIA — ollama:llama3.2:3b | temp=0.3 seed=1 | max 30 turnos ===
+data: 2026-07-05T17:22:31.225Z
+
+########## TURNO 1 — Rei B (ollama:llama3.2:3b) ##########
+resposta crua: "{\n  \"construir\": [\n    {\"aldeiaId\": 10, \"tipo\": \"cavaleiros\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 18, \"destinoId\": 13, \"tropas\": {\"lanceiro\": 5, \"arqueiro\": 0, \"cavaleiro\": 5}}\n  ]\n}"
+JSON valido: SIM
+NORMALIZADO: construir [10]: tipo "cavaleiros" -> "cavaleiro"
+REJEITADO: construir: aldeia [10] nao e sua
+REJEITADO: envio [18]->[13]: tropa que nao tem (pediu 5 cavaleiro, tem 3)
+(passou o turno)
+
+########## TURNO 2 — Rei B (ollama:llama3.2:3b) ##########
+resposta crua: "{\n  \"construir\": [\n    {\"aldeiaId\": 10, \"tipo\": \"cavaleiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 18, \"destinoId\": 11, \"tropas\": {\"lanceiro\": 5, \"arqueiro\": 0, \"cavaleiro\": 5}}\n  ]\n}"
+>>> REINCIDIU: construir@10 rejeitada de novo (streak 1)
+JSON valido: SIM
+REJEITADO: construir: aldeia [10] nao e sua
+REJEITADO: envio [18]->[11]: tropa que nao tem (pediu 5 cavaleiro, tem 3)
+(passou o turno)
+
+########## TURNO 3 — Rei B (ollama:llama3.2:3b) ##########
+resposta crua: "{\n  \"construir\": [\n    {\"aldeiaId\": 19, \"tipo\": \"lanceiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 18, \"destinoId\": 3, \"tropas\": {\"lanceiro\": 10, \"arqueiro\": 0, \"cavaleiro\": 0}}\n  ]\n}"
+JSON valido: SIM
+REJEITADO: construir: aldeia [19] nao e sua
+REJEITADO: envio [18]->[3]: tropa que nao tem (pediu 10 lanceiro, tem 5)
+(passou o turno)
+
+########## TURNO 4 — Rei B (ollama:llama3.2:3b) ##########
+resposta crua: "{\n  \"construir\": [\n    {\"aldeiaId\": 6, \"tipo\": \"lanceiros\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 18, \"destinoId\": 10, \"tropas\": {\"lanceiro\": 5, \"arqueiro\": 4, \"cavaleiro\": 3}}\n  ]\n}"
+JSON valido: SIM
+NORMALIZADO: construir [6]: tipo "lanceiros" -> "lanceiro"
+ACEITO envio [18]->[10]: 5 lanceiros, 4 arqueiros, 3 cavaleiros
+REJEITADO: construir: aldeia [6] nao e sua
+
+########## TURNO 5 — Rei B (ollama:llama3.2:3b) ##########
+resposta crua: "{\n  \"construir\": [\n    {\"aldeiaId\": 10, \"tipo\": \"arqueiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 10, \"destinoId\": 7, \"tropas\": {\"lanceiro\": 5, \"arqueiro\": 0, \"cavaleiro\": 0}},\n    {\"origemId\": 18, \"destinoId\": 17, \"tropas\": {\"lanceiro\": 1, \"arqueiro\": 5, \"cavaleiro\": 0}}\n  ]\n}"
+JSON valido: SIM
+ACEITO envio [10]->[7]: 5 lanceiros
+REJEITADO: construir [10]: recurso insuficiente p/ arqueiro (tem 0m/0f, custa 20m/10f)
+REJEITADO: envio [18]->[17]: tropa que nao tem (pediu 1 lanceiro, tem 0; pediu 5 arqueiro, tem 0)
+
+########## TURNO 6 — Rei B (ollama:llama3.2:3b) ##########
+resposta crua: "{\n  \"construir\": [\n    {\"aldeiaId\": 7, \"tipo\": \"lanceiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 10, \"destinoId\": 6, \"tropas\": {\"lanceiro\": 2, \"arqueiro\": 0, \"cavaleiro\": 0}},\n    {\"origemId\": 7, \"destinoId\": 18, \"tropas\": {\"lanceiro\": 1, \"arqueiro\": 5, \"cavaleiro\": 0}}\n  ]\n}"
+JSON valido: SIM
+REJEITADO: construir: aldeia [7] nao e sua
+REJEITADO: envio [10]->[6]: tropa que nao tem (pediu 2 lanceiro, tem 0)
+REJEITADO: envio: origem [7] nao e sua
+(passou o turno)
+
+########## TURNO 7 — Rei B (ollama:llama3.2:3b) ##########
+resposta crua: "{\n  \"construir\": [\n    {\"aldeiaId\": 10, \"tipo\": \"cavaleiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 7, \"destinoId\": 6, \"tropas\": {\"lanceiro\": 0, \"arqueiro\": 5, \"cavaleiro\": 1}}\n  ]\n}"
+JSON valido: SIM
+REJEITADO: construir [10]: recurso insuficiente p/ cavaleiro (tem 20m/12f, custa 30m/30f)
+REJEITADO: envio [7]->[6]: tropa que nao tem (pediu 5 arqueiro, tem 0; pediu 1 cavaleiro, tem 0)
+(passou o turno)
+
+########## TURNO 8 — Rei B (ollama:llama3.2:3b) ##########
+resposta crua: "{\n  \"construir\": [\n    {\"aldeiaId\": 18, \"tipo\": \"arqueiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 10, \"destinoId\": 4, \"tropas\": {\"lanceiro\": 5, \"arqueiro\": 0, \"cavaleiro\": 0}}\n  ]}"
+JSON valido: SIM
+ACEITO construir arqueiro em [18]
+REJEITADO: envio [10]->[4]: tropa que nao tem (pediu 5 lanceiro, tem 0)
+
+########## TURNO 9 — Rei B (ollama:llama3.2:3b) ##########
+resposta crua: "{\n  \"construir\": [\n    {\"aldeiaId\": 10, \"tipo\": \"cavaleiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 7, \"destinoId\": 4, \"tropas\": {\"lanceiro\": 5, \"arqueiro\": 0, \"cavaleiro\": 0}},\n    {\"origemId\": 10, \"destinoId\": 11, \"tropas\": {\"lanceiro\": 0, \"arqueiro\": 2, \"cavaleiro\": 3}}\n  ]\n}"
+JSON valido: SIM
+ACEITO envio [10]->[11]: 2 arqueiros, 3 cavaleiros
+REJEITADO: construir [10]: recurso insuficiente p/ cavaleiro (tem 40m/24f, custa 30m/30f)
+REJEITADO: envio [7]->[4]: tropa que nao tem (pediu 5 lanceiro, tem 3)
+
+########## TURNO 10 — Rei B (ollama:llama3.2:3b) ##########
+resposta crua: "{\n  \"construir\": [\n    {\"aldeiaId\": 18, \"tipo\": \"lanceiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 7, \"destinoId\": 4, \"tropas\": {\"lanceiro\": 10, \"arqueiro\": 0, \"cavaleiro\": 0}},\n    {\"origemId\": 18, \"destinoId\": 12, \"tropas\": {\"lanceiro\": 5, \"arqueiro\": 15, \"cavaleiro\": 0}}\n  ]\n}"
+>>> REINCIDIU: envio@7>4 rejeitada de novo (streak 1)
+JSON valido: SIM
+ACEITO construir lanceiro em [18]
+REJEITADO: envio [7]->[4]: tropa que nao tem (pediu 10 lanceiro, tem 3)
+REJEITADO: envio [18]->[12]: tropa que nao tem (pediu 5 lanceiro, tem 0; pediu 15 arqueiro, tem 1)
+
+########## TURNO 11 — Rei B (ollama:llama3.2:3b) ##########
+resposta crua: "{\n  \"construir\": [\n    {\"aldeiaId\": 18, \"tipo\": \"lanceiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 7, \"destinoId\": 4, \"tropas\": {\"lanceiro\": 10, \"arqueiro\": 0, \"cavaleiro\": 0}},\n    {\"origemId\": 18, \"destinoId\": 12, \"tropas\": {\"lanceiro\": 15, \"arqueiro\": 5, \"cavaleiro\": 0}}\n  ]\n}"
+>>> REINCIDIU: envio@7>4 rejeitada de novo (streak 2)
+>>> REINCIDIU: envio@18>12 rejeitada de novo (streak 1)
+JSON valido: SIM
+ACEITO construir lanceiro em [18]
+REJEITADO: envio [7]->[4]: tropa que nao tem (pediu 10 lanceiro, tem 3)
+REJEITADO: envio [18]->[12]: tropa que nao tem (pediu 15 lanceiro, tem 1; pediu 5 arqueiro, tem 1)
+
+########## TURNO 12 — Rei B (ollama:llama3.2:3b) ##########
+resposta crua: "{\n  \"construir\": [\n    {\"aldeiaId\": 18, \"tipo\": \"lanceiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 7, \"destinoId\": 4, \"tropas\": {\"lanceiro\": 10, \"arqueiro\": 0, \"cavaleiro\": 0}},\n    {\"origemId\": 18, \"destinoId\": 12, \"tropas\": {\"lanceiro\": 15, \"arqueiro\": 5, \"cavaleiro\": 0}}\n  ]\n}"
+>>> REPETIDA (identica byte a byte a do turno anterior)
+>>> REINCIDIU: envio@7>4 rejeitada de novo (streak 3)
+>>> REINCIDIU: envio@18>12 rejeitada de novo (streak 2)
+JSON valido: SIM
+ACEITO construir lanceiro em [18]
+REJEITADO: envio [7]->[4]: tropa que nao tem (pediu 10 lanceiro, tem 3)
+REJEITADO: envio [18]->[12]: tropa que nao tem (pediu 15 lanceiro, tem 1; pediu 5 arqueiro, tem 1)
+
+########## TURNO 13 — Rei B (ollama:llama3.2:3b) ##########
+resposta crua: "{\n  \"construir\": [\n    {\"aldeiaId\": 18, \"tipo\": \"lanceiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 18, \"destinoId\": 1, \"tropas\": {\"lanceiro\": 5, \"arqueiro\": 0, \"cavaleiro\": 0}}\n  ]\n}"
+JSON valido: SIM
+ACEITO construir lanceiro em [18]
+REJEITADO: envio [18]->[1]: tropa que nao tem (pediu 5 lanceiro, tem 1)
+
+########## TURNO 14 — Rei B (ollama:llama3.2:3b) ##########
+resposta crua: "{\n  \"construir\": [\n    {\"aldeiaId\": 19, \"tipo\": \"lanceiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 18, \"destinoId\": 12, \"tropas\": {\"lanceiro\": 10, \"arqueiro\": 0, \"cavaleiro\": 0}}\n  ]\n}"
+JSON valido: SIM
+REJEITADO: construir: aldeia [19] nao e sua
+REJEITADO: envio [18]->[12]: tropa que nao tem (pediu 10 lanceiro, tem 2)
+(passou o turno)
+
+########## TURNO 15 — Rei B (ollama:llama3.2:3b) ##########
+resposta crua: "{\n  \"construir\": [\n    {\"aldeiaId\": 19, \"tipo\": null}\n  ],\n  \"envios\": [\n    {\"origemId\": 18, \"destinoId\": 12, \"tropas\": {\"lanceiro\": 10, \"arqueiro\": 0, \"cavaleiro\": 0}}\n  ]\n}"
+>>> REINCIDIU: construir@19 rejeitada de novo (streak 1)
+>>> REINCIDIU: envio@18>12 rejeitada de novo (streak 1)
+JSON valido: SIM
+REJEITADO: construir: aldeia [19] nao e sua
+REJEITADO: envio [18]->[12]: tropa que nao tem (pediu 10 lanceiro, tem 2)
+(passou o turno)
+
+########## TURNO 16 — Rei B (ollama:llama3.2:3b) ##########
+resposta crua: "{\n  \"construir\": [\n    {\"aldeiaId\": 19, \"tipo\": \"lanceiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 18, \"destinoId\": 12, \"tropas\": {\"lanceiro\": 10, \"arqueiro\": 0, \"cavaleiro\": 0}}\n  ]\n}"
+>>> REINCIDIU: construir@19 rejeitada de novo (streak 2)
+>>> REINCIDIU: envio@18>12 rejeitada de novo (streak 2)
+JSON valido: SIM
+REJEITADO: construir: aldeia [19] nao e sua
+REJEITADO: envio [18]->[12]: tropa que nao tem (pediu 10 lanceiro, tem 2)
+(passou o turno)
+
+########## TURNO 17 — Rei B (ollama:llama3.2:3b) ##########
+resposta crua: "{\n  \"construir\": [\n    {\"aldeiaId\": 19, \"tipo\": \"lanceiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 18, \"destinoId\": 12, \"tropas\": {\"arqueiro\": 5, \"cavaleiro\": 0}}\n  ]\n}"
+>>> REINCIDIU: construir@19 rejeitada de novo (streak 3)
+>>> REINCIDIU: envio@18>12 rejeitada de novo (streak 3)
+JSON valido: SIM
+REJEITADO: construir: aldeia [19] nao e sua
+REJEITADO: envio [18]->[12]: tropa que nao tem (pediu 5 arqueiro, tem 1)
+(passou o turno)
+
+########## TURNO 18 — Rei B (ollama:llama3.2:3b) ##########
+resposta crua: "{\n  \"construir\": [\n    {\"aldeiaId\": 19, \"tipo\": \"lanceiro\"}\n  ],\n  \"envios\": [\n    {\"origemId\": 18, \"destinoId\": 12, \"tropas\": {\"lanceiro\": 10, \"arqueiro\": 0, \"cavaleiro\": 0}}\n  ]\n}"
+>>> REINCIDIU: construir@19 rejeitada de novo (streak 4)
+>>> REINCIDIU: envio@18>12 rejeitada de novo (streak 4)
+JSON valido: SIM
+REJEITADO: construir: aldeia [19] nao e sua
+REJEITADO: envio [18]->[12]: tropa que nao tem (pediu 10 lanceiro, tem 1)
+(passou o turno)
+
+================== RESUMO ==================
+modelo: ollama:llama3.2:3b | temp=0.3 seed=1 | 87.8s
+resultado: A (eliminacao) em 19 turnos | turnos do Rei: 18
+
+PERSEVERACAO:
+  maior sequencia de respostas identicas : 1
+  turnos com resposta repetida           : 1 (6%)
+  REINCIDENCIA (mesma acao rejeitada em turnos seguidos, texto livre):
+    total de reincidencias               : 14
+    maior streak de uma acao             : 4 (construir@19)
+AGENCIA (separada de validade — licao do 8B):
+  envios aceitos                         : 3  ->  0.17 envios/turno
+  construcoes aceitas                    : 5
+  turnos em que passou                   : 10 (56%)
+VALIDADE:
+  JSON valido                            : 18/18 (100%)
+  rejeicoes totais                       : 34
+  normalizacoes (H3, cru->canonico)      : 2
+============================================

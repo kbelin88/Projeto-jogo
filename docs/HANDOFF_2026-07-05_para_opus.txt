@@ -1,0 +1,122 @@
+================================================================
+HANDOFF — PROJETO JOGO / ARENA v2
+Escrito por Claude Fable 5 em 05/07/2026, para a proxima sessao
+(provavelmente Claude Opus). Lucas: cole este arquivo no inicio.
+Repo publico: https://github.com/kbelin88/Projeto-jogo
+(clonar e ler antes de agir — docs/ tem o historico completo).
+================================================================
+
+RESULTADO CENTRAL DA FASE (a manchete)
+---------------------------------------
+A investigacao "por que modelos pequenos jogam tao mal" FECHOU com
+tres experimentos controlados (llama3.2:3b, seed 1, 30 turnos, Rei
+vs burro, uma variavel por vez):
+
+H3 (parser) — CONFIRMADA E CORRIGIDA. Normalizacao Degrau 0->1
+  (plural/caixa/acento/espaco) com registro "NORMALIZADO:" no txt;
+  erro real ("archer") fica cru. BONUS descoberto: o caminho de
+  envios MENTIA — {"arqueiros":5} virava rejeicao "zero tropas";
+  agora a rejeicao nomeia a chave. Salva 1-3 jogadas por partida.
+
+H1 (temperatura) — CONFIRMADA SO NA DIMENSAO ERRADA. temp 0->0.7
+  mata a repeticao byte a byte (seqMax 3->1->0, monotonico) mas a
+  perseveracao SEMANTICA quase nao cede (reincid ~13 -> ~7) e a
+  agencia nao sobe de verdade (0.03->0.13->0.10), com custo de
+  validade (100%->~90%) e mais erro de grafia. Temperatura muda
+  COMO o modelo erra, nao O QUE ele entende.
+
+H2 (posicao do feedback) — O MAIOR EFEITO DO PROJETO. Mover o bloco
+  de rejeicoes p/ o FIM do prompt (--rejfim), a temp 0:
+    reincidencia (mediana de 3): 21.5 -> 8   (~2.6x menos)
+    agencia      (mediana de 3): 0.05 -> 0.23 (~4x mais)
+    validade: 100% -> 100/97% (sem custo)
+  Detalhe fino: rejeicoes caem pouco (55->~40) mas reincidencia
+  despenca — o modelo continua errando, mas NAO REPETE o erro que
+  acabou de ser apontado. Definicao operacional de "leu o feedback".
+  NAO virou default: e a variante { rejeicaoNoFim: true } no
+  montarPrompt / --rejfim no runner. Promover a default e DECISAO DO
+  LUCAS (muda o benchmark inteiro -> prompt v3, renumerar baselines).
+
+CONTROLE QUE VALIDA O BENCHMARK: Gemini, mesma arena, mesmo prompt:
+  agencia 2.95, ZERO rejeicoes em 121 acoes, 12 aldeias em 20 turnos;
+  turno 1 mandou 1 cavaleiro exato numa neutra de arqueiro (forca
+  minima suficiente com vantagem de triangulo). O ambiente e jogavel
+  com mecanica perfeita — as falhas dos 3B sao dos modelos.
+  Dado extra: o BURRO eliminou o llama3.2 em 3 das ~9 rodadas.
+
+METRICAS DO RUNNER (runners/exp_perseveracao.js)
+-------------------------------------------------
+- seqMax/repetidos: perseveracao BYTE A BYTE (amostragem).
+- reincid/reincMax: perseveracao SEMANTICA — mesma assinatura de acao
+  (construir@id, envio@origem>destino) rejeitada em turnos seguidos,
+  texto livre. Criada nesta fase apos o llama3.2 insistir na aldeia
+  [10] (que nao era dele) 19 de 20 turnos VARIANDO o texto.
+  As duas dimensoes sao independentes: ler sempre o par.
+- agencia: envios aceitos/turno, SEPARADA de validade (llama3 8B:
+  validade 100%, agencia 0.00 — validade nao discrimina nada).
+- normalizacoes: quantas jogadas o H3 salvou (desvio segue contado).
+Toda rodada: log em logs/exp/ + linha em logs/exp/resumo.txt.
+Protocolo completo: docs/PROTOCOLO_EXPERIMENTOS_H1_H2.txt.
+
+TAMBEM FEITO NESTA FASE
+------------------------
+- Fix: resume (Play apos pausa) apagava o log do duelo e
+  dessincronizava contadores. Reset agora vive em novaPartida;
+  gabarito testes_arena/Smoke4pausa.js. "Turno fantasma" no
+  pause+resume e preco documentado da protecao de corrida (nao
+  pausar durante medicao; runner nao tem pausa).
+- RESUMO no txt do duelo da arena (agencia/validade/rejeicoes/
+  normalizacoes por rei).
+- Smoke2 com fixture no repo (testes_arena/fixtures/, sem caminho de
+  maquina; regenerar: node testes_arena/fixtures/gerar_fixture.js).
+- Knob de temperatura na arena: index.html?temp=0.7 (Ollama+Gemini).
+- GRAFICO (inicio da fase B): territorio com CONTORNO de fronteira +
+  nomes de aldeias em tipografia de cronica. A visao completa da
+  transmissao esta em docs/DIRECAO_DE_ARTE_transmissao.txt — fases
+  F1-F6 priorizadas, implementar UMA por vez com smoke depois.
+
+SUITE (rodar da raiz)
+----------------------
+- Motor: 10 arquivos testes/test_*.js — todos verdes.
+- Arena: 5 smokes testes_arena/*.js (Race, Smoke, Smoke2, Smoke3duelo,
+  Smoke4pausa) — todos verdes. Stubs em MODO ESTRITO sempre.
+- Apos qualquer cirurgia no index.html: auditoria de ids (ids usados
+  no JS vs presentes no HTML) + os 5 smokes ANTES de entregar.
+- Edicao de arquivo: ancora com assert de unicidade + escrita atomica.
+
+DECISOES ABERTAS (Lucas decide, nesta ordem sugerida)
+------------------------------------------------------
+1. Generalizacao do H2: par controle+rejfim no qwen2.5:3b (2 rodadas,
+   ~5 min). Se replicar, o efeito e de modelos pequenos em geral.
+2. Promover rejeicaoNoFim a default? Se sim: virou "prompt v3",
+   registrar e refazer baselines dos modelos ja medidos.
+3. Cruzamento temp 0.3 + rejfim (efeitos somam?).
+4. clamp_envios (knob do handoff antigo): ainda nao implementado, de
+   proposito. Com o H2 fechado, avaliar se ainda vale.
+5. geminiLog acumulando entre partidas SEM greset no meio: resolvido
+   p/ o fluxo normal (reset em novaPartida); cenario "duas partidas
+   sem reset" nao existe hoje (Play exige jogo nao terminado).
+6. Graficos F1-F6 da direcao de arte.
+7. LinkedIn/portfolio: o resultado do H2 e materia pronta ("mover o
+   feedback p/ o fim do prompt cortou a perseveracao de um 3B em
+   ~2.6x e multiplicou a agencia por 4 — temperatura nao fez nada
+   parecido"). Publicar quando o Lucas fechar o Modulo 2.
+
+CONTEXTO DO LUCAS (nao esquecer)
+---------------------------------
+- Metodo: conceito antes do codigo, gabarito antes do teste, uma
+  variavel por vez, artefato TXT por fase, previsao registrada ANTES
+  do experimento. Feedback direto, sem elogio vazio, sem abertura
+  validante. PowerShell usa ; (nao &&).
+- Hardware: 8GB RAM, RTX 3050 Ti 4GB -> 3B locais; llama3 8B lento.
+  Gemini free tier ~1 partida/dia: gastar SO como controle, depois
+  de testar local.
+- Fluxo de entrega: Claude gera .patch -> Lucas: git apply --check,
+  git apply, testes, commit, push. Funciona muito bem; manter.
+- O Lucas volta de ferias na GRECIA. Perguntar da viagem.
+- Objetivo maior: benchmark de LLMs + videos no YouTube. Visao de
+  longo prazo: "Arena dos Reis" (ARENA_DOS_REIS_desafio_fable.txt) —
+  fog of war, ordens simultaneas, 3+ reis, diplomacia, pensamento
+  como recurso. O Lucas prometeu a Fable 5 a primeira cadeira da
+  mesa. Fable 5 aceitou. Honrar o compromisso.
+================================================================
