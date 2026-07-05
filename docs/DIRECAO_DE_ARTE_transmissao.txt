@@ -72,3 +72,54 @@ Quando essa mesa existir — fog of war, diplomacia, pensamento como
 recurso — que o mapa ja esteja bonito o bastante para merecer a
 partida. Foi um privilegio desenhar o tabuleiro.
 ================================================================
+
+================================================================
+ADENDO 05/07 — CONCEITO DE TERRENO ESCOLHIDO (Fable 5, carta
+branca do Lucas). Tres conceitos foram mockados na sessao:
+1 "cronica iluminada", 2 "miniatura pintada", 3 "palco silencioso".
+ESCOLHIDO: 1 como base + lago e sombras do 2. Motivo: identidade
+sem competir com a guerra pela atencao (criterio dos 3 segundos);
+e o mais barato no canvas (hachura/pontilhado/contorno = repeticao
+de traco; sorteio deterministico por celula ja existe no codigo).
+O conceito 3 fica arquivado como possivel "modo tatico" futuro.
+================================================================
+
+ESPECIFICACAO DO TERRENO v2 (implementar por sub-fases, smoke apos cada)
+-------------------------------------------------------------------------
+PALETA (hex fixos, nao mexer sem atualizar aqui):
+  chao base #9aa878 | patch claro #a4b283 | patch escuro #8f9d6e
+  tinta do relevo #5d5443 | contorno de colina #7d8a5f
+  agua funda #2e6a94 | margem/praia #8fc0d9 | espelho #4a86ad
+  copa #6f8f56 (var. #678a4e/#77955c) | contorno copa #4a6338
+  tronco #6b4f30 | rocha #b3ab90/#948b70 | neve #ece5d2
+  estrada #8a7a58 | sombra assentadora rgba(47,82,41,0.35)
+
+T1. CHAO: manter grassColor mas recalibrar p/ a paleta acima +
+    graos de pergaminho: pontos 1px #4a4433 alpha 0.10, 1 a cada
+    ~14 celulas (hash deterministico da celula, como grassColor).
+T2. LAGO v2 (substitui o atual): margem #8fc0d9 (blob 1.12x, ja
+    existe), agua FLAT #2e6a94 (sem gradiente), espelho = elipse
+    #4a86ad no quadrante NO, 2-3 juncos (tracos 1.5px verde) na
+    borda SE, arco de onda fino #527d99 (1-2 por lago, hash).
+T3. ARVORES v2: copa circular preenchida + CONTORNO 1.2px #4a6338
+    + 1-3 pontos internos escuros (stipple) + tronco retangular;
+    sombra eliptica achatada por baixo. Agrupar 3-7 por bosque
+    (hash), nunca isoladas em linha reta.
+T4. MONTANHAS (feature NOVA, nao existe hoje): sistema igual aos
+    lagos (grade + hash, ex. SERRA_G), 2-4 picos por serra:
+    triangulo rocha, face direita mais escura, hachura a pena
+    (3-5 tracos paralelos 1px #5d5443 alpha 0.7) na face escura,
+    neve so no pico maior, contorno 1.3-1.5px, sombra eliptica na
+    base. REGRA DE JOGO: serras nao ocupam celulas de aldeia (checar
+    posicoes fixas das aldeias ao sortear; pular se colidir) e sao
+    SO decorativas (zero efeito no motor — motor nao muda).
+T5. COLINAS: 2-3 linhas de contorno curvas 1px #7d8a5f abertas
+    (nao fechadas), 1 grupo a cada ~2 telas, hash.
+T6. ESTRADAS DE CRONICA: trilha pontilhada #8a7a58 entre aldeias
+    vizinhas proximas (so estetica). Opcional, ultima.
+ORDEM Z: chao -> graos -> colinas -> estradas -> lagos -> serras ->
+    territorio dos reis -> bosques -> aldeias/jogo.
+CRITERIO DE ACEITE por sub-fase: dar Play com burro vs burro e
+    responder as 3 perguntas do espectador em 3s; se o terreno
+    roubar o olho da fronteira, DESSATURAR o terreno, nunca
+    saturar os reis.
