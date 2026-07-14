@@ -1,0 +1,36 @@
+name: testes
+
+# Gatilho: todo push e todo pull request, qualquer branch
+on: [push, pull_request]
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest   # a VM limpa que nasce pra cada rodada
+
+    steps:
+      # Passo 1: clonar o teu repo dentro da VM
+      - uses: actions/checkout@v4
+
+      # Passo 2: instalar Node na VM (ela nasce pelada)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Passo 3: os 10 testes do motor, um a um.
+      # O shell do Actions roda com "fail fast": o primeiro
+      # exit code != 0 derruba o passo inteiro.
+      - name: Testes do motor
+        run: |
+          for t in testes/test_*.js; do
+            echo "== $t"
+            node "$t"
+          done
+
+      # Passo 4: os 5 smokes da arena (stubs em modo estrito,
+      # sem Ollama — por isso rodam numa VM sem GPU)
+      - name: Smokes da arena
+        run: |
+          for t in testes_arena/Race.js testes_arena/Smoke.js testes_arena/Smoke2.js testes_arena/Smoke3duelo.js testes_arena/Smoke4pausa.js; do
+            echo "== $t"
+            node "$t"
+          done
