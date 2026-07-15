@@ -638,6 +638,8 @@
       eventos: estado.log.filter((ev) => ev.turno === estado.turno),
       // ordens que o motor RECUSOU no turno anterior (memoria anti-loop)
       rejeicoesAnteriores: (estado.rejeicoesAnteriores && estado.rejeicoesAnteriores[dono]) || [],
+      // ordens EXECUTADAS COM AJUSTE no turno anterior (modo clamp; vazio fora dele)
+      avisosAnteriores: (estado.avisosAnteriores && estado.avisosAnteriores[dono]) || [],
     };
   }
 
@@ -711,6 +713,15 @@
       L.push("=== ATENCAO: SUAS ORDENS RECUSADAS NO TURNO ANTERIOR ===");
       L.push("As ordens abaixo NAO foram executadas (foram recusadas pelo motor). Corrija estes erros nesta jogada e NAO repita a mesma ordem:");
       for (const r of visao.rejeicoesAnteriores) L.push(`- ${r}`);
+      L.push("");
+    }
+    // Canal SEPARADO das rejeicoes: aviso de clamp NAO e recusa — a ordem
+    // FOI executada, ajustada. Meter isto sob "NAO foram executadas" seria
+    // mentir pro modelo (pecado do H3). Fora do modo clamp, nunca renderiza.
+    if (!semRejeicoes && visao.avisosAnteriores && visao.avisosAnteriores.length) {
+      L.push("=== SUAS ORDENS AJUSTADAS NO TURNO ANTERIOR ===");
+      L.push("As ordens abaixo FORAM executadas, mas com a quantidade reduzida ao estoque real. Nesta jogada, peca apenas o que voce TEM:");
+      for (const a of visao.avisosAnteriores) L.push(`- ${a}`);
       L.push("");
     }
 
@@ -1059,6 +1070,42 @@
     return { aceitoConstruir, aceitoEnvios, rejeicoes };
   }
 
+  // ==========================================================
+  //  CLAMP DE ENVIOS (afford do motor — sobrevivente da Fase 12)
+  //  Ajusta APENAS quantidade: pediu mais do que tem -> envia o que
+  //  tem, com AVISO (nunca silencioso — licao do H3). Ilegalidades
+  //  de identidade (origem nao e sua, destino nao existe) NAO sao
+  //  clampaveis: passam adiante e o motor rejeita como sempre.
+  //  Envio ajustado a zero e cancelado (com aviso).
+  // ==========================================================
+  function clampearEnvios(estado, dono, ordem) {
+    const avisos = [];
+    const construir = (ordem && Array.isArray(ordem.construir)) ? ordem.construir : [];
+    const enviosIn = (ordem && Array.isArray(ordem.envios)) ? ordem.envios : [];
+    const envios = [];
+    for (const e of enviosIn) {
+      if (!e || typeof e !== "object") { envios.push(e); continue; }
+      const o = aldeiaPorId(estado, e.origemId);
+      const d = aldeiaPorId(estado, e.destinoId);
+      if (!o || o.dono !== dono || !d || e.origemId === e.destinoId) { envios.push(e); continue; }
+      const pedido = sanitizarTropas(e.tropas);
+      const ajust = {}; const cortes = []; let total = 0;
+      for (const t of TIPOS) {
+        ajust[t] = Math.min(pedido[t], o.tropas[t]);
+        if (ajust[t] < pedido[t]) cortes.push(`pediu ${pedido[t]} ${t}, enviado ${ajust[t]}`);
+        total += ajust[t];
+      }
+      if (!cortes.length) { envios.push(e); continue; }
+      if (total === 0) {
+        avisos.push(`envio [${e.origemId}]->[${e.destinoId}]: ajustado a ZERO (${cortes.join("; ")}) - envio cancelado`);
+        continue;
+      }
+      avisos.push(`envio [${e.origemId}]->[${e.destinoId}]: ajustado ao estoque (${cortes.join("; ")})`);
+      envios.push({ origemId: e.origemId, destinoId: e.destinoId, tropas: ajust });
+    }
+    return { ordem: { construir, envios }, avisos };
+  }
+
   // escolhe a tropa a construir: a mais "em falta" vs composicao_alvo,
   // entre as que cabem no recurso. null se nada cabe.
   function escolherTropa(rec, counts, config) {
@@ -1358,6 +1405,7 @@
     extrairBlocoJSON,
     parsearOrdem,
     diagnosticarOrdem,
+    clampearEnvios,
     decidirEExecutar,
     checarVitoria,
     resumoTurno,

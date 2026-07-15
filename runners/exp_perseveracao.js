@@ -16,6 +16,8 @@
 //    --turnos N   maximo de turnos (default 30)
 //    --seed N     seed do mapa (default 1)
 //    --tag NOME   sufixo do arquivo de log
+//    --clamp      afford do motor: envio acima do estoque e AJUSTADO
+//                 (com aviso no relatorio), nao rejeitado  <- H5
 //    --composto   turno composto: propor -> validar -> [1 revisao]  <- H4
 //    --validador <modeloId>  quem valida (default: o proprio rei; sempre temp 0)
 //
@@ -68,6 +70,7 @@ const tag = opt("tag", "");
 // (conferir fatos e tarefa deterministica; a temperatura do experimento
 // e variavel do PROPOSITOR).
 const composto = args.includes("--composto");
+const clamp = args.includes("--clamp");
 const validadorId = opt("validador", null);
 
 const config = Object.assign({}, Engine.CONFIG, { seed });
@@ -90,6 +93,7 @@ let cruAnterior = null, seqAtual = 0, seqMax = 0, turnosRepetidos = 0;
 // Assinatura da acao rejeitada: "construir@id" / "envio@origem>destino".
 // Reincidir = a MESMA assinatura rejeitada em turnos consecutivos.
 let sigsAnteriores = new Set(), reincidencias = 0, reincMax = 0, reincSig = "-";
+let avisosClamp = 0, enviosCancelados = 0; // H5
 const streaks = new Map();
 // Fase 12: contadores do turno composto (zeros quando --composto desligado)
 let vetosInternos = 0, vereditosIlegiveis = 0, chamadasTotais = 0;
@@ -147,6 +151,13 @@ function onTurno(reg) {
       log("validador: OK");
     }
   }
+  if (reg.clamp) {
+    for (const a of reg.clamp.avisos) {
+      avisosClamp++;
+      if (a.indexOf("ajustado a ZERO") >= 0) enviosCancelados++;
+      log(">>> CLAMP: " + a);
+    }
+  }
   reg.aceito.construir.forEach((c) => log(`ACEITO construir ${c.tipo} em [${c.aldeiaId}]`));
   reg.aceito.envios.forEach((e) => log(`ACEITO envio [${e.origemId}]->[${e.destinoId}]: ${Engine.compTexto(e.tropas)}`));
   reg.rejeicoes.forEach((m) => log("REJEITADO: " + m));
@@ -167,6 +178,7 @@ function onTurno(reg) {
     config, cliente, maxTurnos,
     opcoesPrompt: rejfim ? { rejeicaoNoFim: true } : undefined,
     composto: composto ? { validador: clienteValidador } : undefined,
+    clamp,
     onTurno,
   });
   console.log(""); // fecha a linha de pulsos
@@ -176,7 +188,9 @@ function onTurno(reg) {
   const regs = res.registros;
   const n = regs.length || 1;
   const nValido = regs.filter((r) => r.jsonValido).length;
-  const enviosAceitos = regs.reduce((s, r) => s + r.aceito.envios.length, 0);
+  // com --clamp, agencia conta o EXECUTADO real (pos-ajuste); reincidencia
+  // (acima, em onTurno) segue sobre reg.rejeicoes da proposta CRUA.
+  const enviosAceitos = regs.reduce((s, r) => s + ((r.clamp ? r.clamp.aceito : r.aceito).envios.length), 0);
   const constrAceitas = regs.reduce((s, r) => s + r.aceito.construir.length, 0);
   const nRejeicoes = regs.reduce((s, r) => s + r.rejeicoes.length, 0);
   const nNormalizacoes = regs.reduce((s, r) => s + (r.normalizacoes || []).length, 0);
@@ -202,6 +216,11 @@ function onTurno(reg) {
   R.push(`VALIDADE:`);
   R.push(`  JSON valido                            : ${nValido}/${n} (${pct(nValido)})`);
   R.push(`  rejeicoes totais                       : ${nRejeicoes}`);
+  if (clamp) {
+    R.push(`  -- CLAMP (H5: afford do motor) --`);
+    R.push(`  avisos de ajuste                       : ${avisosClamp}`);
+    R.push(`  envios cancelados (ajuste a zero)      : ${enviosCancelados}`);
+  }
   R.push(`  normalizacoes (H3, cru->canonico)      : ${nNormalizacoes}`);
   if (composto) {
     R.push(`TURNO COMPOSTO (propor -> validar -> [1 revisao]):`);
@@ -220,7 +239,7 @@ function onTurno(reg) {
   fs.mkdirSync(dir, { recursive: true });
   const ts = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19);
   const nomeMod = cliente.nome.replace(/[^a-z0-9._]/gi, "-");
-  const nome = `exp_${nomeMod}_t${temp}${rejfim ? "_rejfim" : ""}${composto ? "_comp" : ""}_s${seed}${tag ? "_" + tag : ""}_${ts}.txt`;
+  const nome = `exp_${nomeMod}_t${temp}${rejfim ? "_rejfim" : ""}${composto ? "_comp" : ""}${clamp ? "_clamp" : ""}_s${seed}${tag ? "_" + tag : ""}_${ts}.txt`;
   const alvo = path.join(dir, nome);
   fs.writeFileSync(alvo + ".tmp", linhas.join("\n"));
   fs.renameSync(alvo + ".tmp", alvo);
@@ -232,6 +251,8 @@ function onTurno(reg) {
     `enviosAceitos=${enviosAceitos}`, `agencia=${agencia}`, `validade=${nValido}/${n}`,
     `rejeicoes=${nRejeicoes}`, `normalizacoes=${nNormalizacoes}`,
     composto ? `composto=1(val=${clienteValidador.nome})` : "composto=0",
+    clamp ? "clamp=1" : "clamp=0",
+    ...(clamp ? [`avisosClamp=${avisosClamp}`, `enviosCancelados=${enviosCancelados}`] : []),
     ...(composto ? [`vetos=${vetosInternos}`, `ilegiveis=${vereditosIlegiveis}`, `chamadasPorTurno=${(chamadasTotais / n).toFixed(2)}`] : []),
     `resultado=${res.vencedor}/${res.turnos}t`].join(" | ");
   fs.appendFileSync(path.join(dir, "resumo.txt"), linha + "\n");

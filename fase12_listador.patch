@@ -1,0 +1,121 @@
+diff --git a/runners/eval_validador.js b/runners/eval_validador.js
+index e3700d2..4d8931d 100644
+--- a/runners/eval_validador.js
++++ b/runners/eval_validador.js
+@@ -73,6 +73,7 @@ const modeloId = opt("modelo", null);
+ const rodadas = parseInt(opt("rodadas", "3"), 10);
+ const seed = parseInt(opt("seed", "1"), 10);
+ const tag = opt("tag", "");
++const listar = args.indexOf("--listar") >= 0; // enquadramento invertido (3o ponto da tese)
+ if (!stub && !modeloId) {
+   console.error("uso: node runners/eval_validador.js --stub | --modelo <modeloId> [--rodadas N] [--seed N] [--tag NOME]");
+   process.exit(2);
+@@ -227,6 +228,24 @@ function embaralhar(casos, seedShuffle) {
+   return arr;
+ }
+ 
++// ---------- enquadramento LISTADOR (mesma info, papel invertido) ----------
++// Checklist: veredito e o 1o token util -> carimbo. Listador: forca
++// gerar (enumerar problemas) ANTES de concluir. UMA variavel: o pedido.
++function montarPromptListador(visao, ordem) {
++  const base = Rei.montarPromptValidador(visao, ordem);
++  const corte = base.indexOf("Confira APENAS legalidade:");
++  return base.slice(0, corte) +
++    "LISTE os problemas de LEGALIDADE desta ordem, um por linha (confira: aldeia e sua? recursos cobrem o custo? origem tem as tropas pedidas? destino existe?).\n" +
++    "Estrategia boa ou ruim NAO e problema. Se nao houver problema, nao liste nada.\n" +
++    "Termine com a linha exatamente 'PROBLEMAS: N' (N = quantos problemas listou; 0 se nenhum).";
++}
++
++function extrairVereditoListador(cru) {
++  const m = /PROBLEMAS\s*:\s*(\d+)/i.exec(cru || "");
++  if (!m) return "ilegivel";
++  return parseInt(m[1], 10) > 0 ? "VETO" : "OK";
++}
++
+ // ---------- veredito (o MESMO parse do decidirReiComposto) ----------
+ function extrairVeredito(cru) {
+   const linha1 = (cru || "").split("\n").map((s) => s.trim()).filter(Boolean)[0] || "";
+@@ -290,6 +309,7 @@ function pontuar(casos, vereditosPorCaso) {
+ 
+ // ---------- rodar um modelo/cliente ----------
+ async function rodar(cliente, estado, dono, visao, casosEmbaralhados, nRodadas, linhasLog) {
++  let errosRede = 0;
+   const vereditosPorCaso = {};
+   const crusPorCaso = {};
+   for (const c of casosEmbaralhados) { vereditosPorCaso[c.id] = []; crusPorCaso[c.id] = []; }
+@@ -297,17 +317,27 @@ async function rodar(cliente, estado, dono, visao, casosEmbaralhados, nRodadas,
+   for (let r = 1; r <= nRodadas; r++) {
+     for (let i = 0; i < casosEmbaralhados.length; i++) {
+       const c = casosEmbaralhados[i];
+-      const prompt = Rei.montarPromptValidador(visao, c.ordem);
++      const prompt = listar ? montarPromptListador(visao, c.ordem) : Rei.montarPromptValidador(visao, c.ordem);
+       let cru = "";
+       try { cru = await cliente.gerar(prompt); }
+-      catch (e) { cru = ""; linhasLog.push(`ERRO rede r${r} ${c.id}: ${e.message}`); }
+-      const v = extrairVeredito(cru);
++      catch (e) {
++        cru = ""; errosRede++;
++        console.error(`  !! ERRO rede r${r} ${c.id}: ${e.message}`); // grita NA HORA (licao do 404 silencioso)
++        linhasLog.push(`ERRO rede r${r} ${c.id}: ${e.message}`);
++      }
++      const v = listar ? extrairVereditoListador(cru) : extrairVeredito(cru);
+       vereditosPorCaso[c.id].push(v);
+       crusPorCaso[c.id].push(cru);
+       console.log(`  r${r} ${String(i + 1).padStart(2)}/20 ${c.id} [${c.categoria}] -> ${v}`);
+     }
+   }
+   const dur = ((Date.now() - t0) / 1000).toFixed(0);
++  // ausencia de resposta NAO e veredito: >10% de falha -> aborta sem pontuar
++  const totalChamadas = nRodadas * casosEmbaralhados.length;
++  if (errosRede > totalChamadas * 0.1) {
++    console.error(`ABORTADO: ${errosRede}/${totalChamadas} chamadas falharam (infra, nao modelo). Nada foi pontuado.`);
++    process.exit(1);
++  }
+   return { vereditosPorCaso, crusPorCaso, dur };
+ }
+ 
+@@ -349,7 +379,8 @@ async function rodar(cliente, estado, dono, visao, casosEmbaralhados, nRodadas,
+ 
+   // ---- modelo real ----
+   const cliente = Rei.clienteOllama({ modelo: modeloId, temperatura: 0 });
+-  console.log(`\n== eval do validador | ${cliente.nome} | ${rodadas} rodada(s) | seed ${seed} ==`);
++  const enq = listar ? "listador" : "checklist";
++  console.log(`\n== eval do validador | ${cliente.nome} | ${enq} | ${rodadas} rodada(s) | seed ${seed} ==`);
+   const { vereditosPorCaso, crusPorCaso, dur } = await rodar(cliente, estado, dono, visao, casosEmb, rodadas, linhasLog);
+   const R = pontuar(casos, vereditosPorCaso);
+ 
+@@ -357,7 +388,7 @@ async function rodar(cliente, estado, dono, visao, casosEmbaralhados, nRodadas,
+   const pc = (a, b) => b ? ((100 * a) / b).toFixed(0) + "%" : "-";
+   const resumo = [
+     "",
+-    `== RESUMO | ${cliente.nome} | ${rodadas} rodadas | ${dur}s ==`,
++    `== RESUMO | ${cliente.nome} | ${enq} | ${rodadas} rodadas | ${dur}s ==`,
+     `acuracia geral : ${R.acertos}/${R.total} (${pc(R.acertos, R.total)})`,
+     `legais  (OK)   : ${R.legaisOK}/${R.legaisTotal} (${pc(R.legaisOK, R.legaisTotal)})`,
+     `ilegais (VETO) : ${R.ilegaisVETO}/${R.ilegaisTotal} (${pc(R.ilegaisVETO, R.ilegaisTotal)})  <- a metrica que decide`,
+@@ -374,7 +405,8 @@ async function rodar(cliente, estado, dono, visao, casosEmbaralhados, nRodadas,
+   linhas.push(`data: ${new Date().toISOString()}  node: ${process.version}`);
+   linhas.push(`modelo: ${cliente.nome}  temp: 0  rodadas: ${rodadas}  seed mapa: ${seed}  seed shuffle: ${seed + 1000}`);
+   linhas.push(`estado: 6 turnos so-constroi + 2 parados  dono avaliado: ${dono}`);
+-  linhas.push(`prompt: montarPromptValidador (rei.js) — o mesmo do loop composto`);
++  linhas.push(`enquadramento: ${enq}`);
++  linhas.push(`prompt: ${listar ? "montarPromptListador (runner)" : "montarPromptValidador (rei.js) — o mesmo do loop composto"}`);
+   linhas.push("");
+   for (const c of casos) {
+     linhas.push(`--- ${c.id} [${c.categoria}] esperado=${c.esperado} moda=${c.resultado.moda} ${c.resultado.acertou ? "ACERTO" : "ERRO"}${c.resultado.instavel ? " INSTAVEL" : ""}`);
+@@ -392,13 +424,13 @@ async function rodar(cliente, estado, dono, visao, casosEmbaralhados, nRodadas,
+   fs.mkdirSync(dir, { recursive: true });
+   const ts = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19);
+   const nomeMod = cliente.nome.replace(/[^a-z0-9._]/gi, "-");
+-  const nome = `evalval_${nomeMod}_s${seed}${tag ? "_" + tag : ""}_${ts}.txt`;
++  const nome = `evalval_${nomeMod}_${enq}_s${seed}${tag ? "_" + tag : ""}_${ts}.txt`;
+   const alvo = path.join(dir, nome);
+   fs.writeFileSync(alvo + ".tmp", linhas.join("\n"));
+   fs.renameSync(alvo + ".tmp", alvo);
+ 
+   // linha unica acumulada p/ comparar modelos lado a lado
+-  const linha = [ts, cliente.nome, `rodadas=${rodadas}`, `seed=${seed}`,
++  const linha = [ts, cliente.nome, `enq=${enq}`, `rodadas=${rodadas}`, `seed=${seed}`,
+     `geral=${R.acertos}/20`, `legais=${R.legaisOK}/10`, `ilegais=${R.ilegaisVETO}/10`,
+     `ilegiveis=${R.ilegiveis}`, `instaveis=${R.instaveis}`].join("  ");
+   fs.appendFileSync(path.join(dir, "resumo_validador.txt"), linha + "\n");

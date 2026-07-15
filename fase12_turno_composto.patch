@@ -1,0 +1,233 @@
+diff --git a/rei.js b/rei.js
+index 8f0baaf..a45ff1a 100644
+--- a/rei.js
++++ b/rei.js
+@@ -179,6 +179,104 @@ async function decidirRei(estado, dono, cliente, opcoesPrompt) {
+   };
+ }
+ 
++// ---- TURNO COMPOSTO (Fase 12 / H4): propor -> validar -> [revisar] --------
++// Decisoes de design (13/07, registradas na sessao):
++//   1. O validador ve APENAS regras + relatorio do turno + ordem proposta.
++//      Sem papel de rei, sem historico, sem rejeicoes passadas (contexto
++//      limpo — licao do Critico do Modulo 1).
++//   2. Veto -> UMA revisao pelo propositor, com o motivo NO FIM (H2).
++//      O que vier da revisao vai ao motor SEM segunda validacao.
++//      O validador NUNCA corrige a ordem; so veta com motivo.
++//   3. Motor continua sendo a rede final (ordem ilegal que escapar e
++//      rejeitada como sempre). Veredito ilegivel -> tratado como OK.
++function montarPromptValidador(visao, ordem) {
++  const L = [];
++  L.push("Voce e um VALIDADOR de ordens de um jogo de estrategia. Voce NAO e um jogador e NAO propoe jogadas.");
++  L.push("Sua unica tarefa: conferir se a ORDEM PROPOSTA abaixo e LEGAL segundo o relatorio. Estrategia boa ou ruim NAO e problema seu.");
++  L.push("");
++  L.push(Engine.regrasCombateTexto(visao.config));
++  L.push("");
++  L.push(Engine.regrasEconomiaTexto(visao.config));
++  L.push("");
++  // O relatorio do motor fala com o leitor como rei ("Voce e o Rei X") —
++  // vazamento de papel que confunde validador 3B. Neutraliza SO AQUI
++  // (o relatorioTexto do motor alimenta o prompt v2 do benchmark e fica
++  // congelado; uma variavel por vez).
++  L.push(Engine.relatorioTexto(visao, { semRejeicoes: true })
++    .replace(/Voce e o Rei (\w+)\./, "Relatorio do Rei $1 (o jogador cuja ordem voce confere)."));
++  L.push("");
++  L.push("ORDEM PROPOSTA (confira item por item):");
++  L.push(JSON.stringify(ordem));
++  L.push("");
++  L.push("Confira APENAS legalidade:");
++  L.push("- construir: a aldeiaId esta na secao SUAS ALDEIAS? os recursos atuais cobrem o custo do tipo?");
++  L.push("- envios: a origemId esta em SUAS ALDEIAS? a origem TEM as tropas pedidas (tipo E quantidade)? o destinoId existe no relatorio?");
++  L.push("");
++  L.push("Responda na PRIMEIRA linha exatamente 'VALIDACAO: OK' ou 'VALIDACAO: VETO'.");
++  L.push("Se VETO, escreva o motivo em UMA linha curta na segunda linha. Nao escreva mais nada.");
++  return L.join("\n");
++}
++
++async function decidirReiComposto(estado, dono, cliente, opcoesPrompt, composto) {
++  const validador = (composto && composto.validador) || cliente;
++  const visao = Engine.montarVisao(estado, dono);
++  const prompt = Engine.montarPrompt(visao, opcoesPrompt);
++
++  let cru = "", erroRede = null;
++  try { cru = await cliente.gerar(prompt); }
++  catch (e) { erroRede = e.message; }
++  let p = Engine.parsearOrdem(cru);
++
++  const info = { chamadas: 1, veredito: "-", vetou: false, motivo: "", cruProposta: "", cruValidador: "" };
++
++  // So valida proposta parseavel COM conteudo: JSON invalido ou ordem vazia
++  // nao tem o que conferir — segue direto (o motor e a rede final).
++  const temConteudo = p.ok &&
++    (((p.ordem.construir || []).length + (p.ordem.envios || []).length) > 0);
++  if (!erroRede && temConteudo) {
++    let cruVal = "";
++    try { cruVal = await validador.gerar(montarPromptValidador(visao, p.ordem)); info.chamadas++; }
++    catch (e) { cruVal = ""; } // validador fora do ar -> segue sem validar
++    info.cruValidador = cruVal;
++    const linha1 = (cruVal || "").split("\n").map((s) => s.trim()).filter(Boolean)[0] || "";
++    const m = /^VALIDACAO\s*:\s*(OK|VETO)/i.exec(linha1);
++    info.veredito = m ? m[1].toUpperCase() : "ilegivel"; // ilegivel -> OK (default seguro)
++
++    if (info.veredito === "VETO") {
++      info.vetou = true;
++      const resto = (cruVal || "").split("\n").map((s) => s.trim()).filter(Boolean).slice(1).join(" ");
++      info.motivo = (resto || linha1.replace(/^VALIDACAO\s*:\s*VETO\s*[-—:.]*\s*/i, "")).slice(0, 300);
++      info.cruProposta = cru;
++      // UMA revisao, motivo no FIM do prompt (H2: modelos pequenos pesam o rabo).
++      const promptRev = prompt + "\n\n=== REVISAO (veto do validador interno) ===\n" +
++        "Sua ordem foi VETADA antes de chegar ao jogo.\n" +
++        "ORDEM VETADA: " + JSON.stringify(p.ordem) + "\n" +
++        "MOTIVO DO VETO: " + (info.motivo || "nao informado") + "\n" +
++        "Corrija o problema e responda novamente APENAS com o JSON da ordem, no mesmo formato.";
++      try { cru = await cliente.gerar(promptRev); info.chamadas++; }
++      catch (e) { erroRede = e.message; }
++      p = Engine.parsearOrdem(cru);
++    }
++  }
++
++  const diag = Engine.diagnosticarOrdem(estado, dono, p.ordem);
++  return {
++    ordem: p.ordem,
++    registro: {
++      turno: estado.turno, dono, prompt, cru,
++      erroRede,
++      jsonValido: p.ok, erroParse: p.erro,
++      normalizacoes: p.normalizacoes || [],
++      ordemParseada: p.ordem,
++      ids: classificarIds(estado, p.ordem),
++      aceito: { construir: diag.aceitoConstruir, envios: diag.aceitoEnvios },
++      rejeicoes: diag.rejeicoes,
++      counter: avaliarCounter(estado, diag.aceitoEnvios),
++      composto: info, // metricas do ciclo interno (vetos, chamadas, veredito)
++    },
++  };
++}
++
+ // INSTRUMENTACAO DA ANCORAGEM (achado): o Rei emite ids que EXISTEM na visao
+ // dele, ou copia ids do exemplo/inexistentes? Coleta todos os ids citados na
+ // ordem (aldeiaId, origemId, destinoId) e separa os que nao existem no estado.
+@@ -236,7 +334,9 @@ async function rodarPartidaRei(opcoes) {
+     for (const dono of ["A", "B"]) {
+       if (!Engine.aldeiasDe(estado, dono).length) continue; // morto nao decide
+       if (dono === ladoRei) {
+-        const { ordem, registro } = await decidirRei(estado, dono, cliente, opcoesPrompt);
++        const { ordem, registro } = opcoes.composto
++          ? await decidirReiComposto(estado, dono, cliente, opcoesPrompt, opcoes.composto)
++          : await decidirRei(estado, dono, cliente, opcoesPrompt);
+         Engine.executarOrdem(estado, dono, ordem);
+         registros.push(registro);
+         onTurno(registro, estado);
+@@ -259,4 +359,4 @@ async function rodarPartidaRei(opcoes) {
+   };
+ }
+ 
+-module.exports = { clienteOllama, clienteGemini, criarCliente, carregarEnv, criarReiIA, decidirRei, avaliarCounter, rodarPartidaRei };
++module.exports = { clienteOllama, clienteGemini, criarCliente, carregarEnv, criarReiIA, decidirRei, decidirReiComposto, montarPromptValidador, avaliarCounter, rodarPartidaRei };
+diff --git a/runners/exp_perseveracao.js b/runners/exp_perseveracao.js
+index 345a8c2..817ee45 100644
+--- a/runners/exp_perseveracao.js
++++ b/runners/exp_perseveracao.js
+@@ -16,6 +16,13 @@
+ //    --turnos N   maximo de turnos (default 30)
+ //    --seed N     seed do mapa (default 1)
+ //    --tag NOME   sufixo do arquivo de log
++//    --composto   turno composto: propor -> validar -> [1 revisao]  <- H4
++//    --validador <modeloId>  quem valida (default: o proprio rei; sempre temp 0)
++//
++//  PROTOCOLO H4 (Fase 12, matriz de 3 condicoes):
++//    Baseline: ja medido (3x temp 0, sem flags)
++//    C1: --composto                              (a ESTRUTURA ajuda?)
++//    C2: --composto --validador <outro modelo>   (o VALIDADOR importa?)
+ //
+ //  PROTOCOLO (uma variavel por vez!):
+ //    H1: --temp 0 | --temp 0.3 | --temp 0.7   (sem --rejfim)
+@@ -55,10 +62,18 @@ const rejfim = args.includes("--rejfim");
+ const maxTurnos = parseInt(opt("turnos", "30"), 10);
+ const seed = parseInt(opt("seed", "1"), 10);
+ const tag = opt("tag", "");
++// Fase 12 / H4 — turno composto: propor -> validar -> [1 revisao] -> motor.
++// --composto liga o ciclo; --validador <modeloId> escolhe quem valida
++// (default: o proprio rei se valida). Validador roda SEMPRE a temp 0
++// (conferir fatos e tarefa deterministica; a temperatura do experimento
++// e variavel do PROPOSITOR).
++const composto = args.includes("--composto");
++const validadorId = opt("validador", null);
+ 
+-const condicao = `temp=${temp}${rejfim ? " rejfim" : ""} seed=${seed}`;
+ const config = Object.assign({}, Engine.CONFIG, { seed });
+ const cliente = Rei.criarCliente(modeloId, { temperatura: temp });
++const clienteValidador = composto ? Rei.criarCliente(validadorId || modeloId, { temperatura: 0 }) : null;
++const condicao = `temp=${temp}${rejfim ? " rejfim" : ""}${composto ? ` composto(val=${clienteValidador.nome})` : ""} seed=${seed}`;
+ 
+ // ---------- log por turno ----------
+ const linhas = [];
+@@ -76,6 +91,8 @@ let cruAnterior = null, seqAtual = 0, seqMax = 0, turnosRepetidos = 0;
+ // Reincidir = a MESMA assinatura rejeitada em turnos consecutivos.
+ let sigsAnteriores = new Set(), reincidencias = 0, reincMax = 0, reincSig = "-";
+ const streaks = new Map();
++// Fase 12: contadores do turno composto (zeros quando --composto desligado)
++let vetosInternos = 0, vereditosIlegiveis = 0, chamadasTotais = 0;
+ function assinaturasRejeitadas(rejeicoes) {
+   // Dois formatos no motor: "construir [18]: motivo" E "construir: aldeia [18]
+   // nao e sua" (idem envio, com ou sem destino). Regra robusta: prefixo da
+@@ -117,6 +134,19 @@ function onTurno(reg) {
+   reincididas.forEach((s) => log(">>> REINCIDIU: " + s + " rejeitada de novo (streak " + streaks.get(s) + ")"));
+   log(`JSON valido: ${reg.jsonValido ? "SIM" : "NAO — " + reg.erroParse}`);
+   (reg.normalizacoes || []).forEach((n) => log("NORMALIZADO: " + n));
++  if (reg.composto) {
++    chamadasTotais += reg.composto.chamadas;
++    if (reg.composto.vetou) {
++      vetosInternos++;
++      log(">>> VALIDADOR VETOU. motivo: " + reg.composto.motivo);
++      log("proposta vetada (cru): " + JSON.stringify(reg.composto.cruProposta));
++    } else if (reg.composto.veredito === "ilegivel") {
++      vereditosIlegiveis++;
++      log(">>> VALIDADOR ILEGIVEL (tratado como OK): " + JSON.stringify((reg.composto.cruValidador || "").slice(0, 120)));
++    } else if (reg.composto.veredito === "OK") {
++      log("validador: OK");
++    }
++  }
+   reg.aceito.construir.forEach((c) => log(`ACEITO construir ${c.tipo} em [${c.aldeiaId}]`));
+   reg.aceito.envios.forEach((e) => log(`ACEITO envio [${e.origemId}]->[${e.destinoId}]: ${Engine.compTexto(e.tropas)}`));
+   reg.rejeicoes.forEach((m) => log("REJEITADO: " + m));
+@@ -136,6 +166,7 @@ function onTurno(reg) {
+   const res = await Rei.rodarPartidaRei({
+     config, cliente, maxTurnos,
+     opcoesPrompt: rejfim ? { rejeicaoNoFim: true } : undefined,
++    composto: composto ? { validador: clienteValidador } : undefined,
+     onTurno,
+   });
+   console.log(""); // fecha a linha de pulsos
+@@ -172,6 +203,13 @@ function onTurno(reg) {
+   R.push(`  JSON valido                            : ${nValido}/${n} (${pct(nValido)})`);
+   R.push(`  rejeicoes totais                       : ${nRejeicoes}`);
+   R.push(`  normalizacoes (H3, cru->canonico)      : ${nNormalizacoes}`);
++  if (composto) {
++    R.push(`TURNO COMPOSTO (propor -> validar -> [1 revisao]):`);
++    R.push(`  validador                              : ${clienteValidador.nome}${validadorId ? "" : " (o proprio rei)"}`);
++    R.push(`  vetos internos                         : ${vetosInternos}`);
++    R.push(`  vereditos ilegiveis (tratados como OK) : ${vereditosIlegiveis}`);
++    R.push(`  chamadas LLM por turno (media)         : ${(chamadasTotais / n).toFixed(2)}`);
++  }
+   R.push("============================================");
+   const resumo = R.join("\n");
+   console.log(resumo);
+@@ -182,7 +220,7 @@ function onTurno(reg) {
+   fs.mkdirSync(dir, { recursive: true });
+   const ts = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19);
+   const nomeMod = cliente.nome.replace(/[^a-z0-9._]/gi, "-");
+-  const nome = `exp_${nomeMod}_t${temp}${rejfim ? "_rejfim" : ""}_s${seed}${tag ? "_" + tag : ""}_${ts}.txt`;
++  const nome = `exp_${nomeMod}_t${temp}${rejfim ? "_rejfim" : ""}${composto ? "_comp" : ""}_s${seed}${tag ? "_" + tag : ""}_${ts}.txt`;
+   const alvo = path.join(dir, nome);
+   fs.writeFileSync(alvo + ".tmp", linhas.join("\n"));
+   fs.renameSync(alvo + ".tmp", alvo);
+@@ -193,6 +231,8 @@ function onTurno(reg) {
+     `reincid=${reincidencias}`, `reincMax=${reincMax}(${reincSig})`,
+     `enviosAceitos=${enviosAceitos}`, `agencia=${agencia}`, `validade=${nValido}/${n}`,
+     `rejeicoes=${nRejeicoes}`, `normalizacoes=${nNormalizacoes}`,
++    composto ? `composto=1(val=${clienteValidador.nome})` : "composto=0",
++    ...(composto ? [`vetos=${vetosInternos}`, `ilegiveis=${vereditosIlegiveis}`, `chamadasPorTurno=${(chamadasTotais / n).toFixed(2)}`] : []),
+     `resultado=${res.vencedor}/${res.turnos}t`].join(" | ");
+   fs.appendFileSync(path.join(dir, "resumo.txt"), linha + "\n");
+ 

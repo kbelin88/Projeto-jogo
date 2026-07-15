@@ -337,7 +337,25 @@ async function rodarPartidaRei(opcoes) {
         const { ordem, registro } = opcoes.composto
           ? await decidirReiComposto(estado, dono, cliente, opcoesPrompt, opcoes.composto)
           : await decidirRei(estado, dono, cliente, opcoesPrompt);
-        Engine.executarOrdem(estado, dono, ordem);
+        // CLAMP (afford do motor): executa a ordem AJUSTADA, mas o registro
+        // cru (rejeicoes da proposta original) fica intacto — a reincidencia
+        // segue medida sobre o que o modelo PEDIU, comparavel 1:1 c/ baseline.
+        let ordemExec = ordem;
+        if (opcoes.clamp) {
+          const c = Engine.clampearEnvios(estado, dono, ordem);
+          const diagReal = Engine.diagnosticarOrdem(estado, dono, c.ordem);
+          registro.clamp = {
+            avisos: c.avisos,
+            aceito: { construir: diagReal.aceitoConstruir, envios: diagReal.aceitoEnvios },
+            rejeicoes: diagReal.rejeicoes,
+          };
+          ordemExec = c.ordem;
+        }
+        Engine.executarOrdem(estado, dono, ordemExec);
+        if (opcoes.clamp) {
+          if (!estado.avisosAnteriores) estado.avisosAnteriores = {};
+          estado.avisosAnteriores[dono] = registro.clamp.avisos; // canal proprio, reset por turno
+        }
         registros.push(registro);
         onTurno(registro, estado);
       } else {

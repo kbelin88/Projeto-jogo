@@ -1,0 +1,195 @@
+diff --git a/engine.js b/engine.js
+index b41af1f..49e2262 100644
+--- a/engine.js
++++ b/engine.js
+@@ -638,6 +638,8 @@
+       eventos: estado.log.filter((ev) => ev.turno === estado.turno),
+       // ordens que o motor RECUSOU no turno anterior (memoria anti-loop)
+       rejeicoesAnteriores: (estado.rejeicoesAnteriores && estado.rejeicoesAnteriores[dono]) || [],
++      // ordens EXECUTADAS COM AJUSTE no turno anterior (modo clamp; vazio fora dele)
++      avisosAnteriores: (estado.avisosAnteriores && estado.avisosAnteriores[dono]) || [],
+     };
+   }
+ 
+@@ -713,6 +715,15 @@
+       for (const r of visao.rejeicoesAnteriores) L.push(`- ${r}`);
+       L.push("");
+     }
++    // Canal SEPARADO das rejeicoes: aviso de clamp NAO e recusa — a ordem
++    // FOI executada, ajustada. Meter isto sob "NAO foram executadas" seria
++    // mentir pro modelo (pecado do H3). Fora do modo clamp, nunca renderiza.
++    if (!semRejeicoes && visao.avisosAnteriores && visao.avisosAnteriores.length) {
++      L.push("=== SUAS ORDENS AJUSTADAS NO TURNO ANTERIOR ===");
++      L.push("As ordens abaixo FORAM executadas, mas com a quantidade reduzida ao estoque real. Nesta jogada, peca apenas o que voce TEM:");
++      for (const a of visao.avisosAnteriores) L.push(`- ${a}`);
++      L.push("");
++    }
+ 
+     // SUAS ALDEIAS
+     L.push(`=== SUAS ALDEIAS (${visao.minhas.length}) ===`);
+@@ -1059,6 +1070,42 @@
+     return { aceitoConstruir, aceitoEnvios, rejeicoes };
+   }
+ 
++  // ==========================================================
++  //  CLAMP DE ENVIOS (afford do motor — sobrevivente da Fase 12)
++  //  Ajusta APENAS quantidade: pediu mais do que tem -> envia o que
++  //  tem, com AVISO (nunca silencioso — licao do H3). Ilegalidades
++  //  de identidade (origem nao e sua, destino nao existe) NAO sao
++  //  clampaveis: passam adiante e o motor rejeita como sempre.
++  //  Envio ajustado a zero e cancelado (com aviso).
++  // ==========================================================
++  function clampearEnvios(estado, dono, ordem) {
++    const avisos = [];
++    const construir = (ordem && Array.isArray(ordem.construir)) ? ordem.construir : [];
++    const enviosIn = (ordem && Array.isArray(ordem.envios)) ? ordem.envios : [];
++    const envios = [];
++    for (const e of enviosIn) {
++      if (!e || typeof e !== "object") { envios.push(e); continue; }
++      const o = aldeiaPorId(estado, e.origemId);
++      const d = aldeiaPorId(estado, e.destinoId);
++      if (!o || o.dono !== dono || !d || e.origemId === e.destinoId) { envios.push(e); continue; }
++      const pedido = sanitizarTropas(e.tropas);
++      const ajust = {}; const cortes = []; let total = 0;
++      for (const t of TIPOS) {
++        ajust[t] = Math.min(pedido[t], o.tropas[t]);
++        if (ajust[t] < pedido[t]) cortes.push(`pediu ${pedido[t]} ${t}, enviado ${ajust[t]}`);
++        total += ajust[t];
++      }
++      if (!cortes.length) { envios.push(e); continue; }
++      if (total === 0) {
++        avisos.push(`envio [${e.origemId}]->[${e.destinoId}]: ajustado a ZERO (${cortes.join("; ")}) - envio cancelado`);
++        continue;
++      }
++      avisos.push(`envio [${e.origemId}]->[${e.destinoId}]: ajustado ao estoque (${cortes.join("; ")})`);
++      envios.push({ origemId: e.origemId, destinoId: e.destinoId, tropas: ajust });
++    }
++    return { ordem: { construir, envios }, avisos };
++  }
++
+   // escolhe a tropa a construir: a mais "em falta" vs composicao_alvo,
+   // entre as que cabem no recurso. null se nada cabe.
+   function escolherTropa(rec, counts, config) {
+@@ -1358,6 +1405,7 @@
+     extrairBlocoJSON,
+     parsearOrdem,
+     diagnosticarOrdem,
++    clampearEnvios,
+     decidirEExecutar,
+     checarVitoria,
+     resumoTurno,
+diff --git a/rei.js b/rei.js
+index a45ff1a..8f145c8 100644
+--- a/rei.js
++++ b/rei.js
+@@ -337,7 +337,25 @@ async function rodarPartidaRei(opcoes) {
+         const { ordem, registro } = opcoes.composto
+           ? await decidirReiComposto(estado, dono, cliente, opcoesPrompt, opcoes.composto)
+           : await decidirRei(estado, dono, cliente, opcoesPrompt);
+-        Engine.executarOrdem(estado, dono, ordem);
++        // CLAMP (afford do motor): executa a ordem AJUSTADA, mas o registro
++        // cru (rejeicoes da proposta original) fica intacto — a reincidencia
++        // segue medida sobre o que o modelo PEDIU, comparavel 1:1 c/ baseline.
++        let ordemExec = ordem;
++        if (opcoes.clamp) {
++          const c = Engine.clampearEnvios(estado, dono, ordem);
++          const diagReal = Engine.diagnosticarOrdem(estado, dono, c.ordem);
++          registro.clamp = {
++            avisos: c.avisos,
++            aceito: { construir: diagReal.aceitoConstruir, envios: diagReal.aceitoEnvios },
++            rejeicoes: diagReal.rejeicoes,
++          };
++          ordemExec = c.ordem;
++        }
++        Engine.executarOrdem(estado, dono, ordemExec);
++        if (opcoes.clamp) {
++          if (!estado.avisosAnteriores) estado.avisosAnteriores = {};
++          estado.avisosAnteriores[dono] = registro.clamp.avisos; // canal proprio, reset por turno
++        }
+         registros.push(registro);
+         onTurno(registro, estado);
+       } else {
+diff --git a/runners/exp_perseveracao.js b/runners/exp_perseveracao.js
+index 817ee45..1d0723d 100644
+--- a/runners/exp_perseveracao.js
++++ b/runners/exp_perseveracao.js
+@@ -16,6 +16,8 @@
+ //    --turnos N   maximo de turnos (default 30)
+ //    --seed N     seed do mapa (default 1)
+ //    --tag NOME   sufixo do arquivo de log
++//    --clamp      afford do motor: envio acima do estoque e AJUSTADO
++//                 (com aviso no relatorio), nao rejeitado  <- H5
+ //    --composto   turno composto: propor -> validar -> [1 revisao]  <- H4
+ //    --validador <modeloId>  quem valida (default: o proprio rei; sempre temp 0)
+ //
+@@ -90,6 +92,7 @@ let cruAnterior = null, seqAtual = 0, seqMax = 0, turnosRepetidos = 0;
+ // Assinatura da acao rejeitada: "construir@id" / "envio@origem>destino".
+ // Reincidir = a MESMA assinatura rejeitada em turnos consecutivos.
+ let sigsAnteriores = new Set(), reincidencias = 0, reincMax = 0, reincSig = "-";
++let avisosClamp = 0, enviosCancelados = 0; // H5
+ const streaks = new Map();
+ // Fase 12: contadores do turno composto (zeros quando --composto desligado)
+ let vetosInternos = 0, vereditosIlegiveis = 0, chamadasTotais = 0;
+@@ -147,6 +150,13 @@ function onTurno(reg) {
+       log("validador: OK");
+     }
+   }
++  if (reg.clamp) {
++    for (const a of reg.clamp.avisos) {
++      avisosClamp++;
++      if (a.indexOf("ajustado a ZERO") >= 0) enviosCancelados++;
++      log(">>> CLAMP: " + a);
++    }
++  }
+   reg.aceito.construir.forEach((c) => log(`ACEITO construir ${c.tipo} em [${c.aldeiaId}]`));
+   reg.aceito.envios.forEach((e) => log(`ACEITO envio [${e.origemId}]->[${e.destinoId}]: ${Engine.compTexto(e.tropas)}`));
+   reg.rejeicoes.forEach((m) => log("REJEITADO: " + m));
+@@ -167,6 +177,7 @@ function onTurno(reg) {
+     config, cliente, maxTurnos,
+     opcoesPrompt: rejfim ? { rejeicaoNoFim: true } : undefined,
+     composto: composto ? { validador: clienteValidador } : undefined,
++    clamp,
+     onTurno,
+   });
+   console.log(""); // fecha a linha de pulsos
+@@ -176,7 +187,9 @@ function onTurno(reg) {
+   const regs = res.registros;
+   const n = regs.length || 1;
+   const nValido = regs.filter((r) => r.jsonValido).length;
+-  const enviosAceitos = regs.reduce((s, r) => s + r.aceito.envios.length, 0);
++  // com --clamp, agencia conta o EXECUTADO real (pos-ajuste); reincidencia
++  // (acima, em onTurno) segue sobre reg.rejeicoes da proposta CRUA.
++  const enviosAceitos = regs.reduce((s, r) => s + ((r.clamp ? r.clamp.aceito : r.aceito).envios.length), 0);
+   const constrAceitas = regs.reduce((s, r) => s + r.aceito.construir.length, 0);
+   const nRejeicoes = regs.reduce((s, r) => s + r.rejeicoes.length, 0);
+   const nNormalizacoes = regs.reduce((s, r) => s + (r.normalizacoes || []).length, 0);
+@@ -202,6 +215,11 @@ function onTurno(reg) {
+   R.push(`VALIDADE:`);
+   R.push(`  JSON valido                            : ${nValido}/${n} (${pct(nValido)})`);
+   R.push(`  rejeicoes totais                       : ${nRejeicoes}`);
++  if (clamp) {
++    R.push(`  -- CLAMP (H5: afford do motor) --`);
++    R.push(`  avisos de ajuste                       : ${avisosClamp}`);
++    R.push(`  envios cancelados (ajuste a zero)      : ${enviosCancelados}`);
++  }
+   R.push(`  normalizacoes (H3, cru->canonico)      : ${nNormalizacoes}`);
+   if (composto) {
+     R.push(`TURNO COMPOSTO (propor -> validar -> [1 revisao]):`);
+@@ -220,7 +238,7 @@ function onTurno(reg) {
+   fs.mkdirSync(dir, { recursive: true });
+   const ts = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19);
+   const nomeMod = cliente.nome.replace(/[^a-z0-9._]/gi, "-");
+-  const nome = `exp_${nomeMod}_t${temp}${rejfim ? "_rejfim" : ""}${composto ? "_comp" : ""}_s${seed}${tag ? "_" + tag : ""}_${ts}.txt`;
++  const nome = `exp_${nomeMod}_t${temp}${rejfim ? "_rejfim" : ""}${composto ? "_comp" : ""}${clamp ? "_clamp" : ""}_s${seed}${tag ? "_" + tag : ""}_${ts}.txt`;
+   const alvo = path.join(dir, nome);
+   fs.writeFileSync(alvo + ".tmp", linhas.join("\n"));
+   fs.renameSync(alvo + ".tmp", alvo);
+@@ -232,6 +250,8 @@ function onTurno(reg) {
+     `enviosAceitos=${enviosAceitos}`, `agencia=${agencia}`, `validade=${nValido}/${n}`,
+     `rejeicoes=${nRejeicoes}`, `normalizacoes=${nNormalizacoes}`,
+     composto ? `composto=1(val=${clienteValidador.nome})` : "composto=0",
++    clamp ? "clamp=1" : "clamp=0",
++    ...(clamp ? [`avisosClamp=${avisosClamp}`, `enviosCancelados=${enviosCancelados}`] : []),
+     ...(composto ? [`vetos=${vetosInternos}`, `ilegiveis=${vereditosIlegiveis}`, `chamadasPorTurno=${(chamadasTotais / n).toFixed(2)}`] : []),
+     `resultado=${res.vencedor}/${res.turnos}t`].join(" | ");
+   fs.appendFileSync(path.join(dir, "resumo.txt"), linha + "\n");
