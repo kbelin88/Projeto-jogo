@@ -16,6 +16,13 @@
 //    --turnos N   maximo de turnos (default 30)
 //    --seed N     seed do mapa (default 1)
 //    --tag NOME   sufixo do arquivo de log
+//    --composto   turno composto: propor -> validar -> [1 revisao]  <- H4
+//    --validador <modeloId>  quem valida (default: o proprio rei; sempre temp 0)
+//
+//  PROTOCOLO H4 (Fase 12, matriz de 3 condicoes):
+//    Baseline: ja medido (3x temp 0, sem flags)
+//    C1: --composto                              (a ESTRUTURA ajuda?)
+//    C2: --composto --validador <outro modelo>   (o VALIDADOR importa?)
 //
 //  PROTOCOLO (uma variavel por vez!):
 //    H1: --temp 0 | --temp 0.3 | --temp 0.7   (sem --rejfim)
@@ -55,10 +62,18 @@ const rejfim = args.includes("--rejfim");
 const maxTurnos = parseInt(opt("turnos", "30"), 10);
 const seed = parseInt(opt("seed", "1"), 10);
 const tag = opt("tag", "");
+// Fase 12 / H4 — turno composto: propor -> validar -> [1 revisao] -> motor.
+// --composto liga o ciclo; --validador <modeloId> escolhe quem valida
+// (default: o proprio rei se valida). Validador roda SEMPRE a temp 0
+// (conferir fatos e tarefa deterministica; a temperatura do experimento
+// e variavel do PROPOSITOR).
+const composto = args.includes("--composto");
+const validadorId = opt("validador", null);
 
-const condicao = `temp=${temp}${rejfim ? " rejfim" : ""} seed=${seed}`;
 const config = Object.assign({}, Engine.CONFIG, { seed });
 const cliente = Rei.criarCliente(modeloId, { temperatura: temp });
+const clienteValidador = composto ? Rei.criarCliente(validadorId || modeloId, { temperatura: 0 }) : null;
+const condicao = `temp=${temp}${rejfim ? " rejfim" : ""}${composto ? ` composto(val=${clienteValidador.nome})` : ""} seed=${seed}`;
 
 // ---------- log por turno ----------
 const linhas = [];
@@ -76,6 +91,8 @@ let cruAnterior = null, seqAtual = 0, seqMax = 0, turnosRepetidos = 0;
 // Reincidir = a MESMA assinatura rejeitada em turnos consecutivos.
 let sigsAnteriores = new Set(), reincidencias = 0, reincMax = 0, reincSig = "-";
 const streaks = new Map();
+// Fase 12: contadores do turno composto (zeros quando --composto desligado)
+let vetosInternos = 0, vereditosIlegiveis = 0, chamadasTotais = 0;
 function assinaturasRejeitadas(rejeicoes) {
   // Dois formatos no motor: "construir [18]: motivo" E "construir: aldeia [18]
   // nao e sua" (idem envio, com ou sem destino). Regra robusta: prefixo da
@@ -117,6 +134,19 @@ function onTurno(reg) {
   reincididas.forEach((s) => log(">>> REINCIDIU: " + s + " rejeitada de novo (streak " + streaks.get(s) + ")"));
   log(`JSON valido: ${reg.jsonValido ? "SIM" : "NAO — " + reg.erroParse}`);
   (reg.normalizacoes || []).forEach((n) => log("NORMALIZADO: " + n));
+  if (reg.composto) {
+    chamadasTotais += reg.composto.chamadas;
+    if (reg.composto.vetou) {
+      vetosInternos++;
+      log(">>> VALIDADOR VETOU. motivo: " + reg.composto.motivo);
+      log("proposta vetada (cru): " + JSON.stringify(reg.composto.cruProposta));
+    } else if (reg.composto.veredito === "ilegivel") {
+      vereditosIlegiveis++;
+      log(">>> VALIDADOR ILEGIVEL (tratado como OK): " + JSON.stringify((reg.composto.cruValidador || "").slice(0, 120)));
+    } else if (reg.composto.veredito === "OK") {
+      log("validador: OK");
+    }
+  }
   reg.aceito.construir.forEach((c) => log(`ACEITO construir ${c.tipo} em [${c.aldeiaId}]`));
   reg.aceito.envios.forEach((e) => log(`ACEITO envio [${e.origemId}]->[${e.destinoId}]: ${Engine.compTexto(e.tropas)}`));
   reg.rejeicoes.forEach((m) => log("REJEITADO: " + m));
@@ -136,6 +166,7 @@ function onTurno(reg) {
   const res = await Rei.rodarPartidaRei({
     config, cliente, maxTurnos,
     opcoesPrompt: rejfim ? { rejeicaoNoFim: true } : undefined,
+    composto: composto ? { validador: clienteValidador } : undefined,
     onTurno,
   });
   console.log(""); // fecha a linha de pulsos
@@ -172,6 +203,13 @@ function onTurno(reg) {
   R.push(`  JSON valido                            : ${nValido}/${n} (${pct(nValido)})`);
   R.push(`  rejeicoes totais                       : ${nRejeicoes}`);
   R.push(`  normalizacoes (H3, cru->canonico)      : ${nNormalizacoes}`);
+  if (composto) {
+    R.push(`TURNO COMPOSTO (propor -> validar -> [1 revisao]):`);
+    R.push(`  validador                              : ${clienteValidador.nome}${validadorId ? "" : " (o proprio rei)"}`);
+    R.push(`  vetos internos                         : ${vetosInternos}`);
+    R.push(`  vereditos ilegiveis (tratados como OK) : ${vereditosIlegiveis}`);
+    R.push(`  chamadas LLM por turno (media)         : ${(chamadasTotais / n).toFixed(2)}`);
+  }
   R.push("============================================");
   const resumo = R.join("\n");
   console.log(resumo);
@@ -182,7 +220,7 @@ function onTurno(reg) {
   fs.mkdirSync(dir, { recursive: true });
   const ts = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19);
   const nomeMod = cliente.nome.replace(/[^a-z0-9._]/gi, "-");
-  const nome = `exp_${nomeMod}_t${temp}${rejfim ? "_rejfim" : ""}_s${seed}${tag ? "_" + tag : ""}_${ts}.txt`;
+  const nome = `exp_${nomeMod}_t${temp}${rejfim ? "_rejfim" : ""}${composto ? "_comp" : ""}_s${seed}${tag ? "_" + tag : ""}_${ts}.txt`;
   const alvo = path.join(dir, nome);
   fs.writeFileSync(alvo + ".tmp", linhas.join("\n"));
   fs.renameSync(alvo + ".tmp", alvo);
@@ -193,6 +231,8 @@ function onTurno(reg) {
     `reincid=${reincidencias}`, `reincMax=${reincMax}(${reincSig})`,
     `enviosAceitos=${enviosAceitos}`, `agencia=${agencia}`, `validade=${nValido}/${n}`,
     `rejeicoes=${nRejeicoes}`, `normalizacoes=${nNormalizacoes}`,
+    composto ? `composto=1(val=${clienteValidador.nome})` : "composto=0",
+    ...(composto ? [`vetos=${vetosInternos}`, `ilegiveis=${vereditosIlegiveis}`, `chamadasPorTurno=${(chamadasTotais / n).toFixed(2)}`] : []),
     `resultado=${res.vencedor}/${res.turnos}t`].join(" | ");
   fs.appendFileSync(path.join(dir, "resumo.txt"), linha + "\n");
 
