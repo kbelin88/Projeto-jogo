@@ -1,6 +1,8 @@
 # Arena dos Reis (Projeto-jogo)
 
-*[English version](README.en.md) — em breve*
+
+![testes](https://github.com/kbelin88/Projeto-jogo/actions/workflows/testes.yml/badge.svg)
+
 
 Um jogo de estratégia medieval no navegador que funciona como **benchmark de LLMs**: modelos de linguagem jogam como reis — comandam aldeias, tropas e recursos — e o motor mede *como* eles jogam. Construído do zero (motor próprio em JavaScript, sem engine de jogo), com Claude como interlocutor de estudo.
 
