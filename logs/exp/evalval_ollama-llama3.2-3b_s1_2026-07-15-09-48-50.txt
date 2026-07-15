@@ -1,0 +1,158 @@
+=== EVAL VALIDADOR — proveniencia ===
+data: 2026-07-15T09:48:50.779Z  node: v24.14.0
+modelo: ollama:llama3.2:3b  temp: 0  rodadas: 3  seed mapa: 1  seed shuffle: 1001
+estado: 6 turnos so-constroi + 2 parados  dono avaliado: A
+prompt: montarPromptValidador (rei.js) — o mesmo do loop composto
+
+--- L01 [legal_envio] esperado=LEGAL moda=OK ACERTO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":0,"tropas":{"lanceiro":3,"arqueiro":0,"cavaleiro":0}}]}
+motor: (sem rejeicoes)
+r1: OK | cru: "VALIDACAO: OK"
+r2: OK | cru: "VALIDACAO: OK"
+r3: OK | cru: "VALIDACAO: OK"
+
+--- L02 [legal_envio] esperado=LEGAL moda=OK ACERTO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":18,"tropas":{"lanceiro":0,"arqueiro":1,"cavaleiro":0}}]}
+motor: (sem rejeicoes)
+r1: OK | cru: "VALIDACAO: OK"
+r2: OK | cru: "VALIDACAO: OK"
+r3: OK | cru: "VALIDACAO: OK"
+
+--- L03 [legal_envio] esperado=LEGAL moda=OK ACERTO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":0,"tropas":{"lanceiro":7,"arqueiro":0,"cavaleiro":0}}]}
+motor: (sem rejeicoes)
+r1: OK | cru: "VALIDACAO: OK"
+r2: OK | cru: "VALIDACAO: OK"
+r3: OK | cru: "VALIDACAO: OK"
+
+--- L04 [legal_envio] esperado=LEGAL moda=OK ACERTO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":0,"tropas":{"lanceiro":1,"arqueiro":1,"cavaleiro":0}}]}
+motor: (sem rejeicoes)
+r1: OK | cru: "VALIDACAO: OK"
+r2: OK | cru: "VALIDACAO: OK"
+r3: OK | cru: "VALIDACAO: OK"
+
+--- L05 [legal_envio] esperado=LEGAL moda=OK ACERTO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":18,"tropas":{"lanceiro":0,"arqueiro":4,"cavaleiro":0}}]}
+motor: (sem rejeicoes)
+r1: OK | cru: "VALIDACAO: OK"
+r2: OK | cru: "VALIDACAO: OK"
+r3: OK | cru: "VALIDACAO: OK"
+
+--- L06 [legal_construir] esperado=LEGAL moda=OK ACERTO
+ordem: {"construir":[{"aldeiaId":17,"tipo":"lanceiro"}],"envios":[]}
+motor: (sem rejeicoes)
+r1: OK | cru: "VALIDACAO: OK"
+r2: OK | cru: "VALIDACAO: OK"
+r3: OK | cru: "VALIDACAO: OK"
+
+--- L07 [legal_construir] esperado=LEGAL moda=OK ACERTO
+ordem: {"construir":[{"aldeiaId":17,"tipo":"lanceiro"}],"envios":[{"origemId":17,"destinoId":0,"tropas":{"lanceiro":1,"arqueiro":0,"cavaleiro":0}}]}
+motor: (sem rejeicoes)
+r1: OK | cru: "VALIDACAO: OK"
+r2: OK | cru: "VALIDACAO: OK"
+r3: OK | cru: "VALIDACAO: OK"
+
+--- L08 [legal_envio] esperado=LEGAL moda=OK ACERTO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":0,"tropas":{"lanceiro":1,"arqueiro":0,"cavaleiro":0}},{"origemId":17,"destinoId":18,"tropas":{"lanceiro":0,"arqueiro":1,"cavaleiro":0}}]}
+motor: (sem rejeicoes)
+r1: OK | cru: "VALIDACAO: OK"
+r2: OK | cru: "VALIDACAO: OK"
+r3: OK | cru: "VALIDACAO: OK"
+
+--- L09 [legal_envio] esperado=LEGAL moda=OK ACERTO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":19,"tropas":{"lanceiro":1,"arqueiro":0,"cavaleiro":0}}]}
+motor: (sem rejeicoes)
+r1: OK | cru: "VALIDACAO: OK"
+r2: OK | cru: "VALIDACAO: OK"
+r3: OK | cru: "VALIDACAO: OK"
+
+--- L10 [legal_envio] esperado=LEGAL moda=OK ACERTO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":0,"tropas":{"lanceiro":0,"arqueiro":5,"cavaleiro":0}}]}
+motor: (sem rejeicoes)
+r1: OK | cru: "VALIDACAO: OK"
+r2: OK | cru: "VALIDACAO: OK"
+r3: OK | cru: "VALIDACAO: OK"
+
+--- I01 [origem_nao_sua] esperado=ILEGAL moda=OK ERRO
+ordem: {"construir":[],"envios":[{"origemId":18,"destinoId":0,"tropas":{"lanceiro":1,"arqueiro":0,"cavaleiro":0}}]}
+motor: envio: origem [18] nao e sua
+r1: OK | cru: "VALIDACAO: OK"
+r2: OK | cru: "VALIDACAO: OK"
+r3: OK | cru: "VALIDACAO: OK"
+
+--- I02 [origem_nao_sua] esperado=ILEGAL moda=OK ERRO
+ordem: {"construir":[],"envios":[{"origemId":9999,"destinoId":0,"tropas":{"lanceiro":1,"arqueiro":0,"cavaleiro":0}}]}
+motor: envio: origem [9999] nao existe
+r1: OK | cru: "VALIDACAO: OK"
+r2: OK | cru: "VALIDACAO: OK"
+r3: OK | cru: "VALIDACAO: OK"
+
+--- I03 [qtd_insuficiente] esperado=ILEGAL moda=OK ERRO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":0,"tropas":{"lanceiro":17,"arqueiro":0,"cavaleiro":0}}]}
+motor: envio [17]->[0]: tropa que nao tem (pediu 17 lanceiro, tem 7)
+r1: OK | cru: "VALIDACAO: OK"
+r2: OK | cru: "VALIDACAO: OK"
+r3: OK | cru: "VALIDACAO: OK"
+
+--- I04 [qtd_insuficiente] esperado=ILEGAL moda=OK ERRO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":18,"tropas":{"lanceiro":0,"arqueiro":11,"cavaleiro":0}}]}
+motor: envio [17]->[18]: tropa que nao tem (pediu 11 arqueiro, tem 5)
+r1: OK | cru: "VALIDACAO: OK"
+r2: OK | cru: "VALIDACAO: OK"
+r3: OK | cru: "VALIDACAO: OK"
+
+--- I05 [tipo_zerado] esperado=ILEGAL moda=OK ERRO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":0,"tropas":{"lanceiro":0,"arqueiro":0,"cavaleiro":3}}]}
+motor: envio [17]->[0]: tropa que nao tem (pediu 3 cavaleiro, tem 0)
+r1: OK | cru: "VALIDACAO: OK"
+r2: OK | cru: "VALIDACAO: OK"
+r3: OK | cru: "VALIDACAO: OK"
+
+--- I06 [tipo_zerado] esperado=ILEGAL moda=OK ERRO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":18,"tropas":{"lanceiro":0,"arqueiro":0,"cavaleiro":1}}]}
+motor: envio [17]->[18]: tropa que nao tem (pediu 1 cavaleiro, tem 0)
+r1: OK | cru: "VALIDACAO: OK"
+r2: OK | cru: "VALIDACAO: OK"
+r3: OK | cru: "VALIDACAO: OK"
+
+--- I07 [construir_sem_recurso] esperado=ILEGAL moda=OK ERRO
+ordem: {"construir":[{"aldeiaId":17,"tipo":"cavaleiro"}],"envios":[]}
+motor: construir [17]: recurso insuficiente p/ cavaleiro (tem 20m/32f, custa 30m/30f)
+r1: OK | cru: "VALIDACAO: OK"
+r2: OK | cru: "VALIDACAO: OK"
+r3: OK | cru: "VALIDACAO: OK"
+
+--- I08 [construir_sem_recurso] esperado=ILEGAL moda=OK ERRO
+ordem: {"construir":[{"aldeiaId":17,"tipo":"cavaleiro"},{"aldeiaId":17,"tipo":"cavaleiro"}],"envios":[]}
+motor: construir [17]: recurso insuficiente p/ cavaleiro (tem 20m/32f, custa 30m/30f) | construir [17]: recurso insuficiente p/ cavaleiro (tem 20m/32f, custa 30m/30f)
+r1: OK | cru: "VALIDACAO: OK"
+r2: OK | cru: "VALIDACAO: OK"
+r3: OK | cru: "VALIDACAO: OK"
+
+--- I09 [destino_inexistente] esperado=ILEGAL moda=OK ERRO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":9999,"tropas":{"lanceiro":1,"arqueiro":0,"cavaleiro":0}}]}
+motor: envio: destino [9999] nao existe
+r1: OK | cru: "VALIDACAO: OK"
+r2: OK | cru: "VALIDACAO: OK"
+r3: OK | cru: "VALIDACAO: OK"
+
+--- I10 [destino_inexistente] esperado=ILEGAL moda=OK ERRO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":20,"tropas":{"lanceiro":0,"arqueiro":1,"cavaleiro":0}}]}
+motor: envio: destino [20] nao existe
+r1: OK | cru: "VALIDACAO: OK"
+r2: OK | cru: "VALIDACAO: OK"
+r3: OK | cru: "VALIDACAO: OK"
+
+
+== RESUMO | ollama:llama3.2:3b | 3 rodadas | 105s ==
+acuracia geral : 10/20 (50%)
+legais  (OK)   : 10/10 (100%)
+ilegais (VETO) : 0/10 (0%)  <- a metrica que decide
+ilegiveis(moda): 0   instaveis: 0/20
+por categoria ilegal:
+  origem_nao_sua         0/2
+  qtd_insuficiente       0/2
+  tipo_zerado            0/2
+  construir_sem_recurso  0/2
+  destino_inexistente    0/2

@@ -1,0 +1,218 @@
+=== EVAL VALIDADOR — proveniencia ===
+data: 2026-07-15T09:49:20.204Z  node: v24.14.0
+modelo: ollama:llama3:8b  temp: 0  rodadas: 3  seed mapa: 1  seed shuffle: 1001
+estado: 6 turnos so-constroi + 2 parados  dono avaliado: A
+prompt: montarPromptValidador (rei.js) — o mesmo do loop composto
+
+--- L01 [legal_envio] esperado=LEGAL moda=ilegivel ERRO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":0,"tropas":{"lanceiro":3,"arqueiro":0,"cavaleiro":0}}]}
+motor: (sem rejeicoes)
+r1: ilegivel | cru: ""
+r2: ilegivel | cru: ""
+r3: ilegivel | cru: ""
+
+--- L02 [legal_envio] esperado=LEGAL moda=ilegivel ERRO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":18,"tropas":{"lanceiro":0,"arqueiro":1,"cavaleiro":0}}]}
+motor: (sem rejeicoes)
+r1: ilegivel | cru: ""
+r2: ilegivel | cru: ""
+r3: ilegivel | cru: ""
+
+--- L03 [legal_envio] esperado=LEGAL moda=ilegivel ERRO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":0,"tropas":{"lanceiro":7,"arqueiro":0,"cavaleiro":0}}]}
+motor: (sem rejeicoes)
+r1: ilegivel | cru: ""
+r2: ilegivel | cru: ""
+r3: ilegivel | cru: ""
+
+--- L04 [legal_envio] esperado=LEGAL moda=ilegivel ERRO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":0,"tropas":{"lanceiro":1,"arqueiro":1,"cavaleiro":0}}]}
+motor: (sem rejeicoes)
+r1: ilegivel | cru: ""
+r2: ilegivel | cru: ""
+r3: ilegivel | cru: ""
+
+--- L05 [legal_envio] esperado=LEGAL moda=ilegivel ERRO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":18,"tropas":{"lanceiro":0,"arqueiro":4,"cavaleiro":0}}]}
+motor: (sem rejeicoes)
+r1: ilegivel | cru: ""
+r2: ilegivel | cru: ""
+r3: ilegivel | cru: ""
+
+--- L06 [legal_construir] esperado=LEGAL moda=ilegivel ERRO
+ordem: {"construir":[{"aldeiaId":17,"tipo":"lanceiro"}],"envios":[]}
+motor: (sem rejeicoes)
+r1: ilegivel | cru: ""
+r2: ilegivel | cru: ""
+r3: ilegivel | cru: ""
+
+--- L07 [legal_construir] esperado=LEGAL moda=ilegivel ERRO
+ordem: {"construir":[{"aldeiaId":17,"tipo":"lanceiro"}],"envios":[{"origemId":17,"destinoId":0,"tropas":{"lanceiro":1,"arqueiro":0,"cavaleiro":0}}]}
+motor: (sem rejeicoes)
+r1: ilegivel | cru: ""
+r2: ilegivel | cru: ""
+r3: ilegivel | cru: ""
+
+--- L08 [legal_envio] esperado=LEGAL moda=ilegivel ERRO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":0,"tropas":{"lanceiro":1,"arqueiro":0,"cavaleiro":0}},{"origemId":17,"destinoId":18,"tropas":{"lanceiro":0,"arqueiro":1,"cavaleiro":0}}]}
+motor: (sem rejeicoes)
+r1: ilegivel | cru: ""
+r2: ilegivel | cru: ""
+r3: ilegivel | cru: ""
+
+--- L09 [legal_envio] esperado=LEGAL moda=ilegivel ERRO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":19,"tropas":{"lanceiro":1,"arqueiro":0,"cavaleiro":0}}]}
+motor: (sem rejeicoes)
+r1: ilegivel | cru: ""
+r2: ilegivel | cru: ""
+r3: ilegivel | cru: ""
+
+--- L10 [legal_envio] esperado=LEGAL moda=ilegivel ERRO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":0,"tropas":{"lanceiro":0,"arqueiro":5,"cavaleiro":0}}]}
+motor: (sem rejeicoes)
+r1: ilegivel | cru: ""
+r2: ilegivel | cru: ""
+r3: ilegivel | cru: ""
+
+--- I01 [origem_nao_sua] esperado=ILEGAL moda=ilegivel ERRO
+ordem: {"construir":[],"envios":[{"origemId":18,"destinoId":0,"tropas":{"lanceiro":1,"arqueiro":0,"cavaleiro":0}}]}
+motor: envio: origem [18] nao e sua
+r1: ilegivel | cru: ""
+r2: ilegivel | cru: ""
+r3: ilegivel | cru: ""
+
+--- I02 [origem_nao_sua] esperado=ILEGAL moda=ilegivel ERRO
+ordem: {"construir":[],"envios":[{"origemId":9999,"destinoId":0,"tropas":{"lanceiro":1,"arqueiro":0,"cavaleiro":0}}]}
+motor: envio: origem [9999] nao existe
+r1: ilegivel | cru: ""
+r2: ilegivel | cru: ""
+r3: ilegivel | cru: ""
+
+--- I03 [qtd_insuficiente] esperado=ILEGAL moda=ilegivel ERRO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":0,"tropas":{"lanceiro":17,"arqueiro":0,"cavaleiro":0}}]}
+motor: envio [17]->[0]: tropa que nao tem (pediu 17 lanceiro, tem 7)
+r1: ilegivel | cru: ""
+r2: ilegivel | cru: ""
+r3: ilegivel | cru: ""
+
+--- I04 [qtd_insuficiente] esperado=ILEGAL moda=ilegivel ERRO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":18,"tropas":{"lanceiro":0,"arqueiro":11,"cavaleiro":0}}]}
+motor: envio [17]->[18]: tropa que nao tem (pediu 11 arqueiro, tem 5)
+r1: ilegivel | cru: ""
+r2: ilegivel | cru: ""
+r3: ilegivel | cru: ""
+
+--- I05 [tipo_zerado] esperado=ILEGAL moda=ilegivel ERRO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":0,"tropas":{"lanceiro":0,"arqueiro":0,"cavaleiro":3}}]}
+motor: envio [17]->[0]: tropa que nao tem (pediu 3 cavaleiro, tem 0)
+r1: ilegivel | cru: ""
+r2: ilegivel | cru: ""
+r3: ilegivel | cru: ""
+
+--- I06 [tipo_zerado] esperado=ILEGAL moda=ilegivel ERRO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":18,"tropas":{"lanceiro":0,"arqueiro":0,"cavaleiro":1}}]}
+motor: envio [17]->[18]: tropa que nao tem (pediu 1 cavaleiro, tem 0)
+r1: ilegivel | cru: ""
+r2: ilegivel | cru: ""
+r3: ilegivel | cru: ""
+
+--- I07 [construir_sem_recurso] esperado=ILEGAL moda=ilegivel ERRO
+ordem: {"construir":[{"aldeiaId":17,"tipo":"cavaleiro"}],"envios":[]}
+motor: construir [17]: recurso insuficiente p/ cavaleiro (tem 20m/32f, custa 30m/30f)
+r1: ilegivel | cru: ""
+r2: ilegivel | cru: ""
+r3: ilegivel | cru: ""
+
+--- I08 [construir_sem_recurso] esperado=ILEGAL moda=ilegivel ERRO
+ordem: {"construir":[{"aldeiaId":17,"tipo":"cavaleiro"},{"aldeiaId":17,"tipo":"cavaleiro"}],"envios":[]}
+motor: construir [17]: recurso insuficiente p/ cavaleiro (tem 20m/32f, custa 30m/30f) | construir [17]: recurso insuficiente p/ cavaleiro (tem 20m/32f, custa 30m/30f)
+r1: ilegivel | cru: ""
+r2: ilegivel | cru: ""
+r3: ilegivel | cru: ""
+
+--- I09 [destino_inexistente] esperado=ILEGAL moda=ilegivel ERRO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":9999,"tropas":{"lanceiro":1,"arqueiro":0,"cavaleiro":0}}]}
+motor: envio: destino [9999] nao existe
+r1: ilegivel | cru: ""
+r2: ilegivel | cru: ""
+r3: ilegivel | cru: ""
+
+--- I10 [destino_inexistente] esperado=ILEGAL moda=ilegivel ERRO
+ordem: {"construir":[],"envios":[{"origemId":17,"destinoId":20,"tropas":{"lanceiro":0,"arqueiro":1,"cavaleiro":0}}]}
+motor: envio: destino [20] nao existe
+r1: ilegivel | cru: ""
+r2: ilegivel | cru: ""
+r3: ilegivel | cru: ""
+
+
+== RESUMO | ollama:llama3:8b | 3 rodadas | 0s ==
+acuracia geral : 0/20 (0%)
+legais  (OK)   : 0/10 (0%)
+ilegais (VETO) : 0/10 (0%)  <- a metrica que decide
+ilegiveis(moda): 20   instaveis: 0/20
+por categoria ilegal:
+  origem_nao_sua         0/2
+  qtd_insuficiente       0/2
+  tipo_zerado            0/2
+  construir_sem_recurso  0/2
+  destino_inexistente    0/2
+ERRO rede r1 I03: Ollama HTTP 404
+ERRO rede r1 L05: Ollama HTTP 404
+ERRO rede r1 L10: Ollama HTTP 404
+ERRO rede r1 I10: Ollama HTTP 404
+ERRO rede r1 L07: Ollama HTTP 404
+ERRO rede r1 L08: Ollama HTTP 404
+ERRO rede r1 I06: Ollama HTTP 404
+ERRO rede r1 I07: Ollama HTTP 404
+ERRO rede r1 L01: Ollama HTTP 404
+ERRO rede r1 I08: Ollama HTTP 404
+ERRO rede r1 L04: Ollama HTTP 404
+ERRO rede r1 I04: Ollama HTTP 404
+ERRO rede r1 I02: Ollama HTTP 404
+ERRO rede r1 L09: Ollama HTTP 404
+ERRO rede r1 I05: Ollama HTTP 404
+ERRO rede r1 I01: Ollama HTTP 404
+ERRO rede r1 I09: Ollama HTTP 404
+ERRO rede r1 L02: Ollama HTTP 404
+ERRO rede r1 L06: Ollama HTTP 404
+ERRO rede r1 L03: Ollama HTTP 404
+ERRO rede r2 I03: Ollama HTTP 404
+ERRO rede r2 L05: Ollama HTTP 404
+ERRO rede r2 L10: Ollama HTTP 404
+ERRO rede r2 I10: Ollama HTTP 404
+ERRO rede r2 L07: Ollama HTTP 404
+ERRO rede r2 L08: Ollama HTTP 404
+ERRO rede r2 I06: Ollama HTTP 404
+ERRO rede r2 I07: Ollama HTTP 404
+ERRO rede r2 L01: Ollama HTTP 404
+ERRO rede r2 I08: Ollama HTTP 404
+ERRO rede r2 L04: Ollama HTTP 404
+ERRO rede r2 I04: Ollama HTTP 404
+ERRO rede r2 I02: Ollama HTTP 404
+ERRO rede r2 L09: Ollama HTTP 404
+ERRO rede r2 I05: Ollama HTTP 404
+ERRO rede r2 I01: Ollama HTTP 404
+ERRO rede r2 I09: Ollama HTTP 404
+ERRO rede r2 L02: Ollama HTTP 404
+ERRO rede r2 L06: Ollama HTTP 404
+ERRO rede r2 L03: Ollama HTTP 404
+ERRO rede r3 I03: Ollama HTTP 404
+ERRO rede r3 L05: Ollama HTTP 404
+ERRO rede r3 L10: Ollama HTTP 404
+ERRO rede r3 I10: Ollama HTTP 404
+ERRO rede r3 L07: Ollama HTTP 404
+ERRO rede r3 L08: Ollama HTTP 404
+ERRO rede r3 I06: Ollama HTTP 404
+ERRO rede r3 I07: Ollama HTTP 404
+ERRO rede r3 L01: Ollama HTTP 404
+ERRO rede r3 I08: Ollama HTTP 404
+ERRO rede r3 L04: Ollama HTTP 404
+ERRO rede r3 I04: Ollama HTTP 404
+ERRO rede r3 I02: Ollama HTTP 404
+ERRO rede r3 L09: Ollama HTTP 404
+ERRO rede r3 I05: Ollama HTTP 404
+ERRO rede r3 I01: Ollama HTTP 404
+ERRO rede r3 I09: Ollama HTTP 404
+ERRO rede r3 L02: Ollama HTTP 404
+ERRO rede r3 L06: Ollama HTTP 404
+ERRO rede r3 L03: Ollama HTTP 404
