@@ -1,0 +1,38 @@
+diff --git a/index.html b/index.html
+index 7d92201..ab642a6 100644
+--- a/index.html
++++ b/index.html
+@@ -181,7 +181,6 @@
+      tudo que falha e texto AO LADO dele. Lei: a informacao acontece no
+      lugar onde acontece — ou nao existe para o espectador. */
+   #sidebar, #sidebarA { display: none !important; } /* feeds seguem no DOM; so nao renderizam */
+-  #placarTop { position: relative; }
+   /* cabo de guerra: a proporcao de aldeias A x neutras x B, viva sob o
+      placar — "quem esta ganhando" respondido sem ler um numero */
+   #pt-cabo { position: absolute; left: 10px; right: 10px; bottom: 3px;
+@@ -870,10 +869,12 @@
+       if (!alvoCam) alvoCam = e;
+       if (e.conquista) {
+         const dono = e.atacante === "A" ? "Rei A" : "Rei B";
+-        mostrarBanner("\u2694 " + e.alvoNome + " caiu para o " + dono,
++        // Etapa 1: banner de conquista desligado — o pulso+eco NA aldeia
++        // conta a cena; nome orfao no topo era ruido (diagnostico Etapa 0).
++        if (false) mostrarBanner("\u2694 " + e.alvoNome + " caiu para o " + dono,
+           e.atacante === "A" ? "#5d8cf0" : "#ef5d5d");
+       } else if (e.vencedor === "defensor") {
+-        mostrarBanner("\ud83d\udee1 " + e.alvoNome + " resistiu ao ataque", "#b0a58a");
++        if (false) mostrarBanner("\ud83d\udee1 " + e.alvoNome + " resistiu ao ataque", "#b0a58a");
+       }
+     }
+     if (alvoCam) {
+@@ -1677,8 +1678,8 @@
+       ctx.save();
+       ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(dx, dy);
+       if (ehAtaque) {
+-        ctx.globalAlpha = m.turnosRestantes === 1 ? 0.55 : 0.28;
+-        ctx.lineWidth = Math.min(cs * 0.22, Math.max(1.5, cs * 0.06 * Math.sqrt(Fm / 50)));
++        ctx.globalAlpha = m.turnosRestantes === 1 ? 0.75 : 0.40;
++        ctx.lineWidth = Math.min(cs * 0.26, Math.max(2, cs * 0.08 * Math.sqrt(Fm / 50)));
+         ctx.strokeStyle = col;
+       } else {
+         ctx.globalAlpha = 0.13;

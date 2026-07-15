@@ -175,6 +175,20 @@
   }
   #zoombar button:hover { background: linear-gradient(#946530,#5f3c16); }
   #zoombar button:active { transform: translateY(1px); }
+
+  /* ===== PLANO ESPECTADOR - Etapa 1 (15/07/2026) =====================
+     Diagnostico do Lucas (Etapa 0): tudo que funciona e pintura NO mapa;
+     tudo que falha e texto AO LADO dele. Lei: a informacao acontece no
+     lugar onde acontece — ou nao existe para o espectador. */
+  #sidebar, #sidebarA { display: none !important; } /* feeds seguem no DOM; so nao renderizam */
+  /* cabo de guerra: a proporcao de aldeias A x neutras x B, viva sob o
+     placar — "quem esta ganhando" respondido sem ler um numero */
+  #pt-cabo { position: absolute; left: 10px; right: 10px; bottom: 3px;
+    height: 6px; display: flex; border-radius: 3px; overflow: hidden; opacity: .95; }
+  #pt-cabo div { transition: flex-basis .7s ease; }
+  #pt-cabo-a { background: #5d8cf0; }
+  #pt-cabo-n { background: rgba(240,228,200,.22); }
+  #pt-cabo-b { background: #ef5d5d; }
 </style>
 </head>
 <body>
@@ -203,6 +217,7 @@
   <div class="p-feed" id="sb-feed"></div>
 </div>
 <div id="placarTop">
+  <div id="pt-cabo"><div id="pt-cabo-a"></div><div id="pt-cabo-n"></div><div id="pt-cabo-b"></div></div>
   <div class="pt-linha">
     <div class="pt-lado a">
       <div class="pt-nome">Rei A<small id="pt-a-mod">burro</small></div>
@@ -854,10 +869,12 @@
       if (!alvoCam) alvoCam = e;
       if (e.conquista) {
         const dono = e.atacante === "A" ? "Rei A" : "Rei B";
-        mostrarBanner("\u2694 " + e.alvoNome + " caiu para o " + dono,
+        // Etapa 1: banner de conquista desligado — o pulso+eco NA aldeia
+        // conta a cena; nome orfao no topo era ruido (diagnostico Etapa 0).
+        if (false) mostrarBanner("\u2694 " + e.alvoNome + " caiu para o " + dono,
           e.atacante === "A" ? "#5d8cf0" : "#ef5d5d");
       } else if (e.vencedor === "defensor") {
-        mostrarBanner("\ud83d\udee1 " + e.alvoNome + " resistiu ao ataque", "#b0a58a");
+        if (false) mostrarBanner("\ud83d\udee1 " + e.alvoNome + " resistiu ao ataque", "#b0a58a");
       }
     }
     if (alvoCam) {
@@ -1034,6 +1051,7 @@
 
   // ===== EFEITOS DE MAPA (anel de impacto / pulso de conquista) =====
   let efeitos = [];
+  let liderPlacar = null; // F4: quem lidera o placar de aldeias
   let efeitoLoop = false;
   const EFEITO_DUR = 900; // ms
 
@@ -1045,6 +1063,7 @@
       if (!a) continue;
       efeitos.push({
         x: a.x, y: a.y, t0: performance.now(), conq: !!e.conquista,
+        dur: e.conquista ? 1600 : undefined, // conquista merece a cena
         cor: e.conquista ? (COR[a.dono] || COR.neutra) : "#ffd56b",
       });
       if (e.baixasForca > 0) { // dano do vencedor: flutua sobre a aldeia
@@ -1488,6 +1507,9 @@
   // preenchimento)". Criterio de sempre: espectador leigo entende quem
   // manda onde em 3 segundos, sem legenda. Cache por turno+donos (so
   // recalcula quando a posse muda; ~20 aldeias x 9x9 celulas, barato).
+  // Etapa 0: nomes ambiente sao texto orfao — ruido para o espectador.
+  // O codigo fica (pode voltar como "nome so quando vira noticia").
+  const NOMES_AMBIENTE = false;
   let territCache = { chave: "", cels: null };
   function territorioCelulas() {
     const chave = game.turno + ":" + game.aldeias.map((a) => a.dono || "n").join("");
@@ -1588,7 +1610,7 @@
 
         // nome da aldeia (tipografia de cronica): donos em zoom medio,
         // neutras so de perto p/ nao virar poluicao — direcao do handoff
-        if (cs >= (a.dono === null ? 46 : 34)) {
+        if (NOMES_AMBIENTE && cs >= (a.dono === null ? 46 : 34)) {
           const fn = Math.max(9, cs * 0.22);
           ctx.font = `${fn}px Georgia, "Times New Roman", serif`;
           ctx.lineWidth = Math.max(2, fn * 0.3); ctx.strokeStyle = "rgba(20,12,4,.7)";
@@ -1647,6 +1669,26 @@
       // FORCA COMO TAMANHO: area do marcador ~ forca (comparavel de relance)
       const Fm = Engine.forcaDe(m.tropas, game.config);
       const r = Math.min(cs * 0.45, Math.max(3, cs * 0.14 * Math.sqrt(Fm / 50)));
+
+      // HIERARQUIA DE SETAS (Etapa 1): ataque = traco cheio, peso pela
+      // forca, mais firme a 1 turno do impacto; reforco proprio =
+      // pontilhado quase invisivel. Num turno com 15 marchas, so as que
+      // importam gritam — o espectador ve DE ONDE, PARA ONDE e QUANTO.
+      const ehAtaque = d && d.dono !== m.dono;
+      ctx.save();
+      ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(dx, dy);
+      if (ehAtaque) {
+        ctx.globalAlpha = m.turnosRestantes === 1 ? 0.75 : 0.40;
+        ctx.lineWidth = Math.min(cs * 0.26, Math.max(2, cs * 0.08 * Math.sqrt(Fm / 50)));
+        ctx.strokeStyle = col;
+      } else {
+        ctx.globalAlpha = 0.13;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 7]);
+        ctx.strokeStyle = col;
+      }
+      ctx.stroke();
+      ctx.restore();
       ctx.fillStyle = col;
       ctx.beginPath(); ctx.arc(mx, my, r, 0, Math.PI * 2); ctx.fill();
       ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(0,0,0,.65)"; ctx.stroke();
@@ -1704,16 +1746,41 @@
         ctx.globalAlpha = 1;
         continue;
       }
+      if (e.virada) { // F4: a mare virou — vinheta pulsa na cor do novo lider
+        const av = Math.sin(Math.min(1, p) * Math.PI) * 0.35;
+        const lw = Math.max(18, VW * 0.045);
+        ctx.globalAlpha = av; ctx.lineWidth = lw; ctx.strokeStyle = e.cor;
+        ctx.strokeRect(lw / 2, lw / 2, VW - lw, VH - lw);
+        ctx.globalAlpha = 1;
+        continue;
+      }
       const ex = e.x * cs + panX + cs / 2, ey = e.y * cs + panY + cs / 2;
       const raio = Math.max(8, cs * 0.45) * (1 + p * 1.6);
       ctx.globalAlpha = (1 - p) * 0.9;
       ctx.lineWidth = Math.max(2, cs * 0.08);
       ctx.strokeStyle = e.cor;
       ctx.beginPath(); ctx.arc(ex, ey, raio, 0, Math.PI * 2); ctx.stroke();
-      if (e.conq) {  // conquista: pulso preenchido na cor do novo dono
+      if (e.conq) {  // conquista: pulso preenchido + SEGUNDO anel em eco —
+        // a explosao de cor NO lugar substitui o banner com nome orfao
         ctx.globalAlpha = (1 - p) * 0.30;
         ctx.fillStyle = e.cor;
         ctx.beginPath(); ctx.arc(ex, ey, raio * 0.75, 0, Math.PI * 2); ctx.fill();
+        const p2 = Math.max(0, p - 0.22) / 0.78; // eco atrasado
+        if (p2 > 0) {
+          ctx.globalAlpha = (1 - p2) * 0.55;
+          ctx.lineWidth = Math.max(1.5, cs * 0.05);
+          ctx.beginPath(); ctx.arc(ex, ey, Math.max(8, cs * 0.45) * (1 + p2 * 2.4), 0, Math.PI * 2); ctx.stroke();
+        }
+      } else if (!e.dano) { // combate sem conquista: choque — 6 raios curtos
+        ctx.globalAlpha = (1 - p) * 0.7;
+        ctx.lineWidth = Math.max(1.5, cs * 0.06);
+        for (let k = 0; k < 6; k++) {
+          const ak = k * Math.PI / 3 + 0.35;
+          ctx.beginPath();
+          ctx.moveTo(ex + Math.cos(ak) * raio * 0.55, ey + Math.sin(ak) * raio * 0.55);
+          ctx.lineTo(ex + Math.cos(ak) * raio * (0.55 + 0.45 * (1 - p)), ey + Math.sin(ak) * raio * (0.55 + 0.45 * (1 - p)));
+          ctx.stroke();
+        }
       }
       ctx.globalAlpha = 1;
     }
@@ -1725,6 +1792,25 @@
     const f = (lista) => lista.reduce((s, a) => s + Engine.forcaDe(a.tropas, game.config), 0);
     const fA = f(A), fB = f(B);
     const venc = Engine.checarVitoria(game);
+
+    // ===== PLACAR UNICO: cabo de guerra (proporcao de aldeias) =====
+    const nNeutras = Engine.aldeiasDe(game, null).length;
+    const totAld = Math.max(1, A.length + B.length + nNeutras);
+    const elCabo = document.getElementById("pt-cabo-a");
+    if (elCabo) {
+      elCabo.style.flexBasis = (100 * A.length / totAld) + "%";
+      document.getElementById("pt-cabo-n").style.flexBasis = (100 * nNeutras / totAld) + "%";
+      document.getElementById("pt-cabo-b").style.flexBasis = (100 * B.length / totAld) + "%";
+    }
+
+    // ===== F4 — MOMENTO DE VIRADA: o placar de aldeias cruza =====
+    const liderAgora = A.length > B.length ? "A" : B.length > A.length ? "B" : liderPlacar;
+    if (!venc && !REDUZ_MOV && liderPlacar && liderAgora && liderAgora !== liderPlacar) {
+      efeitos.push({ virada: true, t0: performance.now(), dur: 2200, cor: COR[liderAgora] });
+      mostrarBanner("A MARE VIROU \u2014 REI " + liderAgora + " assume a frente", COR[liderAgora], true);
+      if (!efeitoLoop) { efeitoLoop = true; requestAnimationFrame(tickEfeitos); }
+    }
+    liderPlacar = liderAgora;
 
     // paineis dos reis (updateGameHUD e o UNICO dono destes rotulos)
     const pre = emReplay ? "REPLAY \u00b7 " : "";
