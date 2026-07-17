@@ -820,6 +820,12 @@
   let timer = null;
   let runId = 0;          // token de geracao: invalida loops/respostas de runs antigos
   let replay = { frames: [] };   // gravacao da partida atual (p/ replay/YouTube)
+  // E3/1c — REGISTRO DO PENSAMENTO (spec SPEC_E3): por turno, por rei.
+  // diagTurno enche durante o turno e e fotografado pelo gravarFrame.
+  // sigsRejAcum: assinaturas ja rejeitadas na partida (p/ reincidencia).
+  let diagTurno = { A: null, B: null };
+  let sigsRejAcum = { A: new Set(), B: new Set() };
+  let tokensUltimaChamada = null; // canal lateral dos geradores do browser
   let emReplay = false;          // reproduzindo um replay carregado
 
   function gravarFrame() {
@@ -832,6 +838,17 @@
       aldeias: game.aldeias,
       movimentos: game.movimentos,
       eventos: game.log.filter((e) => e.turno === game.turno),
+      diag: (function () { // E3/1c: o pensamento do turno, por rei
+        const d = { A: diagTurno.A, B: diagTurno.B };
+        for (const L of ["A", "B"]) {
+          if (!d[L]) continue;
+          const rec = {};
+          for (const a of Engine.aldeiasDe(game, L))
+            for (const k in a.recursos) rec[k] = (rec[k] || 0) + a.recursos[k];
+          d[L].recursos = rec; // estoque AO FIM do turno (spec, secao 1)
+        }
+        return d;
+      })(),
     })));
   }
   // ===== REPRODUCAO: aplica um frame gravado ao estado visivel =====
@@ -956,7 +973,7 @@
 
   function baixarReplay() {
     if (!replay.frames.length) { alert("Nenhuma partida gravada ainda."); return; }
-    const blob = new Blob([JSON.stringify({ v: 1, frames: replay.frames })],
+    const blob = new Blob([JSON.stringify({ v: 1, versaoDiag: replay.versaoDiag || null, frames: replay.frames })],
       { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -1167,7 +1184,9 @@
     efeitos = [];
     emReplay = false;
     rep = null;
-    replay = { frames: [] };
+    replay = { versaoDiag: 1, frames: [] }; // schema versionado (spec, secao 3)
+    diagTurno = { A: null, B: null };
+    sigsRejAcum = { A: new Set(), B: new Set() };
     document.body.classList.remove("cinema");
     document.body.classList.remove("replay");
     etiquetaA = document.getElementById("gmodA").value;
@@ -1232,6 +1251,10 @@
       });
       if (resp.ok) {
         const data = await resp.json();
+        const um = data.usageMetadata;
+        tokensUltimaChamada = um
+          ? { prompt: um.promptTokenCount || 0, resposta: (um.candidatesTokenCount || 0) + (um.thoughtsTokenCount || 0) }
+          : null;
         const c = data.candidates && data.candidates[0];
         const parts = c && c.content && c.content.parts;
         return (parts || []).map((p) => p.text || "").join("");
@@ -1350,6 +1373,9 @@
     });
     if (!resp.ok) throw new Error("Ollama HTTP " + resp.status);
     const data = await resp.json();
+    tokensUltimaChamada = (data.prompt_eval_count != null || data.eval_count != null)
+      ? { prompt: data.prompt_eval_count || 0, resposta: data.eval_count || 0 }
+      : null; // backend nao reportou: null, nunca estimar
     return data.response || "";
   }
 
@@ -1363,24 +1389,51 @@
     return (p) => gerarOllama(p, modelo);
   }
 
+  // E3/1c — fotografa o pensamento do turno de UM rei (spec SPEC_E3).
+  // recursos NAO entram aqui: sao medidos AO FIM do turno, no gravarFrame.
+  function coletarDiag(lado, ordem, dg, formatoOk, tokens) {
+    const envios = (ordem && ordem.envios) || [], constr = (ordem && ordem.construir) || [];
+    const sigs = Engine.assinaturasRejeitadas(dg.rejeicoes);
+    let reincidente = false;
+    for (const s of sigs) if (sigsRejAcum[lado].has(s)) { reincidente = true; break; }
+    for (const s of sigs) sigsRejAcum[lado].add(s);
+    let atq = 0; // hostil = alvo com dono diferente NO MOMENTO do disparo
+    for (const e of dg.aceitoEnvios) if (e.alvo && e.alvo.dono !== lado) atq++;
+    diagTurno[lado] = {
+      propostas: envios.length + constr.length,
+      executadas: dg.aceitoEnvios.length + dg.aceitoConstruir.length,
+      rejeicoes: dg.rejeicoes.slice(),
+      formatoOk: !!formatoOk,
+      reincidente,
+      ataquesIniciados: atq,
+      tokens: tokens || null,
+    };
+  }
+
   // Decide e executa a ordem de UM lado. Retorna "abort" se o run mudou.
   async function decidirLado(lado, gerador, rotulo, meuRun) {
     if (!Engine.aldeiasDe(game, lado).length) return null;
     if (!gerador) {
-      Engine.executarOrdem(game, lado, Engine.jogadorBurro(Engine.montarVisao(game, lado)));
+      const ordemB = Engine.jogadorBurro(Engine.montarVisao(game, lado));
+      const dgB = Engine.diagnosticarOrdem(game, lado, ordemB); // burro entra no registro: e a ancora do benchmark
+      Engine.executarOrdem(game, lado, ordemB);
+      coletarDiag(lado, ordemB, dgB, true, null);
       return null;
     }
     const prompt = Engine.montarPrompt(Engine.montarVisao(game, lado));
     setStatus("Rei " + lado + " pensando... (" + rotulo + ")");
     let cru = "";
+    tokensUltimaChamada = null; // zera ANTES: erro de rede nao herda tokens do turno anterior
     try { cru = await gerador(prompt); }
     catch (e) { cru = "[ERRO DE REDE] " + e.message; }
+    const tokensDoLado = tokensUltimaChamada;
     setStatus("");
     if (runId !== meuRun) return "abort"; // resposta atrasada de run antigo
     const p = Engine.parsearOrdem(cru);                       // sem retry (benchmark)
     const ordem = p.ordem;
     const diag = Engine.diagnosticarOrdem(game, lado, ordem); // ANTES de executar
     Engine.executarOrdem(game, lado, ordem);
+    coletarDiag(lado, ordem, diag, p.ok, tokensDoLado);
     return { cru, ordem, diag, ok: p.ok, normalizacoes: p.normalizacoes || [] }; // H3: p/ o txt
   }
 
@@ -1389,6 +1442,7 @@
     const vA = document.getElementById("gmodA").value, vB = document.getElementById("gmodB").value;
     etiquetaA = vA; etiquetaB = vB;
     Engine.tick(game);
+    diagTurno = { A: null, B: null }; // frame novo, pensamento novo
     const rA = await decidirLado("A", fabricarGerador(vA), vA, meuRun);
     if (rA === "abort") return;
     const rB = await decidirLado("B", fabricarGerador(vB), vB, meuRun);
