@@ -453,7 +453,7 @@
   const SPR = {};
   (function () {
     if (typeof Image === "undefined") return;
-    for (const nome of ["bosque", "serra_grande", "serra_pequena"]) {
+    for (const nome of ["bosque", "serra_grande", "serra_pequena", "castelo", "aldeia_neutra"]) {
       const img = new Image();
       img.onload = function () { img.pronto = true; if (typeof draw === "function") draw(); };
       img.src = "assets/sprites/" + nome + ".png";
@@ -465,6 +465,27 @@
     if (alpha != null && alpha < 1) { ctx.save(); ctx.globalAlpha = alpha; }
     ctx.drawImage(img, xc - larg / 2, yBase - alt, larg, alt); // ancora: base-centro
     if (alpha != null && alpha < 1) ctx.restore();
+  }
+
+  // PECA B (pele v2): sprite tingido na cor do dono, cacheado uma vez por cor.
+  // A tinta e aplicada num buffer proprio com "source-atop" — pinta SO onde ha
+  // pixel do sprite, sem vazar no terreno (um multiply direto no mapa vazaria).
+  const _tintCache = {};
+  function spriteTintado(img, col) {
+    const key = (img.src || "") + "|" + col;
+    let c = _tintCache[key];
+    if (!c) {
+      c = document.createElement("canvas");
+      c.width = img.width; c.height = img.height;
+      const g = c.getContext("2d");
+      g.drawImage(img, 0, 0);
+      g.globalCompositeOperation = "source-atop"; // clipa a tinta ao sprite
+      g.globalAlpha = 0.35;                        // calibravel no olho
+      g.fillStyle = col;
+      g.fillRect(0, 0, c.width, c.height);
+      _tintCache[key] = c;
+    }
+    return c;
   }
 
   function drawTile(type, gx, gy, size, rot) {
@@ -1847,6 +1868,22 @@
       const col = a.dono === null ? COR.neutra : COR[a.dono];
       const r = Math.max(20, cs * 0.59); // E2: aldeia maior + piso p/ mapa inteiro (gate E1)
 
+      // PECA B (pele v2): predio do kit POR BAIXO da camada de informacao.
+      // Rei -> castelo (3.2 cel); neutra -> aldeia_neutra (2.4 cel). Ancora
+      // base-centro: o pe da construcao pousa perto da borda de baixo do anel.
+      // Fallback procedural (torreao/cabana) quando o sprite ainda nao carregou.
+      const sprB = a.dono === null
+        ? (SPR.aldeia_neutra && SPR.aldeia_neutra.pronto ? SPR.aldeia_neutra : null)
+        : (SPR.castelo && SPR.castelo.pronto ? SPR.castelo : null);
+      if (sprB) {
+        const larg = cs * (a.dono === null ? 2.4 : 3.2);
+        const yBase = sy + r * 0.5;                 // base-centro no pe do plot
+        // rei: castelo tingido na cor do dono (bandeiras vem azuis de fabrica);
+        // neutra: sprite cru. O tingido e cacheado por cor, nao refeito por frame.
+        const img = a.dono === null ? sprB : spriteTintado(sprB, col);
+        desenharSprite(img, sx, yBase, larg);
+      }
+
       // tintura sutil da cor do dono (le-se o territorio de relance)
       ctx.globalAlpha = a.dono === null ? 0.10 : 0.18;
       ctx.fillStyle = col;
@@ -1875,8 +1912,10 @@
         // na borda: o matchup segue legivel sem esconder a construcao
         const tg = a.dono === null ? a.tipo : Engine.tipoDominante(game, a.tropas);
         if (r >= 15) { // E2: predio aparece sempre que couber na tela
-          if (a.dono === null) desenharCabana(sx, sy, r);
-          else desenharTorreao(sx, sy, r, col);
+          if (!sprB) { // sprite do kit ja desenhou; procedural so como fallback
+            if (a.dono === null) desenharCabana(sx, sy, r);
+            else desenharTorreao(sx, sy, r, col);
+          }
           if (tg) {
             const rb = Math.max(6, r * 0.34);
             ctx.fillStyle = "rgba(24,17,8,.92)";
