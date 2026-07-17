@@ -91,14 +91,13 @@
     box-shadow: 0 6px 24px rgba(0,0,0,.55); color: #f0e3c0;
     font: 14px 'Trebuchet MS', sans-serif;
   }
-  #placarTop { display: flex; } /* placar sempre visivel: e o estado da batalha */
+  #placarTop { display: flex; padding-bottom: 18px; } /* placar sempre visivel; rodape reservado p/ o cabo grosso (E2) */
   .pt-linha { display: flex; align-items: stretch; }
   .pt-lado { flex: 1; display: flex; align-items: center; gap: 10px; padding: 8px 14px; }
   .pt-lado.b { flex-direction: row-reverse; text-align: right; }
   .pt-lado.a { background: linear-gradient(90deg, rgba(59,99,196,.34), transparent); }
   .pt-lado.b { background: linear-gradient(270deg, rgba(196,59,59,.34), transparent); }
   .pt-nome { font-weight: bold; font-variant: small-caps; letter-spacing: .05em; font-size: 16px; }
-  .pt-nome small { display: block; font: 10px Consolas, monospace; letter-spacing: 0; color: #b0a58a; text-transform: none; }
   .pt-num { font: bold 18px Consolas, monospace; }
   .pt-ald { font: 11px Consolas, monospace; color: #cfc4a4; }
   #pt-turno {
@@ -107,14 +106,8 @@
     border-left: 1px solid rgba(107,74,34,.6); border-right: 1px solid rgba(107,74,34,.6);
     white-space: nowrap;
   }
-  #pt-fbar { display: flex; height: 8px; background: #14100a; }
-  #pt-pips { display: flex; justify-content: center; gap: 3px; padding: 4px 8px 6px; background: rgba(0,0,0,.18); }
   #sb-status { text-align: center; font: 11px Consolas, monospace; color: #d9a441; padding: 0 8px 5px; background: rgba(0,0,0,.18); }
   #sb-status:empty { display: none; }
-  .pip { width: 9px; height: 9px; border-radius: 2px; background: #5a5244; }
-  .pip.A { background: #5d8cf0; } .pip.B { background: #ef5d5d; }
-  #pt-fa { background: linear-gradient(#5d8cf0,#3b63c4); transition: flex-grow .5s; }
-  #pt-fb { background: linear-gradient(#ef5d5d,#c43b3b); transition: flex-grow .5s; }
   body.replay #banner, body.cinema #banner { top: 104px; }
 
   /* ===== REPLAYBAR: cockpit do replay ===== */
@@ -183,12 +176,22 @@
   #sidebar, #sidebarA { display: none !important; } /* feeds seguem no DOM; so nao renderizam */
   /* cabo de guerra: a proporcao de aldeias A x neutras x B, viva sob o
      placar — "quem esta ganhando" respondido sem ler um numero */
-  #pt-cabo { position: absolute; left: 10px; right: 10px; bottom: 3px;
-    height: 6px; display: flex; border-radius: 3px; overflow: hidden; opacity: .95; }
+  #pt-cabo { position: absolute; left: 10px; right: 10px; bottom: 4px;
+    height: 12px; display: flex; border-radius: 4px; overflow: hidden; opacity: .95; } /* E2: A barra — unica e grossa */
   #pt-cabo div { transition: flex-basis .7s ease; }
   #pt-cabo-a { background: #5d8cf0; }
-  #pt-cabo-n { background: rgba(240,228,200,.22); }
   #pt-cabo-b { background: #ef5d5d; }
+  /* E2 placar de luta: fantasma do pedaco perdido — quem olha ve o golpe */
+  .pt-cabo-ghost { position: absolute; top: 0; bottom: 0; opacity: .70;
+    transition: opacity 1.5s ease; pointer-events: none; }
+  /* brasao minimo (arte heraldica de verdade e E5): escudo chapado + inicial */
+  .pt-brasao { width: 30px; height: 36px; flex-shrink: 0;
+    clip-path: polygon(0 0, 100% 0, 100% 52%, 50% 100%, 0 52%);
+    display: flex; align-items: center; justify-content: center;
+    font: bold 16px Georgia, serif; color: rgba(255,255,255,.94);
+    text-shadow: 0 1px 2px rgba(0,0,0,.7); }
+  .pt-brasao.a { background: linear-gradient(180deg, #6d9af6, #4a76d6); }
+  .pt-brasao.b { background: linear-gradient(180deg, #f66d6d, #d64a4a); }
 </style>
 </head>
 <body>
@@ -217,22 +220,22 @@
   <div class="p-feed" id="sb-feed"></div>
 </div>
 <div id="placarTop">
-  <div id="pt-cabo"><div id="pt-cabo-a"></div><div id="pt-cabo-n"></div><div id="pt-cabo-b"></div></div>
+  <div id="pt-cabo"><div id="pt-cabo-a"></div><div id="pt-cabo-b"></div></div>
   <div class="pt-linha">
     <div class="pt-lado a">
-      <div class="pt-nome">Rei A<small id="pt-a-mod">burro</small></div>
+      <div class="pt-brasao a" id="pt-bras-a"></div>
+      <div class="pt-nome" id="pt-a-mod">burro</div>
       <div class="pt-num" id="pt-a-f">0</div>
       <div class="pt-ald" id="pt-a-ald">0 ald</div>
     </div>
     <div id="pt-turno">TURNO 0</div>
     <div class="pt-lado b">
-      <div class="pt-nome">Rei B<small id="pt-b-mod">-</small></div>
+      <div class="pt-brasao b" id="pt-bras-b"></div>
+      <div class="pt-nome" id="pt-b-mod">-</div>
       <div class="pt-num" id="pt-b-f">0</div>
       <div class="pt-ald" id="pt-b-ald">0 ald</div>
     </div>
   </div>
-  <div id="pt-fbar"><div id="pt-fa"></div><div id="pt-fb"></div></div>
-  <div id="pt-pips"></div>
   <div id="sb-status"></div>
 </div>
 <div id="banner"></div>
@@ -1052,6 +1055,7 @@
   // ===== EFEITOS DE MAPA (anel de impacto / pulso de conquista) =====
   let efeitos = [];
   let liderPlacar = null; // F4: quem lidera o placar de aldeias
+  let caboAnt = null;      // E2: proporcao anterior do cabo (fantasma da perda)
   let efeitoLoop = false;
   const EFEITO_DUR = 900; // ms
 
@@ -1582,7 +1586,7 @@
       const sx = a.x * cs + panX + cs / 2, sy = a.y * cs + panY + cs / 2;
       if (sx < -60 || sy < -60 || sx > VW + 60 || sy > VH + 60) continue;
       const col = a.dono === null ? COR.neutra : COR[a.dono];
-      const r = Math.max(5, cs * 0.40);
+      const r = Math.max(20, cs * 0.59); // E2: aldeia maior + piso p/ mapa inteiro (gate E1)
 
       // tintura sutil da cor do dono (le-se o territorio de relance)
       ctx.globalAlpha = a.dono === null ? 0.10 : 0.18;
@@ -1595,13 +1599,13 @@
       ctx.lineWidth = Math.max(2.5, cs * 0.11); ctx.strokeStyle = col;
       ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.stroke();
 
-      if (cs > 20) {
+      if (r > 12) { // E2: interior segue o tamanho NA TELA (r), nao o zoom
         const LET = { lanceiro: "L", arqueiro: "A", cavaleiro: "C" };
         const val = a.dono === null
           ? (a.tropas[a.tipo] || 0) + LET[a.tipo]      // neutra: "40L" (tipo único)
           : Engine.forcaDe(a.tropas, game.config);     // rei: força total
 
-        const fs = Math.max(10, cs * 0.32);
+        const fs = Math.max(10, r * 0.58); // E2: acompanha o raio
         ctx.font = `bold ${fs}px Verdana`; ctx.textAlign = "center";
         ctx.lineWidth = Math.max(2, fs * 0.28); ctx.strokeStyle = "rgba(20,12,4,.85)";
         ctx.strokeText(val, sx, sy - r - 3);
@@ -1611,7 +1615,7 @@
         // predio no centro (torreao com bandeira / cabana) + selo do tipo
         // na borda: o matchup segue legivel sem esconder a construcao
         const tg = a.dono === null ? a.tipo : Engine.tipoDominante(game, a.tropas);
-        if (cs >= 26) {
+        if (r >= 15) { // E2: predio aparece sempre que couber na tela
           if (a.dono === null) desenharCabana(sx, sy, r);
           else desenharTorreao(sx, sy, r, col);
           if (tg) {
@@ -1623,7 +1627,7 @@
             ctx.fillText(GLIFO[tg], sx + r * 0.68, sy + r * 0.68 + rb * 0.48);
           }
         } else if (tg) {
-          const fg = Math.max(9, cs * 0.30);
+          const fg = Math.max(9, r * 0.55); // E2: acompanha o raio
           ctx.font = `bold ${fg}px Verdana`;
           ctx.lineWidth = Math.max(2, fg * 0.25); ctx.strokeStyle = "rgba(20,12,4,.9)";
           ctx.strokeText(LET[tg], sx, sy + fg * 0.36);
@@ -1793,9 +1797,30 @@
     const totAld = Math.max(1, A.length + B.length + nNeutras);
     const elCabo = document.getElementById("pt-cabo-a");
     if (elCabo) {
-      elCabo.style.flexBasis = (100 * A.length / totAld) + "%";
-      document.getElementById("pt-cabo-n").style.flexBasis = (100 * nNeutras / totAld) + "%";
-      document.getElementById("pt-cabo-b").style.flexBasis = (100 * B.length / totAld) + "%";
+      // E2 final: SO os dois reis na barra — comecam meio a meio e se
+      // empurram; neutras nao aparecem (quem ve entende a DISPUTA).
+      const totReis = Math.max(1, A.length + B.length);
+      const pA = 100 * A.length / totReis, pB = 100 - pA;
+      // E2 fantasma (jogo de luta): o pedaco que um rei PERDEU fica
+      // visivel esmaecendo ~1.5s — o espectador ve o golpe e a direcao.
+      const cabo = document.getElementById("pt-cabo");
+      if (cabo && caboAnt && game.turno > 0) {
+        const fantasma = (cor, de, larg) => {
+          if (larg < 0.5 || larg > 30) return; // ruido e resets nao assombram
+          const g = document.createElement("div");
+          g.className = "pt-cabo-ghost";
+          g.style.left = de + "%"; g.style.width = larg + "%";
+          g.style.background = cor;
+          cabo.appendChild(g);
+          requestAnimationFrame(() => requestAnimationFrame(() => { g.style.opacity = "0"; }));
+          setTimeout(() => { if (g.remove) g.remove(); }, 1600); // mock dos smokes nao tem .remove
+        };
+        if (pA < caboAnt.pA) fantasma("#5d8cf0", pA, caboAnt.pA - pA);
+        if (pB < caboAnt.pB) fantasma("#ef5d5d", 100 - caboAnt.pB, caboAnt.pB - pB);
+      }
+      caboAnt = { pA, pB };
+      elCabo.style.flexBasis = pA + "%";
+      document.getElementById("pt-cabo-b").style.flexBasis = pB + "%";
     }
 
     // ===== F4 — MOMENTO DE VIRADA: o placar de aldeias cruza =====
@@ -1824,10 +1849,6 @@
     document.getElementById("pt-b-ald").textContent = B.length + " ald";
     document.getElementById("pt-a-mod").textContent = etiquetaA || "-";
     document.getElementById("pt-b-mod").textContent = etiquetaB || "-";
-    document.getElementById("pt-fa").style.flexGrow = Math.max(fA, 1);
-    document.getElementById("pt-fb").style.flexGrow = Math.max(fB, 1);
-    document.getElementById("pt-pips").innerHTML = game.aldeias
-      .map((a) => `<span class="pip ${a.dono || ""}"></span>`).join("");
   }
 
   // controles

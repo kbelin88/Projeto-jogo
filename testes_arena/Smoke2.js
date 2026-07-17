@@ -92,7 +92,7 @@ eval(html.slice(html.lastIndexOf("<script>") + 8, html.lastIndexOf("</script>"))
   if (!/TURNO \d+/.test(els["pt-turno"].textContent)) throw new Error("placar sem turno: " + els["pt-turno"].textContent);
   if (els["pt-b-mod"].textContent !== modBFx) throw new Error("placar sem modelo B (esperava " + modBFx + "): " + els["pt-b-mod"].textContent);
   console.log("placar ok:", els["pt-turno"].textContent, "| B:", els["pt-b-mod"].textContent, "forca", els["pt-b-f"].textContent);
-  if (!/class="pip/.test(els["pt-pips"].innerHTML)) throw new Error("pips ausentes no placar");
+  if (!els["pt-cabo-a"].style.flexBasis) throw new Error("cabo de guerra sem atualizacao no placar"); // E2: pips sairam, a barra unica e o canal
   const todos = els["sb-feed"].children.concat(els["sb-feedA"].children);
   const temEv = todos.some((c) => /class="ev ev[AB]"/.test(c.innerHTML));
   if (!temEv) throw new Error("cronica de espectador sem frases-icone");
