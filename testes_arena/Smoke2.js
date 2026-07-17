@@ -76,7 +76,9 @@ eval(html.slice(html.lastIndexOf("<script>") + 8, html.lastIndexOf("</script>"))
   const modelo = els["sb-modelo"].textContent;
   if (!/^REPLAY/.test(modelo)) throw new Error("sb-modelo nao entrou em modo replay: " + modelo);
   if (!els["sb-feed"].children.length && !els["sb-feedA"].children.length) throw new Error("cronica vazia no replay");
-  if (!els["banner"].textContent) throw new Error("nenhum banner de evento apareceu");
+  // banner de virada REMOVIDO (17/07, decisao de produto: virada = narracao).
+  // Unico banner restante e o de VITORIA; este fixture nao tem vencedor.
+  // PENDENTE: fixture com vitoria (partida Gemini) p/ cobrir esse banner.
   const prog = els["grepProg"].textContent;
   if (!new RegExp("turno " + NF + "/" + NF).test(prog)) throw new Error("progresso nao chegou ao fim: " + prog);
   // restart deve voltar ao inicio e limpar a cronica
