@@ -103,6 +103,25 @@
     // relatorio caber num modelo pequeno. O jogo "de verdade" e ~50; reversivel.
     teatro: { x0: 80, y0: 80, w: 40, h: 40, n_aldeias: 20, min_dist: 3 },
 
+    // MUNDO v2 (17/07): layout espelhado p/ fairness de benchmark.
+    // "v1" reproduz os numeros antigos; "v2" e o padrao daqui em diante.
+    layout: "v2",
+    teatro_v2: {
+      // palco proprio da v2 (calibrado 17/07 v2): 60x34 — WIDESCREEN.
+      // Gate do Lucas revelou: teatro quase quadrado estoura a tela na
+      // vertical e desperdica as laterais. O teatro agora tem o formato
+      // da tela: cabe inteiro sem scroll e os reis ficam a >=51.
+      x0: 70, y0: 83, w: 60, h: 34,
+      n_aldeias: 24,        // 2 reis + 22 neutras (11 pares espelhados)
+      min_dist: 5,          // calibrado pos-gate: 4 aglomerava
+      portas_por_rei: 2,    // neutras de expansao garantida perto do rei
+      dist_porta: [4, 7],   // faixa de distancia das portas ao rei
+      faixa_rei_y: 0.20,    // rei nasce no centro vertical +- 20% da altura
+      faixa_rei_x: 0.25,    // rei nasce no quarto oeste (B = espelho)
+      miolo: 0.40,          // calibrado pos-gate: 0.60 afunilava no centro
+      dist_rei_min: 0.85,   // reis a >= 85% da largura (48 -> minimo 40.8)
+    },
+
     // JOGADOR BURRO (V0, sem IA): parametros da decisao simples.
     //   composicao_alvo : proporcao desejada do exercito (puxa o mix).
     //   max_construir_por_turno : teto de tropas enfileiradas por aldeia/turno.
@@ -178,6 +197,125 @@
   //     o resto vira neutra de UM tipo sorteado, com N unidades na faixa.
   // ==========================================================
   function gerarTeatro(config) {
+    if ((config.layout || "v1") === "v2") return gerarTeatroV2(config);
+    return gerarTeatroV1(config);
+  }
+
+  // ===== MUNDO v2 (17/07) — layout ESPELHADO ponto-central =====
+  // Regras aprovadas pelo Lucas: reis no eixo horizontal (oeste/leste,
+  // faixa vertical central); TODAS as neutras nascem na metade oeste e sao
+  // espelhadas (posicao + tipo + forca) p/ a leste — fairness total, lado
+  // nao e desculpa; 2 "portas" por rei (expansao inicial garantida);
+  // pares comuns com vies p/ o miolo (a zona de disputa vale a guerra).
+  // Determinismo: TUDO sai do rng semeado; mesma seed -> mesmo mundo.
+  function gerarTeatroV2(config) {
+    const rng = criarRng(config.seed);
+    const v2 = config.teatro_v2;
+    // teatro proprio da v2 quando definido; senao herda o da v1
+    const t = { x0: v2.x0 != null ? v2.x0 : config.teatro.x0,
+                y0: v2.y0 != null ? v2.y0 : config.teatro.y0,
+                w: v2.w || config.teatro.w, h: v2.h || config.teatro.h };
+    const x1 = Math.min(World.WORLD, t.x0 + t.w);
+    const y1 = Math.min(World.WORLD, t.y0 + t.h);
+    // espelho AXIAL (17/07, correcao pos-gate): a linha vertical central e
+    // o espelho — B nasce na MESMA ALTURA de A, confronto horizontal puro.
+    // (o rotacional invertia Y tambem e devolvia a diagonal pela porta dos fundos)
+    const esp = (p) => ({ x: t.x0 + (x1 - 1 - p.x), y: p.y });
+    const agua = (p) => World.isWater(p.x, p.y);
+    const cyMin = Math.floor(t.y0 + t.h * (0.5 - v2.faixa_rei_y));
+    const cyMax = Math.ceil(t.y0 + t.h * (0.5 + v2.faixa_rei_y));
+
+    const pontos = [];   // {x,y} ja aceitos (inclui espelhos)
+    const minD2 = v2.min_dist * v2.min_dist;
+    const longe = (p) => pontos.every((q) => {
+      const dx = q.x - p.x, dy = q.y - p.y; return dx * dx + dy * dy >= minD2;
+    });
+    const longeDoEspelho = (p) => {
+      const m = esp(p); const dx = m.x - p.x, dy = m.y - p.y;
+      return dx * dx + dy * dy >= minD2;
+    };
+    function sortearPar(xa, xb, ya, yb, tenta) {
+      for (let i = 0; i < tenta; i++) {
+        const p = { x: Math.floor(xa + rng() * (xb - xa)), y: Math.floor(ya + rng() * (yb - ya)) };
+        const m = esp(p);
+        if (agua(p) || agua(m)) continue;
+        if (!longe(p) || !longe(m) || !longeDoEspelho(p)) continue;
+        return p;
+      }
+      return null;
+    }
+
+    // 1) REI A: quarto oeste, faixa vertical central; B = espelho exato.
+    //    Garantia: dist(A, B) >= dist_rei_min * largura — o jogo precisa correr.
+    const distMin = t.w * v2.dist_rei_min;
+    let reiA = null;
+    for (let i = 0; i < 600 && !reiA; i++) {
+      const c = sortearPar(t.x0 + 1, t.x0 + Math.floor(t.w * v2.faixa_rei_x), cyMin, cyMax, 1);
+      if (!c) continue;
+      const m = esp(c);
+      if (Math.hypot(m.x - c.x, m.y - c.y) < distMin) continue;
+      reiA = c;
+    }
+    if (!reiA) reiA = { x: t.x0 + 3, y: Math.floor(t.y0 + t.h / 2) }; // fallback deterministico
+    pontos.push(reiA, esp(reiA));
+
+    // 2) PORTAS: neutras a [dist_porta] do rei, metade oeste; espelhadas.
+    const portas = [];
+    for (let k = 0; k < v2.portas_por_rei; k++) {
+      let p = null;
+      for (let i = 0; i < 400 && !p; i++) {
+        const ang = rng() * Math.PI * 2;
+        const d = v2.dist_porta[0] + rng() * (v2.dist_porta[1] - v2.dist_porta[0]);
+        const c = { x: Math.round(reiA.x + Math.cos(ang) * d), y: Math.round(reiA.y + Math.sin(ang) * d) };
+        if (c.x <= t.x0 || c.x >= t.x0 + t.w / 2 || c.y <= t.y0 || c.y >= y1 - 1) continue;
+        const m = esp(c);
+        if (agua(c) || agua(m) || !longe(c) || !longe(m) || !longeDoEspelho(c)) continue;
+        p = c;
+      }
+      if (p) { portas.push(p); pontos.push(p, esp(p)); }
+    }
+
+    // 3) PARES COMUNS ate fechar a cota: vies p/ o miolo (fracao `miolo`
+    //    sorteia no terco central-oeste; o resto, na metade oeste toda).
+    const cotaPares = Math.floor((v2.n_aldeias - 2) / 2) - portas.length;
+    const comuns = [];
+    for (let k = 0; k < cotaPares; k++) {
+      const noMiolo = rng() < v2.miolo;
+      const xa = noMiolo ? t.x0 + Math.floor(t.w * 0.26) : t.x0 + 1;
+      const xb = Math.floor(t.x0 + t.w / 2) - 2; // folga do eixo do espelho
+      const p = sortearPar(xa, xb, t.y0 + 1, y1 - 1, 600);
+      if (p) { comuns.push(p); pontos.push(p, esp(p)); }
+    }
+
+    // 4) montar aldeias: A primeiro, B (espelho) segundo, depois pares
+    //    (oeste, leste, oeste, leste...) — ids estaveis e legiveis.
+    const aldeias = [];
+    let id = 0;
+    function porRei(p, dono) {
+      const ald = criarAldeia(id++, p.x, p.y, World.villageName(p.x, p.y), dono);
+      const ti = (config.rei && config.rei.tropas_iniciais) || {};
+      for (const tp of ["lanceiro", "arqueiro", "cavaleiro"]) ald.tropas[tp] = ti[tp] || 0;
+      aldeias.push(ald);
+    }
+    function parNeutra(p) {
+      // tipo e forca sorteados UMA vez e aplicados aos DOIS lados (fairness)
+      const pool = config.neutra.tipos_sorteaveis;
+      const tipo = pool[Math.floor(rng() * pool.length)];
+      const n = rngInt(rng, config.neutra.forca_min, config.neutra.forca_max);
+      for (const q of [p, esp(p)]) {
+        const ald = criarAldeia(id++, q.x, q.y, World.villageName(q.x, q.y), null);
+        ald.tipo = tipo; ald.tropas[tipo] = n;
+        aldeias.push(ald);
+      }
+    }
+    porRei(reiA, "A"); porRei(esp(reiA), "B");
+    for (const p of portas) parNeutra(p);
+    for (const p of comuns) parNeutra(p);
+
+    return montarJogo(config, aldeias);
+  }
+
+  function gerarTeatroV1(config) {
     const rng = criarRng(config.seed);
     const t = config.teatro;
     const x1 = Math.min(World.WORLD, t.x0 + t.w);
@@ -246,6 +384,11 @@
       return ald;
     });
 
+    return montarJogo(config, aldeias);
+  }
+
+  // estado inicial da partida a partir das aldeias — COMPARTILHADO v1/v2
+  function montarJogo(config, aldeias) {
     return {
       config,
       turno: 0,

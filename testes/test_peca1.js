@@ -14,6 +14,7 @@
 const Engine = require("../engine.js");
 
 const CONFIG = Engine.CONFIG;
+CONFIG.layout = "v1"; // teste da GERACAO V1 (preservada): estes invariantes sao dela
 const estado = Engine.criarEstadoInicial(CONFIG);
 
 console.log(Engine.resumoEstado(estado));

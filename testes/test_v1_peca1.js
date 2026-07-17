@@ -13,6 +13,7 @@
 "use strict";
 const Engine = require("../engine.js");
 const CONFIG = Engine.CONFIG;
+CONFIG.layout = "v1"; // teste da GERACAO V1 (preservada): estes invariantes sao dela
 const TIPOS = ["lanceiro", "arqueiro", "cavaleiro"];
 
 let falhas = 0;

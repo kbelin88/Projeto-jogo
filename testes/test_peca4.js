@@ -13,6 +13,7 @@
 "use strict";
 const Engine = require("../engine.js");
 const CONFIG = Engine.CONFIG;
+CONFIG.layout = "v1"; // teste da GERACAO V1 (preservada): estes invariantes sao dela
 
 let falhas = 0;
 function checa(nome, cond, detalhe) {
