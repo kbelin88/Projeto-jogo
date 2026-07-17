@@ -46,6 +46,10 @@ function clienteOllama(opcoes) {
   const temperatura = opcoes.temperatura != null ? opcoes.temperatura : 0;
   return {
     nome: `ollama:${modelo}`,
+    // E3/1b — canal LATERAL de tokens: gerar() segue devolvendo so a string
+    // (nenhum consumidor muda); quem quiser tokens le cliente.ultimosTokens
+    // apos a chamada. null = backend nao reportou (nunca estimar em silencio).
+    ultimosTokens: null,
     async gerar(prompt) {
       const resp = await fetch(url, {
         method: "POST",
@@ -54,6 +58,9 @@ function clienteOllama(opcoes) {
       });
       if (!resp.ok) throw new Error(`Ollama HTTP ${resp.status}`);
       const data = await resp.json();
+      this.ultimosTokens = (data.prompt_eval_count != null || data.eval_count != null)
+        ? { prompt: data.prompt_eval_count || 0, resposta: data.eval_count || 0 }
+        : null;
       return data.response || "";
     },
   };
@@ -94,6 +101,7 @@ function clienteGemini(opcoes) {
   }
   return {
     nome: `gemini:${modelo}`,
+    ultimosTokens: null, // E3/1b — mesmo canal lateral do clienteOllama
     async gerar(prompt) {
       for (let tentativa = 1; ; tentativa++) {
         await respeitarPiso();
@@ -107,6 +115,10 @@ function clienteGemini(opcoes) {
         });
         if (resp.ok) {
           const data = await resp.json();
+          const um = data.usageMetadata;
+          this.ultimosTokens = um
+            ? { prompt: um.promptTokenCount || 0, resposta: (um.candidatesTokenCount || 0) + (um.thoughtsTokenCount || 0) }
+            : null;
           const cand = data.candidates && data.candidates[0];
           const parts = cand && cand.content && cand.content.parts;
           return (parts || []).map((p) => p.text || "").join("");
