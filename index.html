@@ -704,9 +704,10 @@
           const sx = x * cs + panX, sy = y * cs + panY;
           if (d.type === T_FOREST && !d.village) {
             if (SPR.bosque && SPR.bosque.pronto) {
-              // 1 bosque do kit por aglomerado (~1 a cada 5-6 celulas de mata),
+              // 1 bosque do kit por aglomerado (~1 a cada 10 celulas de mata),
               // nao 1 carimbo por celula — menos arvore, mais paisagem.
-              if (hash(x, y, 401) < 0.18) {
+              // densidade calibravel no olho (Lucas): 0.10 = esparso, 0.18 = denso.
+              if (hash(x, y, 401) < 0.10) {
                 const wS = cs * (2.4 + hash(x, y, 402) * 1.2);
                 desenharSprite(SPR.bosque, sx + cs * 0.5, sy + cs * 0.95, wS);
               }
