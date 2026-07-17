@@ -1359,6 +1359,20 @@
     return L.join("\n");
   }
 
+  // E3/1c-i — assinatura SEMANTICA de rejeicao (promovida do runner de
+  // perseveracao em 17/07): prefixo da acao + ids entre colchetes. Um so
+  // calculo p/ reincidencia, dois consumidores (runner Node + arena browser).
+  function assinaturasRejeitadas(rejeicoes) {
+    const sigs = new Set();
+    for (const r of rejeicoes || []) {
+      const ids = [...r.matchAll(/\[(\d+)\]/g)].map((m) => m[1]);
+      if (!ids.length) continue;
+      if (r.startsWith("construir")) sigs.add("construir@" + ids[0]);
+      else if (r.startsWith("envio")) sigs.add("envio@" + ids.join(">"));
+    }
+    return sigs;
+  }
+
   return {
     CONFIG,
     relatorioDesfecho,
@@ -1405,6 +1419,7 @@
     extrairBlocoJSON,
     parsearOrdem,
     diagnosticarOrdem,
+    assinaturasRejeitadas,
     clampearEnvios,
     decidirEExecutar,
     checarVitoria,

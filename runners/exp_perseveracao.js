@@ -97,19 +97,9 @@ let avisosClamp = 0, enviosCancelados = 0; // H5
 const streaks = new Map();
 // Fase 12: contadores do turno composto (zeros quando --composto desligado)
 let vetosInternos = 0, vereditosIlegiveis = 0, chamadasTotais = 0;
-function assinaturasRejeitadas(rejeicoes) {
-  // Dois formatos no motor: "construir [18]: motivo" E "construir: aldeia [18]
-  // nao e sua" (idem envio, com ou sem destino). Regra robusta: prefixo da
-  // acao + todos os ids entre colchetes, na ordem.
-  const sigs = new Set();
-  for (const r of rejeicoes) {
-    const ids = [...r.matchAll(/\[(\d+)\]/g)].map((m) => m[1]);
-    if (!ids.length) continue;
-    if (r.startsWith("construir")) sigs.add("construir@" + ids[0]);
-    else if (r.startsWith("envio")) sigs.add("envio@" + ids.join(">"));
-  }
-  return sigs;
-}
+// assinaturasRejeitadas PROMOVIDA p/ engine.js em 17/07 (E3/1c-i):
+// um so calculo de assinatura, dois consumidores (runner + arena).
+const assinaturasRejeitadas = Engine.assinaturasRejeitadas;
 function onTurno(reg) {
   const repetiu = cruAnterior !== null && reg.cru === cruAnterior && !reg.erroRede;
   if (repetiu) { turnosRepetidos++; seqAtual++; seqMax = Math.max(seqMax, seqAtual); }
