@@ -1,0 +1,85 @@
+diff --git a/index.html b/index.html
+index b6df041..6fff461 100644
+--- a/index.html
++++ b/index.html
+@@ -189,6 +189,17 @@
+   #pt-cabo-a { background: #5d8cf0; }
+   #pt-cabo-n { background: rgba(240,228,200,.22); }
+   #pt-cabo-b { background: #ef5d5d; }
++  /* E2 placar de luta: fantasma do pedaco perdido — quem olha ve o golpe */
++  .pt-cabo-ghost { position: absolute; top: 0; bottom: 0; opacity: .70;
++    transition: opacity 1.5s ease; pointer-events: none; }
++  /* brasao minimo (arte heraldica de verdade e E5): escudo chapado + inicial */
++  .pt-brasao { width: 30px; height: 36px; flex-shrink: 0;
++    clip-path: polygon(0 0, 100% 0, 100% 52%, 50% 100%, 0 52%);
++    display: flex; align-items: center; justify-content: center;
++    font: bold 16px Georgia, serif; color: rgba(255,255,255,.94);
++    text-shadow: 0 1px 2px rgba(0,0,0,.7); }
++  .pt-brasao.a { background: linear-gradient(180deg, #6d9af6, #4a76d6); }
++  .pt-brasao.b { background: linear-gradient(180deg, #f66d6d, #d64a4a); }
+ </style>
+ </head>
+ <body>
+@@ -220,12 +231,14 @@
+   <div id="pt-cabo"><div id="pt-cabo-a"></div><div id="pt-cabo-n"></div><div id="pt-cabo-b"></div></div>
+   <div class="pt-linha">
+     <div class="pt-lado a">
++      <div class="pt-brasao a" id="pt-bras-a">?</div>
+       <div class="pt-nome">Rei A<small id="pt-a-mod">burro</small></div>
+       <div class="pt-num" id="pt-a-f">0</div>
+       <div class="pt-ald" id="pt-a-ald">0 ald</div>
+     </div>
+     <div id="pt-turno">TURNO 0</div>
+     <div class="pt-lado b">
++      <div class="pt-brasao b" id="pt-bras-b">?</div>
+       <div class="pt-nome">Rei B<small id="pt-b-mod">-</small></div>
+       <div class="pt-num" id="pt-b-f">0</div>
+       <div class="pt-ald" id="pt-b-ald">0 ald</div>
+@@ -1052,6 +1065,7 @@
+   // ===== EFEITOS DE MAPA (anel de impacto / pulso de conquista) =====
+   let efeitos = [];
+   let liderPlacar = null; // F4: quem lidera o placar de aldeias
++  let caboAnt = null;      // E2: proporcao anterior do cabo (fantasma da perda)
+   let efeitoLoop = false;
+   const EFEITO_DUR = 900; // ms
+ 
+@@ -1793,9 +1807,28 @@
+     const totAld = Math.max(1, A.length + B.length + nNeutras);
+     const elCabo = document.getElementById("pt-cabo-a");
+     if (elCabo) {
+-      elCabo.style.flexBasis = (100 * A.length / totAld) + "%";
++      const pA = 100 * A.length / totAld, pB = 100 * B.length / totAld;
++      // E2 fantasma (jogo de luta): o pedaco que um rei PERDEU fica
++      // visivel esmaecendo ~1.5s — o espectador ve o golpe e a direcao.
++      const cabo = document.getElementById("pt-cabo");
++      if (cabo && caboAnt && game.turno > 0) {
++        const fantasma = (cor, de, larg) => {
++          if (larg < 0.5 || larg > 30) return; // ruido e resets nao assombram
++          const g = document.createElement("div");
++          g.className = "pt-cabo-ghost";
++          g.style.left = de + "%"; g.style.width = larg + "%";
++          g.style.background = cor;
++          cabo.appendChild(g);
++          requestAnimationFrame(() => requestAnimationFrame(() => { g.style.opacity = "0"; }));
++          setTimeout(() => { if (g.remove) g.remove(); }, 1600); // mock dos smokes nao tem .remove
++        };
++        if (pA < caboAnt.pA) fantasma("#5d8cf0", pA, caboAnt.pA - pA);
++        if (pB < caboAnt.pB) fantasma("#ef5d5d", 100 - caboAnt.pB, caboAnt.pB - pB);
++      }
++      caboAnt = { pA, pB };
++      elCabo.style.flexBasis = pA + "%";
+       document.getElementById("pt-cabo-n").style.flexBasis = (100 * nNeutras / totAld) + "%";
+-      document.getElementById("pt-cabo-b").style.flexBasis = (100 * B.length / totAld) + "%";
++      document.getElementById("pt-cabo-b").style.flexBasis = pB + "%";
+     }
+ 
+     // ===== F4 — MOMENTO DE VIRADA: o placar de aldeias cruza =====
+@@ -1824,6 +1857,8 @@
+     document.getElementById("pt-b-ald").textContent = B.length + " ald";
+     document.getElementById("pt-a-mod").textContent = etiquetaA || "-";
+     document.getElementById("pt-b-mod").textContent = etiquetaB || "-";
++    document.getElementById("pt-bras-a").textContent = (etiquetaA || "?").charAt(0).toUpperCase();
++    document.getElementById("pt-bras-b").textContent = (etiquetaB || "?").charAt(0).toUpperCase();
+     document.getElementById("pt-fa").style.flexGrow = Math.max(fA, 1);
+     document.getElementById("pt-fb").style.flexGrow = Math.max(fB, 1);
+     document.getElementById("pt-pips").innerHTML = game.aldeias

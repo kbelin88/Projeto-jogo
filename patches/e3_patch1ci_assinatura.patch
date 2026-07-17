@@ -1,0 +1,60 @@
+diff --git a/engine.js b/engine.js
+index 49e2262..19abb14 100644
+--- a/engine.js
++++ b/engine.js
+@@ -1359,6 +1359,20 @@
+     return L.join("\n");
+   }
+ 
++  // E3/1c-i — assinatura SEMANTICA de rejeicao (promovida do runner de
++  // perseveracao em 17/07): prefixo da acao + ids entre colchetes. Um so
++  // calculo p/ reincidencia, dois consumidores (runner Node + arena browser).
++  function assinaturasRejeitadas(rejeicoes) {
++    const sigs = new Set();
++    for (const r of rejeicoes || []) {
++      const ids = [...r.matchAll(/\[(\d+)\]/g)].map((m) => m[1]);
++      if (!ids.length) continue;
++      if (r.startsWith("construir")) sigs.add("construir@" + ids[0]);
++      else if (r.startsWith("envio")) sigs.add("envio@" + ids.join(">"));
++    }
++    return sigs;
++  }
++
+   return {
+     CONFIG,
+     relatorioDesfecho,
+@@ -1405,6 +1419,7 @@
+     extrairBlocoJSON,
+     parsearOrdem,
+     diagnosticarOrdem,
++    assinaturasRejeitadas,
+     clampearEnvios,
+     decidirEExecutar,
+     checarVitoria,
+diff --git a/runners/exp_perseveracao.js b/runners/exp_perseveracao.js
+index 9233430..c89f670 100644
+--- a/runners/exp_perseveracao.js
++++ b/runners/exp_perseveracao.js
+@@ -97,19 +97,9 @@ let avisosClamp = 0, enviosCancelados = 0; // H5
+ const streaks = new Map();
+ // Fase 12: contadores do turno composto (zeros quando --composto desligado)
+ let vetosInternos = 0, vereditosIlegiveis = 0, chamadasTotais = 0;
+-function assinaturasRejeitadas(rejeicoes) {
+-  // Dois formatos no motor: "construir [18]: motivo" E "construir: aldeia [18]
+-  // nao e sua" (idem envio, com ou sem destino). Regra robusta: prefixo da
+-  // acao + todos os ids entre colchetes, na ordem.
+-  const sigs = new Set();
+-  for (const r of rejeicoes) {
+-    const ids = [...r.matchAll(/\[(\d+)\]/g)].map((m) => m[1]);
+-    if (!ids.length) continue;
+-    if (r.startsWith("construir")) sigs.add("construir@" + ids[0]);
+-    else if (r.startsWith("envio")) sigs.add("envio@" + ids.join(">"));
+-  }
+-  return sigs;
+-}
++// assinaturasRejeitadas PROMOVIDA p/ engine.js em 17/07 (E3/1c-i):
++// um so calculo de assinatura, dois consumidores (runner + arena).
++const assinaturasRejeitadas = Engine.assinaturasRejeitadas;
+ function onTurno(reg) {
+   const repetiu = cruAnterior !== null && reg.cru === cruAnterior && !reg.erroRede;
+   if (repetiu) { turnosRepetidos++; seqAtual++; seqMax = Math.max(seqMax, seqAtual); }

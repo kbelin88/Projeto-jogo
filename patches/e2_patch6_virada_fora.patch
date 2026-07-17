@@ -1,0 +1,59 @@
+diff --git a/index.html b/index.html
+index e1e8236..6b4e251 100644
+--- a/index.html
++++ b/index.html
+@@ -1054,7 +1054,6 @@
+ 
+   // ===== EFEITOS DE MAPA (anel de impacto / pulso de conquista) =====
+   let efeitos = [];
+-  let liderPlacar = null; // F4: quem lidera o placar de aldeias
+   let caboAnt = null;      // E2: proporcao anterior do cabo (fantasma da perda)
+   let efeitoLoop = false;
+   const EFEITO_DUR = 900; // ms
+@@ -1745,14 +1744,6 @@
+         ctx.globalAlpha = 1;
+         continue;
+       }
+-      if (e.virada) { // F4: a mare virou — vinheta pulsa na cor do novo lider
+-        const av = Math.sin(Math.min(1, p) * Math.PI) * 0.35;
+-        const lw = Math.max(18, VW * 0.045);
+-        ctx.globalAlpha = av; ctx.lineWidth = lw; ctx.strokeStyle = e.cor;
+-        ctx.strokeRect(lw / 2, lw / 2, VW - lw, VH - lw);
+-        ctx.globalAlpha = 1;
+-        continue;
+-      }
+       const ex = e.x * cs + panX + cs / 2, ey = e.y * cs + panY + cs / 2;
+       const raio = Math.max(8, cs * 0.45) * (1 + p * 1.6);
+       ctx.globalAlpha = (1 - p) * 0.9;
+@@ -1823,14 +1814,8 @@
+       document.getElementById("pt-cabo-b").style.flexBasis = pB + "%";
+     }
+ 
+-    // ===== F4 — MOMENTO DE VIRADA: o placar de aldeias cruza =====
+-    const liderAgora = A.length > B.length ? "A" : B.length > A.length ? "B" : liderPlacar;
+-    if (!venc && !REDUZ_MOV && liderPlacar && liderAgora && liderAgora !== liderPlacar) {
+-      efeitos.push({ virada: true, t0: performance.now(), dur: 2200, cor: COR[liderAgora] });
+-      mostrarBanner("A MARE VIROU \u2014 REI " + liderAgora + " assume a frente", COR[liderAgora], true);
+-      if (!efeitoLoop) { efeitoLoop = true; requestAnimationFrame(tickEfeitos); }
+-    }
+-    liderPlacar = liderAgora;
++    // F4 REMOVIDA (17/07): a virada e trabalho da NARRACAO na edicao
++    // do video, nao do jogo. A barra de empurrao ja mostra a mare.
+ 
+     // paineis dos reis (updateGameHUD e o UNICO dono destes rotulos)
+     const pre = emReplay ? "REPLAY \u00b7 " : "";
+diff --git a/testes_arena/Smoke2.js b/testes_arena/Smoke2.js
+index 6496384..d0fda0e 100644
+--- a/testes_arena/Smoke2.js
++++ b/testes_arena/Smoke2.js
+@@ -76,7 +76,9 @@ eval(html.slice(html.lastIndexOf("<script>") + 8, html.lastIndexOf("</script>"))
+   const modelo = els["sb-modelo"].textContent;
+   if (!/^REPLAY/.test(modelo)) throw new Error("sb-modelo nao entrou em modo replay: " + modelo);
+   if (!els["sb-feed"].children.length && !els["sb-feedA"].children.length) throw new Error("cronica vazia no replay");
+-  if (!els["banner"].textContent) throw new Error("nenhum banner de evento apareceu");
++  // banner de virada REMOVIDO (17/07, decisao de produto: virada = narracao).
++  // Unico banner restante e o de VITORIA; este fixture nao tem vencedor.
++  // PENDENTE: fixture com vitoria (partida Gemini) p/ cobrir esse banner.
+   const prog = els["grepProg"].textContent;
+   if (!new RegExp("turno " + NF + "/" + NF).test(prog)) throw new Error("progresso nao chegou ao fim: " + prog);
+   // restart deve voltar ao inicio e limpar a cronica

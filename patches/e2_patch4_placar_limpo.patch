@@ -1,0 +1,93 @@
+diff --git a/index.html b/index.html
+index 6fff461..a0d2893 100644
+--- a/index.html
++++ b/index.html
+@@ -91,14 +91,13 @@
+     box-shadow: 0 6px 24px rgba(0,0,0,.55); color: #f0e3c0;
+     font: 14px 'Trebuchet MS', sans-serif;
+   }
+-  #placarTop { display: flex; } /* placar sempre visivel: e o estado da batalha */
++  #placarTop { display: flex; padding-bottom: 18px; } /* placar sempre visivel; rodape reservado p/ o cabo grosso (E2) */
+   .pt-linha { display: flex; align-items: stretch; }
+   .pt-lado { flex: 1; display: flex; align-items: center; gap: 10px; padding: 8px 14px; }
+   .pt-lado.b { flex-direction: row-reverse; text-align: right; }
+   .pt-lado.a { background: linear-gradient(90deg, rgba(59,99,196,.34), transparent); }
+   .pt-lado.b { background: linear-gradient(270deg, rgba(196,59,59,.34), transparent); }
+   .pt-nome { font-weight: bold; font-variant: small-caps; letter-spacing: .05em; font-size: 16px; }
+-  .pt-nome small { display: block; font: 10px Consolas, monospace; letter-spacing: 0; color: #b0a58a; text-transform: none; }
+   .pt-num { font: bold 18px Consolas, monospace; }
+   .pt-ald { font: 11px Consolas, monospace; color: #cfc4a4; }
+   #pt-turno {
+@@ -107,14 +106,8 @@
+     border-left: 1px solid rgba(107,74,34,.6); border-right: 1px solid rgba(107,74,34,.6);
+     white-space: nowrap;
+   }
+-  #pt-fbar { display: flex; height: 8px; background: #14100a; }
+-  #pt-pips { display: flex; justify-content: center; gap: 3px; padding: 4px 8px 6px; background: rgba(0,0,0,.18); }
+   #sb-status { text-align: center; font: 11px Consolas, monospace; color: #d9a441; padding: 0 8px 5px; background: rgba(0,0,0,.18); }
+   #sb-status:empty { display: none; }
+-  .pip { width: 9px; height: 9px; border-radius: 2px; background: #5a5244; }
+-  .pip.A { background: #5d8cf0; } .pip.B { background: #ef5d5d; }
+-  #pt-fa { background: linear-gradient(#5d8cf0,#3b63c4); transition: flex-grow .5s; }
+-  #pt-fb { background: linear-gradient(#ef5d5d,#c43b3b); transition: flex-grow .5s; }
+   body.replay #banner, body.cinema #banner { top: 104px; }
+ 
+   /* ===== REPLAYBAR: cockpit do replay ===== */
+@@ -183,8 +176,8 @@
+   #sidebar, #sidebarA { display: none !important; } /* feeds seguem no DOM; so nao renderizam */
+   /* cabo de guerra: a proporcao de aldeias A x neutras x B, viva sob o
+      placar — "quem esta ganhando" respondido sem ler um numero */
+-  #pt-cabo { position: absolute; left: 10px; right: 10px; bottom: 3px;
+-    height: 6px; display: flex; border-radius: 3px; overflow: hidden; opacity: .95; }
++  #pt-cabo { position: absolute; left: 10px; right: 10px; bottom: 4px;
++    height: 12px; display: flex; border-radius: 4px; overflow: hidden; opacity: .95; } /* E2: A barra — unica e grossa */
+   #pt-cabo div { transition: flex-basis .7s ease; }
+   #pt-cabo-a { background: #5d8cf0; }
+   #pt-cabo-n { background: rgba(240,228,200,.22); }
+@@ -232,20 +225,18 @@
+   <div class="pt-linha">
+     <div class="pt-lado a">
+       <div class="pt-brasao a" id="pt-bras-a">?</div>
+-      <div class="pt-nome">Rei A<small id="pt-a-mod">burro</small></div>
++      <div class="pt-nome" id="pt-a-mod">burro</div>
+       <div class="pt-num" id="pt-a-f">0</div>
+       <div class="pt-ald" id="pt-a-ald">0 ald</div>
+     </div>
+     <div id="pt-turno">TURNO 0</div>
+     <div class="pt-lado b">
+       <div class="pt-brasao b" id="pt-bras-b">?</div>
+-      <div class="pt-nome">Rei B<small id="pt-b-mod">-</small></div>
++      <div class="pt-nome" id="pt-b-mod">-</div>
+       <div class="pt-num" id="pt-b-f">0</div>
+       <div class="pt-ald" id="pt-b-ald">0 ald</div>
+     </div>
+   </div>
+-  <div id="pt-fbar"><div id="pt-fa"></div><div id="pt-fb"></div></div>
+-  <div id="pt-pips"></div>
+   <div id="sb-status"></div>
+ </div>
+ <div id="banner"></div>
+@@ -1859,10 +1850,6 @@
+     document.getElementById("pt-b-mod").textContent = etiquetaB || "-";
+     document.getElementById("pt-bras-a").textContent = (etiquetaA || "?").charAt(0).toUpperCase();
+     document.getElementById("pt-bras-b").textContent = (etiquetaB || "?").charAt(0).toUpperCase();
+-    document.getElementById("pt-fa").style.flexGrow = Math.max(fA, 1);
+-    document.getElementById("pt-fb").style.flexGrow = Math.max(fB, 1);
+-    document.getElementById("pt-pips").innerHTML = game.aldeias
+-      .map((a) => `<span class="pip ${a.dono || ""}"></span>`).join("");
+   }
+ 
+   // controles
+diff --git a/testes_arena/Smoke2.js b/testes_arena/Smoke2.js
+index 24a9865..6496384 100644
+--- a/testes_arena/Smoke2.js
++++ b/testes_arena/Smoke2.js
+@@ -92,7 +92,7 @@ eval(html.slice(html.lastIndexOf("<script>") + 8, html.lastIndexOf("</script>"))
+   if (!/TURNO \d+/.test(els["pt-turno"].textContent)) throw new Error("placar sem turno: " + els["pt-turno"].textContent);
+   if (els["pt-b-mod"].textContent !== modBFx) throw new Error("placar sem modelo B (esperava " + modBFx + "): " + els["pt-b-mod"].textContent);
+   console.log("placar ok:", els["pt-turno"].textContent, "| B:", els["pt-b-mod"].textContent, "forca", els["pt-b-f"].textContent);
+-  if (!/class="pip/.test(els["pt-pips"].innerHTML)) throw new Error("pips ausentes no placar");
++  if (!els["pt-cabo-a"].style.flexBasis) throw new Error("cabo de guerra sem atualizacao no placar"); // E2: pips sairam, a barra unica e o canal
+   const todos = els["sb-feed"].children.concat(els["sb-feedA"].children);
+   const temEv = todos.some((c) => /class="ev ev[AB]"/.test(c.innerHTML));
+   if (!temEv) throw new Error("cronica de espectador sem frases-icone");

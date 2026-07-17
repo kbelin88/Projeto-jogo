@@ -1,0 +1,62 @@
+diff --git a/index.html b/index.html
+index a0d2893..c1fe31e 100644
+--- a/index.html
++++ b/index.html
+@@ -180,7 +180,6 @@
+     height: 12px; display: flex; border-radius: 4px; overflow: hidden; opacity: .95; } /* E2: A barra — unica e grossa */
+   #pt-cabo div { transition: flex-basis .7s ease; }
+   #pt-cabo-a { background: #5d8cf0; }
+-  #pt-cabo-n { background: rgba(240,228,200,.22); }
+   #pt-cabo-b { background: #ef5d5d; }
+   /* E2 placar de luta: fantasma do pedaco perdido — quem olha ve o golpe */
+   .pt-cabo-ghost { position: absolute; top: 0; bottom: 0; opacity: .70;
+@@ -221,17 +220,17 @@
+   <div class="p-feed" id="sb-feed"></div>
+ </div>
+ <div id="placarTop">
+-  <div id="pt-cabo"><div id="pt-cabo-a"></div><div id="pt-cabo-n"></div><div id="pt-cabo-b"></div></div>
++  <div id="pt-cabo"><div id="pt-cabo-a"></div><div id="pt-cabo-b"></div></div>
+   <div class="pt-linha">
+     <div class="pt-lado a">
+-      <div class="pt-brasao a" id="pt-bras-a">?</div>
++      <div class="pt-brasao a" id="pt-bras-a"></div>
+       <div class="pt-nome" id="pt-a-mod">burro</div>
+       <div class="pt-num" id="pt-a-f">0</div>
+       <div class="pt-ald" id="pt-a-ald">0 ald</div>
+     </div>
+     <div id="pt-turno">TURNO 0</div>
+     <div class="pt-lado b">
+-      <div class="pt-brasao b" id="pt-bras-b">?</div>
++      <div class="pt-brasao b" id="pt-bras-b"></div>
+       <div class="pt-nome" id="pt-b-mod">-</div>
+       <div class="pt-num" id="pt-b-f">0</div>
+       <div class="pt-ald" id="pt-b-ald">0 ald</div>
+@@ -1798,7 +1797,10 @@
+     const totAld = Math.max(1, A.length + B.length + nNeutras);
+     const elCabo = document.getElementById("pt-cabo-a");
+     if (elCabo) {
+-      const pA = 100 * A.length / totAld, pB = 100 * B.length / totAld;
++      // E2 final: SO os dois reis na barra — comecam meio a meio e se
++      // empurram; neutras nao aparecem (quem ve entende a DISPUTA).
++      const totReis = Math.max(1, A.length + B.length);
++      const pA = 100 * A.length / totReis, pB = 100 - pA;
+       // E2 fantasma (jogo de luta): o pedaco que um rei PERDEU fica
+       // visivel esmaecendo ~1.5s — o espectador ve o golpe e a direcao.
+       const cabo = document.getElementById("pt-cabo");
+@@ -1818,7 +1820,6 @@
+       }
+       caboAnt = { pA, pB };
+       elCabo.style.flexBasis = pA + "%";
+-      document.getElementById("pt-cabo-n").style.flexBasis = (100 * nNeutras / totAld) + "%";
+       document.getElementById("pt-cabo-b").style.flexBasis = pB + "%";
+     }
+ 
+@@ -1848,8 +1849,6 @@
+     document.getElementById("pt-b-ald").textContent = B.length + " ald";
+     document.getElementById("pt-a-mod").textContent = etiquetaA || "-";
+     document.getElementById("pt-b-mod").textContent = etiquetaB || "-";
+-    document.getElementById("pt-bras-a").textContent = (etiquetaA || "?").charAt(0).toUpperCase();
+-    document.getElementById("pt-bras-b").textContent = (etiquetaB || "?").charAt(0).toUpperCase();
+   }
+ 
+   // controles
