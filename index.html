@@ -181,6 +181,21 @@
   #pt-cabo div { transition: flex-basis .7s ease; }
   #pt-cabo-a { background: #5d8cf0; }
   #pt-cabo-b { background: #ef5d5d; }
+  /* ===== E3/PECA 2 — CARTAO POS-PARTIDA (raio-X, estilo futebol) ===== */
+  #cartaoFinal { position: fixed; inset: 0; z-index: 9; display: none;
+    align-items: center; justify-content: center; background: rgba(10,7,3,.55); }
+  #cartaoFinal.aberto { display: flex; }
+  #cartaoCaixa { width: min(560px, 92vw); background: linear-gradient(180deg, rgba(43,32,20,.98), rgba(30,21,9,.98));
+    border: 2px solid #6b4a22; border-radius: 10px; color: #f0e3c0;
+    font: 14px 'Trebuchet MS', sans-serif; box-shadow: 0 10px 40px rgba(0,0,0,.7); overflow: hidden; }
+  .cf-secao { background: rgba(0,0,0,.28); padding: 4px 18px; font-size: 11px; letter-spacing: 2px; color: #d9a441; }
+  .cf-linha { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; margin: 9px 0 3px; }
+  .cf-linha .lbl { color: #b0a58a; }
+  .cf-barra { height: 8px; border-radius: 4px; overflow: hidden; display: flex; background: #14100a; }
+  .cf-barra .a { background: #5d8cf0; } .cf-barra .b { background: #ef5d5d; }
+  .cf-bras { width: 26px; height: 32px; clip-path: polygon(0 0,100% 0,100% 52%,50% 100%,0 52%); }
+  #cartaoFechar { position: absolute; margin: 8px 0 0 8px; width: 30px; height: 30px; cursor: pointer;
+    background: rgba(0,0,0,.4); color: #b0a58a; border: 1px solid #6b4a22; border-radius: 6px; font-size: 15px; }
   /* E2 placar de luta: fantasma do pedaco perdido — quem olha ve o golpe */
   .pt-cabo-ghost { position: absolute; top: 0; bottom: 0; opacity: .70;
     transition: opacity 1.5s ease; pointer-events: none; }
@@ -238,6 +253,7 @@
   </div>
   <div id="sb-status"></div>
 </div>
+<div id="cartaoFinal"><button id="cartaoFechar" title="Fechar o cartao">&#10005;</button><div id="cartaoCaixa"></div></div>
 <div id="banner"></div>
 <div id="replaybar">
   <button id="grepRestart" title="Recomecar o replay">&#9198;</button>
@@ -851,6 +867,114 @@
       })(),
     })));
   }
+  // ===== E3/PECA 2 — CARTAO POS-PARTIDA: le SO do registro (frames) =====
+  // Bloco JOGO funciona em replay antigo; bloco MENTE exige diag (v1) e
+  // degrada com elegancia quando ausente. Nada aqui consulta o game vivo.
+  function calcularCartao(frames) {
+    const S = { A: {}, B: {} };
+    const lid = { A: 0, B: 0 };
+    for (const f of frames) {
+      const nA = f.aldeias.filter((a) => a.dono === "A").length;
+      const nB = f.aldeias.filter((a) => a.dono === "B").length;
+      if (nA > nB) lid.A++; else if (nB > nA) lid.B++;
+    }
+    for (const L of ["A", "B"]) {
+      const s = S[L];
+      s.lid = frames.length ? Math.round(100 * lid[L] / frames.length) : 0;
+      s.conq = 0; s.perd = 0; s.combAtk = 0; s.vitAtk = 0;
+      s.prop = 0; s.exec = 0; s.rej = 0; s.reinc = 0; s.turnosDiag = 0;
+      s.tok = 0; s.temTok = false; s.rec = {}; s.temDiag = false;
+    }
+    for (const f of frames) {
+      for (const e of f.eventos || []) {
+        if (e.tipo !== "combate") continue;
+        S[e.atacante].combAtk++;
+        if (e.vencedor === "atacante") S[e.atacante].vitAtk++;
+        if (e.conquista) S[e.atacante].conq++;
+      }
+      for (const L of ["A", "B"]) {
+        const d = (f.diag || {})[L];
+        if (!d) continue;
+        const s = S[L];
+        s.temDiag = true; s.turnosDiag++;
+        s.prop += d.propostas; s.exec += d.executadas;
+        s.rej += d.rejeicoes.length; if (d.reincidente) s.reinc++;
+        if (d.tokens) { s.temTok = true; s.tok += (d.tokens.prompt || 0) + (d.tokens.resposta || 0); }
+        for (const k in d.recursos || {}) s.rec[k] = (s.rec[k] || 0) + d.recursos[k];
+      }
+    }
+    // perdida = conquista alheia sobre aldeia que era MINHA no frame anterior
+    for (let i = 1; i < frames.length; i++) {
+      const antes = {}; for (const a of frames[i - 1].aldeias) antes[a.id] = a.dono;
+      for (const e of frames[i].eventos || []) {
+        if (e.tipo === "combate" && e.conquista && antes[e.alvoId] && antes[e.alvoId] !== e.atacante)
+          S[antes[e.alvoId]].perd++;
+      }
+    }
+    return S;
+  }
+
+  function linhaCartao(lbl, va, vb, barA, barB) {
+    let h = '<div class="cf-linha"><span>' + va + '</span><span class="lbl">' + lbl + '</span><span>' + vb + "</span></div>";
+    if (barA != null) {
+      const tot = Math.max(0.0001, barA + barB);
+      h += '<div class="cf-barra"><div class="a" style="flex-basis:' + Math.round(100 * barA / tot) +
+        '%"></div><div class="b" style="flex-basis:' + Math.round(100 * barB / tot) + '%"></div></div>';
+    }
+    return h;
+  }
+
+  function mostrarCartao(frames, etqA, etqB, versaoDiag) {
+    const el = document.getElementById("cartaoFinal"), cx = document.getElementById("cartaoCaixa");
+    if (!el || !cx || !frames || !frames.length) return;
+    const S = calcularCartao(frames);
+    const ult = frames[frames.length - 1];
+    const aldA = ult.aldeias.filter((a) => a.dono === "A").length;
+    const aldB = ult.aldeias.filter((a) => a.dono === "B").length;
+    const pct = (v, t) => (t ? Math.round(100 * v / t) + "%" : "\u2014");
+    const rec = (s) => Object.keys(s.rec).length && s.turnosDiag
+      ? Object.keys(s.rec).map((k) => Math.round(s.rec[k] / s.turnosDiag) + k[0]).join(" \u00b7 ") : "\u2014";
+    let h = '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px 10px">' +
+      '<div style="display:flex;align-items:center;gap:10px"><div class="cf-bras" style="background:#5d8cf0"></div>' +
+      '<div><div style="font-weight:bold">' + esc(etqA) + '</div><div style="font-size:12px;color:#b0a58a">' + aldA + ' ald</div></div></div>' +
+      '<div style="text-align:center"><div style="font-size:11px;color:#b0a58a;letter-spacing:1px">fim de partida</div>' +
+      '<div style="font-size:22px;color:#d9a441">' + aldA + ' \u00b7 ' + aldB + '</div></div>' +
+      '<div style="display:flex;align-items:center;gap:10px"><div style="text-align:right"><div style="font-weight:bold">' + esc(etqB) +
+      '</div><div style="font-size:12px;color:#b0a58a">' + aldB + ' ald</div></div><div class="cf-bras" style="background:#ef5d5d"></div></div></div>';
+    h += '<div class="cf-secao">o jogo</div><div style="padding:2px 18px 8px">';
+    h += linhaCartao("turnos na lideran\u00e7a", S.A.lid + "%", S.B.lid + "%", S.A.lid, S.B.lid);
+    h += linhaCartao("conquistadas \u00b7 perdidas", S.A.conq + " \u00b7 " + S.A.perd, S.B.conq + " \u00b7 " + S.B.perd, S.A.conq, S.B.conq);
+    h += linhaCartao("sucesso dos ataques",
+      S.A.vitAtk + "/" + S.A.combAtk + " \u00b7 " + pct(S.A.vitAtk, S.A.combAtk),
+      S.B.vitAtk + "/" + S.B.combAtk + " \u00b7 " + pct(S.B.vitAtk, S.B.combAtk),
+      S.A.combAtk ? S.A.vitAtk / S.A.combAtk : 0, S.B.combAtk ? S.B.vitAtk / S.B.combAtk : 0);
+    h += linhaCartao("recursos ociosos (m\u00e9dia/turno)", rec(S.A), rec(S.B), null, null);
+    h += "</div>";
+    if (S.A.temDiag || S.B.temDiag) {
+      h += '<div class="cf-secao">a mente</div><div style="padding:2px 18px 10px">';
+      h += linhaCartao("ag\u00eancia",
+        S.A.exec + "/" + S.A.prop + " \u00b7 " + pct(S.A.exec, S.A.prop),
+        S.B.exec + "/" + S.B.prop + " \u00b7 " + pct(S.B.exec, S.B.prop),
+        S.A.prop ? S.A.exec / S.A.prop : 0, S.B.prop ? S.B.exec / S.B.prop : 0);
+      h += linhaCartao("rejei\u00e7\u00f5es", S.A.rej, S.B.rej, null, null);
+      h += linhaCartao("turnos reincidentes", S.A.reinc + "/" + S.A.turnosDiag, S.B.reinc + "/" + S.B.turnosDiag, null, null);
+      h += linhaCartao("tokens consumidos", S.A.temTok ? S.A.tok.toLocaleString("pt-BR") : "n/d",
+        S.B.temTok ? S.B.tok.toLocaleString("pt-BR") : "n/d", null, null);
+      h += "</div>";
+    } else {
+      h += '<div class="cf-secao">a mente</div>' +
+        '<div style="padding:10px 18px;font-size:12px;color:#8a7f68">registro diagn\u00f3stico ausente neste replay (gravado antes da v1)</div>';
+    }
+    h += '<div style="border-top:1px solid rgba(107,74,34,.5);padding:6px 18px;font-size:11px;color:#8a7f68;display:flex;justify-content:space-between">' +
+      '<span>' + frames.length + ' turnos</span><span>registro diagn\u00f3stico ' + (versaoDiag ? "v" + versaoDiag : "\u2014") + "</span></div>";
+    cx.innerHTML = h;
+    el.className = "aberto";
+  }
+  function fecharCartao() {
+    const el = document.getElementById("cartaoFinal");
+    if (el) el.className = "";
+  }
+
   // ===== REPRODUCAO: aplica um frame gravado ao estado visivel =====
   function aplicarFrame(fr) {
     game.turno = fr.turno;
@@ -935,7 +1059,11 @@
     while (emReplay && runId === meuRun) {
       atualizarProgresso();
       if (!playing || rep.idx >= rep.dados.frames.length) {
-        if (rep.idx >= rep.dados.frames.length) playing = false; // fim: espera restart/sair
+        if (rep.idx >= rep.dados.frames.length) {
+          playing = false; // fim: espera restart/sair
+          const uf = rep.dados.frames[rep.dados.frames.length - 1];
+          mostrarCartao(rep.dados.frames, uf.etiquetaA || "?", uf.etiquetaB || uf.etiqueta || "?", rep.dados.versaoDiag);
+        }
         await new Promise((r) => setTimeout(r, 140));
         continue;
       }
@@ -1181,6 +1309,7 @@
   function novaPartida() {
     pause();
     limparFeeds();
+    fecharCartao();
     efeitos = [];
     emReplay = false;
     rep = null;
@@ -1505,6 +1634,7 @@
       " | A " + Engine.aldeiasDe(game, "A").length + " ald | B " + Engine.aldeiasDe(game, "B").length +
       " ald | neutras " + Engine.aldeiasDe(game, null).length);
     baixarLogGemini(); // baixa o .txt automaticamente no fim da partida
+    mostrarCartao(replay.frames, etiquetaA, etiquetaB, replay.versaoDiag); // E3/2: o raio-X entra em cena
   }
 
   function play() {
@@ -1901,6 +2031,8 @@
     else passoTurno();
   });
   document.getElementById("greset").addEventListener("click", novaPartida);
+  const bcf = document.getElementById("cartaoFechar");
+  if (bcf && bcf.addEventListener) bcf.addEventListener("click", fecharCartao);
   document.getElementById("sb-toggle").addEventListener("click", () => document.body.classList.toggle("sb-closed"));
   document.getElementById("glog").addEventListener("click", baixarLogGemini);
   document.getElementById("greplaysave").addEventListener("click", baixarReplay);
@@ -1927,7 +2059,7 @@
   });
   document.getElementById("grepRestart").addEventListener("click", () => {
     if (!rep) return;
-    rep.idx = 0; limparFeeds(); limparBanners(); efeitos = [];
+    rep.idx = 0; limparFeeds(); limparBanners(); fecharCartao(); efeitos = [];
     camAuto = true; document.getElementById("grepCam").classList.add("ativo");
     playing = true;
     atualizarProgresso();
