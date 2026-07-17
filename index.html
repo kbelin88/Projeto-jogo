@@ -356,14 +356,17 @@
 
   // ---------- Helpers de desenho ----------
 
-  // Cor de grama com variação suave de larga escala (sem xadrez por célula)
+  // Cor de grama com variação suave (T1/E4): paleta da DIRECAO_DE_ARTE —
+  // patch escuro #8f9d6e -> base #9aa878 -> patch claro #a4b283.
+  // Mesmo vnoise de antes (manchas grandes), so a tinta mudou.
   function grassColor(x, y) {
     const v = vnoise(x, y, 21, 0.07);          // manchas grandes e suaves
     const t = vnoise(x, y, 22, 0.30) * 0.30;   // textura leve
-    const m = v * 0.78 + t;
-    const g = Math.floor(lerp(126, 162, m));
-    const rr = Math.floor(lerp(82, 110, m));
-    return `rgb(${rr},${g},${Math.floor(g * 0.42)})`;
+    const m = Math.min(1, v * 0.78 + t);
+    const rr = Math.floor(lerp(143, 164, m));
+    const g = Math.floor(lerp(157, 178, m));
+    const b = Math.floor(lerp(110, 131, m));
+    return `rgb(${rr},${g},${b})`;
   }
 
   // Caminho de blob orgânico (arredondado/irregular) — caller define fillStyle e dá fill()
@@ -443,6 +446,27 @@
   };
 
   // Desenha um tile com âncora de chão em (gx,gy), tamanho 'size' (px), rotação em rad
+  // ===== PELE v2 / PECA A — sprites do kit (assets/sprites) =====
+  // Carregamento assincrono com FALLBACK: enquanto (ou se) um sprite nao
+  // carrega, o desenho procedural antigo segue valendo. O mock dos smokes
+  // nao tem Image: o guarda typeof mantem os testes no fallback p/ sempre.
+  const SPR = {};
+  (function () {
+    if (typeof Image === "undefined") return;
+    for (const nome of ["bosque", "serra_grande", "serra_pequena"]) {
+      const img = new Image();
+      img.onload = function () { img.pronto = true; if (typeof draw === "function") draw(); };
+      img.src = "assets/sprites/" + nome + ".png";
+      SPR[nome] = img;
+    }
+  })();
+  function desenharSprite(img, xc, yBase, larg, alpha) {
+    const alt = larg * img.height / img.width;   // proporcao natural do sprite
+    if (alpha != null && alpha < 1) { ctx.save(); ctx.globalAlpha = alpha; }
+    ctx.drawImage(img, xc - larg / 2, yBase - alt, larg, alt); // ancora: base-centro
+    if (alpha != null && alpha < 1) ctx.restore();
+  }
+
   function drawTile(type, gx, gy, size, rot) {
     const fn = tileShapes[type]; if (!fn) return;
     const k = size / VB;
@@ -612,6 +636,43 @@
       }
     }
 
+    // 1a-bis) graos de pergaminho (T1/E4): pontos 1px #4a4433 alpha .10,
+    // ~1 a cada 14 celulas, hash deterministico — papel envelhecido, nao ruido.
+    ctx.fillStyle = "rgba(74,68,51,.10)";
+    for (let y = cy0; y < cy1; y += gstep) {
+      for (let x = cx0; x < cx1; x += gstep) {
+        if (hash(x, y, 97) >= 0.072) continue;
+        const gx = x * cs + panX + hash(x, y, 98) * cs;
+        const gy = y * cs + panY + hash(x, y, 99) * cs;
+        ctx.fillRect(gx, gy, 1, 1);
+      }
+    }
+
+    // 1a-ter) colinas (T5/E4): 2-3 linhas de contorno ABERTAS a pena,
+    // tinta #7d8a5f, 1 grupo a cada ~2 telas (hash por grade de 40 cel).
+    // Relevo sugerido, nunca preenchido — cartografia, nao paisagem.
+    const CG = 40;
+    const hg0x = Math.floor(cx0 / CG) - 1, hg1x = Math.floor(cx1 / CG) + 1;
+    const hg0y = Math.floor(cy0 / CG) - 1, hg1y = Math.floor(cy1 / CG) + 1;
+    ctx.strokeStyle = "#7d8a5f"; ctx.lineWidth = 1;
+    for (let hx = hg0x; hx <= hg1x; hx++) {
+      for (let hy = hg0y; hy <= hg1y; hy++) {
+        if (hash(hx, hy, 301) >= 0.30) continue;
+        const bcx = (hx + 0.25 + hash(hx, hy, 302) * 0.5) * CG;
+        const bcy = (hy + 0.25 + hash(hx, hy, 303) * 0.5) * CG;
+        const nlin = 2 + (hash(hx, hy, 304) < 0.5 ? 0 : 1);
+        for (let i = 0; i < nlin; i++) {
+          const larg = (2.2 + hash(hx, hy, 305 + i) * 1.6) * cs;
+          const lx = bcx * cs + panX + (hash(hx, hy, 310 + i) - 0.5) * cs * 2;
+          const ly = bcy * cs + panY + i * cs * 0.55;
+          ctx.beginPath();
+          ctx.moveTo(lx - larg / 2, ly);
+          ctx.quadraticCurveTo(lx, ly - cs * (0.85 - i * 0.18), lx + larg / 2, ly);
+          ctx.stroke();
+        }
+      }
+    }
+
     // 1b) lagos como blobs orgânicos arredondados
     const lg0x = Math.floor(cx0 / LAKE_G) - 1, lg1x = Math.floor(cx1 / LAKE_G) + 1;
     const lg0y = Math.floor(cy0 / LAKE_G) - 1, lg1y = Math.floor(cy1 / LAKE_G) + 1;
@@ -642,7 +703,14 @@
           const d = cellData(x, y);
           const sx = x * cs + panX, sy = y * cs + panY;
           if (d.type === T_FOREST && !d.village) {
-            if (detailed) {
+            if (SPR.bosque && SPR.bosque.pronto) {
+              // 1 bosque do kit por aglomerado (~1 a cada 5-6 celulas de mata),
+              // nao 1 carimbo por celula — menos arvore, mais paisagem.
+              if (hash(x, y, 401) < 0.18) {
+                const wS = cs * (2.4 + hash(x, y, 402) * 1.2);
+                desenharSprite(SPR.bosque, sx + cs * 0.5, sy + cs * 0.95, wS);
+              }
+            } else if (detailed) {
               // mata: 1-2 árvores/pinheiros com variação natural de escala e rotação
               const n = 1 + Math.floor(hash(x, y, 31) * 2);
               for (let i = 0; i < n; i++) {
@@ -660,7 +728,14 @@
               ctx.fill();
             }
           } else if (d.type === T_MOUNT) {
-            if (detailed) {
+            if (SPR.serra_pequena && SPR.serra_pequena.pronto) {
+              if (hash(x, y, 411) < 0.22) {
+                const grande = SPR.serra_grande && SPR.serra_grande.pronto && hash(x, y, 412) < 0.30;
+                const img = grande ? SPR.serra_grande : SPR.serra_pequena;
+                const wS = cs * (grande ? 5.5 : 2.8) * (0.9 + hash(x, y, 413) * 0.3);
+                desenharSprite(img, sx + cs * 0.5, sy + cs * 0.9, wS);
+              }
+            } else if (detailed) {
               const sc = 0.9 + hash(x, y, 71) * 0.3;
               drawTile("montanha", sx + cs * 0.5, sy + cs * 0.72, cs * 1.6 * sc, 0);
             } else {
@@ -1620,7 +1695,7 @@
       // PROVENIENCIA (13/07): registrar as condicoes do experimento no proprio
       // log. Descoberto na analise da partida de 13/07: sem isso, so lendo o
       // codigo da pra saber se a rodada foi baseline ou rejfim.
-      geminiLog.push("condicoes: temp=" + tempLLM + " | prompt=baseline v2 (rejeicoes no meio, sem rejfim) | normalizacao H3 ativa\n");
+      geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=baseline v2 (rejeicoes no meio, sem rejfim) | normalizacao H3 ativa\n");
     }
     while (playing && runId === meuRun && game && !Engine.checarVitoria(game) && game.turno < maxT) {
       await passoTurnoDuelo(meuRun);
