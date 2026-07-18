@@ -723,6 +723,7 @@
         for (let x = cx0; x < cx1; x++) {
           const d = cellData(x, y);
           const sx = x * cs + panX, sy = y * cs + panY;
+          if (game && decoClear().has(x + "," + y)) continue; // pele v2: sem deco sob aldeias
           if (d.type === T_FOREST && !d.village) {
             if (SPR.bosque && SPR.bosque.pronto) {
               // 1 bosque do kit por aglomerado (~1 a cada 10 celulas de mata),
@@ -1771,6 +1772,22 @@
     ctx.lineWidth = 1; ctx.strokeStyle = "rgba(20,12,4,.6)"; ctx.stroke();
   }
 
+  // bandeira do time fincada sobre a aldeia DOMINADA (pele v2, 18/07):
+  // no mapa limpo e o unico sinal de posse. Mastro + flamula triangular.
+  // footY = pe do mastro; h = altura; col = cor do time.
+  function desenharBandeira(x, footY, h, col) {
+    const topo = footY - h;
+    ctx.lineWidth = Math.max(1.5, h * 0.09); ctx.strokeStyle = "rgba(30,20,8,.85)";
+    ctx.beginPath(); ctx.moveTo(x, footY); ctx.lineTo(x, topo); ctx.stroke();
+    ctx.fillStyle = col;                              // flamula
+    ctx.beginPath();
+    ctx.moveTo(x, topo);
+    ctx.lineTo(x + h * 0.60, topo + h * 0.15);
+    ctx.lineTo(x, topo + h * 0.30);
+    ctx.closePath(); ctx.fill();
+    ctx.lineWidth = 1; ctx.strokeStyle = "rgba(20,12,4,.6)"; ctx.stroke();
+  }
+
   // cabana com telhado de palha (aldeias neutras)
   function desenharCabana(sx, sy, r) {
     const w = r * 0.95, h = r * 0.55, x = sx - w / 2, y = sy - h * 0.1;
@@ -1837,113 +1854,64 @@
     return cels;
   }
 
+  // PELE v2 (18/07): celulas "limpas" no entorno de cada aldeia — nelas a
+  // decoracao (bosque/serra) NAO nasce, senao arvore/montanha brotam por cima
+  // do predio. Posicoes das aldeias sao fixas na partida -> cache por assinatura.
+  let decoClearCache = { sig: "", set: null };
+  function decoClear() {
+    if (!game) return null;
+    const sig = game.aldeias.map((a) => a.x + "_" + a.y).join(";");
+    if (decoClearCache.sig === sig) return decoClearCache.set;
+    const set = new Set();
+    for (const a of game.aldeias) {
+      const cap = a.tipo === null;                // castelo ocupa mais que aldeia
+      const rx = 2, up = cap ? 3 : 2, down = 1;   // sprite sobe -> folga maior p/ cima
+      for (let dy = -up; dy <= down; dy++)
+        for (let dx = -rx; dx <= rx; dx++) set.add((a.x + dx) + "," + (a.y + dy));
+    }
+    decoClearCache = { sig, set };
+    return set;
+  }
+
   function drawGame() {
     if (!game) return;
     const cs = TILE * scale;
 
-    // territorio por baixo de tudo: veu da cor do rei + fronteira tracada
-    const cels = territorioCelulas();
-    const RGB_T = { A: "93,140,240", B: "239,93,93" };
-    ctx.lineWidth = Math.max(1.5, cs * 0.06);
-    for (const [k, c] of cels) {
-      const gx = +k.slice(0, k.indexOf(",")), gy = +k.slice(k.indexOf(",") + 1);
-      const px = gx * cs + panX, py = gy * cs + panY;
-      if (px < -cs || py < -cs || px > VW + cs || py > VH + cs) continue;
-      ctx.fillStyle = `rgba(${RGB_T[c.dono]},0.10)`;
-      ctx.fillRect(px, py, cs + 1, cs + 1);
-      ctx.strokeStyle = `rgba(${RGB_T[c.dono]},0.55)`;
-      ctx.beginPath();
-      const lados = [[1, 0, px + cs, py, px + cs, py + cs], [-1, 0, px, py, px, py + cs],
-        [0, 1, px, py + cs, px + cs, py + cs], [0, -1, px, py, px + cs, py]];
-      for (const [ddx, ddy, ax, ay, bx, by] of lados) {
-        const viz = cels.get((gx + ddx) + "," + (gy + ddy));
-        if (!viz || viz.dono !== c.dono) { ctx.moveTo(ax, ay); ctx.lineTo(bx, by); }
-      }
-      ctx.stroke();
-    }
+    // AREA DE INFLUENCIA removida (pele v2, feedback Lucas 18/07): o veu de
+    // territorio poluia o mapa. O placar/cabo-de-guerra no topo carrega o jogo;
+    // o mapa vira paisagem. territorioCelulas() segue definida caso volte.
 
     for (const a of game.aldeias) {
       const sx = a.x * cs + panX + cs / 2, sy = a.y * cs + panY + cs / 2;
       if (sx < -60 || sy < -60 || sx > VW + 60 || sy > VH + 60) continue;
       const col = a.dono === null ? COR.neutra : COR[a.dono];
-      const r = Math.max(20, cs * 0.59); // E2: aldeia maior + piso p/ mapa inteiro (gate E1)
+      const r = Math.max(20, cs * 0.59);
+      const ehCapital = a.tipo === null; // rei tem tipo null (persistente): so a capital vira castelo
 
-      // PECA B (pele v2): predio do kit POR BAIXO da camada de informacao.
-      // Rei -> castelo (3.2 cel); neutra -> aldeia_neutra (2.4 cel). Ancora
-      // base-centro: o pe da construcao pousa perto da borda de baixo do anel.
-      // Fallback procedural (torreao/cabana) quando o sprite ainda nao carregou.
-      const sprB = a.dono === null
-        ? (SPR.aldeia_neutra && SPR.aldeia_neutra.pronto ? SPR.aldeia_neutra : null)
-        : (SPR.castelo && SPR.castelo.pronto ? SPR.castelo : null);
+      // PELE v2 (feedback Lucas 18/07): MAPA LIMPO. Fora anel, numero de
+      // tropas e selo — o placar no topo carrega a leitura do jogo. So a
+      // CAPITAL do rei e castelo (o alvo da partida = tomar o castelo inimigo);
+      // aldeia barbara dominada segue aldeia, marcada por BANDEIRA do time.
+      // Sprite base-centro; fallback procedural quando ainda nao carregou.
+      const sprB = ehCapital
+        ? (SPR.castelo && SPR.castelo.pronto ? SPR.castelo : null)
+        : (SPR.aldeia_neutra && SPR.aldeia_neutra.pronto ? SPR.aldeia_neutra : null);
+      const larg = cs * (ehCapital ? 3.2 : 2.4);
+      const yBase = sy + r * 0.5;                    // base-centro no pe do plot
       if (sprB) {
-        const larg = cs * (a.dono === null ? 2.4 : 3.2);
-        const yBase = sy + r * 0.5;                 // base-centro no pe do plot
-        // rei: castelo tingido na cor do dono (bandeiras vem azuis de fabrica);
-        // neutra: sprite cru. O tingido e cacheado por cor, nao refeito por frame.
-        const img = a.dono === null ? sprB : spriteTintado(sprB, col);
-        desenharSprite(img, sx, yBase, larg);
+        // capital tingida na cor do dono (bandeiras vem azuis de fabrica);
+        // aldeia = sprite cru (a bandeira marca a posse). Tinta cacheada por cor.
+        desenharSprite(ehCapital ? spriteTintado(sprB, col) : sprB, sx, yBase, larg);
+      } else if (r >= 15) {                          // fallback procedural
+        if (ehCapital) desenharTorreao(sx, sy, r, col);
+        else desenharCabana(sx, sy, r);
       }
 
-      // tintura sutil da cor do dono (le-se o territorio de relance)
-      ctx.globalAlpha = a.dono === null ? 0.10 : 0.18;
-      ctx.fillStyle = col;
-      ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.fill();
-      ctx.globalAlpha = 1;
-
-      ctx.lineWidth = 1; ctx.strokeStyle = "rgba(0,0,0,.55)";
-      ctx.beginPath(); ctx.arc(sx, sy, r + 2, 0, Math.PI * 2); ctx.stroke();
-      ctx.lineWidth = Math.max(2.5, cs * 0.11); ctx.strokeStyle = col;
-      ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.stroke();
-
-      if (r > 12) { // E2: interior segue o tamanho NA TELA (r), nao o zoom
-        const LET = { lanceiro: "L", arqueiro: "A", cavaleiro: "C" };
-        const val = a.dono === null
-          ? (a.tropas[a.tipo] || 0) + LET[a.tipo]      // neutra: "40L" (tipo único)
-          : Engine.forcaDe(a.tropas, game.config);     // rei: força total
-
-        const fs = Math.max(10, r * 0.58); // E2: acompanha o raio
-        ctx.font = `bold ${fs}px Verdana`; ctx.textAlign = "center";
-        ctx.lineWidth = Math.max(2, fs * 0.28); ctx.strokeStyle = "rgba(20,12,4,.85)";
-        ctx.strokeText(val, sx, sy - r - 3);
-        ctx.fillStyle = a.dono === null ? "#fff" : col === COR.A ? "#bcd0ff" : "#ffc4c4";
-        ctx.fillText(val, sx, sy - r - 3);
-
-        // predio no centro (torreao com bandeira / cabana) + selo do tipo
-        // na borda: o matchup segue legivel sem esconder a construcao
-        const tg = a.dono === null ? a.tipo : Engine.tipoDominante(game, a.tropas);
-        if (r >= 15) { // E2: predio aparece sempre que couber na tela
-          if (!sprB) { // sprite do kit ja desenhou; procedural so como fallback
-            if (a.dono === null) desenharCabana(sx, sy, r);
-            else desenharTorreao(sx, sy, r, col);
-          }
-          if (tg) {
-            const rb = Math.max(6, r * 0.34);
-            ctx.fillStyle = "rgba(24,17,8,.92)";
-            ctx.beginPath(); ctx.arc(sx + r * 0.68, sy + r * 0.68, rb, 0, Math.PI * 2); ctx.fill();
-            ctx.lineWidth = 1; ctx.strokeStyle = "rgba(217,164,65,.55)"; ctx.stroke();
-            ctx.font = `${rb * 1.35}px serif`;
-            ctx.fillText(GLIFO[tg], sx + r * 0.68, sy + r * 0.68 + rb * 0.48);
-          }
-        } else if (tg) {
-          const fg = Math.max(9, r * 0.55); // E2: acompanha o raio
-          ctx.font = `bold ${fg}px Verdana`;
-          ctx.lineWidth = Math.max(2, fg * 0.25); ctx.strokeStyle = "rgba(20,12,4,.9)";
-          ctx.strokeText(LET[tg], sx, sy + fg * 0.36);
-          ctx.fillStyle = "#f5e9c8";
-          ctx.fillText(LET[tg], sx, sy + fg * 0.36);
-        }
-
-        // nome da aldeia (tipografia de cronica): donos em zoom medio,
-        // neutras so de perto p/ nao virar poluicao — direcao do handoff
-        if (NOMES_AMBIENTE && cs >= (a.dono === null ? 46 : 34)) {
-          const fn = Math.max(9, cs * 0.22);
-          ctx.font = `${fn}px Georgia, "Times New Roman", serif`;
-          ctx.lineWidth = Math.max(2, fn * 0.3); ctx.strokeStyle = "rgba(20,12,4,.7)";
-          ctx.strokeText(a.nome, sx, sy + r + fn + 4);
-          ctx.fillStyle = a.dono === null ? "rgba(240,228,200,.85)"
-            : a.dono === "A" ? "#cdd9ff" : "#ffd0d0";
-          ctx.fillText(a.nome, sx, sy + r + fn + 4);
-        }
+      // BANDEIRA do time sobre a aldeia DOMINADA (nao-capital): a capital ja
+      // veste a cor no proprio castelo, entao so as aldeias tomadas recebem.
+      if (!ehCapital && a.dono !== null) {
+        const alt = sprB ? larg * sprB.height / sprB.width : r * 2;
+        desenharBandeira(sx, yBase - alt * 0.55, r * 1.25, col);
       }
     }
 
