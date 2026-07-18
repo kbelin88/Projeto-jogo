@@ -694,6 +694,27 @@
       }
     }
 
+    // 1a-quater) ESTRADAS (pele v2): a malha (MST das aldeias) fica LOGO
+    // ACIMA DO CHAO — por baixo de agua, decoracao e vilas. Leito de terra
+    // batida na paleta do kit: borda escura larga + centro claro estreito.
+    const estradas = game && !gridView ? estradaMST() : null;
+    if (estradas) {
+      ctx.lineCap = "round"; ctx.lineJoin = "round";
+      for (let pass = 0; pass < 2; pass++) {
+        ctx.strokeStyle = pass === 0 ? "rgba(120,96,58,0.50)" : "rgba(198,170,118,0.85)";
+        ctx.lineWidth = pass === 0 ? Math.max(3, cs * 0.34) : Math.max(1.5, cs * 0.17);
+        ctx.beginPath();
+        for (const e of estradas) {
+          const ax = (e.ax + 0.5) * cs + panX, ay = (e.ay + 0.5) * cs + panY;
+          const bx = (e.bx + 0.5) * cs + panX, by = (e.by + 0.5) * cs + panY;
+          if (Math.max(ax, bx) < 0 || Math.min(ax, bx) > VW ||
+              Math.max(ay, by) < 0 || Math.min(ay, by) > VH) continue; // fora da tela
+          ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
+        }
+        ctx.stroke();
+      }
+    }
+
     // 1b) lagos como blobs orgânicos arredondados
     const lg0x = Math.floor(cx0 / LAKE_G) - 1, lg1x = Math.floor(cx1 / LAKE_G) + 1;
     const lg0y = Math.floor(cy0 / LAKE_G) - 1, lg1y = Math.floor(cy1 / LAKE_G) + 1;
@@ -1878,6 +1899,44 @@
     }
     decoClearCache = { sig, set };
     return set;
+  }
+
+  // PELE v2 (18/07): malha de ESTRADAS = arvore geradora minima sobre as
+  // aldeias (Prim a partir do id 0, empates por id). Deterministica e so
+  // depende das posicoes (fixas na partida) -> cache por assinatura. Devolve
+  // arestas em coordenadas de celula.
+  let estradaCache = { sig: "", edges: null };
+  function estradaMST() {
+    if (!game) return null;
+    const A = game.aldeias;
+    const sig = A.map((a) => a.x + "_" + a.y).join(";");
+    if (estradaCache.sig === sig) return estradaCache.edges;
+    const n = A.length;
+    const inTree = new Array(n).fill(false);
+    const byId = new Map(A.map((a, i) => [a.id, i]));
+    inTree[byId.has(0) ? byId.get(0) : 0] = true;
+    const edges = [];
+    for (let added = 1; added < n; added++) {
+      let best = null;
+      for (let i = 0; i < n; i++) {
+        if (!inTree[i]) continue;
+        for (let j = 0; j < n; j++) {
+          if (inTree[j]) continue;
+          const dx = A[i].x - A[j].x, dy = A[i].y - A[j].y;
+          const d = dx * dx + dy * dy;
+          // empate por id: menor id do no de fora, depois menor id do no da arvore
+          if (!best || d < best.d ||
+              (d === best.d && (A[j].id < best.jid ||
+                (A[j].id === best.jid && A[i].id < best.iid)))) {
+            best = { i, j, d, jid: A[j].id, iid: A[i].id };
+          }
+        }
+      }
+      inTree[best.j] = true;
+      edges.push({ ax: A[best.i].x, ay: A[best.i].y, bx: A[best.j].x, by: A[best.j].y });
+    }
+    estradaCache = { sig, edges };
+    return edges;
   }
 
   function drawGame() {
