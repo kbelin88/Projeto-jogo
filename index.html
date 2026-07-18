@@ -929,6 +929,10 @@
   const COR = { A: "#3b6bd8", B: "#d83b3b", neutra: "#d9d2bd" };
 
   let game = null;        // estado da partida (engine)
+  // PELE v2: ids das CAPITAIS (as unicas aldeias que ja comecam com dono).
+  // Persistente: na conquista o motor zera o tipo (engine 650), entao tipo
+  // nao distingue capital de aldeia tomada; o id inicial-com-dono distingue.
+  let capitalIds = new Set();
   let playing = false;
   let speed = 500;        // ms por turno
   let timer = null;
@@ -1189,6 +1193,8 @@
         if (!dados.frames || !dados.frames.length) throw new Error("replay vazio");
         pause();
         if (!game) game = Engine.criarEstadoInicial(Engine.CONFIG);
+        // capitais do replay: aldeias com dono no primeiro frame gravado
+        capitalIds = new Set(dados.frames[0].aldeias.filter((a) => a.dono !== null).map((a) => a.id));
         rep = { dados, idx: 0 };
         const meuRun = ++runId;
         runReplay(meuRun);
@@ -1423,6 +1429,7 @@
     game = Engine.criarEstadoInicial(Engine.CONFIG);
     // indice celula -> aldeia (posicoes fixas): filtro rapido no render
     game.byCell = new Map(game.aldeias.map((a) => [a.x + "," + a.y, a]));
+    capitalIds = new Set(game.aldeias.filter((a) => a.dono !== null).map((a) => a.id));
     enquadrarTeatro();
     updateGameHUD();
     draw();
@@ -1864,7 +1871,7 @@
     if (decoClearCache.sig === sig) return decoClearCache.set;
     const set = new Set();
     for (const a of game.aldeias) {
-      const cap = a.tipo === null;                // castelo ocupa mais que aldeia
+      const cap = capitalIds.has(a.id);           // castelo ocupa mais que aldeia
       const rx = 2, up = cap ? 3 : 2, down = 1;   // sprite sobe -> folga maior p/ cima
       for (let dy = -up; dy <= down; dy++)
         for (let dx = -rx; dx <= rx; dx++) set.add((a.x + dx) + "," + (a.y + dy));
@@ -1886,7 +1893,7 @@
       if (sx < -60 || sy < -60 || sx > VW + 60 || sy > VH + 60) continue;
       const col = a.dono === null ? COR.neutra : COR[a.dono];
       const r = Math.max(20, cs * 0.59);
-      const ehCapital = a.tipo === null; // rei tem tipo null (persistente): so a capital vira castelo
+      const ehCapital = capitalIds.has(a.id); // so a capital inicial e castelo (aldeia tomada nao)
 
       // PELE v2 (feedback Lucas 18/07): MAPA LIMPO. Fora anel, numero de
       // tropas e selo — o placar no topo carrega a leitura do jogo. So a
