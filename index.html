@@ -702,18 +702,13 @@
         const lk = lakeInfo(gx, gy);
         if (!lk) continue;
         const scx = lk.cx * cs + panX, scy = lk.cy * cs + panY, srad = lk.rad * cs;
-        // margem clara (praia)
-        blobPath(scx, scy, srad * 1.12, lk.seed);
-        ctx.fillStyle = "#9fc18a"; ctx.fill();
-        // água com profundidade (gradiente radial)
-        const grad = ctx.createRadialGradient(scx, scy, srad * 0.1, scx, scy, srad);
-        grad.addColorStop(0, "#3f7fb0"); grad.addColorStop(1, "#2f6694");
-        blobPath(scx, scy, srad, lk.seed);
-        ctx.fillStyle = grad; ctx.fill();
-        // reflexo suave
-        ctx.fillStyle = "rgba(255,255,255,.12)";
-        blobPath(scx - srad * 0.2, scy - srad * 0.25, srad * 0.4, lk.seed + 7);
-        ctx.fill();
+        // AGUA v2 (pele v2, estilo flat do kit): borda de areia FINA + agua
+        // chapada. Fora o gradiente radial e o reflexo branco — a lingua do
+        // kit e cor plana, sem volume fotografico.
+        blobPath(scx, scy, srad * 1.06, lk.seed);   // orla de areia (fina)
+        ctx.fillStyle = "#d9c79a"; ctx.fill();
+        blobPath(scx, scy, srad, lk.seed);          // agua chapada
+        ctx.fillStyle = "#2e6a94"; ctx.fill();
       }
     }
 
