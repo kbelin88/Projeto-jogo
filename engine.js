@@ -69,7 +69,14 @@
     // COMBATE: atrito_base = fracao da forca do PERDEDOR que o vencedor
     // perde, antes do triangulo. Vencedor sempre sobrevive (com base*m < 1).
     // PROVISORIO.
-    combate: { atrito_base: 0.5 },
+    //
+    // BONUS DE DEFESA POR TERRENO (fase motor #3, 19/07): tropa parada numa
+    // aldeia resiste mais que em campo aberto; castelo (capital) resiste ainda
+    // mais. Multiplica a forca EFETIVA do defensor. Calibravel no eval.
+    //   campo aberto / estrada (combate #2) -> 1.0 (nao passa por aqui)
+    //   aldeia (neutra ou conquistada)      -> +25%
+    //   capital / castelo                   -> +50%
+    combate: { atrito_base: 0.5, bonus_defesa_aldeia: 1.25, bonus_defesa_castelo: 1.5 },
 
     // MOVIMENTO (usado na PECA 3): turnos de viagem = ceil(distancia / passo).
     // Cavaleiro rapido, lanceiro lento. Numeros PROVISORIOS, a calibrar.
@@ -179,6 +186,7 @@
       x, y,                                   // posicao no grid do mundo
       nome,
       dono,                                   // null = neutra | "A" | "B"
+      capital: false,                         // true = aldeia PRINCIPAL do rei (castelo); persistente
       tipo: null,                             // (neutra) tipo dominante sorteado; reis = null
       recursos: { madeira: 0, ferro: 0 },     // estoque da aldeia
       tropas: { lanceiro: 0, arqueiro: 0, cavaleiro: 0 }, // tropas tipadas (todos)
@@ -293,6 +301,7 @@
     let id = 0;
     function porRei(p, dono) {
       const ald = criarAldeia(id++, p.x, p.y, World.villageName(p.x, p.y), dono);
+      ald.capital = true;                        // aldeia principal do rei (castelo)
       const ti = (config.rei && config.rei.tropas_iniciais) || {};
       for (const tp of ["lanceiro", "arqueiro", "cavaleiro"]) ald.tropas[tp] = ti[tp] || 0;
       aldeias.push(ald);
@@ -378,6 +387,7 @@
         ald.tropas[tipo] = n;
       } else {
         // rei: guarnicao inicial (CONFIG.rei.tropas_iniciais) p/ poder atacar cedo.
+        ald.capital = true;                     // aldeia principal do rei (castelo)
         const ti = (config.rei && config.rei.tropas_iniciais) || {};
         for (const t of ["lanceiro", "arqueiro", "cavaleiro"]) ald.tropas[t] = ti[t] || 0;
       }
@@ -564,13 +574,24 @@
     }
     return best;
   }
+  // Bonus de defesa por TERRENO (fase motor #3): tropa numa aldeia resiste
+  // mais que em campo aberto; castelo (capital) resiste ainda mais. alvo null
+  // = combate em campo aberto/estrada (#2 futuro) -> sem bonus.
+  function bonusDefesa(estado, alvo) {
+    if (!alvo) return 1;
+    return alvo.capital ? estado.config.combate.bonus_defesa_castelo
+                        : estado.config.combate.bonus_defesa_aldeia;
+  }
+
   // Nucleo da conta do combate (v2): usado pelo resolverCombate E pela
   // previsao de confronto da UI — uma conta so, impossivel divergir.
-  function preverCombateTipos(estado, Fatk, atkType, Fdef, defType) {
+  // defBonus = multiplicador de terreno do defensor (1 = campo aberto).
+  function preverCombateTipos(estado, Fatk, atkType, Fdef, defType, defBonus) {
     const v = vantagem(estado, atkType, defType); // +1 atk tem counter, -1 def tem
     const B = estado.config.bonus_forca_triangulo;
+    const dB = defBonus || 1;                      // terreno do defensor (aldeia/castelo/campo)
     const FatkEf = Fatk * (v > 0 ? B : 1);
-    const FdefEf = Fdef * (v < 0 ? B : 1);
+    const FdefEf = Fdef * (v < 0 ? B : 1) * dB;
     return { v, FatkEf, FdefEf, atacanteVence: FatkEf > FdefEf }; // empate -> defensor segura
   }
 
@@ -581,7 +602,7 @@
     const atkType = tipoDominante(estado, tropasAtk);
     const defType = alvo.dono === null ? alvo.tipo : tipoDominante(estado, alvo.tropas);
     return Object.assign({ Fatk, Fdef, atkType, defType },
-      preverCombateTipos(estado, Fatk, atkType, Fdef, defType));
+      preverCombateTipos(estado, Fatk, atkType, Fdef, defType, bonusDefesa(estado, alvo)));
   }
 
   // +1 se atkType vence defType; -1 se defType vence atkType; 0 neutro/sem tipo.
@@ -618,8 +639,9 @@
 
     // TRIANGULO v2: counter multiplica a forca EFETIVA -> decide o vencedor.
     // A conta vive em preverCombateTipos p/ NUNCA divergir da previsao da UI.
+    const defBonus = bonusDefesa(estado, alvo); // #3: terreno do defensor (aldeia/castelo)
     const { v, FatkEf, FdefEf, atacanteVence } =
-      preverCombateTipos(estado, Fatk, atkType, Fdef, defType);
+      preverCombateTipos(estado, Fatk, atkType, Fdef, defType, defBonus);
     const FwinEf = atacanteVence ? FatkEf : FdefEf;
     const FloseEf = atacanteVence ? FdefEf : FatkEf;
 

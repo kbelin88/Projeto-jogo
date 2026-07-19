@@ -12,6 +12,11 @@
 "use strict";
 const Engine = require("../engine.js");
 const CONFIG = Engine.CONFIG;
+// FASE MOTOR #3: este teste e a spec do NUCLEO de combate (triangulo+atrito),
+// conferida a mao SEM fortificacao. Fixa o bonus de terreno em 1 p/ preservar
+// os numeros; o bonus de aldeia/castelo tem teste proprio (test_peca5_defesa).
+CONFIG.combate.bonus_defesa_aldeia = 1;
+CONFIG.combate.bonus_defesa_castelo = 1;
 
 let falhas = 0;
 function checa(nome, cond, detalhe) {
