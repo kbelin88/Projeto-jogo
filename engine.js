@@ -397,12 +397,50 @@
     return montarJogo(config, aldeias);
   }
 
+  // Rede de ESTRADAS (fase motor #1, 19/07): arvore geradora minima sobre as
+  // aldeias (Prim a partir do id 0, empates por id) — a MESMA que a pele
+  // desenhou. Deterministica; so depende das posicoes (fixas na partida). A
+  // arvore garante caminho UNICO entre quaisquer duas aldeias. Devolve
+  // adjacencia { id: [idVizinho,...] } com vizinhos ordenados por id.
+  function construirEstradas(aldeias) {
+    const n = aldeias.length;
+    const adj = {};
+    for (const a of aldeias) adj[a.id] = [];
+    if (n < 2) return { adj };
+    const inTree = new Array(n).fill(false);
+    const idx0 = aldeias.findIndex((a) => a.id === 0);
+    inTree[idx0 >= 0 ? idx0 : 0] = true;
+    for (let added = 1; added < n; added++) {
+      let best = null;
+      for (let i = 0; i < n; i++) {
+        if (!inTree[i]) continue;
+        for (let j = 0; j < n; j++) {
+          if (inTree[j]) continue;
+          const dx = aldeias[i].x - aldeias[j].x, dy = aldeias[i].y - aldeias[j].y;
+          const d = dx * dx + dy * dy;
+          // empate por id: menor id de fora, depois menor id de dentro
+          if (!best || d < best.d ||
+              (d === best.d && (aldeias[j].id < best.jid ||
+                (aldeias[j].id === best.jid && aldeias[i].id < best.iid)))) {
+            best = { i, j, d, jid: aldeias[j].id, iid: aldeias[i].id };
+          }
+        }
+      }
+      inTree[best.j] = true;
+      adj[aldeias[best.i].id].push(aldeias[best.j].id);
+      adj[aldeias[best.j].id].push(aldeias[best.i].id);
+    }
+    for (const k in adj) adj[k].sort((x, y) => x - y); // BFS deterministico
+    return { adj };
+  }
+
   // estado inicial da partida a partir das aldeias — COMPARTILHADO v1/v2
   function montarJogo(config, aldeias) {
     return {
       config,
       turno: 0,
       aldeias,
+      estradas: construirEstradas(aldeias),  // rede de estradas (motor #1)
       movimentos: [],   // exercitos em transito (PECA 3)
       jogadores: {
         A: { id: "A", nome: "Rei A" },
@@ -697,10 +735,45 @@
     }
     return pior;
   }
-  function turnosViagem(estado, origem, destino, tropas) {
-    const d = distancia(origem, destino);
+  function turnosPorDist(estado, dist, tropas) {
     const passo = estado.config.velocidade_passo[velExercito(estado, tropas)];
-    return Math.max(1, Math.ceil(d / passo));
+    return Math.max(1, Math.ceil(dist / passo));
+  }
+  function turnosViagem(estado, origem, destino, tropas) {
+    return turnosPorDist(estado, distancia(origem, destino), tropas);
+  }
+
+  // Caminho UNICO (lista de ids, origem->destino) pela rede de estradas.
+  // A rede e uma arvore -> BFS acha o unico caminho. null se nao ha rede.
+  function caminhoEntre(estado, aId, bId) {
+    const est = estado.estradas;
+    if (!est || !est.adj) return null;
+    if (aId === bId) return [aId];
+    const prev = { [aId]: aId };
+    const fila = [aId];
+    while (fila.length) {
+      const u = fila.shift();
+      for (const v of (est.adj[u] || [])) {
+        if (prev[v] != null) continue;
+        prev[v] = u;
+        if (v === bId) {
+          const caminho = [bId];
+          let c = bId;
+          while (c !== aId) { c = prev[c]; caminho.push(c); }
+          return caminho.reverse();
+        }
+        fila.push(v);
+      }
+    }
+    return null; // desconexo (nao ocorre numa arvore geradora)
+  }
+  // Distancia total ao longo de um caminho (soma dos trechos).
+  function distanciaRota(estado, caminho) {
+    let d = 0;
+    for (let i = 0; i + 1 < caminho.length; i++) {
+      d += distancia(aldeiaPorId(estado, caminho[i]), aldeiaPorId(estado, caminho[i + 1]));
+    }
+    return d;
   }
 
   // Envia um exercito de uma aldeia (do jogador) a outra. Deduz as tropas
@@ -714,8 +787,18 @@
     let total = 0;
     for (const t of TIPOS) { const n = tropas[t] || 0; carga[t] = n; o.tropas[t] -= n; total += n; }
     if (total === 0) return null;
-    const turnos = turnosViagem(estado, o, d, carga);
-    const mov = { dono: o.dono, origemId, destinoId, tropas: carga, turnosRestantes: turnos, turnosTotal: turnos };
+    // MOTOR #1: o exercito segue a ESTRADA (caminho unico na arvore). Tempo =
+    // distancia AO LONGO da rota / passo. Sem rede (estados sinteticos), reta.
+    let caminho = caminhoEntre(estado, origemId, destinoId);
+    let turnos;
+    if (caminho && caminho.length >= 2) {
+      turnos = turnosPorDist(estado, distanciaRota(estado, caminho), carga);
+    } else {
+      caminho = [origemId, destinoId];
+      turnos = turnosViagem(estado, o, d, carga);
+    }
+    const mov = { dono: o.dono, origemId, destinoId, tropas: carga, caminho,
+      turnosRestantes: turnos, turnosTotal: turnos };
     estado.movimentos.push(mov);
     return mov;
   }
@@ -1567,6 +1650,10 @@
     distancia,
     velExercito,
     turnosViagem,
+    turnosPorDist,
+    construirEstradas,
+    caminhoEntre,
+    distanciaRota,
     enviarExercito,
     avancarMovimentos,
     // Peca 4
