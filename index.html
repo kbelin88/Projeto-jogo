@@ -696,6 +696,33 @@
       }
     }
 
+    // 1a-quinquies) ESTRADAS (motor #1): a rede REAL do jogo (game.estradas),
+    // por baixo de agua/decoracao/vilas. Agora os exercitos ANDAM por ela — a
+    // malha faz sentido no mapa. Cada aresta uma vez (a<b). Terra batida.
+    if (game && game.estradas && game.estradas.adj && !gridView) {
+      const adj = game.estradas.adj;
+      const byId = {}; for (const v of game.aldeias) byId[v.id] = v;
+      ctx.lineCap = "round"; ctx.lineJoin = "round";
+      for (let pass = 0; pass < 2; pass++) {
+        ctx.strokeStyle = pass === 0 ? "rgba(120,96,58,0.42)" : "rgba(198,170,118,0.75)";
+        ctx.lineWidth = pass === 0 ? Math.max(2.5, cs * 0.26) : Math.max(1.2, cs * 0.13);
+        ctx.beginPath();
+        for (const aId in adj) {
+          const av = byId[aId]; if (!av) continue;
+          for (const bId of adj[aId]) {
+            if (bId <= +aId) continue;               // cada aresta uma vez
+            const bv = byId[bId]; if (!bv) continue;
+            const ax = (av.x + 0.5) * cs + panX, ay = (av.y + 0.5) * cs + panY;
+            const bx = (bv.x + 0.5) * cs + panX, by = (bv.y + 0.5) * cs + panY;
+            if (Math.max(ax, bx) < 0 || Math.min(ax, bx) > VW ||
+                Math.max(ay, by) < 0 || Math.min(ay, by) > VH) continue;
+            ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
+          }
+        }
+        ctx.stroke();
+      }
+    }
+
     // 1b) lagos como blobs orgânicos arredondados
     const lg0x = Math.floor(cx0 / LAKE_G) - 1, lg1x = Math.floor(cx1 / LAKE_G) + 1;
     const lg0y = Math.floor(cy0 / LAKE_G) - 1, lg1y = Math.floor(cy1 / LAKE_G) + 1;
@@ -1307,7 +1334,12 @@
   function registrarEfeitosTurno(tn) {
     if (REDUZ_MOV) return;
     for (const e of game.log) {
-      if (e.turno !== tn || e.tipo !== "combate") continue;
+      if (e.turno !== tn) continue;
+      if (e.tipo === "combate_estrada") { // #2: choque no meio da estrada, cor do vencedor
+        efeitos.push({ x: e.x, y: e.y, t0: performance.now(), cor: COR[e.vencedorDono] || "#ffd56b" });
+        continue;
+      }
+      if (e.tipo !== "combate") continue;
       const a = game.aldeias.find((v) => v.id === e.alvoId);
       if (!a) continue;
       efeitos.push({
@@ -1877,6 +1909,28 @@
     return set;
   }
 
+  // MOTOR #1 (render): pontos (em celulas) do caminho de um exercito e o ponto
+  // atual pela fracao de progresso — o exercito ANDA pela estrada, nao pela reta.
+  function pontosCaminho(m) {
+    const cam = (m.caminho && m.caminho.length >= 2) ? m.caminho : [m.origemId, m.destinoId];
+    const pts = [];
+    for (const id of cam) { const a = game.aldeias.find((v) => v.id === id); if (a) pts.push({ x: a.x, y: a.y }); }
+    return pts.length >= 2 ? pts : null;
+  }
+  function pontoNaRota(pts, prog) {
+    const segs = []; let total = 0;
+    for (let i = 0; i + 1 < pts.length; i++) { const d = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y); segs.push(d); total += d; }
+    let alvo = Math.max(0, Math.min(1, prog)) * total;
+    for (let i = 0; i < segs.length; i++) {
+      if (alvo <= segs[i] || i === segs.length - 1) {
+        const t = segs[i] > 0 ? Math.max(0, Math.min(1, alvo / segs[i])) : 0;
+        return { x: lerp(pts[i].x, pts[i + 1].x, t), y: lerp(pts[i].y, pts[i + 1].y, t), seg: i };
+      }
+      alvo -= segs[i];
+    }
+    return { x: pts[pts.length - 1].x, y: pts[pts.length - 1].y, seg: pts.length - 2 };
+  }
+
   function drawGame() {
     if (!game) return;
     const cs = TILE * scale;
@@ -1924,8 +1978,10 @@
       const d = game.aldeias.find((a) => a.id === m.destinoId);
       if (!o || !d) continue;
       const prog = m.turnosTotal ? (m.turnosTotal - m.turnosRestantes) / m.turnosTotal : 1;
-      const mx = lerp(o.x, d.x, prog) * cs + panX + cs / 2;
-      const my = lerp(o.y, d.y, prog) * cs + panY + cs / 2;
+      const pts = pontosCaminho(m);                       // motor #1: segue a estrada
+      const p = pts ? pontoNaRota(pts, prog) : { x: lerp(o.x, d.x, prog), y: lerp(o.y, d.y, prog), seg: 0 };
+      const mx = p.x * cs + panX + cs / 2;
+      const my = p.y * cs + panY + cs / 2;
       const dx = d.x * cs + panX + cs / 2, dy = d.y * cs + panY + cs / 2;
       const col = COR[m.dono];
 
@@ -1954,7 +2010,9 @@
       // importam gritam — o espectador ve DE ONDE, PARA ONDE e QUANTO.
       const ehAtaque = d && d.dono !== m.dono;
       ctx.save();
-      ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(dx, dy);
+      ctx.beginPath(); ctx.moveTo(mx, my);              // motor #1: rota restante pela estrada
+      if (pts) { for (let i = p.seg + 1; i < pts.length; i++) ctx.lineTo(pts[i].x * cs + panX + cs / 2, pts[i].y * cs + panY + cs / 2); }
+      else ctx.lineTo(dx, dy);
       if (ehAtaque) {
         // E2: rota de ataque = pontilhado PRETO fino, do ponto atual ao
         // alvo. A cor mora no escudo; a linha so aponta. Firma a 1 turno.
