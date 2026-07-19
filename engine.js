@@ -54,9 +54,14 @@
     // A forca e quase proporcional ao custo de proposito: o
     // cavaleiro paga a mais por velocidade, nao por forca bruta.
     tropas: {
-      lanceiro:  { custo: { madeira: 15, ferro: 0  }, forca: 10, vel: "lenta",  turnos: 1 },
-      arqueiro:  { custo: { madeira: 20, ferro: 10 }, forca: 15, vel: "media",  turnos: 1 },
-      cavaleiro: { custo: { madeira: 30, ferro: 30 }, forca: 30, vel: "rapida", turnos: 2 },
+      // FORCA ACHATADA (experimento 19/07, hipotese do Lucas): forca 1 por
+      // unidade -> "forca total" = NUMERO DE TROPAS. Remove a indireção (contagem
+      // 5/4/3 vs forca 200) que confundia os modelos fracos. Trade-off: cavaleiro
+      // perde a vantagem de PODER; diferencia so por triangulo+velocidade+custo.
+      // Reversivel/calibravel: p/ manter o cavaleiro forte, use 1/2/3 aqui.
+      lanceiro:  { custo: { madeira: 15, ferro: 0  }, forca: 1, vel: "lenta",  turnos: 1 },
+      arqueiro:  { custo: { madeira: 20, ferro: 10 }, forca: 1, vel: "media",  turnos: 1 },
+      cavaleiro: { custo: { madeira: 30, ferro: 30 }, forca: 1, vel: "rapida", turnos: 2 },
     },
 
     // TRIANGULO pedra-papel-tesoura: cada tropa VENCE a indicada.
@@ -1197,17 +1202,33 @@
   function exemploAncorado(visao) {
     const minhas = (visao && visao.minhas) || [];
     const alvos = (visao && visao.alvos) || [];
-    const origem = minhas.length ? minhas[0].id : 0;       // id real de uma aldeia minha
-    const alvoAtk = alvos.length ? alvos[0].id : origem;   // id real de um alvo (neutra/inimigo)
+    const a0 = minhas.length ? minhas[0] : null;
+    const origem = a0 ? a0.id : 0;                          // id real de uma aldeia minha
+    // prefere NEUTRAS como alvo do exemplo (expansao sensata); copiar nao vira
+    // ataque suicida a capital inimiga. Cai p/ qualquer alvo se nao houver neutra.
+    const neutras = alvos.filter((a) => a.dono === null);
+    const poolAlvo = neutras.length ? neutras : alvos;
+    const alvoAtk = poolAlvo.length ? poolAlvo[0].id : origem;
     const tropas = (l, a, c) => `{"lanceiro": ${l}, "arqueiro": ${a}, "cavaleiro": ${c}}`;
 
+    // ANCORAGEM DAS QUANTIDADES (19/07): os modelos fracos copiam o exemplo ao
+    // pe da letra. Antes o exemplo pedia 10 lanceiros / 5 arqueiros — mais do que
+    // o rei tem (5/4/3) -> copia = 100% rejeitada. Agora as quantidades saem das
+    // tropas REAIS da 1a aldeia (metade de cada): um copia-cola sai VALIDO, e
+    // ainda sobra guarnicao (2x floor(n/2) <= n). Numeros = os do turno, nao fixos.
+    const tr = a0 ? a0.tropas : { lanceiro: 0, arqueiro: 0, cavaleiro: 0 };
+    let hl = Math.floor((tr.lanceiro || 0) / 2), ha = Math.floor((tr.arqueiro || 0) / 2), hc = Math.floor((tr.cavaleiro || 0) / 2);
+    if (hl + ha + hc === 0) { // aldeia quase vazia: manda 1 de um tipo que exista (senao so o molde)
+      if ((tr.lanceiro || 0) > 0) hl = 1; else if ((tr.arqueiro || 0) > 0) ha = 1; else if ((tr.cavaleiro || 0) > 0) hc = 1;
+    }
     const envios = [
-      `    {"origemId": ${origem}, "destinoId": ${alvoAtk}, "tropas": ${tropas(10, 0, 0)}}`,
+      `    {"origemId": ${origem}, "destinoId": ${alvoAtk}, "tropas": ${tropas(hl, ha, hc)}}`,
     ];
-    // 2a linha mostra o molde com os 3 tipos preenchidos; destino = outro id real.
-    const segundoDestino = minhas.length >= 2 ? minhas[1].id : (alvos.length >= 2 ? alvos[1].id : null);
-    if (segundoDestino != null) {
-      envios.push(`    {"origemId": ${origem}, "destinoId": ${segundoDestino}, "tropas": ${tropas(0, 5, 0)}}`);
+    // 2a linha mostra o molde com 2 envios; mesmas quantidades (2x metade <= total),
+    // destino = outro id real. So aparece se ha um 2o alvo E tropas p/ enviar.
+    const segundoDestino = poolAlvo.length >= 2 ? poolAlvo[1].id : (minhas.length >= 2 ? minhas[1].id : null);
+    if (segundoDestino != null && hl + ha + hc > 0) {
+      envios.push(`    {"origemId": ${origem}, "destinoId": ${segundoDestino}, "tropas": ${tropas(hl, ha, hc)}}`);
     }
     return [
       "{",

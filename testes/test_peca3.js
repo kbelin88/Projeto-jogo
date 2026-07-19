@@ -12,6 +12,10 @@
 "use strict";
 const Engine = require("../engine.js");
 const CONFIG = Engine.CONFIG;
+// FORCA: este teste confere numeros a mao com a escala classica (lanceiro 10,
+// arqueiro 15, cavaleiro 30). O default do jogo pode estar achatado (experimento);
+// a conta do combate independe da escala, entao fixamos a escala aqui.
+CONFIG.tropas.lanceiro.forca = 10; CONFIG.tropas.arqueiro.forca = 15; CONFIG.tropas.cavaleiro.forca = 30;
 // FASE MOTOR #3: este teste e a spec do NUCLEO de combate (triangulo+atrito),
 // conferida a mao SEM fortificacao. Fixa o bonus de terreno em 1 p/ preservar
 // os numeros; o bonus de aldeia/castelo tem teste proprio (test_peca5_defesa).

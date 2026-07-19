@@ -19,6 +19,7 @@ const CONFIG = Engine.CONFIG;
 // fixa os valores que este teste confere (robusto a recalibracao do default)
 CONFIG.combate.bonus_defesa_aldeia = 1.25;
 CONFIG.combate.bonus_defesa_castelo = 1.5;
+CONFIG.tropas.lanceiro.forca = 10; CONFIG.tropas.arqueiro.forca = 15; CONFIG.tropas.cavaleiro.forca = 30;
 
 const TIPOS = ["lanceiro", "arqueiro", "cavaleiro"];
 let falhas = 0;

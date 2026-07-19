@@ -10,6 +10,8 @@
 "use strict";
 const Engine = require("../engine.js");
 const CONFIG = Engine.CONFIG;
+// escala classica de forca p/ os numeros conferidos a mao (default pode estar achatado)
+CONFIG.tropas.lanceiro.forca = 10; CONFIG.tropas.arqueiro.forca = 15; CONFIG.tropas.cavaleiro.forca = 30;
 
 let falhas = 0;
 function checa(nome, cond, detalhe) {
