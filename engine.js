@@ -78,6 +78,12 @@
     //   capital / castelo                   -> +50%
     combate: { atrito_base: 0.5, bonus_defesa_aldeia: 1.25, bonus_defesa_castelo: 1.5 },
 
+    // ESTRADAS (fase motor #1): a rede liga as aldeias. Base = arvore geradora
+    // minima (garante que da p/ chegar a todas); + os k vizinhos mais proximos
+    // de cada aldeia como ATALHOS (rotas alternativas, sem serpentear o mapa).
+    // vizinhos maior = rede mais densa e caminhos mais curtos. Calibravel.
+    estradas: { vizinhos: 3 },
+
     // MOVIMENTO (usado na PECA 3): turnos de viagem = ceil(distancia / passo).
     // Cavaleiro rapido, lanceiro lento. Numeros PROVISORIOS, a calibrar.
     // Exercito misto viaja na velocidade da tropa MAIS LENTA.
@@ -397,40 +403,54 @@
     return montarJogo(config, aldeias);
   }
 
-  // Rede de ESTRADAS (fase motor #1, 19/07): arvore geradora minima sobre as
-  // aldeias (Prim a partir do id 0, empates por id) — a MESMA que a pele
-  // desenhou. Deterministica; so depende das posicoes (fixas na partida). A
-  // arvore garante caminho UNICO entre quaisquer duas aldeias. Devolve
+  // Rede de ESTRADAS (fase motor #1, 19/07): grafo que liga as aldeias.
+  //   base : arvore geradora minima (Prim do id 0, empates por id) -> garante
+  //          conectividade (da p/ chegar a qualquer aldeia).
+  //   + k  : os k vizinhos mais proximos de cada aldeia como ATALHOS -> rotas
+  //          alternativas, sem serpentear o mapa (a MST pura fazia isso).
+  // Deterministica; so depende das posicoes (fixas na partida). Devolve
   // adjacencia { id: [idVizinho,...] } com vizinhos ordenados por id.
-  function construirEstradas(aldeias) {
+  function construirEstradas(aldeias, k) {
+    k = (k == null) ? 3 : k;                        // respeita k=0 (so MST)
     const n = aldeias.length;
-    const adj = {};
-    for (const a of aldeias) adj[a.id] = [];
-    if (n < 2) return { adj };
-    const inTree = new Array(n).fill(false);
-    const idx0 = aldeias.findIndex((a) => a.id === 0);
-    inTree[idx0 >= 0 ? idx0 : 0] = true;
-    for (let added = 1; added < n; added++) {
-      let best = null;
-      for (let i = 0; i < n; i++) {
-        if (!inTree[i]) continue;
-        for (let j = 0; j < n; j++) {
-          if (inTree[j]) continue;
-          const dx = aldeias[i].x - aldeias[j].x, dy = aldeias[i].y - aldeias[j].y;
-          const d = dx * dx + dy * dy;
-          // empate por id: menor id de fora, depois menor id de dentro
-          if (!best || d < best.d ||
-              (d === best.d && (aldeias[j].id < best.jid ||
-                (aldeias[j].id === best.jid && aldeias[i].id < best.iid)))) {
-            best = { i, j, d, jid: aldeias[j].id, iid: aldeias[i].id };
+    const adjSet = {};
+    for (const a of aldeias) adjSet[a.id] = new Set();
+    const ligar = (a, b) => { if (a !== b) { adjSet[a].add(b); adjSet[b].add(a); } };
+    const d2 = (a, b) => { const dx = a.x - b.x, dy = a.y - b.y; return dx * dx + dy * dy; };
+
+    if (n >= 2) {
+      // 1) MST base (Prim do id 0, empates por id) — conectividade garantida
+      const inTree = new Array(n).fill(false);
+      const idx0 = aldeias.findIndex((a) => a.id === 0);
+      inTree[idx0 >= 0 ? idx0 : 0] = true;
+      for (let added = 1; added < n; added++) {
+        let best = null;
+        for (let i = 0; i < n; i++) {
+          if (!inTree[i]) continue;
+          for (let j = 0; j < n; j++) {
+            if (inTree[j]) continue;
+            const d = d2(aldeias[i], aldeias[j]);
+            if (!best || d < best.d ||
+                (d === best.d && (aldeias[j].id < best.jid ||
+                  (aldeias[j].id === best.jid && aldeias[i].id < best.iid)))) {
+              best = { i, j, d, jid: aldeias[j].id, iid: aldeias[i].id };
+            }
           }
         }
+        inTree[best.j] = true;
+        ligar(aldeias[best.i].id, aldeias[best.j].id);
       }
-      inTree[best.j] = true;
-      adj[aldeias[best.i].id].push(aldeias[best.j].id);
-      adj[aldeias[best.j].id].push(aldeias[best.i].id);
+      // 2) k vizinhos mais proximos de cada aldeia (atalhos), simetrizado
+      for (let i = 0; i < n; i++) {
+        const perto = aldeias
+          .filter((_, j) => j !== i)
+          .map((b) => ({ id: b.id, d: d2(aldeias[i], b) }))
+          .sort((p, q) => p.d - q.d || p.id - q.id);
+        for (let t = 0; t < Math.min(k, perto.length); t++) ligar(aldeias[i].id, perto[t].id);
+      }
     }
-    for (const k in adj) adj[k].sort((x, y) => x - y); // BFS deterministico
+    const adj = {};
+    for (const id in adjSet) adj[id] = [...adjSet[id]].sort((x, y) => x - y);
     return { adj };
   }
 
@@ -440,7 +460,7 @@
       config,
       turno: 0,
       aldeias,
-      estradas: construirEstradas(aldeias),  // rede de estradas (motor #1)
+      estradas: construirEstradas(aldeias, (config.estradas && config.estradas.vizinhos) || 3),
       movimentos: [],   // exercitos em transito (PECA 3)
       jogadores: {
         A: { id: "A", nome: "Rei A" },
@@ -743,29 +763,36 @@
     return turnosPorDist(estado, distancia(origem, destino), tropas);
   }
 
-  // Caminho UNICO (lista de ids, origem->destino) pela rede de estradas.
-  // A rede e uma arvore -> BFS acha o unico caminho. null se nao ha rede.
+  // MENOR caminho (lista de ids, origem->destino) pela rede de estradas.
+  // A rede tem ciclos (MST + atalhos) -> Dijkstra ponderado pela distancia
+  // euclidiana dos trechos. null se nao ha rede. Deterministico: a fila
+  // escolhe sempre o menor id entre empates (ids iterados em ordem crescente).
   function caminhoEntre(estado, aId, bId) {
     const est = estado.estradas;
     if (!est || !est.adj) return null;
     if (aId === bId) return [aId];
-    const prev = { [aId]: aId };
-    const fila = [aId];
-    while (fila.length) {
-      const u = fila.shift();
-      for (const v of (est.adj[u] || [])) {
-        if (prev[v] != null) continue;
-        prev[v] = u;
-        if (v === bId) {
-          const caminho = [bId];
-          let c = bId;
-          while (c !== aId) { c = prev[c]; caminho.push(c); }
-          return caminho.reverse();
-        }
-        fila.push(v);
+    const pos = {}; for (const a of estado.aldeias) pos[a.id] = a;
+    const ids = Object.keys(est.adj).map(Number);
+    const dist = {}, prev = {}, visto = {};
+    dist[aId] = 0;
+    for (;;) {
+      let u = null;                                  // menor dist ainda nao visitada
+      for (const id of ids) {
+        if (visto[id] || dist[id] == null) continue;
+        if (u === null || dist[id] < dist[u]) u = id; // ids crescentes -> empate = menor id
+      }
+      if (u === null || u === bId) break;
+      visto[u] = true;
+      for (const v of est.adj[u]) {
+        if (visto[v]) continue;
+        const nd = dist[u] + Math.hypot(pos[u].x - pos[v].x, pos[u].y - pos[v].y);
+        if (dist[v] == null || nd < dist[v]) { dist[v] = nd; prev[v] = u; }
       }
     }
-    return null; // desconexo (nao ocorre numa arvore geradora)
+    if (dist[bId] == null) return null;              // desconexo (nao ocorre)
+    const caminho = [bId]; let c = bId;
+    while (c !== aId) { c = prev[c]; caminho.push(c); }
+    return caminho.reverse();
   }
   // Distancia total ao longo de um caminho (soma dos trechos).
   function distanciaRota(estado, caminho) {
