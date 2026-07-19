@@ -1057,7 +1057,7 @@
       const euAtaquei = ev.atacante === me;
       const quem = euAtaquei ? "Voce" : "Rei " + ev.atacante;
       if (ev.vencedor === "atacante") {
-        const baixas = euAtaquei ? ` (suas baixas: ${ev.baixasForca} de forca)` : "";
+        const baixas = euAtaquei ? ` (suas baixas: ${ev.baixasForca} tropas)` : "";
         return `${quem} atacou [${ev.alvoId}] ${ev.alvoNome}: VITORIA, conquistou${baixas}`;
       }
       const perdeu = euAtaquei ? " (seu exercito foi perdido)" : "";
@@ -1133,12 +1133,9 @@
     }
     L.push("");
 
-    // FORCA TOTAL
-    const forcaCasa = visao.minhas.reduce((s, a) => s + forcaDe(a.tropas, cfg), 0);
-    const forcaTransito = visao.transito.filter((m) => m.dono === me).reduce((s, m) => s + forcaDe(m.tropas, cfg), 0);
-    L.push(`=== FORCA TOTAL ===`);
-    L.push(`Sua forca em casa: ${forcaCasa}   |   Sua forca em transito: ${forcaTransito}`);
-    L.push("");
+    // FORCA TOTAL removida (19/07, filosofia do Lucas): na partida o Rei ve so
+    // TROPA + QUANTIDADE (por aldeia, acima) + CUSTO (nas regras). Sem numero de
+    // "forca" — 1 lanceiro e 1 lanceiro. A tabela de calculo fica nas REGRAS.
 
     // ALDEIAS NEUTRAS (ordenadas por distancia da minha mais proxima)
     const neutras = visao.alvos.filter((a) => a.dono === null)
@@ -1253,16 +1250,20 @@
     const B = cfg.bonus_forca_triangulo;
     const L = [];
     L.push("=== REGRAS DE COMBATE ===");
+    L.push("Cada tropa vale 1: o que conta e o NUMERO de tropas de cada lado.");
     L.push(`Triangulo de counters: ${TIPOS.map((t) => `${t} vence ${cfg.triangulo[t]}`).join("; ")}.`);
-    L.push(`No combate, o tipo com MAIS FORCA em cada exercito define o matchup. O lado com o counter certo luta com sua forca multiplicada por ${B}. Vence quem tiver a maior forca efetiva; empate favorece o defensor.`);
+    L.push(`O tipo com MAIS tropas em cada exercito define o matchup. O lado com o counter certo conta suas tropas x ${B}. Vence o maior numero efetivo de tropas; empate favorece o defensor.`);
     if (B > 1) {
-      const def = 300;
-      const atk = Math.ceil((def + 30) / B); // sempre: atk*B > def
+      const def = 5;
+      const atk = Math.ceil((def + 1) / B); // atk*B > def
       if (atk < def) {
         const atkEf = Math.round(atk * B);
-        L.push(`Exemplo: ${atk} de forca em arqueiros atacando ${def} de forca em lanceiros: ${atk} x ${B} = ${atkEf} contra ${def} -> o atacante vence, mesmo com menos forca. Com o counter errado, aconteceria o inverso.`);
+        L.push(`Exemplo: ${atk} arqueiros atacando ${def} lanceiros: com o counter certo, ${atk} x ${B} = ${atkEf} contra ${def} -> o atacante vence mesmo com MENOS tropas. Com o counter errado, seria o inverso.`);
       }
     }
+    const bA = cfg.combate && cfg.combate.bonus_defesa_aldeia, bC = cfg.combate && cfg.combate.bonus_defesa_castelo;
+    if (bA || bC)
+      L.push(`Defender e mais facil: tropas paradas numa aldeia contam x ${bA}; num castelo (capital), x ${bC}. Em campo aberto (na estrada) nao ha bonus. Para TOMAR uma aldeia, leve tropas com folga — 1 unidade nao conquista nada.`);
     return L.join("\n");
   }
 
@@ -1276,7 +1277,7 @@
     for (const t of TIPOS) {
       const d = cfg.tropas[t];
       L.push(`${t}: custa ${d.custo.madeira} madeira + ${d.custo.ferro} ferro, ` +
-        `forca ${d.forca}, fica pronto em ${d.turnos} turno${d.turnos > 1 ? "s" : ""}, velocidade ${d.vel}.`);
+        `fica pronto em ${d.turnos} turno${d.turnos > 1 ? "s" : ""}, velocidade ${d.vel}.`);
     }
     L.push(`Cada aldeia sua produz ${cfg.producao.madeira} madeira e ${cfg.producao.ferro} ferro por turno.`);
     if (cfg.limite_forca_aldeia)
