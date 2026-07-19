@@ -279,6 +279,8 @@
     <select id="gmodA" class="selrei">
       <option value="burro" selected>burro</option>
       <option value="gemini">Gemini</option>
+      <option value="grok:grok-4">Grok 4</option>
+      <option value="grok:grok-3-mini">Grok 3 mini</option>
       <option value="ollama:qwen2.5:3b">qwen2.5:3b</option>
       <option value="ollama:llama3.2:3b">llama3.2:3b</option>
       <option value="ollama:llama3:latest">llama3 8B</option>
@@ -288,6 +290,8 @@
     <select id="gmodB" class="selrei">
       <option value="burro" selected>burro</option>
       <option value="gemini">Gemini</option>
+      <option value="grok:grok-4">Grok 4</option>
+      <option value="grok:grok-3-mini">Grok 3 mini</option>
       <option value="ollama:qwen2.5:3b">qwen2.5:3b</option>
       <option value="ollama:llama3.2:3b">llama3.2:3b</option>
       <option value="ollama:llama3:latest">llama3 8B</option>
@@ -1516,6 +1520,41 @@
     }
   }
 
+  // ----- GROK (xAI): API OpenAI-compatible (chat/completions). Chave no
+  // localStorage (o browser NAO le o .env — cola-se uma vez, como o Gemini).
+  const GROK_URL = "https://api.x.ai/v1/chat/completions";
+  let grokKey = lsGet("GROK_API_KEY") || "";
+  let ultimoEnvioGrok = 0;
+  function pedirChaveGrok() {
+    if (!grokKey) {
+      const k = (window.prompt("Cole sua GROK_API_KEY (xai-..., fica so neste navegador):") || "").trim();
+      if (k) { grokKey = k; lsSet("GROK_API_KEY", k); }
+    }
+    return grokKey;
+  }
+  async function gerarGrok(prompt, modelo) {
+    const faltam = 300 - (Date.now() - ultimoEnvioGrok); // pacing leve p/ rate limit
+    if (faltam > 0) await espera(faltam);
+    ultimoEnvioGrok = Date.now();
+    for (let tentativa = 1; ; tentativa++) {
+      const resp = await fetch(GROK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + grokKey },
+        body: JSON.stringify({ model: modelo, messages: [{ role: "user", content: prompt }], temperature: tempLLM, stream: false }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const u = data.usage;
+        tokensUltimaChamada = u ? { prompt: u.prompt_tokens || 0, resposta: u.completion_tokens || 0 } : null;
+        const c = data.choices && data.choices[0];
+        return (c && c.message && c.message.content) || "";
+      }
+      const corpo = await resp.text().catch(() => "");
+      if ((resp.status !== 429 && resp.status !== 503) || tentativa >= 6) throw new Error("Grok HTTP " + resp.status + ": " + corpo);
+      await espera(Math.min(1000 * 2 ** tentativa, 40000) + 500); // backoff p/ throttle
+    }
+  }
+
   // composicao curta p/ o log (ex.: "10L+5C")
   function compStrG(t) {
     const p = [];
@@ -1634,6 +1673,7 @@
   function fabricarGerador(valor) {
     if (valor === "burro") return null; // burro decide sem rede
     if (valor === "gemini") return (p) => gerarGemini(p);
+    if (valor.startsWith("grok:")) { const m = valor.slice("grok:".length); return (p) => gerarGrok(p, m); }
     const modelo = valor.slice("ollama:".length);
     return (p) => gerarOllama(p, modelo);
   }
@@ -1712,6 +1752,9 @@
     const vA = document.getElementById("gmodA").value, vB = document.getElementById("gmodB").value;
     if ((vA === "gemini" || vB === "gemini") && !pedirChave()) {
       pause(); alert("Sem GEMINI_API_KEY: nao da pra rodar o Gemini."); return;
+    }
+    if ((vA.startsWith("grok:") || vB.startsWith("grok:")) && !pedirChaveGrok()) {
+      pause(); alert("Sem GROK_API_KEY: nao da pra rodar o Grok."); return;
     }
     const usaOllama = [vA, vB].find((v) => v.startsWith("ollama:"));
     if (usaOllama) { // sanity check (e teste de CORS)
