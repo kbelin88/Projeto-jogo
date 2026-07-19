@@ -1,0 +1,189 @@
+================================================================================
+  ARENA DOS REIS — RESUMO DA SESSAO (19-20/07/2026) + MAPA DA PROXIMA
+  Escrito pelo Claude (Cursor) a pedido do Lucas.
+================================================================================
+
+Esta sessao foi longa e cobriu TRES frentes: (1) terminar a PELE v2 (visual),
+(2) abrir a FASE DE MOTOR (jogo interage com o cenario), (3) melhorar o PROMPT
+dos modelos e ligar o GROK. Nada foi mergeado no main ainda — aguarda seu F5.
+
+--------------------------------------------------------------------------------
+ESTADO DAS BRANCHES (nada mergeado no main; tudo local, agora tambem no remote)
+--------------------------------------------------------------------------------
+  main .......................... base + "mundo v2" (layout espelhado 60x34).
+  pele-v2 ....................... so o visual (index.html + sprites). Seguro.
+  motor-defesa-aldeia ........... so o motor (#3 defesa + #1 estradas). Off main.
+  integracao-fase-motor ......... *** A BRANCH BOA *** = pele + motor + #2 +
+                                   integracao de render + feedback + prompt + grok.
+                                   E ela que voce testou. E ela que merge no main.
+
+  Para continuar:  git checkout integracao-fase-motor
+
+--------------------------------------------------------------------------------
+1) PELE v2 — CAMADA VISUAL (index.html, sprites)
+--------------------------------------------------------------------------------
+  - Kit de sprites v2 do nano banana; texturas antigas (tw1/tw2) removidas.
+  - Bosques calibrados (densidade hash 0.18 -> 0.10).
+  - PECA B: predios do kit. So a CAPITAL do rei e CASTELO; aldeia barbara
+    dominada continua ALDEIA + uma BANDEIRA da cor do time.
+      * Capital identificada por capitalIds (aldeias com dono no 1o frame),
+        NAO por a.tipo — porque a conquista zera o tipo (engine linha ~650).
+  - MAPA LIMPO (feedback seu): removidos do mapa o anel/tintura do dono, o
+    numero de tropas, o selo do tipo e o veu de area de influencia. O placar/
+    cabo-de-guerra no topo carrega a leitura; o mapa virou paisagem.
+  - Agua v2: estilo flat do kit. DEPOIS removida do mapa (lagos poluiam) — o
+    isWater segue no motor, mas invisivel.
+  - Grama mais viva (verde vicoso no lugar do oliva).
+  - Decoracao (arvore/montanha) nao nasce mais sob aldeias (decoClear).
+  Commits: 81bef57, bf9dc04, 27e42cb, 86e3897, 50b9c94, fb7238f, ca9538f
+           (+ 7992df4 tirou os lagos)
+
+--------------------------------------------------------------------------------
+2) FASE DE MOTOR — o jogo interage com o cenario (engine.js) *** O GRANDE ***
+--------------------------------------------------------------------------------
+  Motivo (sua objecao recorrente): ataque em linha reta passando por cima de
+  tudo nao faz sentido. Tres mecanicas + bloqueio, TODAS deterministicas.
+
+  #3  DEFESA POR TERRENO (commit 9510b8c)
+      - Tropa parada numa ALDEIA defende com +25%; no CASTELO (capital), +50%;
+        em campo aberto/estrada, sem bonus. Multiplica a forca efetiva do
+        defensor na conta unica (motor + UI nunca divergem).
+      - Novo campo persistente aldeia.capital (marcado na geracao dos reis).
+      - CONFIG.combate.bonus_defesa_aldeia (1.25) / bonus_defesa_castelo (1.5).
+      - Teste: testes/test_peca5_defesa.js
+
+  #1  MOVIMENTO POR ESTRADAS (commits 1ce687c, 2310e56)
+      - Exercito segue a REDE de estradas, nao a reta. Rede = arvore geradora
+        minima (conectividade) + os k vizinhos mais proximos (atalhos) +
+        N TRAVESSIAS ligando os dois lados (o mapa e espelhado; sem isso so
+        havia 2 rotas entre os reis -> agora 7).
+      - estado.estradas.adj; caminhoEntre = Dijkstra (menor caminho).
+      - Tempo de viagem = distancia AO LONGO da rota / passo.
+      - CONFIG.estradas.vizinhos (3) e .travessias (5) — calibraveis.
+      - Teste: testes/test_peca6_estradas.js
+
+  #2  COMBATE NA ESTRADA (commit 59d1511)
+      - Dois exercitos INIMIGOS que se cruzam no MESMO trecho, em sentidos
+        opostos, se enfrentam NO CAMINHO (campo aberto, sem bonus). Perdedor
+        eliminado, vencedor segue com baixas. Evento "combate_estrada".
+      - NAO tratado (de proposito): mesmo sentido (alcance) e passagem por
+        aldeia inimiga (isso o #4 abaixo resolve no envio).
+      - Teste: testes/test_peca7_combate_estrada.js
+
+  #4  NAO PASSA POR ALDEIA ALHEIA (commit 7992df4)
+      - enviarExercito TRUNCA a rota na 1a aldeia que nao e do dono (inimiga/
+        barbara): a marcha para e briga ali. Aldeia propria no meio: passa reto.
+      - Mata o "atacar a aldeia do lado do castelo no turno 2".
+      - Teste: testes/test_peca8_bloqueio_aldeia.js
+
+  INTEGRACAO DE RENDER (commit eb5037b): a rede de estradas aparece no mapa
+  (game.estradas), o exercito ANDA pela estrada (segue mov.caminho), e o
+  combate na estrada mostra o choque na cor do vencedor (live + replay).
+
+--------------------------------------------------------------------------------
+3) PROMPT DOS MODELOS + GROK (engine.js, index.html)
+--------------------------------------------------------------------------------
+  Diagnostico: modelos fracos (qwen2.5:3b, llama3.2:3b) quase nao jogavam.
+
+  (a) EXEMPLO ANCORADO copiado ao pe da letra (commit 0e73287)
+      - Antes o exemplo pedia 10 lanceiros / 5 arqueiros — mais do que o rei
+        tem (5/4/3) -> toda copia REJEITADA. Agora as quantidades saem das
+        tropas REAIS da 1a aldeia (metade de cada) e o alvo prefere NEUTRA.
+        Copiar o exemplo virou uma ordem VALIDA. -> agencia do qwen 0.25->0.75.
+
+  (b) FORCA ACHATADA (commit 0e73287): forca 1 por unidade -> "forca total" =
+      numero de tropas. Remove a indireção (contagem 5/4/3 vs forca 200).
+      Trade-off: cavaleiro perde a vantagem de PODER (so triangulo+velocidade+
+      custo). Reversivel/calibravel: 1/2/3 mantem o cavaleiro forte.
+
+  (c) PROMPT SEM "FORCA" na partida (commit 36cff13, sua filosofia): "1 lanceiro
+      e 1 lanceiro". Na hora do jogo o Rei ve so TROPA + QUANTIDADE + CUSTO.
+      - Removido o bloco FORCA TOTAL do relatorio.
+      - Regras de combate reescritas em NUMERO DE TROPAS, com o BONUS DE DEFESA
+        explicado ("1 unidade nao conquista nada").
+      - A "tabela de calculo" (triangulo, x1.5) fica nas REGRAS, como referencia.
+
+  (d) GROK (xAI) como jogador (commit 6111854)
+      - Dropdown "Grok 4" / "Grok 3 mini" pra qualquer rei. Cliente OpenAI-
+        compatible (api.x.ai). Chave GROK_API_KEY no localStorage (o browser
+        NAO le o .env — cola-se uma vez, como o Gemini).
+      - STATUS: a integracao FUNCIONA. O erro do seu teste foi HTTP 403
+        "team sem creditos" — billing, nao a chave nem CORS. Adicionar credito
+        em console.x.ai/team/... e o Grok joga.
+
+--------------------------------------------------------------------------------
+ESTADO DOS TESTES
+--------------------------------------------------------------------------------
+  Suite VERDE: 16 testes em testes/ + 5 smokes em testes_arena/ = 21, 0 falhas.
+  (test_peca3/5/7 fixam a escala classica de forca 10/15/30 para conferir os
+   numeros a mao; o jogo roda com forca achatada 1/1/1 — a conta independe da
+   escala.)
+  Rodar (bash):
+    for f in testes/test_*.js testes_arena/*.js; do node "$f" >/dev/null 2>&1 \
+      || echo "FALHOU: $f"; done; echo ok
+
+--------------------------------------------------------------------------------
+O QUE OS JOGOS MOSTRARAM (achados)
+--------------------------------------------------------------------------------
+  - 3B (qwen/llama): TETO DE CAPACIDADE. Melhoraram com o exemplo consertado,
+    mas o qwen entrou num LOOP DURO (repetiu a MESMA ordem rejeitada por 11
+    turnos: "enviar 1 cavaleiro de uma aldeia que tem 0"). O feedback "nao
+    repita" nao quebra o loop. 3B e frágil: a mesma mudanca de prompt ajudou o
+    llama e piorou o qwo — ruido, nao sinal. Precisa de VARIAS seeds pra
+    avaliar prompt.
+  - GEMINI: joga DE VERDADE. Agencia 2.17 envios/turno, 0 rejeicoes. Usa o
+    TRIANGULO de proposito (arqueiro na neutra-lanceiro, vant=1), expansao
+    multi-frente encadeando aldeias conquistadas como base. 1->6 aldeias em 6
+    turnos. => A MECANICA/PROMPT ESTA BOA; a falha do 3B era capacidade.
+    Poren: (1) o oponente (Grok) estava inerte (403), nao foi duelo real;
+           (2) o Gemini se espalha FINO (6 aldeias, forca ~5) — vulneravel a
+           um oponente ativo.
+
+================================================================================
+  MAPA DA PROXIMA SESSAO (por onde continuar)
+================================================================================
+  Comece em:  git checkout integracao-fase-motor  (e rode a suite pra confirmar)
+
+  DECISOES PENDENTES (suas):
+  [ ] MERGE integracao-fase-motor -> main? (depois do seu F5 final). Sugiro
+      revisar no navegador e, se aprovar, mergear. As branches pele-v2 e
+      motor-defesa-aldeia podem ser apagadas depois do merge (ja estao dentro).
+  [ ] FORCA: manter achatada 1/1/1 (experimento) ou ir pra 1/2/3 (cavaleiro
+      volta a ser forte)? Decidir vendo Gemini vs Grok.
+
+  PROXIMOS PASSOS (candidatos, por prioridade):
+  [ ] GROK: por credito no time xAI (console.x.ai/team/...) e rodar
+      GEMINI vs GROK — o primeiro DUELO real com dois lados ativos. E ai que
+      as estradas + combate no caminho + defesa importam de verdade.
+  [ ] FEEDBACK DE REJEICAO PRESCRITIVO (mira o loop do 3B): em vez de "nao
+      repita", dizer o que o modelo PODE fazer ("a aldeia [2] tem 0 cavaleiros;
+      ela tem 5 lanceiros — envie o que ela TEM"). Ataca o inventario mental
+      desatualizado. Arquivo: engine.js, relatorioTexto (bloco de rejeicoes).
+  [ ] AVALIACAO MULTI-SEED do prompt (3B e ruidoso demais p/ 1 partida).
+  [ ] ECONOMIA: o FERRO vira peso morto (modelos so constroem lanceiro, que
+      custa 0 ferro; acumulam 90+ de ferro sem uso). Considerar simplificar
+      pra runs de modelo fraco. producao={madeira:10,ferro:6}; lanceiro=15mad.
+
+  MOTOR — o que ficou DE FORA (se um dia quiser):
+  [ ] Combate na estrada no MESMO sentido (alcance) — hoje so trata frontal.
+  [ ] Interceptacao ao PASSAR por aldeia inimiga a MEIO do transito (hoje o #4
+      resolve so na hora do ENVIO, truncando a rota).
+  [ ] RIOS: e decisao de MOTOR (world.js, congelado) — a agua hoje sao lagos
+      circulares (isWater). Rio de verdade muda a geracao. Nao e pele.
+
+  KNOBS CALIBRAVEIS (tudo em engine.js CONFIG):
+    combate.bonus_defesa_aldeia = 1.25 ; bonus_defesa_castelo = 1.5
+    estradas.vizinhos = 3 (densidade) ; estradas.travessias = 5 (rotas entre lados)
+    tropas.*.forca = 1 (achatada; experimento)
+    producao / custos das tropas (economia)
+
+  ARQUIVOS-CHAVE:
+    engine.js ...... motor (combate, movimento, estradas, prompt, regras)
+    world.js ....... geracao do mundo (isWater/lagos) — CONGELADO
+    index.html ..... render + clientes LLM (gemini/grok/ollama) + duelo
+    testes/ ........ 16 testes ; testes_arena/ .... 5 smokes
+    .env ........... chaves (GEMINI_API_KEY, GROK_API_KEY) — GITIGNORED, seguro
+
+  MEMORIA (Claude): pele-v2-estado, direcao-motor-cenario-interativo,
+    benchmark-modelos, v1-peca2-rei-ia (em ~/.claude/.../memory/).
+================================================================================
