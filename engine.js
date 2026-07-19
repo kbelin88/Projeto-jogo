@@ -844,14 +844,96 @@
     return rep;
   }
 
-  // (3+4) MOVIMENTO + COMBATE: avanca transitos; os que chegam resolvem.
+  // ---- MOTOR #2: combate na ESTRADA (exercitos que se cruzam) ----
+
+  // Ponto atual de um exercito ao longo da sua rota (pelo progresso de turnos).
+  // Devolve o trecho (aId->bId no sentido da marcha), t em [0,1] e o ponto x,y.
+  function posicaoRota(estado, mov) {
+    const cam = mov.caminho;
+    if (!cam || cam.length < 2) return null;
+    const total = distanciaRota(estado, cam);
+    const frac = mov.turnosTotal ? (mov.turnosTotal - mov.turnosRestantes) / mov.turnosTotal : 1;
+    let alvo = Math.max(0, frac) * total;
+    for (let i = 0; i + 1 < cam.length; i++) {
+      const a = aldeiaPorId(estado, cam[i]), b = aldeiaPorId(estado, cam[i + 1]);
+      const seg = distancia(a, b);
+      if (alvo <= seg || i + 2 === cam.length) {
+        const t = seg > 0 ? Math.max(0, Math.min(1, alvo / seg)) : 0;
+        return { aId: cam[i], bId: cam[i + 1], t, x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+      }
+      alvo -= seg;
+    }
+    return null;
+  }
+
+  // Dois exercitos INIMIGOS se cruzaram no mesmo trecho, em sentidos opostos?
+  // Teste instantaneo: no trecho lo<->hi, quem vai lo->hi ja alcancou quem vai
+  // hi->lo (posicoes medidas a partir de lo). Sem estado anterior -> deterministico.
+  function cruzaramNaEstrada(estado, m1, m2) {
+    if (m1.dono === m2.dono) return false;
+    const p1 = posicaoRota(estado, m1), p2 = posicaoRota(estado, m2);
+    if (!p1 || !p2) return false;
+    const lo = Math.min(p1.aId, p1.bId), hi = Math.max(p1.aId, p1.bId);
+    if (lo !== Math.min(p2.aId, p2.bId) || hi !== Math.max(p2.aId, p2.bId)) return false; // trecho diferente
+    const dir1 = p1.aId < p1.bId ? 1 : -1, dir2 = p2.aId < p2.bId ? 1 : -1;
+    if (dir1 === dir2) return false; // mesmo sentido: nao tratado (nao se enfrentam de frente)
+    const seg = distancia(aldeiaPorId(estado, lo), aldeiaPorId(estado, hi));
+    const posLo = (p) => (p.aId < p.bId ? p.t : 1 - p.t) * seg; // distancia a partir de lo
+    const posX = dir1 === 1 ? posLo(p1) : posLo(p2); // o que marcha lo->hi
+    const posY = dir1 === 1 ? posLo(p2) : posLo(p1); // o que marcha hi->lo
+    return posX >= posY; // se encontraram (ou passaram) no trecho
+  }
+
+  // Combate CAMPO ABERTO entre dois exercitos (sem bonus de terreno). Vencedor
+  // segue com baixas; perdedor eliminado. Determinismo do empate: dono "A" e o
+  // "atacante" (a conta em si nao depende da ordem dos argumentos).
+  function resolverCombateEstrada(estado, m1, m2) {
+    const cfg = estado.config;
+    const atk = m1.dono < m2.dono ? m1 : m2;
+    const def = atk === m1 ? m2 : m1;
+    const Fa = forcaTropas(estado, atk.tropas), Fd = forcaTropas(estado, def.tropas);
+    const ta = tipoDominante(estado, atk.tropas), td = tipoDominante(estado, def.tropas);
+    const { v, FatkEf, FdefEf, atacanteVence } = preverCombateTipos(estado, Fa, ta, Fd, td, 1); // campo aberto
+    const vencedor = atacanteVence ? atk : def, perdedor = atacanteVence ? def : atk;
+    const Fwin = atacanteVence ? FatkEf : FdefEf, Flose = atacanteVence ? FdefEf : FatkEf;
+    const baixasEf = Math.min(Flose * cfg.combate.atrito_base, Fwin);
+    const fracao = Fwin > 0 ? baixasEf / Fwin : 0;
+    aplicarBaixas(estado, vencedor.tropas, fracao);
+    const pa = posicaoRota(estado, atk) || { x: 0, y: 0 };
+    const ev = { tipo: "combate_estrada", turno: estado.turno,
+      atacante: atk.dono, defensor: def.dono, vencedorDono: vencedor.dono,
+      Fatk: Fa, Fdef: Fd, vantagem: v, x: pa.x, y: pa.y };
+    estado.log.push(ev);
+    return { vencedor, perdedor, ev };
+  }
+
+  // Varre os exercitos em transito e resolve os cruzamentos inimigos. Devolve
+  // os sobreviventes (perdedores saem do transito). O(m^2), m pequeno.
+  function detectarCombatesEstrada(estado, movs) {
+    const mortos = new Set();
+    for (let i = 0; i < movs.length; i++) {
+      if (mortos.has(movs[i])) continue;
+      for (let j = i + 1; j < movs.length; j++) {
+        if (mortos.has(movs[i])) break;
+        if (mortos.has(movs[j])) continue;
+        if (!cruzaramNaEstrada(estado, movs[i], movs[j])) continue;
+        const { perdedor } = resolverCombateEstrada(estado, movs[i], movs[j]);
+        mortos.add(perdedor);
+      }
+    }
+    return movs.filter((m) => !mortos.has(m));
+  }
+
+  // (3+4) MOVIMENTO + COMBATE: avanca transitos; cruzamentos na estrada
+  // resolvem no meio do caminho; os que chegam resolvem no destino.
   function avancarMovimentos(estado) {
     const chegaram = [], viajando = [];
     for (const m of estado.movimentos) {
       m.turnosRestantes -= 1;
       (m.turnosRestantes <= 0 ? chegaram : viajando).push(m);
     }
-    estado.movimentos = viajando;
+    // #2: quem segue viajando pode se cruzar com inimigo no mesmo trecho
+    estado.movimentos = detectarCombatesEstrada(estado, viajando);
     for (const m of chegaram) resolverChegada(estado, m);
   }
 
@@ -1681,6 +1763,9 @@
     construirEstradas,
     caminhoEntre,
     distanciaRota,
+    posicaoRota,
+    cruzaramNaEstrada,
+    resolverCombateEstrada,
     enviarExercito,
     avancarMovimentos,
     // Peca 4
