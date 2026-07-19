@@ -80,9 +80,10 @@
 
     // ESTRADAS (fase motor #1): a rede liga as aldeias. Base = arvore geradora
     // minima (garante que da p/ chegar a todas); + os k vizinhos mais proximos
-    // de cada aldeia como ATALHOS (rotas alternativas, sem serpentear o mapa).
-    // vizinhos maior = rede mais densa e caminhos mais curtos. Calibravel.
-    estradas: { vizinhos: 3 },
+    // de cada aldeia como ATALHOS; + N TRAVESSIAS ligando os lados oeste/leste
+    // (o mapa e espelhado, as metades se conectam pouco pela vizinhanca).
+    // vizinhos = densidade local; travessias = rotas entre os dois jogadores.
+    estradas: { vizinhos: 3, travessias: 5 },
 
     // MOVIMENTO (usado na PECA 3): turnos de viagem = ceil(distancia / passo).
     // Cavaleiro rapido, lanceiro lento. Numeros PROVISORIOS, a calibrar.
@@ -410,8 +411,9 @@
   //          alternativas, sem serpentear o mapa (a MST pura fazia isso).
   // Deterministica; so depende das posicoes (fixas na partida). Devolve
   // adjacencia { id: [idVizinho,...] } com vizinhos ordenados por id.
-  function construirEstradas(aldeias, k) {
+  function construirEstradas(aldeias, k, travessias) {
     k = (k == null) ? 3 : k;                        // respeita k=0 (so MST)
+    travessias = (travessias == null) ? 0 : travessias;
     const n = aldeias.length;
     const adjSet = {};
     for (const a of aldeias) adjSet[a.id] = new Set();
@@ -448,6 +450,28 @@
           .sort((p, q) => p.d - q.d || p.id - q.id);
         for (let t = 0; t < Math.min(k, perto.length); t++) ligar(aldeias[i].id, perto[t].id);
       }
+      // 3) TRAVESSIAS entre os lados: o mapa e espelhado no eixo vertical, entao
+      //    as metades quase nao se ligam. Liga os N pares oeste-leste mais
+      //    proximos ainda nao ligados (medido pela mediana do x). Determinismo:
+      //    ordena por distancia, depois pelos ids.
+      if (travessias > 0) {
+        const xs = aldeias.map((a) => a.x).slice().sort((p, q) => p - q);
+        const med = xs[Math.floor(xs.length / 2)];
+        const pares = [];
+        for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+          if ((aldeias[i].x < med) === (aldeias[j].x < med)) continue; // mesmo lado
+          pares.push({ i, j, d: d2(aldeias[i], aldeias[j]) });
+        }
+        pares.sort((p, q) => p.d - q.d ||
+          aldeias[p.i].id - aldeias[q.i].id || aldeias[p.j].id - aldeias[q.j].id);
+        let add = 0;
+        for (const pr of pares) {
+          if (add >= travessias) break;
+          const a = aldeias[pr.i].id, b = aldeias[pr.j].id;
+          if (adjSet[a].has(b)) continue; // ja ligado (nao conta como nova travessia)
+          ligar(a, b); add++;
+        }
+      }
     }
     const adj = {};
     for (const id in adjSet) adj[id] = [...adjSet[id]].sort((x, y) => x - y);
@@ -460,7 +484,9 @@
       config,
       turno: 0,
       aldeias,
-      estradas: construirEstradas(aldeias, (config.estradas && config.estradas.vizinhos) || 3),
+      estradas: construirEstradas(aldeias,
+        (config.estradas && config.estradas.vizinhos) != null ? config.estradas.vizinhos : 3,
+        (config.estradas && config.estradas.travessias) != null ? config.estradas.travessias : 5),
       movimentos: [],   // exercitos em transito (PECA 3)
       jogadores: {
         A: { id: "A", nome: "Rei A" },
@@ -814,17 +840,20 @@
     let total = 0;
     for (const t of TIPOS) { const n = tropas[t] || 0; carga[t] = n; o.tropas[t] -= n; total += n; }
     if (total === 0) return null;
-    // MOTOR #1: o exercito segue a ESTRADA (caminho unico na arvore). Tempo =
-    // distancia AO LONGO da rota / passo. Sem rede (estados sinteticos), reta.
+    // MOTOR #1: o exercito segue a ESTRADA (menor caminho). Tempo = distancia
+    // AO LONGO da rota / passo. Sem rede (estados sinteticos), reta.
     let caminho = caminhoEntre(estado, origemId, destinoId);
-    let turnos;
-    if (caminho && caminho.length >= 2) {
-      turnos = turnosPorDist(estado, distanciaRota(estado, caminho), carga);
-    } else {
-      caminho = [origemId, destinoId];
-      turnos = turnosViagem(estado, o, d, carga);
+    if (!caminho || caminho.length < 2) caminho = [origemId, destinoId];
+    // MOTOR #4 (19/07): NAO passa por aldeia que nao e do dono. A marcha para na
+    // PRIMEIRA aldeia inimiga/barbara do trajeto e briga ali (nao da p/ pular ate
+    // a aldeia ao lado do castelo). Aldeias proprias no caminho: passa reto.
+    for (let i = 1; i < caminho.length; i++) {
+      const passo = aldeiaPorId(estado, caminho[i]);
+      if (passo && passo.dono !== o.dono) { caminho = caminho.slice(0, i + 1); break; }
     }
-    const mov = { dono: o.dono, origemId, destinoId, tropas: carga, caminho,
+    const destinoReal = caminho[caminho.length - 1];
+    const turnos = turnosPorDist(estado, distanciaRota(estado, caminho), carga);
+    const mov = { dono: o.dono, origemId, destinoId: destinoReal, tropas: carga, caminho,
       turnosRestantes: turnos, turnosTotal: turnos };
     estado.movimentos.push(mov);
     return mov;

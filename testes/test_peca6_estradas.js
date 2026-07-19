@@ -71,24 +71,27 @@ console.log("\nC) Menor caminho entre aldeias (Dijkstra):");
 }
 
 // ---------------------------------------------------------
-//  D) enviarExercito roteia pela estrada (jogo real, mundo v2).
+//  D) enviarExercito roteia pela estrada E respeita o bloqueio (#4): no jogo
+//     real, capital A -> capital B trunca na 1a aldeia nao-propria (neutra).
 // ---------------------------------------------------------
-console.log("\nD) enviarExercito segue a estrada (integracao):");
+console.log("\nD) enviarExercito segue a estrada e nao pula aldeia alheia:");
 {
   const g = Engine.criarEstadoInicial(CONFIG);          // front-end usa esta via
   checa("criarEstadoInicial tem rede de estradas", !!(g.estradas && g.estradas.adj));
-  const rota = Engine.caminhoEntre(g, 0, 1);
-  const mov = Engine.enviarExercito(g, 0, 1, { lanceiro: 1 }); // capital A -> capital B
-  checa("mov.caminho == caminho da rede", JSON.stringify(mov.caminho) === JSON.stringify(rota), mov.caminho.join(">"));
-  const dRota = Engine.distanciaRota(g, rota);
-  const dReta = Engine.distancia(g.aldeias.find((a) => a.id === 0), g.aldeias.find((a) => a.id === 1));
-  checa("rota >= reta (triangulo)", dRota >= dReta - 1e-9, `rota ${dRota.toFixed(1)} vs reta ${dReta.toFixed(1)}`);
-  checa("turnos = ceil(distRota/passo)", mov.turnosTotal === Engine.turnosPorDist(g, dRota, { lanceiro: 1 }));
+  const rotaCheia = Engine.caminhoEntre(g, 0, 1);       // capital A -> capital B (passa por neutras)
+  const mov = Engine.enviarExercito(g, 0, 1, { lanceiro: 1 });
+  checa("mov.caminho comeca em 0", mov.caminho[0] === 0);
+  checa("mov.caminho e prefixo da rota da rede", rotaCheia.slice(0, mov.caminho.length).join(">") === mov.caminho.join(">"));
+  const destino = Engine.aldeiaPorId(g, mov.destinoId);
+  checa("#4: parou na 1a aldeia nao-propria (nao pulou ate a capital B)", destino.dono !== "A" && mov.destinoId !== 1);
+  checa("turnos = ceil(distRota do caminho/passo)",
+    mov.turnosTotal === Engine.turnosPorDist(g, Engine.distanciaRota(g, mov.caminho), { lanceiro: 1 }));
 }
 
 // ---------------------------------------------------------
-//  E) ROTEAMENTO MUDA O TEMPO: 0->2 tem de passar por 1 (mais que a reta).
-//     0:(0,0)A  1:(10,0)  2:(5,8) ; rede caminho 0-1-2 (2 nao liga direto em 0)
+//  E) ROTEAMENTO MUDA O TEMPO: 0->2 passa por 1 (mais que a reta). A aldeia 1
+//     e PROPRIA (A) para o exercito passar reto (senao o #4 truncaria nela).
+//     0:(0,0)A  1:(10,0)A  2:(5,8) ; rede caminho 0-1-2 (2 nao liga direto em 0)
 // ---------------------------------------------------------
 console.log("\nE) Roteamento pela estrada custa mais que a reta:");
 {
@@ -96,7 +99,7 @@ console.log("\nE) Roteamento pela estrada custa mais que a reta:");
     tipo: null, recursos: { madeira: 0, ferro: 0 },
     tropas: { lanceiro: id === 0 ? 50 : 0, arqueiro: 0, cavaleiro: 0 }, construindo: [] });
   const e = { config: CONFIG, turno: 0, log: [], movimentos: [],
-    aldeias: [mk(0, 0, 0, "A"), mk(1, 10, 0, null), mk(2, 5, 8, null)],
+    aldeias: [mk(0, 0, 0, "A"), mk(1, 10, 0, "A"), mk(2, 5, 8, null)],
     estradas: { adj: { 0: [1], 1: [0, 2], 2: [1] } } };
   const mov = Engine.enviarExercito(e, 0, 2, { lanceiro: 1 });
   checa("caminho 0->2 passa por 1", JSON.stringify(mov.caminho) === JSON.stringify([0, 1, 2]), mov.caminho.join(">"));

@@ -723,23 +723,9 @@
       }
     }
 
-    // 1b) lagos como blobs orgânicos arredondados
-    const lg0x = Math.floor(cx0 / LAKE_G) - 1, lg1x = Math.floor(cx1 / LAKE_G) + 1;
-    const lg0y = Math.floor(cy0 / LAKE_G) - 1, lg1y = Math.floor(cy1 / LAKE_G) + 1;
-    for (let gx = lg0x; gx <= lg1x; gx++) {
-      for (let gy = lg0y; gy <= lg1y; gy++) {
-        const lk = lakeInfo(gx, gy);
-        if (!lk) continue;
-        const scx = lk.cx * cs + panX, scy = lk.cy * cs + panY, srad = lk.rad * cs;
-        // AGUA v2 (pele v2, estilo flat do kit): borda de areia FINA + agua
-        // chapada. Fora o gradiente radial e o reflexo branco — a lingua do
-        // kit e cor plana, sem volume fotografico.
-        blobPath(scx, scy, srad * 1.06, lk.seed);   // orla de areia (fina)
-        ctx.fillStyle = "#d9c79a"; ctx.fill();
-        blobPath(scx, scy, srad, lk.seed);          // agua chapada
-        ctx.fillStyle = "#2e6a94"; ctx.fill();
-      }
-    }
+    // 1b) LAGOS removidos do mapa (feedback Lucas 19/07): poluiam. isWater/
+    // lakeInfo seguem no motor (aldeias nao nascem na agua), mas nao sao mais
+    // desenhados — paisagem limpa. Rios ficam para uma etapa de motor.
 
     // 2) decoração de terreno (florestas e montanhas) — some só na visão de grade
     if (!gridView) {
