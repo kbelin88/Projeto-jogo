@@ -1,0 +1,463 @@
+================================================================
+  EXPERIMENTO CONTROLADO — frase de cautela no montarPrompt (2x2)
+  MEDICAO, nao mudanca de baseline. engine.js NAO foi alterado.
+================================================================
+inicio: 2026-07-20T23:28:01.201Z | fim: 2026-07-20T23:33:31.569Z
+turnos/partida: 15 | seeds: 1,2,3,4,5 (n=5) | temp: 0 | lado do Rei: B (oponente: burro)
+modelos: llama3:latest, llama3.2:3b, qwen2.5:3b
+mundo: v2 (Engine.CONFIG), seed varia por partida
+
+BRACOS (o UNICO trecho que muda entre celulas e o paragrafo de cautela):
+  A_BASE           : prompt atual, com a frase de cautela
+  B_SEM_CAUTELA    : frase removida, nada adicionado
+  C_NUDGE_PURO     : cautela -> principio estrategico apenas
+  D_NUDGE_COMPLETO : cautela -> principio + avaliacao factual das neutras
+
+--- TEXTO trocado em cada braco (no lugar da frase de cautela) ---
+FRASE_CAUTELA (removida em B/C/D):
+  "Listas vazias sao uma resposta valida. Se uma aldeia nao deve atacar nem construir neste turno, simplesmente nao a inclua. E melhor nao fazer nada do que enviar um ataque ruim ou construir sem motivo."
+A_BASE   : (mantida)
+B        : (nada)
+C_PRINCIPIO:
+  "Voce ganha o jogo tomando aldeias, nao acumulando tropas em casa. Prefira expandir a estagnar."
+D_COMPLETO:
+  "Voce ganha o jogo tomando aldeias, nao acumulando tropas em casa. As aldeias neutras proximas tem poucas tropas e sao alvos faceis agora no comeco. Prefira expandir a estagnar; so deixe 'envios' vazio se realmente nao houver um bom alvo."
+
+METRICAS (media±desvio amostral entre as seeds):
+  agencia    = envios PEDIDOS por turno (intencao de mover)
+  ag.aceita  = envios ACEITOS pelo motor por turno
+  taxaRej    = fracao de turnos com >=1 rejeicao
+  reincid    = nº de turnos com resposta crua byte-identica a anterior (por partida)
+  aldeias    = aldeias do Rei no turno final
+  rejRecurso = construcoes rejeitadas por recurso insuficiente (soma por partida)
+
+================================================================
+MODELO: llama3:latest
+================================================================
+braco             agencia     ag.aceita   taxaRej     reincid     aldeias     rejRecurso
+A_BASE           0.00±0.00   0.00±0.00   0.41±0.07   8.80±5.22   1.00±0.00   6.20±1.10
+B_SEM_CAUTELA    1.71±0.21   0.85±0.13   0.75±0.07   0.80±1.10   5.20±0.45   5.20±1.64
+C_NUDGE_PURO     1.68±0.12   0.87±0.08   0.81±0.06   1.00±0.71   5.00±1.00   4.40±0.89
+D_NUDGE_COMPLETO 1.80±0.11   0.96±0.16   0.79±0.07   0.40±0.89   5.00±1.22   5.00±1.87
+
+  --- valores por seed (crus) ---
+  A_BASE:
+     agencia   : [0.00, 0.00, 0.00, 0.00, 0.00]
+     taxaRej   : [0.40, 0.33, 0.40, 0.53, 0.40]
+     reincid   : [10, 14, 10, 0, 10]
+     aldeias   : [1, 1, 1, 1, 1]
+     rejRecurso: [6, 5, 6, 8, 6]
+     erroRede  : [0, 0, 0, 0, 0] (esperado tudo 0)
+  B_SEM_CAUTELA:
+     agencia   : [1.60, 1.80, 1.93, 1.80, 1.40]
+     taxaRej   : [0.87, 0.73, 0.73, 0.73, 0.67]
+     reincid   : [2, 0, 0, 2, 0]
+     aldeias   : [5, 5, 5, 5, 6]
+     rejRecurso: [7, 7, 4, 4, 4]
+     erroRede  : [0, 0, 0, 0, 0] (esperado tudo 0)
+  C_NUDGE_PURO:
+     agencia   : [1.73, 1.60, 1.60, 1.87, 1.60]
+     taxaRej   : [0.80, 0.87, 0.87, 0.73, 0.80]
+     reincid   : [1, 1, 2, 0, 1]
+     aldeias   : [5, 4, 4, 6, 6]
+     rejRecurso: [5, 5, 5, 3, 4]
+     erroRede  : [0, 0, 0, 0, 0] (esperado tudo 0)
+  D_NUDGE_COMPLETO:
+     agencia   : [1.87, 1.67, 1.73, 1.80, 1.93]
+     taxaRej   : [0.73, 0.87, 0.73, 0.87, 0.73]
+     reincid   : [2, 0, 0, 0, 0]
+     aldeias   : [4, 4, 7, 5, 5]
+     rejRecurso: [4, 8, 5, 3, 5]
+     erroRede  : [0, 0, 0, 0, 0] (esperado tudo 0)
+
+================================================================
+MODELO: llama3.2:3b
+================================================================
+braco             agencia     ag.aceita   taxaRej     reincid     aldeias     rejRecurso
+A_BASE           1.05±0.13   0.49±0.17   0.80±0.12   1.80±1.48   3.20±0.45   6.60±0.55
+B_SEM_CAUTELA    1.88±0.09   1.07±0.09   0.80±0.08   0.40±0.89   3.60±0.89   6.80±1.30
+C_NUDGE_PURO     1.83±0.11   0.76±0.14   0.87±0.08   0.40±0.55   3.00±1.41   7.20±0.84
+D_NUDGE_COMPLETO 1.83±0.15   0.39±0.14   0.97±0.04   0.80±0.84   2.60±1.14   4.60±3.85
+
+  --- valores por seed (crus) ---
+  A_BASE:
+     agencia   : [1.00, 1.27, 1.00, 1.07, 0.93]
+     taxaRej   : [0.93, 0.80, 0.87, 0.60, 0.80]
+     reincid   : [2, 1, 4, 2, 0]
+     aldeias   : [3, 3, 3, 4, 3]
+     rejRecurso: [7, 7, 7, 6, 6]
+     erroRede  : [0, 0, 0, 0, 0] (esperado tudo 0)
+  B_SEM_CAUTELA:
+     agencia   : [1.93, 2.00, 1.80, 1.87, 1.80]
+     taxaRej   : [0.87, 0.87, 0.80, 0.67, 0.80]
+     reincid   : [0, 2, 0, 0, 0]
+     aldeias   : [5, 3, 3, 4, 3]
+     rejRecurso: [7, 8, 6, 5, 8]
+     erroRede  : [0, 0, 0, 0, 0] (esperado tudo 0)
+  C_NUDGE_PURO:
+     agencia   : [1.73, 1.73, 1.80, 2.00, 1.87]
+     taxaRej   : [0.73, 0.93, 0.87, 0.87, 0.93]
+     reincid   : [1, 0, 1, 0, 0]
+     aldeias   : [4, 5, 2, 2, 2]
+     rejRecurso: [7, 7, 8, 6, 8]
+     erroRede  : [0, 0, 0, 0, 0] (esperado tudo 0)
+  D_NUDGE_COMPLETO:
+     agencia   : [1.67, 2.00, 1.93, 1.67, 1.87]
+     taxaRej   : [0.93, 1.00, 0.93, 1.00, 1.00]
+     reincid   : [1, 2, 0, 0, 1]
+     aldeias   : [4, 3, 2, 1, 3]
+     rejRecurso: [8, 1, 6, 0, 8]
+     erroRede  : [0, 0, 0, 0, 0] (esperado tudo 0)
+
+================================================================
+MODELO: qwen2.5:3b
+================================================================
+braco             agencia     ag.aceita   taxaRej     reincid     aldeias     rejRecurso
+A_BASE           1.36±0.38   0.83±0.26   0.64±0.14   1.20±1.64   4.20±1.30   2.00±1.41
+B_SEM_CAUTELA    1.72±0.37   0.77±0.41   0.85±0.10   1.60±0.55   4.40±0.89   2.40±0.89
+C_NUDGE_PURO     1.67±0.31   0.88±0.36   0.77±0.15   1.00±0.00   4.60±0.89   2.60±1.52
+D_NUDGE_COMPLETO 1.55±0.31   0.85±0.45   0.77±0.20   3.40±2.97   4.80±1.10   4.00±1.41
+
+  --- valores por seed (crus) ---
+  A_BASE:
+     agencia   : [1.60, 1.60, 1.67, 0.80, 1.13]
+     taxaRej   : [0.87, 0.60, 0.67, 0.53, 0.53]
+     reincid   : [3, 3, 0, 0, 0]
+     aldeias   : [6, 3, 4, 3, 5]
+     rejRecurso: [4, 3, 1, 1, 1]
+     erroRede  : [0, 0, 0, 0, 0] (esperado tudo 0)
+  B_SEM_CAUTELA:
+     agencia   : [2.00, 1.73, 1.13, 1.67, 2.07]
+     taxaRej   : [0.73, 0.80, 0.87, 0.87, 1.00]
+     reincid   : [1, 1, 2, 2, 2]
+     aldeias   : [4, 5, 5, 5, 3]
+     rejRecurso: [3, 2, 1, 3, 3]
+     erroRede  : [0, 0, 0, 0, 0] (esperado tudo 0)
+  C_NUDGE_PURO:
+     agencia   : [1.93, 1.80, 1.13, 1.67, 1.80]
+     taxaRej   : [0.93, 0.60, 0.93, 0.67, 0.73]
+     reincid   : [1, 1, 1, 1, 1]
+     aldeias   : [4, 4, 4, 5, 6]
+     rejRecurso: [5, 2, 1, 2, 3]
+     erroRede  : [0, 0, 0, 0, 0] (esperado tudo 0)
+  D_NUDGE_COMPLETO:
+     agencia   : [1.93, 1.53, 1.13, 1.40, 1.73]
+     taxaRej   : [1.00, 0.87, 0.80, 0.47, 0.73]
+     reincid   : [8, 3, 2, 4, 0]
+     aldeias   : [3, 5, 6, 5, 5]
+     rejRecurso: [5, 5, 2, 5, 3]
+     erroRede  : [0, 0, 0, 0, 0] (esperado tudo 0)
+
+================================================================
+  PROMPTS FINAIS DE CADA BRACO (seed 1, turno 1) — prova da substituicao
+================================================================
+
+########## A_BASE ##########
+Voce e o Rei. As aldeias listadas em "SUAS ALDEIAS" pertencem a voce.
+Seu objetivo e vencer eliminando o inimigo.
+
+=== REGRAS DE COMBATE ===
+Cada tropa vale 1: o que conta e o NUMERO de tropas de cada lado.
+Triangulo de counters: lanceiro vence cavaleiro; arqueiro vence lanceiro; cavaleiro vence arqueiro.
+O tipo com MAIS tropas em cada exercito define o matchup. O lado com o counter certo conta suas tropas x 1.5. Vence o maior numero efetivo de tropas; empate favorece o defensor.
+Exemplo: 4 arqueiros atacando 5 lanceiros: com o counter certo, 4 x 1.5 = 6 contra 5 -> o atacante vence mesmo com MENOS tropas. Com o counter errado, seria o inverso.
+Defender e mais facil: tropas paradas numa aldeia contam x 1.25; num castelo (capital), x 1.5. Em campo aberto (na estrada) nao ha bonus. Para TOMAR uma aldeia, leve tropas com folga — 1 unidade nao conquista nada.
+
+=== REGRAS DE ECONOMIA ===
+lanceiro: custa 15 madeira + 0 ferro, fica pronto em 1 turno, velocidade lenta.
+arqueiro: custa 20 madeira + 10 ferro, fica pronto em 1 turno, velocidade media.
+cavaleiro: custa 30 madeira + 30 ferro, fica pronto em 2 turnos, velocidade rapida.
+Cada aldeia sua produz 10 madeira e 6 ferro por turno.
+Teto por aldeia: quando a forca das tropas em casa atinge 300, a aldeia PARA de construir (mas segue produzindo recursos e pode receber reforcos).
+So ordene construir se a aldeia tem recursos para pagar o custo AGORA.
+
+TURNO 1 - Voce e o Rei B.
+
+=== SUAS ALDEIAS (1) ===
+[1] | recursos: 10 madeira, 6 ferro
+       tropas em casa: 5 lanceiros, 4 arqueiros, 3 cavaleiros
+       construindo: nada
+
+=== ALDEIAS NEUTRAS (22) - ordenadas por distancia da sua mais proxima ===
+[3] 1 lanceiros | 1 turnos de marcha
+[5] 1 arqueiros | 1 turnos de marcha
+[7] 1 cavaleiros | 2 turnos de marcha
+[9] 1 cavaleiros | 2 turnos de marcha
+[11] 1 lanceiros | 2 turnos de marcha
+[15] 1 lanceiros | 2 turnos de marcha
+[17] 1 lanceiros | 2 turnos de marcha
+[19] 1 arqueiros | 2 turnos de marcha
+[23] 1 cavaleiros | 2 turnos de marcha
+[13] 1 lanceiros | 3 turnos de marcha
+[20] 1 lanceiros | 4 turnos de marcha
+[21] 1 lanceiros | 4 turnos de marcha
+[10] 1 lanceiros | 5 turnos de marcha
+[12] 1 lanceiros | 5 turnos de marcha
+[14] 1 lanceiros | 5 turnos de marcha
+[2] 1 lanceiros | 6 turnos de marcha
+[6] 1 cavaleiros | 6 turnos de marcha
+[8] 1 cavaleiros | 6 turnos de marcha
+[16] 1 lanceiros | 6 turnos de marcha
+[18] 1 arqueiros | 6 turnos de marcha
+[4] 1 arqueiros | 7 turnos de marcha
+[22] 1 cavaleiros | 7 turnos de marcha
+
+=== INIMIGO (Rei A) - 1 aldeia(s) ===
+[0] 5 lanceiros, 4 arqueiros, 3 cavaleiros | 7 turnos de marcha
+
+=== EXERCITOS EM TRANSITO ===
+SEUS:
+- nenhum
+INIMIGOS:
+- nenhum
+
+=== O QUE ACONTECEU NO ULTIMO TURNO ===
+- nada de relevante
+
+Responda APENAS com um JSON valido no formato abaixo. Nenhum texto antes ou depois do JSON.
+
+Listas vazias sao uma resposta valida. Se uma aldeia nao deve atacar nem construir neste turno, simplesmente nao a inclua. E melhor nao fazer nada do que enviar um ataque ruim ou construir sem motivo.
+
+Antes de responder: em 'origemId' e em 'aldeiaId' use SOMENTE ids que aparecem na secao SUAS ALDEIAS. Escolha o 'destinoId' entre os ids das secoes ALDEIAS NEUTRAS e INIMIGO. Nao envie tropas que voce nao tem: se uma aldeia esta sem tropas, nao a use em 'envios'. O exemplo abaixo so mostra o FORMATO com ids reais deste turno; nao copie os numeros dele como se fossem sua jogada.
+
+{
+  "construir": [
+    {"aldeiaId": 1, "tipo": "lanceiro"}
+  ],
+  "envios": [
+    {"origemId": 1, "destinoId": 2, "tropas": {"lanceiro": 2, "arqueiro": 2, "cavaleiro": 1}},
+    {"origemId": 1, "destinoId": 3, "tropas": {"lanceiro": 2, "arqueiro": 2, "cavaleiro": 1}}
+  ]
+}
+
+########## B_SEM_CAUTELA ##########
+Voce e o Rei. As aldeias listadas em "SUAS ALDEIAS" pertencem a voce.
+Seu objetivo e vencer eliminando o inimigo.
+
+=== REGRAS DE COMBATE ===
+Cada tropa vale 1: o que conta e o NUMERO de tropas de cada lado.
+Triangulo de counters: lanceiro vence cavaleiro; arqueiro vence lanceiro; cavaleiro vence arqueiro.
+O tipo com MAIS tropas em cada exercito define o matchup. O lado com o counter certo conta suas tropas x 1.5. Vence o maior numero efetivo de tropas; empate favorece o defensor.
+Exemplo: 4 arqueiros atacando 5 lanceiros: com o counter certo, 4 x 1.5 = 6 contra 5 -> o atacante vence mesmo com MENOS tropas. Com o counter errado, seria o inverso.
+Defender e mais facil: tropas paradas numa aldeia contam x 1.25; num castelo (capital), x 1.5. Em campo aberto (na estrada) nao ha bonus. Para TOMAR uma aldeia, leve tropas com folga — 1 unidade nao conquista nada.
+
+=== REGRAS DE ECONOMIA ===
+lanceiro: custa 15 madeira + 0 ferro, fica pronto em 1 turno, velocidade lenta.
+arqueiro: custa 20 madeira + 10 ferro, fica pronto em 1 turno, velocidade media.
+cavaleiro: custa 30 madeira + 30 ferro, fica pronto em 2 turnos, velocidade rapida.
+Cada aldeia sua produz 10 madeira e 6 ferro por turno.
+Teto por aldeia: quando a forca das tropas em casa atinge 300, a aldeia PARA de construir (mas segue produzindo recursos e pode receber reforcos).
+So ordene construir se a aldeia tem recursos para pagar o custo AGORA.
+
+TURNO 1 - Voce e o Rei B.
+
+=== SUAS ALDEIAS (1) ===
+[1] | recursos: 10 madeira, 6 ferro
+       tropas em casa: 5 lanceiros, 4 arqueiros, 3 cavaleiros
+       construindo: nada
+
+=== ALDEIAS NEUTRAS (22) - ordenadas por distancia da sua mais proxima ===
+[3] 1 lanceiros | 1 turnos de marcha
+[5] 1 arqueiros | 1 turnos de marcha
+[7] 1 cavaleiros | 2 turnos de marcha
+[9] 1 cavaleiros | 2 turnos de marcha
+[11] 1 lanceiros | 2 turnos de marcha
+[15] 1 lanceiros | 2 turnos de marcha
+[17] 1 lanceiros | 2 turnos de marcha
+[19] 1 arqueiros | 2 turnos de marcha
+[23] 1 cavaleiros | 2 turnos de marcha
+[13] 1 lanceiros | 3 turnos de marcha
+[20] 1 lanceiros | 4 turnos de marcha
+[21] 1 lanceiros | 4 turnos de marcha
+[10] 1 lanceiros | 5 turnos de marcha
+[12] 1 lanceiros | 5 turnos de marcha
+[14] 1 lanceiros | 5 turnos de marcha
+[2] 1 lanceiros | 6 turnos de marcha
+[6] 1 cavaleiros | 6 turnos de marcha
+[8] 1 cavaleiros | 6 turnos de marcha
+[16] 1 lanceiros | 6 turnos de marcha
+[18] 1 arqueiros | 6 turnos de marcha
+[4] 1 arqueiros | 7 turnos de marcha
+[22] 1 cavaleiros | 7 turnos de marcha
+
+=== INIMIGO (Rei A) - 1 aldeia(s) ===
+[0] 5 lanceiros, 4 arqueiros, 3 cavaleiros | 7 turnos de marcha
+
+=== EXERCITOS EM TRANSITO ===
+SEUS:
+- nenhum
+INIMIGOS:
+- nenhum
+
+=== O QUE ACONTECEU NO ULTIMO TURNO ===
+- nada de relevante
+
+Responda APENAS com um JSON valido no formato abaixo. Nenhum texto antes ou depois do JSON.
+
+Antes de responder: em 'origemId' e em 'aldeiaId' use SOMENTE ids que aparecem na secao SUAS ALDEIAS. Escolha o 'destinoId' entre os ids das secoes ALDEIAS NEUTRAS e INIMIGO. Nao envie tropas que voce nao tem: se uma aldeia esta sem tropas, nao a use em 'envios'. O exemplo abaixo so mostra o FORMATO com ids reais deste turno; nao copie os numeros dele como se fossem sua jogada.
+
+{
+  "construir": [
+    {"aldeiaId": 1, "tipo": "lanceiro"}
+  ],
+  "envios": [
+    {"origemId": 1, "destinoId": 2, "tropas": {"lanceiro": 2, "arqueiro": 2, "cavaleiro": 1}},
+    {"origemId": 1, "destinoId": 3, "tropas": {"lanceiro": 2, "arqueiro": 2, "cavaleiro": 1}}
+  ]
+}
+
+########## C_NUDGE_PURO ##########
+Voce e o Rei. As aldeias listadas em "SUAS ALDEIAS" pertencem a voce.
+Seu objetivo e vencer eliminando o inimigo.
+
+=== REGRAS DE COMBATE ===
+Cada tropa vale 1: o que conta e o NUMERO de tropas de cada lado.
+Triangulo de counters: lanceiro vence cavaleiro; arqueiro vence lanceiro; cavaleiro vence arqueiro.
+O tipo com MAIS tropas em cada exercito define o matchup. O lado com o counter certo conta suas tropas x 1.5. Vence o maior numero efetivo de tropas; empate favorece o defensor.
+Exemplo: 4 arqueiros atacando 5 lanceiros: com o counter certo, 4 x 1.5 = 6 contra 5 -> o atacante vence mesmo com MENOS tropas. Com o counter errado, seria o inverso.
+Defender e mais facil: tropas paradas numa aldeia contam x 1.25; num castelo (capital), x 1.5. Em campo aberto (na estrada) nao ha bonus. Para TOMAR uma aldeia, leve tropas com folga — 1 unidade nao conquista nada.
+
+=== REGRAS DE ECONOMIA ===
+lanceiro: custa 15 madeira + 0 ferro, fica pronto em 1 turno, velocidade lenta.
+arqueiro: custa 20 madeira + 10 ferro, fica pronto em 1 turno, velocidade media.
+cavaleiro: custa 30 madeira + 30 ferro, fica pronto em 2 turnos, velocidade rapida.
+Cada aldeia sua produz 10 madeira e 6 ferro por turno.
+Teto por aldeia: quando a forca das tropas em casa atinge 300, a aldeia PARA de construir (mas segue produzindo recursos e pode receber reforcos).
+So ordene construir se a aldeia tem recursos para pagar o custo AGORA.
+
+TURNO 1 - Voce e o Rei B.
+
+=== SUAS ALDEIAS (1) ===
+[1] | recursos: 10 madeira, 6 ferro
+       tropas em casa: 5 lanceiros, 4 arqueiros, 3 cavaleiros
+       construindo: nada
+
+=== ALDEIAS NEUTRAS (22) - ordenadas por distancia da sua mais proxima ===
+[3] 1 lanceiros | 1 turnos de marcha
+[5] 1 arqueiros | 1 turnos de marcha
+[7] 1 cavaleiros | 2 turnos de marcha
+[9] 1 cavaleiros | 2 turnos de marcha
+[11] 1 lanceiros | 2 turnos de marcha
+[15] 1 lanceiros | 2 turnos de marcha
+[17] 1 lanceiros | 2 turnos de marcha
+[19] 1 arqueiros | 2 turnos de marcha
+[23] 1 cavaleiros | 2 turnos de marcha
+[13] 1 lanceiros | 3 turnos de marcha
+[20] 1 lanceiros | 4 turnos de marcha
+[21] 1 lanceiros | 4 turnos de marcha
+[10] 1 lanceiros | 5 turnos de marcha
+[12] 1 lanceiros | 5 turnos de marcha
+[14] 1 lanceiros | 5 turnos de marcha
+[2] 1 lanceiros | 6 turnos de marcha
+[6] 1 cavaleiros | 6 turnos de marcha
+[8] 1 cavaleiros | 6 turnos de marcha
+[16] 1 lanceiros | 6 turnos de marcha
+[18] 1 arqueiros | 6 turnos de marcha
+[4] 1 arqueiros | 7 turnos de marcha
+[22] 1 cavaleiros | 7 turnos de marcha
+
+=== INIMIGO (Rei A) - 1 aldeia(s) ===
+[0] 5 lanceiros, 4 arqueiros, 3 cavaleiros | 7 turnos de marcha
+
+=== EXERCITOS EM TRANSITO ===
+SEUS:
+- nenhum
+INIMIGOS:
+- nenhum
+
+=== O QUE ACONTECEU NO ULTIMO TURNO ===
+- nada de relevante
+
+Responda APENAS com um JSON valido no formato abaixo. Nenhum texto antes ou depois do JSON.
+
+Voce ganha o jogo tomando aldeias, nao acumulando tropas em casa. Prefira expandir a estagnar.
+
+Antes de responder: em 'origemId' e em 'aldeiaId' use SOMENTE ids que aparecem na secao SUAS ALDEIAS. Escolha o 'destinoId' entre os ids das secoes ALDEIAS NEUTRAS e INIMIGO. Nao envie tropas que voce nao tem: se uma aldeia esta sem tropas, nao a use em 'envios'. O exemplo abaixo so mostra o FORMATO com ids reais deste turno; nao copie os numeros dele como se fossem sua jogada.
+
+{
+  "construir": [
+    {"aldeiaId": 1, "tipo": "lanceiro"}
+  ],
+  "envios": [
+    {"origemId": 1, "destinoId": 2, "tropas": {"lanceiro": 2, "arqueiro": 2, "cavaleiro": 1}},
+    {"origemId": 1, "destinoId": 3, "tropas": {"lanceiro": 2, "arqueiro": 2, "cavaleiro": 1}}
+  ]
+}
+
+########## D_NUDGE_COMPLETO ##########
+Voce e o Rei. As aldeias listadas em "SUAS ALDEIAS" pertencem a voce.
+Seu objetivo e vencer eliminando o inimigo.
+
+=== REGRAS DE COMBATE ===
+Cada tropa vale 1: o que conta e o NUMERO de tropas de cada lado.
+Triangulo de counters: lanceiro vence cavaleiro; arqueiro vence lanceiro; cavaleiro vence arqueiro.
+O tipo com MAIS tropas em cada exercito define o matchup. O lado com o counter certo conta suas tropas x 1.5. Vence o maior numero efetivo de tropas; empate favorece o defensor.
+Exemplo: 4 arqueiros atacando 5 lanceiros: com o counter certo, 4 x 1.5 = 6 contra 5 -> o atacante vence mesmo com MENOS tropas. Com o counter errado, seria o inverso.
+Defender e mais facil: tropas paradas numa aldeia contam x 1.25; num castelo (capital), x 1.5. Em campo aberto (na estrada) nao ha bonus. Para TOMAR uma aldeia, leve tropas com folga — 1 unidade nao conquista nada.
+
+=== REGRAS DE ECONOMIA ===
+lanceiro: custa 15 madeira + 0 ferro, fica pronto em 1 turno, velocidade lenta.
+arqueiro: custa 20 madeira + 10 ferro, fica pronto em 1 turno, velocidade media.
+cavaleiro: custa 30 madeira + 30 ferro, fica pronto em 2 turnos, velocidade rapida.
+Cada aldeia sua produz 10 madeira e 6 ferro por turno.
+Teto por aldeia: quando a forca das tropas em casa atinge 300, a aldeia PARA de construir (mas segue produzindo recursos e pode receber reforcos).
+So ordene construir se a aldeia tem recursos para pagar o custo AGORA.
+
+TURNO 1 - Voce e o Rei B.
+
+=== SUAS ALDEIAS (1) ===
+[1] | recursos: 10 madeira, 6 ferro
+       tropas em casa: 5 lanceiros, 4 arqueiros, 3 cavaleiros
+       construindo: nada
+
+=== ALDEIAS NEUTRAS (22) - ordenadas por distancia da sua mais proxima ===
+[3] 1 lanceiros | 1 turnos de marcha
+[5] 1 arqueiros | 1 turnos de marcha
+[7] 1 cavaleiros | 2 turnos de marcha
+[9] 1 cavaleiros | 2 turnos de marcha
+[11] 1 lanceiros | 2 turnos de marcha
+[15] 1 lanceiros | 2 turnos de marcha
+[17] 1 lanceiros | 2 turnos de marcha
+[19] 1 arqueiros | 2 turnos de marcha
+[23] 1 cavaleiros | 2 turnos de marcha
+[13] 1 lanceiros | 3 turnos de marcha
+[20] 1 lanceiros | 4 turnos de marcha
+[21] 1 lanceiros | 4 turnos de marcha
+[10] 1 lanceiros | 5 turnos de marcha
+[12] 1 lanceiros | 5 turnos de marcha
+[14] 1 lanceiros | 5 turnos de marcha
+[2] 1 lanceiros | 6 turnos de marcha
+[6] 1 cavaleiros | 6 turnos de marcha
+[8] 1 cavaleiros | 6 turnos de marcha
+[16] 1 lanceiros | 6 turnos de marcha
+[18] 1 arqueiros | 6 turnos de marcha
+[4] 1 arqueiros | 7 turnos de marcha
+[22] 1 cavaleiros | 7 turnos de marcha
+
+=== INIMIGO (Rei A) - 1 aldeia(s) ===
+[0] 5 lanceiros, 4 arqueiros, 3 cavaleiros | 7 turnos de marcha
+
+=== EXERCITOS EM TRANSITO ===
+SEUS:
+- nenhum
+INIMIGOS:
+- nenhum
+
+=== O QUE ACONTECEU NO ULTIMO TURNO ===
+- nada de relevante
+
+Responda APENAS com um JSON valido no formato abaixo. Nenhum texto antes ou depois do JSON.
+
+Voce ganha o jogo tomando aldeias, nao acumulando tropas em casa. As aldeias neutras proximas tem poucas tropas e sao alvos faceis agora no comeco. Prefira expandir a estagnar; so deixe 'envios' vazio se realmente nao houver um bom alvo.
+
+Antes de responder: em 'origemId' e em 'aldeiaId' use SOMENTE ids que aparecem na secao SUAS ALDEIAS. Escolha o 'destinoId' entre os ids das secoes ALDEIAS NEUTRAS e INIMIGO. Nao envie tropas que voce nao tem: se uma aldeia esta sem tropas, nao a use em 'envios'. O exemplo abaixo so mostra o FORMATO com ids reais deste turno; nao copie os numeros dele como se fossem sua jogada.
+
+{
+  "construir": [
+    {"aldeiaId": 1, "tipo": "lanceiro"}
+  ],
+  "envios": [
+    {"origemId": 1, "destinoId": 2, "tropas": {"lanceiro": 2, "arqueiro": 2, "cavaleiro": 1}},
+    {"origemId": 1, "destinoId": 3, "tropas": {"lanceiro": 2, "arqueiro": 2, "cavaleiro": 1}}
+  ]
+}
