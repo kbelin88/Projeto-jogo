@@ -1307,10 +1307,15 @@
     // MEIO: dados do turno (relatorio integral)
     L.push(relatorioTexto(visao, rejNoFim ? { semRejeicoes: true } : undefined));
     L.push("");
-    // FIM: instrucao de formato -> permissao de vazio -> processo -> exemplo (ultimo)
+    // FIM: instrucao de formato -> processo -> exemplo (ultimo).
+    // A "permissao de vazio" ("Listas vazias sao uma resposta valida... E melhor
+    // nao fazer nada do que enviar um ataque ruim...") foi REMOVIDA. Experimento
+    // exp-cautela-2x2 (braco B, 4x3x5, 15t, temp0): a frase congelava o
+    // llama3:8b em agencia 0.00 envios/turno (5/5 seeds, variancia zero) — ele
+    // copiava a linha construir do exemplo e esvaziava os envios. Remove-la
+    // destrava (0->1.71 envios/turno, 1->5.2 aldeias) e ajuda tambem os 3B, sem
+    // o efeito colateral do nudge factual (que fazia MAL ao llama3.2:3b).
     L.push("Responda APENAS com um JSON valido no formato abaixo. Nenhum texto antes ou depois do JSON.");
-    L.push("");
-    L.push("Listas vazias sao uma resposta valida. Se uma aldeia nao deve atacar nem construir neste turno, simplesmente nao a inclua. E melhor nao fazer nada do que enviar um ataque ruim ou construir sem motivo.");
     L.push("");
     // INSTRUCAO DE PROCESSO (curta, logo antes do exemplo): forca o modelo a
     // ancorar nos ids REAIS da visao em vez de copiar numeros do exemplo.
