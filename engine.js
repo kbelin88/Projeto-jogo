@@ -54,9 +54,14 @@
     // A forca e quase proporcional ao custo de proposito: o
     // cavaleiro paga a mais por velocidade, nao por forca bruta.
     tropas: {
-      lanceiro:  { custo: { madeira: 15, ferro: 0  }, forca: 10, vel: "lenta",  turnos: 1 },
-      arqueiro:  { custo: { madeira: 20, ferro: 10 }, forca: 15, vel: "media",  turnos: 1 },
-      cavaleiro: { custo: { madeira: 30, ferro: 30 }, forca: 30, vel: "rapida", turnos: 2 },
+      // FORCA ACHATADA (experimento 19/07, hipotese do Lucas): forca 1 por
+      // unidade -> "forca total" = NUMERO DE TROPAS. Remove a indireção (contagem
+      // 5/4/3 vs forca 200) que confundia os modelos fracos. Trade-off: cavaleiro
+      // perde a vantagem de PODER; diferencia so por triangulo+velocidade+custo.
+      // Reversivel/calibravel: p/ manter o cavaleiro forte, use 1/2/3 aqui.
+      lanceiro:  { custo: { madeira: 15, ferro: 0  }, forca: 1, vel: "lenta",  turnos: 1 },
+      arqueiro:  { custo: { madeira: 20, ferro: 10 }, forca: 1, vel: "media",  turnos: 1 },
+      cavaleiro: { custo: { madeira: 30, ferro: 30 }, forca: 1, vel: "rapida", turnos: 2 },
     },
 
     // TRIANGULO pedra-papel-tesoura: cada tropa VENCE a indicada.
@@ -69,7 +74,21 @@
     // COMBATE: atrito_base = fracao da forca do PERDEDOR que o vencedor
     // perde, antes do triangulo. Vencedor sempre sobrevive (com base*m < 1).
     // PROVISORIO.
-    combate: { atrito_base: 0.5 },
+    //
+    // BONUS DE DEFESA POR TERRENO (fase motor #3, 19/07): tropa parada numa
+    // aldeia resiste mais que em campo aberto; castelo (capital) resiste ainda
+    // mais. Multiplica a forca EFETIVA do defensor. Calibravel no eval.
+    //   campo aberto / estrada (combate #2) -> 1.0 (nao passa por aqui)
+    //   aldeia (neutra ou conquistada)      -> +25%
+    //   capital / castelo                   -> +50%
+    combate: { atrito_base: 0.5, bonus_defesa_aldeia: 1.25, bonus_defesa_castelo: 1.5 },
+
+    // ESTRADAS (fase motor #1): a rede liga as aldeias. Base = arvore geradora
+    // minima (garante que da p/ chegar a todas); + os k vizinhos mais proximos
+    // de cada aldeia como ATALHOS; + N TRAVESSIAS ligando os lados oeste/leste
+    // (o mapa e espelhado, as metades se conectam pouco pela vizinhanca).
+    // vizinhos = densidade local; travessias = rotas entre os dois jogadores.
+    estradas: { vizinhos: 3, travessias: 5 },
 
     // MOVIMENTO (usado na PECA 3): turnos de viagem = ceil(distancia / passo).
     // Cavaleiro rapido, lanceiro lento. Numeros PROVISORIOS, a calibrar.
@@ -179,6 +198,7 @@
       x, y,                                   // posicao no grid do mundo
       nome,
       dono,                                   // null = neutra | "A" | "B"
+      capital: false,                         // true = aldeia PRINCIPAL do rei (castelo); persistente
       tipo: null,                             // (neutra) tipo dominante sorteado; reis = null
       recursos: { madeira: 0, ferro: 0 },     // estoque da aldeia
       tropas: { lanceiro: 0, arqueiro: 0, cavaleiro: 0 }, // tropas tipadas (todos)
@@ -293,6 +313,7 @@
     let id = 0;
     function porRei(p, dono) {
       const ald = criarAldeia(id++, p.x, p.y, World.villageName(p.x, p.y), dono);
+      ald.capital = true;                        // aldeia principal do rei (castelo)
       const ti = (config.rei && config.rei.tropas_iniciais) || {};
       for (const tp of ["lanceiro", "arqueiro", "cavaleiro"]) ald.tropas[tp] = ti[tp] || 0;
       aldeias.push(ald);
@@ -378,6 +399,7 @@
         ald.tropas[tipo] = n;
       } else {
         // rei: guarnicao inicial (CONFIG.rei.tropas_iniciais) p/ poder atacar cedo.
+        ald.capital = true;                     // aldeia principal do rei (castelo)
         const ti = (config.rei && config.rei.tropas_iniciais) || {};
         for (const t of ["lanceiro", "arqueiro", "cavaleiro"]) ald.tropas[t] = ti[t] || 0;
       }
@@ -387,12 +409,89 @@
     return montarJogo(config, aldeias);
   }
 
+  // Rede de ESTRADAS (fase motor #1, 19/07): grafo que liga as aldeias.
+  //   base : arvore geradora minima (Prim do id 0, empates por id) -> garante
+  //          conectividade (da p/ chegar a qualquer aldeia).
+  //   + k  : os k vizinhos mais proximos de cada aldeia como ATALHOS -> rotas
+  //          alternativas, sem serpentear o mapa (a MST pura fazia isso).
+  // Deterministica; so depende das posicoes (fixas na partida). Devolve
+  // adjacencia { id: [idVizinho,...] } com vizinhos ordenados por id.
+  function construirEstradas(aldeias, k, travessias) {
+    k = (k == null) ? 3 : k;                        // respeita k=0 (so MST)
+    travessias = (travessias == null) ? 0 : travessias;
+    const n = aldeias.length;
+    const adjSet = {};
+    for (const a of aldeias) adjSet[a.id] = new Set();
+    const ligar = (a, b) => { if (a !== b) { adjSet[a].add(b); adjSet[b].add(a); } };
+    const d2 = (a, b) => { const dx = a.x - b.x, dy = a.y - b.y; return dx * dx + dy * dy; };
+
+    if (n >= 2) {
+      // 1) MST base (Prim do id 0, empates por id) — conectividade garantida
+      const inTree = new Array(n).fill(false);
+      const idx0 = aldeias.findIndex((a) => a.id === 0);
+      inTree[idx0 >= 0 ? idx0 : 0] = true;
+      for (let added = 1; added < n; added++) {
+        let best = null;
+        for (let i = 0; i < n; i++) {
+          if (!inTree[i]) continue;
+          for (let j = 0; j < n; j++) {
+            if (inTree[j]) continue;
+            const d = d2(aldeias[i], aldeias[j]);
+            if (!best || d < best.d ||
+                (d === best.d && (aldeias[j].id < best.jid ||
+                  (aldeias[j].id === best.jid && aldeias[i].id < best.iid)))) {
+              best = { i, j, d, jid: aldeias[j].id, iid: aldeias[i].id };
+            }
+          }
+        }
+        inTree[best.j] = true;
+        ligar(aldeias[best.i].id, aldeias[best.j].id);
+      }
+      // 2) k vizinhos mais proximos de cada aldeia (atalhos), simetrizado
+      for (let i = 0; i < n; i++) {
+        const perto = aldeias
+          .filter((_, j) => j !== i)
+          .map((b) => ({ id: b.id, d: d2(aldeias[i], b) }))
+          .sort((p, q) => p.d - q.d || p.id - q.id);
+        for (let t = 0; t < Math.min(k, perto.length); t++) ligar(aldeias[i].id, perto[t].id);
+      }
+      // 3) TRAVESSIAS entre os lados: o mapa e espelhado no eixo vertical, entao
+      //    as metades quase nao se ligam. Liga os N pares oeste-leste mais
+      //    proximos ainda nao ligados (medido pela mediana do x). Determinismo:
+      //    ordena por distancia, depois pelos ids.
+      if (travessias > 0) {
+        const xs = aldeias.map((a) => a.x).slice().sort((p, q) => p - q);
+        const med = xs[Math.floor(xs.length / 2)];
+        const pares = [];
+        for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+          if ((aldeias[i].x < med) === (aldeias[j].x < med)) continue; // mesmo lado
+          pares.push({ i, j, d: d2(aldeias[i], aldeias[j]) });
+        }
+        pares.sort((p, q) => p.d - q.d ||
+          aldeias[p.i].id - aldeias[q.i].id || aldeias[p.j].id - aldeias[q.j].id);
+        let add = 0;
+        for (const pr of pares) {
+          if (add >= travessias) break;
+          const a = aldeias[pr.i].id, b = aldeias[pr.j].id;
+          if (adjSet[a].has(b)) continue; // ja ligado (nao conta como nova travessia)
+          ligar(a, b); add++;
+        }
+      }
+    }
+    const adj = {};
+    for (const id in adjSet) adj[id] = [...adjSet[id]].sort((x, y) => x - y);
+    return { adj };
+  }
+
   // estado inicial da partida a partir das aldeias — COMPARTILHADO v1/v2
   function montarJogo(config, aldeias) {
     return {
       config,
       turno: 0,
       aldeias,
+      estradas: construirEstradas(aldeias,
+        (config.estradas && config.estradas.vizinhos) != null ? config.estradas.vizinhos : 3,
+        (config.estradas && config.estradas.travessias) != null ? config.estradas.travessias : 5),
       movimentos: [],   // exercitos em transito (PECA 3)
       jogadores: {
         A: { id: "A", nome: "Rei A" },
@@ -564,13 +663,24 @@
     }
     return best;
   }
+  // Bonus de defesa por TERRENO (fase motor #3): tropa numa aldeia resiste
+  // mais que em campo aberto; castelo (capital) resiste ainda mais. alvo null
+  // = combate em campo aberto/estrada (#2 futuro) -> sem bonus.
+  function bonusDefesa(estado, alvo) {
+    if (!alvo) return 1;
+    return alvo.capital ? estado.config.combate.bonus_defesa_castelo
+                        : estado.config.combate.bonus_defesa_aldeia;
+  }
+
   // Nucleo da conta do combate (v2): usado pelo resolverCombate E pela
   // previsao de confronto da UI — uma conta so, impossivel divergir.
-  function preverCombateTipos(estado, Fatk, atkType, Fdef, defType) {
+  // defBonus = multiplicador de terreno do defensor (1 = campo aberto).
+  function preverCombateTipos(estado, Fatk, atkType, Fdef, defType, defBonus) {
     const v = vantagem(estado, atkType, defType); // +1 atk tem counter, -1 def tem
     const B = estado.config.bonus_forca_triangulo;
+    const dB = defBonus || 1;                      // terreno do defensor (aldeia/castelo/campo)
     const FatkEf = Fatk * (v > 0 ? B : 1);
-    const FdefEf = Fdef * (v < 0 ? B : 1);
+    const FdefEf = Fdef * (v < 0 ? B : 1) * dB;
     return { v, FatkEf, FdefEf, atacanteVence: FatkEf > FdefEf }; // empate -> defensor segura
   }
 
@@ -581,7 +691,7 @@
     const atkType = tipoDominante(estado, tropasAtk);
     const defType = alvo.dono === null ? alvo.tipo : tipoDominante(estado, alvo.tropas);
     return Object.assign({ Fatk, Fdef, atkType, defType },
-      preverCombateTipos(estado, Fatk, atkType, Fdef, defType));
+      preverCombateTipos(estado, Fatk, atkType, Fdef, defType, bonusDefesa(estado, alvo)));
   }
 
   // +1 se atkType vence defType; -1 se defType vence atkType; 0 neutro/sem tipo.
@@ -618,8 +728,9 @@
 
     // TRIANGULO v2: counter multiplica a forca EFETIVA -> decide o vencedor.
     // A conta vive em preverCombateTipos p/ NUNCA divergir da previsao da UI.
+    const defBonus = bonusDefesa(estado, alvo); // #3: terreno do defensor (aldeia/castelo)
     const { v, FatkEf, FdefEf, atacanteVence } =
-      preverCombateTipos(estado, Fatk, atkType, Fdef, defType);
+      preverCombateTipos(estado, Fatk, atkType, Fdef, defType, defBonus);
     const FwinEf = atacanteVence ? FatkEf : FdefEf;
     const FloseEf = atacanteVence ? FdefEf : FatkEf;
 
@@ -675,10 +786,52 @@
     }
     return pior;
   }
-  function turnosViagem(estado, origem, destino, tropas) {
-    const d = distancia(origem, destino);
+  function turnosPorDist(estado, dist, tropas) {
     const passo = estado.config.velocidade_passo[velExercito(estado, tropas)];
-    return Math.max(1, Math.ceil(d / passo));
+    return Math.max(1, Math.ceil(dist / passo));
+  }
+  function turnosViagem(estado, origem, destino, tropas) {
+    return turnosPorDist(estado, distancia(origem, destino), tropas);
+  }
+
+  // MENOR caminho (lista de ids, origem->destino) pela rede de estradas.
+  // A rede tem ciclos (MST + atalhos) -> Dijkstra ponderado pela distancia
+  // euclidiana dos trechos. null se nao ha rede. Deterministico: a fila
+  // escolhe sempre o menor id entre empates (ids iterados em ordem crescente).
+  function caminhoEntre(estado, aId, bId) {
+    const est = estado.estradas;
+    if (!est || !est.adj) return null;
+    if (aId === bId) return [aId];
+    const pos = {}; for (const a of estado.aldeias) pos[a.id] = a;
+    const ids = Object.keys(est.adj).map(Number);
+    const dist = {}, prev = {}, visto = {};
+    dist[aId] = 0;
+    for (;;) {
+      let u = null;                                  // menor dist ainda nao visitada
+      for (const id of ids) {
+        if (visto[id] || dist[id] == null) continue;
+        if (u === null || dist[id] < dist[u]) u = id; // ids crescentes -> empate = menor id
+      }
+      if (u === null || u === bId) break;
+      visto[u] = true;
+      for (const v of est.adj[u]) {
+        if (visto[v]) continue;
+        const nd = dist[u] + Math.hypot(pos[u].x - pos[v].x, pos[u].y - pos[v].y);
+        if (dist[v] == null || nd < dist[v]) { dist[v] = nd; prev[v] = u; }
+      }
+    }
+    if (dist[bId] == null) return null;              // desconexo (nao ocorre)
+    const caminho = [bId]; let c = bId;
+    while (c !== aId) { c = prev[c]; caminho.push(c); }
+    return caminho.reverse();
+  }
+  // Distancia total ao longo de um caminho (soma dos trechos).
+  function distanciaRota(estado, caminho) {
+    let d = 0;
+    for (let i = 0; i + 1 < caminho.length; i++) {
+      d += distancia(aldeiaPorId(estado, caminho[i]), aldeiaPorId(estado, caminho[i + 1]));
+    }
+    return d;
   }
 
   // Envia um exercito de uma aldeia (do jogador) a outra. Deduz as tropas
@@ -692,8 +845,21 @@
     let total = 0;
     for (const t of TIPOS) { const n = tropas[t] || 0; carga[t] = n; o.tropas[t] -= n; total += n; }
     if (total === 0) return null;
-    const turnos = turnosViagem(estado, o, d, carga);
-    const mov = { dono: o.dono, origemId, destinoId, tropas: carga, turnosRestantes: turnos, turnosTotal: turnos };
+    // MOTOR #1: o exercito segue a ESTRADA (menor caminho). Tempo = distancia
+    // AO LONGO da rota / passo. Sem rede (estados sinteticos), reta.
+    let caminho = caminhoEntre(estado, origemId, destinoId);
+    if (!caminho || caminho.length < 2) caminho = [origemId, destinoId];
+    // MOTOR #4 (19/07): NAO passa por aldeia que nao e do dono. A marcha para na
+    // PRIMEIRA aldeia inimiga/barbara do trajeto e briga ali (nao da p/ pular ate
+    // a aldeia ao lado do castelo). Aldeias proprias no caminho: passa reto.
+    for (let i = 1; i < caminho.length; i++) {
+      const passo = aldeiaPorId(estado, caminho[i]);
+      if (passo && passo.dono !== o.dono) { caminho = caminho.slice(0, i + 1); break; }
+    }
+    const destinoReal = caminho[caminho.length - 1];
+    const turnos = turnosPorDist(estado, distanciaRota(estado, caminho), carga);
+    const mov = { dono: o.dono, origemId, destinoId: destinoReal, tropas: carga, caminho,
+      turnosRestantes: turnos, turnosTotal: turnos };
     estado.movimentos.push(mov);
     return mov;
   }
@@ -712,14 +878,96 @@
     return rep;
   }
 
-  // (3+4) MOVIMENTO + COMBATE: avanca transitos; os que chegam resolvem.
+  // ---- MOTOR #2: combate na ESTRADA (exercitos que se cruzam) ----
+
+  // Ponto atual de um exercito ao longo da sua rota (pelo progresso de turnos).
+  // Devolve o trecho (aId->bId no sentido da marcha), t em [0,1] e o ponto x,y.
+  function posicaoRota(estado, mov) {
+    const cam = mov.caminho;
+    if (!cam || cam.length < 2) return null;
+    const total = distanciaRota(estado, cam);
+    const frac = mov.turnosTotal ? (mov.turnosTotal - mov.turnosRestantes) / mov.turnosTotal : 1;
+    let alvo = Math.max(0, frac) * total;
+    for (let i = 0; i + 1 < cam.length; i++) {
+      const a = aldeiaPorId(estado, cam[i]), b = aldeiaPorId(estado, cam[i + 1]);
+      const seg = distancia(a, b);
+      if (alvo <= seg || i + 2 === cam.length) {
+        const t = seg > 0 ? Math.max(0, Math.min(1, alvo / seg)) : 0;
+        return { aId: cam[i], bId: cam[i + 1], t, x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+      }
+      alvo -= seg;
+    }
+    return null;
+  }
+
+  // Dois exercitos INIMIGOS se cruzaram no mesmo trecho, em sentidos opostos?
+  // Teste instantaneo: no trecho lo<->hi, quem vai lo->hi ja alcancou quem vai
+  // hi->lo (posicoes medidas a partir de lo). Sem estado anterior -> deterministico.
+  function cruzaramNaEstrada(estado, m1, m2) {
+    if (m1.dono === m2.dono) return false;
+    const p1 = posicaoRota(estado, m1), p2 = posicaoRota(estado, m2);
+    if (!p1 || !p2) return false;
+    const lo = Math.min(p1.aId, p1.bId), hi = Math.max(p1.aId, p1.bId);
+    if (lo !== Math.min(p2.aId, p2.bId) || hi !== Math.max(p2.aId, p2.bId)) return false; // trecho diferente
+    const dir1 = p1.aId < p1.bId ? 1 : -1, dir2 = p2.aId < p2.bId ? 1 : -1;
+    if (dir1 === dir2) return false; // mesmo sentido: nao tratado (nao se enfrentam de frente)
+    const seg = distancia(aldeiaPorId(estado, lo), aldeiaPorId(estado, hi));
+    const posLo = (p) => (p.aId < p.bId ? p.t : 1 - p.t) * seg; // distancia a partir de lo
+    const posX = dir1 === 1 ? posLo(p1) : posLo(p2); // o que marcha lo->hi
+    const posY = dir1 === 1 ? posLo(p2) : posLo(p1); // o que marcha hi->lo
+    return posX >= posY; // se encontraram (ou passaram) no trecho
+  }
+
+  // Combate CAMPO ABERTO entre dois exercitos (sem bonus de terreno). Vencedor
+  // segue com baixas; perdedor eliminado. Determinismo do empate: dono "A" e o
+  // "atacante" (a conta em si nao depende da ordem dos argumentos).
+  function resolverCombateEstrada(estado, m1, m2) {
+    const cfg = estado.config;
+    const atk = m1.dono < m2.dono ? m1 : m2;
+    const def = atk === m1 ? m2 : m1;
+    const Fa = forcaTropas(estado, atk.tropas), Fd = forcaTropas(estado, def.tropas);
+    const ta = tipoDominante(estado, atk.tropas), td = tipoDominante(estado, def.tropas);
+    const { v, FatkEf, FdefEf, atacanteVence } = preverCombateTipos(estado, Fa, ta, Fd, td, 1); // campo aberto
+    const vencedor = atacanteVence ? atk : def, perdedor = atacanteVence ? def : atk;
+    const Fwin = atacanteVence ? FatkEf : FdefEf, Flose = atacanteVence ? FdefEf : FatkEf;
+    const baixasEf = Math.min(Flose * cfg.combate.atrito_base, Fwin);
+    const fracao = Fwin > 0 ? baixasEf / Fwin : 0;
+    aplicarBaixas(estado, vencedor.tropas, fracao);
+    const pa = posicaoRota(estado, atk) || { x: 0, y: 0 };
+    const ev = { tipo: "combate_estrada", turno: estado.turno,
+      atacante: atk.dono, defensor: def.dono, vencedorDono: vencedor.dono,
+      Fatk: Fa, Fdef: Fd, vantagem: v, x: pa.x, y: pa.y };
+    estado.log.push(ev);
+    return { vencedor, perdedor, ev };
+  }
+
+  // Varre os exercitos em transito e resolve os cruzamentos inimigos. Devolve
+  // os sobreviventes (perdedores saem do transito). O(m^2), m pequeno.
+  function detectarCombatesEstrada(estado, movs) {
+    const mortos = new Set();
+    for (let i = 0; i < movs.length; i++) {
+      if (mortos.has(movs[i])) continue;
+      for (let j = i + 1; j < movs.length; j++) {
+        if (mortos.has(movs[i])) break;
+        if (mortos.has(movs[j])) continue;
+        if (!cruzaramNaEstrada(estado, movs[i], movs[j])) continue;
+        const { perdedor } = resolverCombateEstrada(estado, movs[i], movs[j]);
+        mortos.add(perdedor);
+      }
+    }
+    return movs.filter((m) => !mortos.has(m));
+  }
+
+  // (3+4) MOVIMENTO + COMBATE: avanca transitos; cruzamentos na estrada
+  // resolvem no meio do caminho; os que chegam resolvem no destino.
   function avancarMovimentos(estado) {
     const chegaram = [], viajando = [];
     for (const m of estado.movimentos) {
       m.turnosRestantes -= 1;
       (m.turnosRestantes <= 0 ? chegaram : viajando).push(m);
     }
-    estado.movimentos = viajando;
+    // #2: quem segue viajando pode se cruzar com inimigo no mesmo trecho
+    estado.movimentos = detectarCombatesEstrada(estado, viajando);
     for (const m of chegaram) resolverChegada(estado, m);
   }
 
@@ -809,7 +1057,7 @@
       const euAtaquei = ev.atacante === me;
       const quem = euAtaquei ? "Voce" : "Rei " + ev.atacante;
       if (ev.vencedor === "atacante") {
-        const baixas = euAtaquei ? ` (suas baixas: ${ev.baixasForca} de forca)` : "";
+        const baixas = euAtaquei ? ` (suas baixas: ${ev.baixasForca} tropas)` : "";
         return `${quem} atacou [${ev.alvoId}] ${ev.alvoNome}: VITORIA, conquistou${baixas}`;
       }
       const perdeu = euAtaquei ? " (seu exercito foi perdido)" : "";
@@ -885,12 +1133,9 @@
     }
     L.push("");
 
-    // FORCA TOTAL
-    const forcaCasa = visao.minhas.reduce((s, a) => s + forcaDe(a.tropas, cfg), 0);
-    const forcaTransito = visao.transito.filter((m) => m.dono === me).reduce((s, m) => s + forcaDe(m.tropas, cfg), 0);
-    L.push(`=== FORCA TOTAL ===`);
-    L.push(`Sua forca em casa: ${forcaCasa}   |   Sua forca em transito: ${forcaTransito}`);
-    L.push("");
+    // FORCA TOTAL removida (19/07, filosofia do Lucas): na partida o Rei ve so
+    // TROPA + QUANTIDADE (por aldeia, acima) + CUSTO (nas regras). Sem numero de
+    // "forca" — 1 lanceiro e 1 lanceiro. A tabela de calculo fica nas REGRAS.
 
     // ALDEIAS NEUTRAS (ordenadas por distancia da minha mais proxima)
     const neutras = visao.alvos.filter((a) => a.dono === null)
@@ -954,17 +1199,33 @@
   function exemploAncorado(visao) {
     const minhas = (visao && visao.minhas) || [];
     const alvos = (visao && visao.alvos) || [];
-    const origem = minhas.length ? minhas[0].id : 0;       // id real de uma aldeia minha
-    const alvoAtk = alvos.length ? alvos[0].id : origem;   // id real de um alvo (neutra/inimigo)
+    const a0 = minhas.length ? minhas[0] : null;
+    const origem = a0 ? a0.id : 0;                          // id real de uma aldeia minha
+    // prefere NEUTRAS como alvo do exemplo (expansao sensata); copiar nao vira
+    // ataque suicida a capital inimiga. Cai p/ qualquer alvo se nao houver neutra.
+    const neutras = alvos.filter((a) => a.dono === null);
+    const poolAlvo = neutras.length ? neutras : alvos;
+    const alvoAtk = poolAlvo.length ? poolAlvo[0].id : origem;
     const tropas = (l, a, c) => `{"lanceiro": ${l}, "arqueiro": ${a}, "cavaleiro": ${c}}`;
 
+    // ANCORAGEM DAS QUANTIDADES (19/07): os modelos fracos copiam o exemplo ao
+    // pe da letra. Antes o exemplo pedia 10 lanceiros / 5 arqueiros — mais do que
+    // o rei tem (5/4/3) -> copia = 100% rejeitada. Agora as quantidades saem das
+    // tropas REAIS da 1a aldeia (metade de cada): um copia-cola sai VALIDO, e
+    // ainda sobra guarnicao (2x floor(n/2) <= n). Numeros = os do turno, nao fixos.
+    const tr = a0 ? a0.tropas : { lanceiro: 0, arqueiro: 0, cavaleiro: 0 };
+    let hl = Math.floor((tr.lanceiro || 0) / 2), ha = Math.floor((tr.arqueiro || 0) / 2), hc = Math.floor((tr.cavaleiro || 0) / 2);
+    if (hl + ha + hc === 0) { // aldeia quase vazia: manda 1 de um tipo que exista (senao so o molde)
+      if ((tr.lanceiro || 0) > 0) hl = 1; else if ((tr.arqueiro || 0) > 0) ha = 1; else if ((tr.cavaleiro || 0) > 0) hc = 1;
+    }
     const envios = [
-      `    {"origemId": ${origem}, "destinoId": ${alvoAtk}, "tropas": ${tropas(10, 0, 0)}}`,
+      `    {"origemId": ${origem}, "destinoId": ${alvoAtk}, "tropas": ${tropas(hl, ha, hc)}}`,
     ];
-    // 2a linha mostra o molde com os 3 tipos preenchidos; destino = outro id real.
-    const segundoDestino = minhas.length >= 2 ? minhas[1].id : (alvos.length >= 2 ? alvos[1].id : null);
-    if (segundoDestino != null) {
-      envios.push(`    {"origemId": ${origem}, "destinoId": ${segundoDestino}, "tropas": ${tropas(0, 5, 0)}}`);
+    // 2a linha mostra o molde com 2 envios; mesmas quantidades (2x metade <= total),
+    // destino = outro id real. So aparece se ha um 2o alvo E tropas p/ enviar.
+    const segundoDestino = poolAlvo.length >= 2 ? poolAlvo[1].id : (minhas.length >= 2 ? minhas[1].id : null);
+    if (segundoDestino != null && hl + ha + hc > 0) {
+      envios.push(`    {"origemId": ${origem}, "destinoId": ${segundoDestino}, "tropas": ${tropas(hl, ha, hc)}}`);
     }
     return [
       "{",
@@ -989,16 +1250,20 @@
     const B = cfg.bonus_forca_triangulo;
     const L = [];
     L.push("=== REGRAS DE COMBATE ===");
+    L.push("Cada tropa vale 1: o que conta e o NUMERO de tropas de cada lado.");
     L.push(`Triangulo de counters: ${TIPOS.map((t) => `${t} vence ${cfg.triangulo[t]}`).join("; ")}.`);
-    L.push(`No combate, o tipo com MAIS FORCA em cada exercito define o matchup. O lado com o counter certo luta com sua forca multiplicada por ${B}. Vence quem tiver a maior forca efetiva; empate favorece o defensor.`);
+    L.push(`O tipo com MAIS tropas em cada exercito define o matchup. O lado com o counter certo conta suas tropas x ${B}. Vence o maior numero efetivo de tropas; empate favorece o defensor.`);
     if (B > 1) {
-      const def = 300;
-      const atk = Math.ceil((def + 30) / B); // sempre: atk*B > def
+      const def = 5;
+      const atk = Math.ceil((def + 1) / B); // atk*B > def
       if (atk < def) {
         const atkEf = Math.round(atk * B);
-        L.push(`Exemplo: ${atk} de forca em arqueiros atacando ${def} de forca em lanceiros: ${atk} x ${B} = ${atkEf} contra ${def} -> o atacante vence, mesmo com menos forca. Com o counter errado, aconteceria o inverso.`);
+        L.push(`Exemplo: ${atk} arqueiros atacando ${def} lanceiros: com o counter certo, ${atk} x ${B} = ${atkEf} contra ${def} -> o atacante vence mesmo com MENOS tropas. Com o counter errado, seria o inverso.`);
       }
     }
+    const bA = cfg.combate && cfg.combate.bonus_defesa_aldeia, bC = cfg.combate && cfg.combate.bonus_defesa_castelo;
+    if (bA || bC)
+      L.push(`Defender e mais facil: tropas paradas numa aldeia contam x ${bA}; num castelo (capital), x ${bC}. Em campo aberto (na estrada) nao ha bonus. Para TOMAR uma aldeia, leve tropas com folga — 1 unidade nao conquista nada.`);
     return L.join("\n");
   }
 
@@ -1012,7 +1277,7 @@
     for (const t of TIPOS) {
       const d = cfg.tropas[t];
       L.push(`${t}: custa ${d.custo.madeira} madeira + ${d.custo.ferro} ferro, ` +
-        `forca ${d.forca}, fica pronto em ${d.turnos} turno${d.turnos > 1 ? "s" : ""}, velocidade ${d.vel}.`);
+        `fica pronto em ${d.turnos} turno${d.turnos > 1 ? "s" : ""}, velocidade ${d.vel}.`);
     }
     L.push(`Cada aldeia sua produz ${cfg.producao.madeira} madeira e ${cfg.producao.ferro} ferro por turno.`);
     if (cfg.limite_forca_aldeia)
@@ -1042,10 +1307,15 @@
     // MEIO: dados do turno (relatorio integral)
     L.push(relatorioTexto(visao, rejNoFim ? { semRejeicoes: true } : undefined));
     L.push("");
-    // FIM: instrucao de formato -> permissao de vazio -> processo -> exemplo (ultimo)
+    // FIM: instrucao de formato -> processo -> exemplo (ultimo).
+    // A "permissao de vazio" ("Listas vazias sao uma resposta valida... E melhor
+    // nao fazer nada do que enviar um ataque ruim...") foi REMOVIDA. Experimento
+    // exp-cautela-2x2 (braco B, 4x3x5, 15t, temp0): a frase congelava o
+    // llama3:8b em agencia 0.00 envios/turno (5/5 seeds, variancia zero) — ele
+    // copiava a linha construir do exemplo e esvaziava os envios. Remove-la
+    // destrava (0->1.71 envios/turno, 1->5.2 aldeias) e ajuda tambem os 3B, sem
+    // o efeito colateral do nudge factual (que fazia MAL ao llama3.2:3b).
     L.push("Responda APENAS com um JSON valido no formato abaixo. Nenhum texto antes ou depois do JSON.");
-    L.push("");
-    L.push("Listas vazias sao uma resposta valida. Se uma aldeia nao deve atacar nem construir neste turno, simplesmente nao a inclua. E melhor nao fazer nada do que enviar um ataque ruim ou construir sem motivo.");
     L.push("");
     // INSTRUCAO DE PROCESSO (curta, logo antes do exemplo): forca o modelo a
     // ancorar nos ids REAIS da visao em vez de copiar numeros do exemplo.
@@ -1545,6 +1815,13 @@
     distancia,
     velExercito,
     turnosViagem,
+    turnosPorDist,
+    construirEstradas,
+    caminhoEntre,
+    distanciaRota,
+    posicaoRota,
+    cruzaramNaEstrada,
+    resolverCombateEstrada,
     enviarExercito,
     avancarMovimentos,
     // Peca 4

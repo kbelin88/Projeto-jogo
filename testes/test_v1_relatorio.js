@@ -71,8 +71,10 @@ function checa(nome, cond, detalhe) {
 }
 
 console.log("Conferencias da Parte B:");
-const secoes = ["SUAS ALDEIAS", "FORCA TOTAL", "ALDEIAS NEUTRAS", "INIMIGO", "EXERCITOS EM TRANSITO", "O QUE ACONTECEU NO ULTIMO TURNO"];
-checa("todas as 6 secoes presentes", secoes.every((s) => rel.includes("=== " + s)), secoes.filter((s) => !rel.includes("=== " + s)).join(",") || "ok");
+// FORCA TOTAL removida (19/07): na partida o Rei ve so tropa+quantidade+custo.
+const secoes = ["SUAS ALDEIAS", "ALDEIAS NEUTRAS", "INIMIGO", "EXERCITOS EM TRANSITO", "O QUE ACONTECEU NO ULTIMO TURNO"];
+checa("todas as 5 secoes presentes", secoes.every((s) => rel.includes("=== " + s)), secoes.filter((s) => !rel.includes("=== " + s)).join(",") || "ok");
+checa("relatorio NAO fala 'forca' (so tropas)", !/forca/i.test(rel), (rel.match(/forca/i) || []).join());
 checa("distancia em TURNOS DE MARCHA", rel.includes("turnos de marcha"));
 checa('sem a palavra "estimado"', !/estimad/i.test(rel));
 checa("sem coordenadas (x,y) entre parenteses", !/\(\s*\d+\s*,\s*\d+\s*\)/.test(rel));

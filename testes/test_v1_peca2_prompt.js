@@ -32,18 +32,20 @@ function checa(nome, cond, detalhe) {
 const iTopo = prompt.indexOf("Voce e o Rei");
 const iDados = prompt.indexOf("=== SUAS ALDEIAS");
 const iFormato = prompt.indexOf("Responda APENAS com um JSON");
-const iVazio = prompt.indexOf("Listas vazias sao uma resposta valida");
 const iExemplo = prompt.lastIndexOf("{");
 
 console.log("Conferencias do Pedaco 1:");
 checa("funcao pura (mesma visao -> mesmo prompt)", prompt === Engine.montarPrompt(visao));
 checa("TOPO: identidade + tarefa", iTopo >= 0 && /objetivo e vencer/.test(prompt));
-checa("MEIO: relatorioTexto integral injetado", iDados > iTopo && prompt.includes("=== FORCA TOTAL"));
+checa("MEIO: relatorioTexto integral injetado", iDados > iTopo && prompt.includes("=== ALDEIAS NEUTRAS"));
 checa("FIM: instrucao de formato presente", iFormato > iDados);
-checa("permissao de vazio presente", iVazio > iFormato);
-checa('permissao de vazio SEM a palavra "estrategico"', !/estrateg/i.test(prompt));
+// A frase de cautela ("E melhor nao fazer nada...") foi removida em
+// exp-cautela-2x2 (braco B): congelava o llama3:8b. Guarda de regressao:
+// nao reintroduzir nem ela nem a palavra "estrategico".
+checa("frase de cautela AUSENTE (braco B aplicado)", !prompt.includes("Listas vazias sao uma resposta valida") && !/melhor nao fazer nada/i.test(prompt));
+checa('prompt SEM a palavra "estrategico"', !/estrateg/i.test(prompt));
 const iProcesso = prompt.indexOf("Antes de responder:");
-checa("instrucao de PROCESSO antes do exemplo", iProcesso > iVazio && iProcesso < iExemplo);
+checa("instrucao de PROCESSO antes do exemplo", iProcesso > iFormato && iProcesso < iExemplo);
 checa("EXEMPLO depois de tudo (ordem tarefa->dados->formato)", iExemplo > iProcesso);
 checa("prompt TERMINA com '}' (exemplo e a ultima coisa)", prompt.trimEnd().endsWith("}"));
 checa("exemplo: tropas com os 3 tipos (inclusive zero)", /"lanceiro": 0|"arqueiro": 0|"cavaleiro": 0/.test(prompt));
@@ -52,7 +54,7 @@ checa('topo NAO nomeia "lado A/B"', !/lado [AB]/i.test(prompt));
 // REGRAS DE COMBATE (triangulo v2): bloco gerado da CONFIG, entre topo e dados
 const iRegras = prompt.indexOf("=== REGRAS DE COMBATE ===");
 checa("REGRAS: bloco presente entre topo e dados", iRegras > iTopo && iRegras < iDados);
-checa("REGRAS: bonus vem da CONFIG", prompt.includes(`multiplicada por ${CONFIG.bonus_forca_triangulo}`));
+checa("REGRAS: bonus vem da CONFIG", prompt.includes(`tropas x ${CONFIG.bonus_forca_triangulo}`));
 checa("REGRAS: triangulo por extenso", prompt.includes("lanceiro vence cavaleiro"));
 checa("REGRAS: exemplo numerico presente", /-> o atacante vence/.test(prompt));
 

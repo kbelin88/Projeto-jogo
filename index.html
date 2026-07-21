@@ -279,6 +279,8 @@
     <select id="gmodA" class="selrei">
       <option value="burro" selected>burro</option>
       <option value="gemini">Gemini</option>
+      <option value="grok:grok-4">Grok 4</option>
+      <option value="grok:grok-3-mini">Grok 3 mini</option>
       <option value="ollama:qwen2.5:3b">qwen2.5:3b</option>
       <option value="ollama:llama3.2:3b">llama3.2:3b</option>
       <option value="ollama:llama3:latest">llama3 8B</option>
@@ -288,6 +290,8 @@
     <select id="gmodB" class="selrei">
       <option value="burro" selected>burro</option>
       <option value="gemini">Gemini</option>
+      <option value="grok:grok-4">Grok 4</option>
+      <option value="grok:grok-3-mini">Grok 3 mini</option>
       <option value="ollama:qwen2.5:3b">qwen2.5:3b</option>
       <option value="ollama:llama3.2:3b">llama3.2:3b</option>
       <option value="ollama:llama3:latest">llama3 8B</option>
@@ -363,9 +367,11 @@
     const v = vnoise(x, y, 21, 0.07);          // manchas grandes e suaves
     const t = vnoise(x, y, 22, 0.30) * 0.30;   // textura leve
     const m = Math.min(1, v * 0.78 + t);
-    const rr = Math.floor(lerp(143, 164, m));
-    const g = Math.floor(lerp(157, 178, m));
-    const b = Math.floor(lerp(110, 131, m));
+    // grama v2 (pele v2): verde mais vivo/vicoso (era oliva dessaturado).
+    // Calibravel no olho: escuro rgb(120,150,85) -> claro rgb(150,180,110).
+    const rr = Math.floor(lerp(120, 150, m));
+    const g = Math.floor(lerp(150, 180, m));
+    const b = Math.floor(lerp(85, 110, m));
     return `rgb(${rr},${g},${b})`;
   }
 
@@ -453,7 +459,7 @@
   const SPR = {};
   (function () {
     if (typeof Image === "undefined") return;
-    for (const nome of ["bosque", "serra_grande", "serra_pequena"]) {
+    for (const nome of ["bosque", "serra_grande", "serra_pequena", "castelo", "aldeia_neutra"]) {
       const img = new Image();
       img.onload = function () { img.pronto = true; if (typeof draw === "function") draw(); };
       img.src = "assets/sprites/" + nome + ".png";
@@ -465,6 +471,27 @@
     if (alpha != null && alpha < 1) { ctx.save(); ctx.globalAlpha = alpha; }
     ctx.drawImage(img, xc - larg / 2, yBase - alt, larg, alt); // ancora: base-centro
     if (alpha != null && alpha < 1) ctx.restore();
+  }
+
+  // PECA B (pele v2): sprite tingido na cor do dono, cacheado uma vez por cor.
+  // A tinta e aplicada num buffer proprio com "source-atop" — pinta SO onde ha
+  // pixel do sprite, sem vazar no terreno (um multiply direto no mapa vazaria).
+  const _tintCache = {};
+  function spriteTintado(img, col) {
+    const key = (img.src || "") + "|" + col;
+    let c = _tintCache[key];
+    if (!c) {
+      c = document.createElement("canvas");
+      c.width = img.width; c.height = img.height;
+      const g = c.getContext("2d");
+      g.drawImage(img, 0, 0);
+      g.globalCompositeOperation = "source-atop"; // clipa a tinta ao sprite
+      g.globalAlpha = 0.35;                        // calibravel no olho
+      g.fillStyle = col;
+      g.fillRect(0, 0, c.width, c.height);
+      _tintCache[key] = c;
+    }
+    return c;
   }
 
   function drawTile(type, gx, gy, size, rot) {
@@ -673,28 +700,36 @@
       }
     }
 
-    // 1b) lagos como blobs orgânicos arredondados
-    const lg0x = Math.floor(cx0 / LAKE_G) - 1, lg1x = Math.floor(cx1 / LAKE_G) + 1;
-    const lg0y = Math.floor(cy0 / LAKE_G) - 1, lg1y = Math.floor(cy1 / LAKE_G) + 1;
-    for (let gx = lg0x; gx <= lg1x; gx++) {
-      for (let gy = lg0y; gy <= lg1y; gy++) {
-        const lk = lakeInfo(gx, gy);
-        if (!lk) continue;
-        const scx = lk.cx * cs + panX, scy = lk.cy * cs + panY, srad = lk.rad * cs;
-        // margem clara (praia)
-        blobPath(scx, scy, srad * 1.12, lk.seed);
-        ctx.fillStyle = "#9fc18a"; ctx.fill();
-        // água com profundidade (gradiente radial)
-        const grad = ctx.createRadialGradient(scx, scy, srad * 0.1, scx, scy, srad);
-        grad.addColorStop(0, "#3f7fb0"); grad.addColorStop(1, "#2f6694");
-        blobPath(scx, scy, srad, lk.seed);
-        ctx.fillStyle = grad; ctx.fill();
-        // reflexo suave
-        ctx.fillStyle = "rgba(255,255,255,.12)";
-        blobPath(scx - srad * 0.2, scy - srad * 0.25, srad * 0.4, lk.seed + 7);
-        ctx.fill();
+    // 1a-quinquies) ESTRADAS (motor #1): a rede REAL do jogo (game.estradas),
+    // por baixo de agua/decoracao/vilas. Agora os exercitos ANDAM por ela — a
+    // malha faz sentido no mapa. Cada aresta uma vez (a<b). Terra batida.
+    if (game && game.estradas && game.estradas.adj && !gridView) {
+      const adj = game.estradas.adj;
+      const byId = {}; for (const v of game.aldeias) byId[v.id] = v;
+      ctx.lineCap = "round"; ctx.lineJoin = "round";
+      for (let pass = 0; pass < 2; pass++) {
+        ctx.strokeStyle = pass === 0 ? "rgba(120,96,58,0.42)" : "rgba(198,170,118,0.75)";
+        ctx.lineWidth = pass === 0 ? Math.max(2.5, cs * 0.26) : Math.max(1.2, cs * 0.13);
+        ctx.beginPath();
+        for (const aId in adj) {
+          const av = byId[aId]; if (!av) continue;
+          for (const bId of adj[aId]) {
+            if (bId <= +aId) continue;               // cada aresta uma vez
+            const bv = byId[bId]; if (!bv) continue;
+            const ax = (av.x + 0.5) * cs + panX, ay = (av.y + 0.5) * cs + panY;
+            const bx = (bv.x + 0.5) * cs + panX, by = (bv.y + 0.5) * cs + panY;
+            if (Math.max(ax, bx) < 0 || Math.min(ax, bx) > VW ||
+                Math.max(ay, by) < 0 || Math.min(ay, by) > VH) continue;
+            ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
+          }
+        }
+        ctx.stroke();
       }
     }
+
+    // 1b) LAGOS removidos do mapa (feedback Lucas 19/07): poluiam. isWater/
+    // lakeInfo seguem no motor (aldeias nao nascem na agua), mas nao sao mais
+    // desenhados — paisagem limpa. Rios ficam para uma etapa de motor.
 
     // 2) decoração de terreno (florestas e montanhas) — some só na visão de grade
     if (!gridView) {
@@ -702,11 +737,13 @@
         for (let x = cx0; x < cx1; x++) {
           const d = cellData(x, y);
           const sx = x * cs + panX, sy = y * cs + panY;
+          if (game && decoClear().has(x + "," + y)) continue; // pele v2: sem deco sob aldeias
           if (d.type === T_FOREST && !d.village) {
             if (SPR.bosque && SPR.bosque.pronto) {
-              // 1 bosque do kit por aglomerado (~1 a cada 5-6 celulas de mata),
+              // 1 bosque do kit por aglomerado (~1 a cada 10 celulas de mata),
               // nao 1 carimbo por celula — menos arvore, mais paisagem.
-              if (hash(x, y, 401) < 0.18) {
+              // densidade calibravel no olho (Lucas): 0.10 = esparso, 0.18 = denso.
+              if (hash(x, y, 401) < 0.10) {
                 const wS = cs * (2.4 + hash(x, y, 402) * 1.2);
                 desenharSprite(SPR.bosque, sx + cs * 0.5, sy + cs * 0.95, wS);
               }
@@ -906,6 +943,10 @@
   const COR = { A: "#3b6bd8", B: "#d83b3b", neutra: "#d9d2bd" };
 
   let game = null;        // estado da partida (engine)
+  // PELE v2: ids das CAPITAIS (as unicas aldeias que ja comecam com dono).
+  // Persistente: na conquista o motor zera o tipo (engine 650), entao tipo
+  // nao distingue capital de aldeia tomada; o id inicial-com-dono distingue.
+  let capitalIds = new Set();
   let playing = false;
   let speed = 500;        // ms por turno
   let timer = null;
@@ -1166,6 +1207,8 @@
         if (!dados.frames || !dados.frames.length) throw new Error("replay vazio");
         pause();
         if (!game) game = Engine.criarEstadoInicial(Engine.CONFIG);
+        // capitais do replay: aldeias com dono no primeiro frame gravado
+        capitalIds = new Set(dados.frames[0].aldeias.filter((a) => a.dono !== null).map((a) => a.id));
         rep = { dados, idx: 0 };
         const meuRun = ++runId;
         runReplay(meuRun);
@@ -1281,7 +1324,12 @@
   function registrarEfeitosTurno(tn) {
     if (REDUZ_MOV) return;
     for (const e of game.log) {
-      if (e.turno !== tn || e.tipo !== "combate") continue;
+      if (e.turno !== tn) continue;
+      if (e.tipo === "combate_estrada") { // #2: choque no meio da estrada, cor do vencedor
+        efeitos.push({ x: e.x, y: e.y, t0: performance.now(), cor: COR[e.vencedorDono] || "#ffd56b" });
+        continue;
+      }
+      if (e.tipo !== "combate") continue;
       const a = game.aldeias.find((v) => v.id === e.alvoId);
       if (!a) continue;
       efeitos.push({
@@ -1400,6 +1448,7 @@
     game = Engine.criarEstadoInicial(Engine.CONFIG);
     // indice celula -> aldeia (posicoes fixas): filtro rapido no render
     game.byCell = new Map(game.aldeias.map((a) => [a.x + "," + a.y, a]));
+    capitalIds = new Set(game.aldeias.filter((a) => a.dono !== null).map((a) => a.id));
     enquadrarTeatro();
     updateGameHUD();
     draw();
@@ -1468,6 +1517,41 @@
       const m = /"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/.exec(corpo);
       const ms = m ? Math.ceil(parseFloat(m[1]) * 1000) : Math.min(1000 * 2 ** tentativa, 40000);
       await espera(ms + 500); // backoff SO p/ throttle de transporte (429/503)
+    }
+  }
+
+  // ----- GROK (xAI): API OpenAI-compatible (chat/completions). Chave no
+  // localStorage (o browser NAO le o .env — cola-se uma vez, como o Gemini).
+  const GROK_URL = "https://api.x.ai/v1/chat/completions";
+  let grokKey = lsGet("GROK_API_KEY") || "";
+  let ultimoEnvioGrok = 0;
+  function pedirChaveGrok() {
+    if (!grokKey) {
+      const k = (window.prompt("Cole sua GROK_API_KEY (xai-..., fica so neste navegador):") || "").trim();
+      if (k) { grokKey = k; lsSet("GROK_API_KEY", k); }
+    }
+    return grokKey;
+  }
+  async function gerarGrok(prompt, modelo) {
+    const faltam = 300 - (Date.now() - ultimoEnvioGrok); // pacing leve p/ rate limit
+    if (faltam > 0) await espera(faltam);
+    ultimoEnvioGrok = Date.now();
+    for (let tentativa = 1; ; tentativa++) {
+      const resp = await fetch(GROK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + grokKey },
+        body: JSON.stringify({ model: modelo, messages: [{ role: "user", content: prompt }], temperature: tempLLM, stream: false }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const u = data.usage;
+        tokensUltimaChamada = u ? { prompt: u.prompt_tokens || 0, resposta: u.completion_tokens || 0 } : null;
+        const c = data.choices && data.choices[0];
+        return (c && c.message && c.message.content) || "";
+      }
+      const corpo = await resp.text().catch(() => "");
+      if ((resp.status !== 429 && resp.status !== 503) || tentativa >= 6) throw new Error("Grok HTTP " + resp.status + ": " + corpo);
+      await espera(Math.min(1000 * 2 ** tentativa, 40000) + 500); // backoff p/ throttle
     }
   }
 
@@ -1589,6 +1673,7 @@
   function fabricarGerador(valor) {
     if (valor === "burro") return null; // burro decide sem rede
     if (valor === "gemini") return (p) => gerarGemini(p);
+    if (valor.startsWith("grok:")) { const m = valor.slice("grok:".length); return (p) => gerarGrok(p, m); }
     const modelo = valor.slice("ollama:".length);
     return (p) => gerarOllama(p, modelo);
   }
@@ -1667,6 +1752,9 @@
     const vA = document.getElementById("gmodA").value, vB = document.getElementById("gmodB").value;
     if ((vA === "gemini" || vB === "gemini") && !pedirChave()) {
       pause(); alert("Sem GEMINI_API_KEY: nao da pra rodar o Gemini."); return;
+    }
+    if ((vA.startsWith("grok:") || vB.startsWith("grok:")) && !pedirChaveGrok()) {
+      pause(); alert("Sem GROK_API_KEY: nao da pra rodar o Grok."); return;
     }
     const usaOllama = [vA, vB].find((v) => v.startsWith("ollama:"));
     if (usaOllama) { // sanity check (e teste de CORS)
@@ -1749,6 +1837,22 @@
     ctx.lineWidth = 1; ctx.strokeStyle = "rgba(20,12,4,.6)"; ctx.stroke();
   }
 
+  // bandeira do time fincada sobre a aldeia DOMINADA (pele v2, 18/07):
+  // no mapa limpo e o unico sinal de posse. Mastro + flamula triangular.
+  // footY = pe do mastro; h = altura; col = cor do time.
+  function desenharBandeira(x, footY, h, col) {
+    const topo = footY - h;
+    ctx.lineWidth = Math.max(1.5, h * 0.09); ctx.strokeStyle = "rgba(30,20,8,.85)";
+    ctx.beginPath(); ctx.moveTo(x, footY); ctx.lineTo(x, topo); ctx.stroke();
+    ctx.fillStyle = col;                              // flamula
+    ctx.beginPath();
+    ctx.moveTo(x, topo);
+    ctx.lineTo(x + h * 0.60, topo + h * 0.15);
+    ctx.lineTo(x, topo + h * 0.30);
+    ctx.closePath(); ctx.fill();
+    ctx.lineWidth = 1; ctx.strokeStyle = "rgba(20,12,4,.6)"; ctx.stroke();
+  }
+
   // cabana com telhado de palha (aldeias neutras)
   function desenharCabana(sx, sy, r) {
     const w = r * 0.95, h = r * 0.55, x = sx - w / 2, y = sy - h * 0.1;
@@ -1815,95 +1919,86 @@
     return cels;
   }
 
+  // PELE v2 (18/07): celulas "limpas" no entorno de cada aldeia — nelas a
+  // decoracao (bosque/serra) NAO nasce, senao arvore/montanha brotam por cima
+  // do predio. Posicoes das aldeias sao fixas na partida -> cache por assinatura.
+  let decoClearCache = { sig: "", set: null };
+  function decoClear() {
+    if (!game) return null;
+    const sig = game.aldeias.map((a) => a.x + "_" + a.y).join(";");
+    if (decoClearCache.sig === sig) return decoClearCache.set;
+    const set = new Set();
+    for (const a of game.aldeias) {
+      const cap = capitalIds.has(a.id);           // castelo ocupa mais que aldeia
+      const rx = 2, up = cap ? 3 : 2, down = 1;   // sprite sobe -> folga maior p/ cima
+      for (let dy = -up; dy <= down; dy++)
+        for (let dx = -rx; dx <= rx; dx++) set.add((a.x + dx) + "," + (a.y + dy));
+    }
+    decoClearCache = { sig, set };
+    return set;
+  }
+
+  // MOTOR #1 (render): pontos (em celulas) do caminho de um exercito e o ponto
+  // atual pela fracao de progresso — o exercito ANDA pela estrada, nao pela reta.
+  function pontosCaminho(m) {
+    const cam = (m.caminho && m.caminho.length >= 2) ? m.caminho : [m.origemId, m.destinoId];
+    const pts = [];
+    for (const id of cam) { const a = game.aldeias.find((v) => v.id === id); if (a) pts.push({ x: a.x, y: a.y }); }
+    return pts.length >= 2 ? pts : null;
+  }
+  function pontoNaRota(pts, prog) {
+    const segs = []; let total = 0;
+    for (let i = 0; i + 1 < pts.length; i++) { const d = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y); segs.push(d); total += d; }
+    let alvo = Math.max(0, Math.min(1, prog)) * total;
+    for (let i = 0; i < segs.length; i++) {
+      if (alvo <= segs[i] || i === segs.length - 1) {
+        const t = segs[i] > 0 ? Math.max(0, Math.min(1, alvo / segs[i])) : 0;
+        return { x: lerp(pts[i].x, pts[i + 1].x, t), y: lerp(pts[i].y, pts[i + 1].y, t), seg: i };
+      }
+      alvo -= segs[i];
+    }
+    return { x: pts[pts.length - 1].x, y: pts[pts.length - 1].y, seg: pts.length - 2 };
+  }
+
   function drawGame() {
     if (!game) return;
     const cs = TILE * scale;
 
-    // territorio por baixo de tudo: veu da cor do rei + fronteira tracada
-    const cels = territorioCelulas();
-    const RGB_T = { A: "93,140,240", B: "239,93,93" };
-    ctx.lineWidth = Math.max(1.5, cs * 0.06);
-    for (const [k, c] of cels) {
-      const gx = +k.slice(0, k.indexOf(",")), gy = +k.slice(k.indexOf(",") + 1);
-      const px = gx * cs + panX, py = gy * cs + panY;
-      if (px < -cs || py < -cs || px > VW + cs || py > VH + cs) continue;
-      ctx.fillStyle = `rgba(${RGB_T[c.dono]},0.10)`;
-      ctx.fillRect(px, py, cs + 1, cs + 1);
-      ctx.strokeStyle = `rgba(${RGB_T[c.dono]},0.55)`;
-      ctx.beginPath();
-      const lados = [[1, 0, px + cs, py, px + cs, py + cs], [-1, 0, px, py, px, py + cs],
-        [0, 1, px, py + cs, px + cs, py + cs], [0, -1, px, py, px + cs, py]];
-      for (const [ddx, ddy, ax, ay, bx, by] of lados) {
-        const viz = cels.get((gx + ddx) + "," + (gy + ddy));
-        if (!viz || viz.dono !== c.dono) { ctx.moveTo(ax, ay); ctx.lineTo(bx, by); }
-      }
-      ctx.stroke();
-    }
+    // AREA DE INFLUENCIA removida (pele v2, feedback Lucas 18/07): o veu de
+    // territorio poluia o mapa. O placar/cabo-de-guerra no topo carrega o jogo;
+    // o mapa vira paisagem. territorioCelulas() segue definida caso volte.
 
     for (const a of game.aldeias) {
       const sx = a.x * cs + panX + cs / 2, sy = a.y * cs + panY + cs / 2;
       if (sx < -60 || sy < -60 || sx > VW + 60 || sy > VH + 60) continue;
       const col = a.dono === null ? COR.neutra : COR[a.dono];
-      const r = Math.max(20, cs * 0.59); // E2: aldeia maior + piso p/ mapa inteiro (gate E1)
+      const r = Math.max(20, cs * 0.59);
+      const ehCapital = capitalIds.has(a.id); // so a capital inicial e castelo (aldeia tomada nao)
 
-      // tintura sutil da cor do dono (le-se o territorio de relance)
-      ctx.globalAlpha = a.dono === null ? 0.10 : 0.18;
-      ctx.fillStyle = col;
-      ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.fill();
-      ctx.globalAlpha = 1;
+      // PELE v2 (feedback Lucas 18/07): MAPA LIMPO. Fora anel, numero de
+      // tropas e selo — o placar no topo carrega a leitura do jogo. So a
+      // CAPITAL do rei e castelo (o alvo da partida = tomar o castelo inimigo);
+      // aldeia barbara dominada segue aldeia, marcada por BANDEIRA do time.
+      // Sprite base-centro; fallback procedural quando ainda nao carregou.
+      const sprB = ehCapital
+        ? (SPR.castelo && SPR.castelo.pronto ? SPR.castelo : null)
+        : (SPR.aldeia_neutra && SPR.aldeia_neutra.pronto ? SPR.aldeia_neutra : null);
+      const larg = cs * (ehCapital ? 3.2 : 2.4);
+      const yBase = sy + r * 0.5;                    // base-centro no pe do plot
+      if (sprB) {
+        // capital tingida na cor do dono (bandeiras vem azuis de fabrica);
+        // aldeia = sprite cru (a bandeira marca a posse). Tinta cacheada por cor.
+        desenharSprite(ehCapital ? spriteTintado(sprB, col) : sprB, sx, yBase, larg);
+      } else if (r >= 15) {                          // fallback procedural
+        if (ehCapital) desenharTorreao(sx, sy, r, col);
+        else desenharCabana(sx, sy, r);
+      }
 
-      ctx.lineWidth = 1; ctx.strokeStyle = "rgba(0,0,0,.55)";
-      ctx.beginPath(); ctx.arc(sx, sy, r + 2, 0, Math.PI * 2); ctx.stroke();
-      ctx.lineWidth = Math.max(2.5, cs * 0.11); ctx.strokeStyle = col;
-      ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.stroke();
-
-      if (r > 12) { // E2: interior segue o tamanho NA TELA (r), nao o zoom
-        const LET = { lanceiro: "L", arqueiro: "A", cavaleiro: "C" };
-        const val = a.dono === null
-          ? (a.tropas[a.tipo] || 0) + LET[a.tipo]      // neutra: "40L" (tipo único)
-          : Engine.forcaDe(a.tropas, game.config);     // rei: força total
-
-        const fs = Math.max(10, r * 0.58); // E2: acompanha o raio
-        ctx.font = `bold ${fs}px Verdana`; ctx.textAlign = "center";
-        ctx.lineWidth = Math.max(2, fs * 0.28); ctx.strokeStyle = "rgba(20,12,4,.85)";
-        ctx.strokeText(val, sx, sy - r - 3);
-        ctx.fillStyle = a.dono === null ? "#fff" : col === COR.A ? "#bcd0ff" : "#ffc4c4";
-        ctx.fillText(val, sx, sy - r - 3);
-
-        // predio no centro (torreao com bandeira / cabana) + selo do tipo
-        // na borda: o matchup segue legivel sem esconder a construcao
-        const tg = a.dono === null ? a.tipo : Engine.tipoDominante(game, a.tropas);
-        if (r >= 15) { // E2: predio aparece sempre que couber na tela
-          if (a.dono === null) desenharCabana(sx, sy, r);
-          else desenharTorreao(sx, sy, r, col);
-          if (tg) {
-            const rb = Math.max(6, r * 0.34);
-            ctx.fillStyle = "rgba(24,17,8,.92)";
-            ctx.beginPath(); ctx.arc(sx + r * 0.68, sy + r * 0.68, rb, 0, Math.PI * 2); ctx.fill();
-            ctx.lineWidth = 1; ctx.strokeStyle = "rgba(217,164,65,.55)"; ctx.stroke();
-            ctx.font = `${rb * 1.35}px serif`;
-            ctx.fillText(GLIFO[tg], sx + r * 0.68, sy + r * 0.68 + rb * 0.48);
-          }
-        } else if (tg) {
-          const fg = Math.max(9, r * 0.55); // E2: acompanha o raio
-          ctx.font = `bold ${fg}px Verdana`;
-          ctx.lineWidth = Math.max(2, fg * 0.25); ctx.strokeStyle = "rgba(20,12,4,.9)";
-          ctx.strokeText(LET[tg], sx, sy + fg * 0.36);
-          ctx.fillStyle = "#f5e9c8";
-          ctx.fillText(LET[tg], sx, sy + fg * 0.36);
-        }
-
-        // nome da aldeia (tipografia de cronica): donos em zoom medio,
-        // neutras so de perto p/ nao virar poluicao — direcao do handoff
-        if (NOMES_AMBIENTE && cs >= (a.dono === null ? 46 : 34)) {
-          const fn = Math.max(9, cs * 0.22);
-          ctx.font = `${fn}px Georgia, "Times New Roman", serif`;
-          ctx.lineWidth = Math.max(2, fn * 0.3); ctx.strokeStyle = "rgba(20,12,4,.7)";
-          ctx.strokeText(a.nome, sx, sy + r + fn + 4);
-          ctx.fillStyle = a.dono === null ? "rgba(240,228,200,.85)"
-            : a.dono === "A" ? "#cdd9ff" : "#ffd0d0";
-          ctx.fillText(a.nome, sx, sy + r + fn + 4);
-        }
+      // BANDEIRA do time sobre a aldeia DOMINADA (nao-capital): a capital ja
+      // veste a cor no proprio castelo, entao so as aldeias tomadas recebem.
+      if (!ehCapital && a.dono !== null) {
+        const alt = sprB ? larg * sprB.height / sprB.width : r * 2;
+        desenharBandeira(sx, yBase - alt * 0.55, r * 1.25, col);
       }
     }
 
@@ -1912,8 +2007,10 @@
       const d = game.aldeias.find((a) => a.id === m.destinoId);
       if (!o || !d) continue;
       const prog = m.turnosTotal ? (m.turnosTotal - m.turnosRestantes) / m.turnosTotal : 1;
-      const mx = lerp(o.x, d.x, prog) * cs + panX + cs / 2;
-      const my = lerp(o.y, d.y, prog) * cs + panY + cs / 2;
+      const pts = pontosCaminho(m);                       // motor #1: segue a estrada
+      const p = pts ? pontoNaRota(pts, prog) : { x: lerp(o.x, d.x, prog), y: lerp(o.y, d.y, prog), seg: 0 };
+      const mx = p.x * cs + panX + cs / 2;
+      const my = p.y * cs + panY + cs / 2;
       const dx = d.x * cs + panX + cs / 2, dy = d.y * cs + panY + cs / 2;
       const col = COR[m.dono];
 
@@ -1942,7 +2039,9 @@
       // importam gritam — o espectador ve DE ONDE, PARA ONDE e QUANTO.
       const ehAtaque = d && d.dono !== m.dono;
       ctx.save();
-      ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(dx, dy);
+      ctx.beginPath(); ctx.moveTo(mx, my);              // motor #1: rota restante pela estrada
+      if (pts) { for (let i = p.seg + 1; i < pts.length; i++) ctx.lineTo(pts[i].x * cs + panX + cs / 2, pts[i].y * cs + panY + cs / 2); }
+      else ctx.lineTo(dx, dy);
       if (ehAtaque) {
         // E2: rota de ataque = pontilhado PRETO fino, do ponto atual ao
         // alvo. A cor mora no escudo; a linha so aponta. Firma a 1 turno.
