@@ -207,6 +207,90 @@
     text-shadow: 0 1px 2px rgba(0,0,0,.7); }
   .pt-brasao.a { background: linear-gradient(180deg, #6d9af6, #4a76d6); }
   .pt-brasao.b { background: linear-gradient(180deg, #f66d6d, #d64a4a); }
+
+  /* ===== PAINEIS LATERAIS DE ESPECTADOR (fatia 1) =====================
+     Adaptado do mockup painel-v2.html. Cantos superiores, um por rei.
+     Cor da unidade constante entre a barra do exercito e a lista.
+     Painel direito espelhado (leitura de fora para dentro). */
+  .esp-painel {
+    position: fixed; top: 8px; z-index: 6; width: 320px;
+    background: linear-gradient(180deg, rgba(20,18,15,.94), rgba(20,18,15,.88));
+    border: 1px solid rgba(232,223,200,.22);
+    border-left: 3px solid #5b93c9;
+    border-radius: 2px; padding: 15px 17px 16px;
+    color: #e8dfc8; font-family: "Trebuchet MS", Verdana, sans-serif;
+    box-shadow: 0 6px 22px rgba(0,0,0,.5);
+  }
+  #espA { left: 8px; }
+  #espB { right: 8px; }
+  .esp-painel.dir {
+    border-left: 1px solid rgba(232,223,200,.22);
+    border-right: 3px solid #c85a5a; text-align: right;
+  }
+  /* cabecalho */
+  .esp-topo { display: flex; align-items: flex-start; gap: 12px; }
+  .esp-painel.dir .esp-topo { flex-direction: row-reverse; }
+  .esp-brasao { width: 48px; height: 56px; flex: none; margin-top: 1px; }
+  .esp-id { min-width: 0; flex: 1; }
+  .esp-nome { font-family: Georgia, "Times New Roman", serif; font-size: 19px; font-weight: 700; letter-spacing: .03em; line-height: 1.12; }
+  .esp-modelo { font-family: Consolas, monospace; font-size: 10.5px; color: #7a7160; letter-spacing: .05em; margin-top: 4px; }
+  /* barra de numeros */
+  .esp-barra {
+    display: flex; gap: 18px; margin-top: 15px; padding: 12px 0;
+    border-top: 1px solid rgba(232,223,200,.14);
+    border-bottom: 1px solid rgba(232,223,200,.14);
+  }
+  .esp-painel.dir .esp-barra { flex-direction: row-reverse; }
+  .esp-m { display: flex; flex-direction: column; gap: 3px; }
+  .esp-m .esp-v { font-family: Consolas, monospace; font-size: 23px; font-weight: 700; line-height: 1; }
+  .esp-m .esp-r { font-family: Consolas, monospace; font-size: 9.5px; letter-spacing: .13em; text-transform: uppercase; color: #7a7160; }
+  .esp-d { font-family: Consolas, monospace; font-size: 12px; margin-left: 4px; vertical-align: 2px; }
+  .esp-painel.dir .esp-d { margin: 0 4px 0 0; }
+  .esp-up { color: #7fb069; } .esp-down { color: #c8654a; } .esp-flat { color: #7a7160; }
+  /* composicao do exercito */
+  .esp-exercito { margin-top: 15px; }
+  .esp-rot { font-family: Consolas, monospace; font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase; color: #7a7160; margin-bottom: 8px; }
+  .esp-exe-barra { display: flex; height: 12px; border-radius: 1px; overflow: hidden; border: 1px solid rgba(0,0,0,.4); background: rgba(0,0,0,.35); }
+  .esp-exe-barra i { display: block; }
+  .esp-exe-leg { display: flex; gap: 13px; margin-top: 8px; font-family: Consolas, monospace; font-size: 11.5px; }
+  .esp-painel.dir .esp-exe-leg { justify-content: flex-end; }
+  .esp-exe-leg span { display: flex; align-items: center; gap: 4px; color: #b3a992; }
+  .esp-exe-leg em { width: 9px; height: 9px; border-radius: 1px; display: inline-block; font-style: normal; }
+  .esp-exe-leg b { color: #e8dfc8; font-weight: 700; }
+  /* lista de aldeias */
+  .esp-lista { margin-top: 15px; padding-top: 13px; border-top: 1px solid rgba(232,223,200,.14); }
+  .esp-lista-cab { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 9px; }
+  .esp-lista-cnt { font-family: Consolas, monospace; font-size: 9.5px; color: #5c5347; }
+  .esp-ald {
+    display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; align-items: center;
+    padding: 8px 7px; border-radius: 2px; text-align: left; border-left: 2px solid transparent;
+  }
+  /* as LINHAS de aldeia NAO sao espelhadas: leem id -> nome -> tropas nos dois
+     paineis (tropas antes do nome ficava estranho no painel direito) */
+  .esp-ald:nth-child(odd) { background: rgba(232,223,200,.035); }
+  .esp-ald.combate { background: rgba(200,90,74,.16); border-left-color: #c8654a; }
+  .esp-ald.nova { background: rgba(127,176,105,.13); border-left-color: #7fb069; }
+  .esp-ald-n { font-family: Consolas, monospace; font-size: 12px; font-weight: 700; color: #8f8672; }
+  .esp-ald-nome { font-size: 13px; color: #cfc5ae; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .esp-ald-cap { font-size: 9.5px; color: #c9a227; margin-left: 4px; letter-spacing: .08em; }
+  .esp-ald-tropas { display: flex; gap: 8px; font-family: Consolas, monospace; font-size: 12px; }
+  .esp-ald-tropas u { text-decoration: none; display: flex; align-items: center; gap: 3px; }
+  .esp-ald-tropas u i { width: 7px; height: 7px; border-radius: 1px; display: inline-block; }
+  .esp-ald-tropas u b { font-weight: 700; }
+  .esp-zero { opacity: .28; }
+  .esp-ald-tag { font-family: Consolas, monospace; font-size: 8.5px; letter-spacing: .1em; text-transform: uppercase; padding: 2px 4px; border-radius: 1px; align-self: center; }
+  .esp-tag-combate { background: rgba(200,90,74,.3); color: #e8a397; }
+  .esp-tag-nova { background: rgba(127,176,105,.25); color: #a9cf95; }
+  .esp-mais { font-family: Consolas, monospace; font-size: 10px; color: #5c5347; padding: 8px 7px 0; }
+  /* recursos rodape */
+  .esp-rec {
+    display: flex; gap: 14px; margin-top: 13px; padding-top: 12px;
+    border-top: 1px solid rgba(232,223,200,.14);
+    font-family: Consolas, monospace; font-size: 12px; color: #9a9080;
+  }
+  .esp-painel.dir .esp-rec { justify-content: flex-end; }
+  .esp-rec span b { color: #e8dfc8; font-weight: 700; }
+  /* cinema esconde o chrome de dev, mas os paineis de espectador ficam */
 </style>
 </head>
 <body>
@@ -234,6 +318,14 @@
   </div>
   <div class="p-feed" id="sb-feed"></div>
 </div>
+
+<!-- ===== PAINEIS LATERAIS DE ESPECTADOR (fatia 1: so render) =====
+     Dois paineis nos cantos superiores, um por rei. Toda a informacao
+     vem do estado do jogo (nada e inventado). Preenchidos por
+     renderPaineisEspectador() em updateGameHUD(). -->
+<div id="espA" class="esp-painel"></div>
+<div id="espB" class="esp-painel dir"></div>
+
 <div id="placarTop">
   <div id="pt-cabo"><div id="pt-cabo-a"></div><div id="pt-cabo-b"></div></div>
   <div class="pt-linha">
@@ -2134,6 +2226,144 @@
     }
   }
 
+  // ===== PAINEIS LATERAIS DE ESPECTADOR (fatia 1: so render) ============
+  //  Le SO o estado do jogo. Nada aqui altera engine/prompt/schema.
+  //  Cor da unidade constante entre a barra do exercito e a lista.
+  const ESP_COR = { lanceiro: "#c9a227", arqueiro: "#5b9c6b", cavaleiro: "#a8577c" };
+  const ESP_NOME = { A: "Rei do Norte", B: "Rei do Sul" };  // rotulo de exibicao (o estado guarda "Rei A"/"Rei B")
+  const ESP_BRASAO = {
+    A: '<svg class="esp-brasao" viewBox="0 0 44 51"><path d="M2 2h40v30c0 9.5-9.5 15.5-20 17C11.5 47.5 2 41.5 2 32V2z" fill="#2f5d8a" stroke="#e8dfc8" stroke-width="1.6"/><path d="M22 13l3.9 7.6 8.4 1.2-6.1 5.9 1.5 8.3-7.7-4-7.7 4 1.5-8.3-6.1-5.9 8.4-1.2z" fill="#e8dfc8" opacity=".92"/></svg>',
+    B: '<svg class="esp-brasao" viewBox="0 0 44 51"><path d="M2 2h40v30c0 9.5-9.5 15.5-20 17C11.5 47.5 2 41.5 2 32V2z" fill="#9b2c2c" stroke="#e8dfc8" stroke-width="1.6"/><path d="M22 11c4.6 4.6 9.2 7 9.2 14s-4.2 11.5-9.2 14c-5-2.5-9.2-7-9.2-14s4.6-9.4 9.2-14z" fill="#e8dfc8" opacity=".92"/></svg>'
+  };
+  // snapshot p/ variacao por turno (aldeias/tropas) e deteccao de "nova".
+  // So rola quando o turno avanca; deltas persistem durante todo o turno.
+  let espBase = null;                                 // { turno, A:{ald,tropas}, B:{...}, owners:{id:dono} }
+  let espDelta = { A: { ald: 0, tropas: 0 }, B: { ald: 0, tropas: 0 } };
+  let espNova = { A: new Set(), B: new Set() };
+
+  function espTotais(lado) {
+    const lista = Engine.aldeiasDe(game, lado);
+    let tropas = 0;
+    for (const a of lista) tropas += a.tropas.lanceiro + a.tropas.arqueiro + a.tropas.cavaleiro;
+    // tropas em marcha saem da guarnicao ao partir; contam no total do exercito
+    for (const m of game.movimentos) if (m.dono === lado) tropas += m.tropas.lanceiro + m.tropas.arqueiro + m.tropas.cavaleiro;
+    return { ald: lista.length, tropas };
+  }
+  function espAtualizarSnap() {
+    const cur = { turno: game.turno, A: espTotais("A"), B: espTotais("B"), owners: {} };
+    for (const a of game.aldeias) cur.owners[a.id] = a.dono;
+    if (!espBase || game.turno < espBase.turno) {   // 1o render ou reset (replay volta a 0): sem variacao
+      espDelta = { A: { ald: 0, tropas: 0 }, B: { ald: 0, tropas: 0 } };
+      espNova = { A: new Set(), B: new Set() };
+      espBase = cur;
+      return;
+    }
+    if (game.turno > espBase.turno) {               // avancou de turno
+      espDelta = {
+        A: { ald: cur.A.ald - espBase.A.ald, tropas: cur.A.tropas - espBase.A.tropas },
+        B: { ald: cur.B.ald - espBase.B.ald, tropas: cur.B.tropas - espBase.B.tropas }
+      };
+      espNova = { A: new Set(), B: new Set() };
+      for (const a of game.aldeias) {
+        const antes = espBase.owners[a.id];
+        if (a.dono && a.dono !== antes && espNova[a.dono]) espNova[a.dono].add(a.id);
+      }
+      espBase = cur;
+    }
+    // mesmo turno: mantem espDelta/espNova cacheados
+  }
+  function espVar(n) {
+    if (n > 0) return '<span class="esp-d esp-up">+' + n + "</span>";
+    if (n < 0) return '<span class="esp-d esp-down">−' + Math.abs(n) + "</span>";
+    return '<span class="esp-d esp-flat">0</span>';
+  }
+  function espTropasCel(a) {
+    let h = "";
+    for (const tp of ["lanceiro", "arqueiro", "cavaleiro"]) {
+      const n = a.tropas[tp];
+      h += '<u' + (n === 0 ? ' class="esp-zero"' : "") + '><i style="background:' + ESP_COR[tp] + '"></i><b>' + n + "</b></u>";
+    }
+    return h;
+  }
+  function renderPainelEspectador(lado) {
+    const el = document.getElementById(lado === "A" ? "espA" : "espB");
+    if (!el) return;
+    const lista = Engine.aldeiasDe(game, lado);
+    // composicao do exercito = guarnicoes + tropas em marcha (o exercito todo
+    // do rei; senao, com tudo marchando, o painel mostrava 0 a partida inteira)
+    let L = 0, Aq = 0, C = 0;
+    for (const a of lista) { L += a.tropas.lanceiro; Aq += a.tropas.arqueiro; C += a.tropas.cavaleiro; }
+    for (const m of game.movimentos) if (m.dono === lado) { L += m.tropas.lanceiro; Aq += m.tropas.arqueiro; C += m.tropas.cavaleiro; }
+    const tot = L + Aq + C;
+    const pct = (n) => tot > 0 ? (100 * n / tot) : 0;
+    // em marcha (exercitos deste rei em transito)
+    const marcha = game.movimentos.filter((m) => m.dono === lado).length;
+    // recursos (soma dos estoques das aldeias do rei)
+    let mad = 0, fer = 0;
+    for (const a of lista) { mad += a.recursos.madeira; fer += a.recursos.ferro; }
+    // sob ataque: aldeia deste rei que e destino de exercito inimigo
+    const sob = new Set();
+    for (const m of game.movimentos) {
+      if (m.dono === lado) continue;
+      const alvo = lista.find((a) => a.id === m.destinoId);
+      if (alvo) sob.add(alvo.id);
+    }
+    const nova = espNova[lado] || new Set();
+    // ordenacao: sob ataque > capital > nova > resto (por id). Mostra TODAS as
+    // aldeias — o total da partida e 24 (teto absoluto do rei) e cabe de sobra.
+    const rank = (a) => sob.has(a.id) ? 0 : (a.capital ? 1 : (nova.has(a.id) ? 2 : 3));
+    const ord = lista.slice().sort((x, y) => { const r = rank(x) - rank(y); return r !== 0 ? r : x.id - y.id; });
+    // ---- monta HTML ----
+    const dl = espDelta[lado];
+    let linhas = "";
+    for (const a of ord) {
+      const cls = sob.has(a.id) ? " combate" : (nova.has(a.id) ? " nova" : "");
+      const tag = sob.has(a.id)
+        ? '<span class="esp-ald-tag esp-tag-combate">sob ataque</span>'
+        : (nova.has(a.id) ? '<span class="esp-ald-tag esp-tag-nova">nova</span>' : "");
+      const cap = a.capital ? '<span class="esp-ald-cap">CAPITAL</span>' : "";
+      const nid = String(a.id).padStart(2, "0");
+      linhas +=
+        '<div class="esp-ald' + cls + '">' +
+          '<span class="esp-ald-n">' + nid + "</span>" +
+          '<span class="esp-ald-nome">' + esc(a.nome) + cap + "</span>" +
+          '<span class="esp-ald-tropas">' + espTropasCel(a) + tag + "</span>" +
+        "</div>";
+    }
+
+    el.innerHTML =
+      '<div class="esp-topo">' + ESP_BRASAO[lado] +
+        '<div class="esp-id"><div class="esp-nome">' + ESP_NOME[lado] + "</div>" +
+        '<div class="esp-modelo">' + esc(lado === "A" ? etiquetaA : etiquetaB) + "</div></div></div>" +
+      '<div class="esp-barra">' +
+        '<div class="esp-m"><span class="esp-v">' + lista.length + espVar(dl.ald) + '</span><span class="esp-r">aldeias</span></div>' +
+        '<div class="esp-m"><span class="esp-v">' + marcha + '</span><span class="esp-r">em marcha</span></div>' +
+        '<div class="esp-m"><span class="esp-v">' + tot + espVar(dl.tropas) + '</span><span class="esp-r">tropas</span></div>' +
+      "</div>" +
+      '<div class="esp-exercito"><div class="esp-rot">Exercito</div>' +
+        '<div class="esp-exe-barra">' +
+          '<i style="background:' + ESP_COR.lanceiro + ';width:' + pct(L) + '%"></i>' +
+          '<i style="background:' + ESP_COR.arqueiro + ';width:' + pct(Aq) + '%"></i>' +
+          '<i style="background:' + ESP_COR.cavaleiro + ';width:' + pct(C) + '%"></i>' +
+        "</div>" +
+        '<div class="esp-exe-leg">' +
+          '<span><em style="background:' + ESP_COR.lanceiro + '"></em>lanceiro <b>' + L + "</b></span>" +
+          '<span><em style="background:' + ESP_COR.arqueiro + '"></em>arqueiro <b>' + Aq + "</b></span>" +
+          '<span><em style="background:' + ESP_COR.cavaleiro + '"></em>cavaleiro <b>' + C + "</b></span>" +
+        "</div></div>" +
+      '<div class="esp-lista"><div class="esp-lista-cab"><span class="esp-rot">Aldeias</span>' +
+        '<span class="esp-lista-cnt">' + ord.length + "</span></div>" +
+        linhas +
+      "</div>" +
+      '<div class="esp-rec"><span>madeira <b>' + mad + "</b></span><span>ferro <b>" + fer + "</b></span></div>";
+  }
+  function renderPaineisEspectador() {
+    if (!game) return;
+    espAtualizarSnap();
+    renderPainelEspectador("A");
+    renderPainelEspectador("B");
+  }
+
   function updateGameHUD() {
     if (!game) return;
     const A = Engine.aldeiasDe(game, "A"), B = Engine.aldeiasDe(game, "B");
@@ -2192,6 +2422,8 @@
     document.getElementById("pt-b-ald").textContent = B.length + " ald";
     document.getElementById("pt-a-mod").textContent = etiquetaA || "-";
     document.getElementById("pt-b-mod").textContent = etiquetaB || "-";
+
+    renderPaineisEspectador();   // fatia 1: paineis laterais de espectador
   }
 
   // controles
