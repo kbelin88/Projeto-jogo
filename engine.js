@@ -1122,6 +1122,18 @@
     };
     const classifica = (dono) => (dono === me ? "SUA" : dono === null ? "NEUTRA" : "INIMIGA");
 
+    // VARIANTE P2: sufixo " | para tomar: N lanc ou N arq ou N cav" — so quando
+    // o alvo traz `minimos` (visao montada com {minimos:true}). Sem isso, "" —
+    // P0/P1 ficam byte-identicos. Nao recomenda nada: so os tres numeros.
+    const minTexto = (a) => {
+      if (!a.minimos) return "";
+      const m = a.minimos, p = [];
+      if (m.lanceiro)  p.push(`${m.lanceiro} lanc`);
+      if (m.arqueiro)  p.push(`${m.arqueiro} arq`);
+      if (m.cavaleiro) p.push(`${m.cavaleiro} cav`);
+      return p.length ? ` | para tomar: ${p.join(" ou ")}` : "";
+    };
+
     // cabecalho
     L.push(`TURNO ${visao.turno} - Voce e o Rei ${me}.`);
     L.push("");
@@ -1172,7 +1184,7 @@
       .sort((p, q) => p.t - q.t || p.a.id - q.a.id);
     L.push(`=== ALDEIAS NEUTRAS (${neutras.length}) - ordenadas por distancia da sua mais proxima ===`);
     for (const { a, t } of neutras) {
-      L.push(`[${a.id}] ${compTexto(a.tropas)} | ${t} turnos de marcha`);
+      L.push(`[${a.id}] ${compTexto(a.tropas)} | ${t} turnos de marcha${minTexto(a)}`);
     }
     L.push("");
 
@@ -1183,7 +1195,7 @@
     L.push(`=== INIMIGO (Rei ${inimigo}) - ${inimigas.length} aldeia(s) ===`);
     if (!inimigas.length) L.push("(nenhuma aldeia inimiga)");
     for (const { a, t } of inimigas) {
-      L.push(`[${a.id}] ${compTexto(a.tropas)} | ${t} turnos de marcha`);
+      L.push(`[${a.id}] ${compTexto(a.tropas)} | ${t} turnos de marcha${minTexto(a)}`);
     }
     L.push("");
 
@@ -1296,6 +1308,35 @@
     return L.join("\n");
   }
 
+  // VARIANTE P1: regras de combate com a CONTA EXPLICITA da forca efetiva.
+  // Numeros TODOS derivados da cfg (nada hard-coded). Nao usa minimos. NAO
+  // inclui a frase "1 unidade nao conquista nada" (falsa com esta CONFIG:
+  // 1 tropa com counter certo = 1.5 > 1.25 e conquista).
+  function regrasCombateTextoP1(cfg) {
+    const B = cfg.bonus_forca_triangulo;
+    const bA = cfg.combate.bonus_defesa_aldeia;
+    const bC = cfg.combate.bonus_defesa_castelo;
+    const L = [];
+    L.push("=== REGRAS DE COMBATE ===");
+    L.push("Cada tropa vale 1. A batalha compara a FORCA EFETIVA dos dois lados.");
+    L.push(`Triangulo de counters: ${TIPOS.map((t) => `${t} vence ${cfg.triangulo[t]}`).join("; ")}.`);
+    L.push("O tipo com MAIS tropas em cada exercito define o matchup.");
+    L.push("");
+    L.push("CONTA DA BATALHA:");
+    L.push(`  ATACANTE = numero de tropas x ${B} se voce tem o counter; senao x 1`);
+    L.push(`  DEFENSOR = numero de tropas x ${B} se ele tem o counter; senao x 1`);
+    L.push(`             ... e ainda x ${bA} se esta numa aldeia, x ${bC} se e capital`);
+    L.push("  Voce vence se ATACANTE for MAIOR que DEFENSOR. Empate: o defensor segura.");
+    L.push("");
+    L.push("EXEMPLOS COM OS NUMEROS DESTE JOGO (cada aldeia neutra tem 1 tropa):");
+    L.push(`  1 arqueiro ataca aldeia de 1 lanceiro: voce ${1 * B} contra ${1 * bA} -> VENCE com 1 tropa.`);
+    L.push(`  1 arqueiro ataca aldeia de 1 arqueiro: voce 1 contra ${1 * bA} -> PERDE. Leve 2.`);
+    L.push(`  1 arqueiro ataca aldeia de 1 cavaleiro: voce 1 contra ${(1 * B * bA).toFixed(2)} -> PERDE. Leve 2.`);
+    L.push("Com o counter certo, 1 tropa basta contra uma aldeia de 1 tropa. Sem o counter, leve 2.");
+    L.push("Antes de enviar, faca a conta com os numeros do relatorio.");
+    return L.join("\n");
+  }
+
   // REGRAS DE ECONOMIA em texto, GERADAS da CONFIG (mesmo principio do
   // bloco de combate): custo/forca/tempo por tropa, producao e teto.
   // Sem isso o modelo so aprende os precos errando (51 rejeicoes do
@@ -1322,6 +1363,10 @@
   //   anti-repeticao do handoff. Sem opcoes ou sem rejeicoes: prompt
   //   BYTE-IGUAL ao de sempre — o benchmark antigo segue comparavel.
   function montarPrompt(visao, opcoes) {
+    // VARIANTE de prompt (experimento de tropas): "P0" (default, inalterado),
+    // "P1" (conta explicita no bloco de combate), "P2" (minimo pre-calculado
+    // no relatorio — depende da visao trazer `minimos`, ligado pelo caller).
+    const variante = (opcoes && opcoes.variante) || "P0";
     const rejNoFim = !!(opcoes && opcoes.rejeicaoNoFim) &&
       !!(visao.rejeicoesAnteriores && visao.rejeicoesAnteriores.length);
     const L = [];
@@ -1329,7 +1374,8 @@
     L.push('Voce e o Rei. As aldeias listadas em "SUAS ALDEIAS" pertencem a voce.');
     L.push("Seu objetivo e vencer eliminando o inimigo.");
     L.push("");
-    L.push(regrasCombateTexto(visao.config));
+    // P1 troca SO o bloco de combate pela conta explicita; P0/P2 usam o padrao.
+    L.push(variante === "P1" ? regrasCombateTextoP1(visao.config) : regrasCombateTexto(visao.config));
     L.push("");
     L.push(regrasEconomiaTexto(visao.config));
     L.push("");
