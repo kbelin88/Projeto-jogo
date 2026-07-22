@@ -694,6 +694,20 @@
       preverCombateTipos(estado, Fatk, atkType, Fdef, defType, bonusDefesa(estado, alvo)));
   }
 
+  // Menor numero de tropas do tipo `atkType` que CONQUISTA `alvo`.
+  // Usa preverCombateTipos — a MESMA conta do combate, impossivel divergir.
+  // null se nem 99 tropas bastam.
+  function minimoParaTomar(estado, atkType, alvo) {
+    const Fdef = forcaDefesa(estado, alvo);
+    const defType = alvo.dono === null ? alvo.tipo : tipoDominante(estado, alvo.tropas);
+    const dB = bonusDefesa(estado, alvo);
+    for (let n = 1; n <= 99; n++) {
+      const r = preverCombateTipos(estado, n, atkType, Fdef, defType, dB);
+      if (r.atacanteVence) return n;
+    }
+    return null;
+  }
+
   // +1 se atkType vence defType; -1 se defType vence atkType; 0 neutro/sem tipo.
   function vantagem(estado, atkType, defType) {
     if (!atkType || !defType) return 0;
@@ -1810,6 +1824,7 @@
     regrasCombateTexto,
     regrasEconomiaTexto,
     preverCombate,
+    minimoParaTomar,
     vantagem,
     resolverCombate,
     distancia,
