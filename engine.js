@@ -1127,6 +1127,7 @@
     // P0/P1 ficam byte-identicos. Nao recomenda nada: so os tres numeros.
     const minTexto = (a) => {
       if (!a.minimos) return "";
+      if (a.capital) return " | CAPITAL: maior bonus de defesa do jogo";
       const m = a.minimos, p = [];
       if (m.lanceiro)  p.push(`${m.lanceiro} lanc`);
       if (m.arqueiro)  p.push(`${m.arqueiro} arq`);
@@ -1292,7 +1293,8 @@
     const L = [];
     L.push("=== REGRAS DE COMBATE ===");
     L.push("Cada tropa vale 1: o que conta e o NUMERO de tropas de cada lado.");
-    L.push(`Triangulo de counters: ${TIPOS.map((t) => `${t} vence ${cfg.triangulo[t]}`).join("; ")}.`);
+    L.push(`Triangulo de counters (BONUS, nao vitoria automatica): ${TIPOS.map((t) => `${t} tem bonus contra ${cfg.triangulo[t]}`).join("; ")}.`);
+    L.push(`Ter o counter multiplica suas tropas por ${cfg.bonus_forca_triangulo} — mas o NUMERO de tropas continua a decidir.`);
     L.push(`O tipo com MAIS tropas em cada exercito define o matchup. O lado com o counter certo conta suas tropas x ${B}. Vence o maior numero efetivo de tropas; empate favorece o defensor.`);
     if (B > 1) {
       const def = 5;
@@ -1319,7 +1321,8 @@
     const L = [];
     L.push("=== REGRAS DE COMBATE ===");
     L.push("Cada tropa vale 1. A batalha compara a FORCA EFETIVA dos dois lados.");
-    L.push(`Triangulo de counters: ${TIPOS.map((t) => `${t} vence ${cfg.triangulo[t]}`).join("; ")}.`);
+    L.push(`Triangulo de counters (BONUS, nao vitoria automatica): ${TIPOS.map((t) => `${t} tem bonus contra ${cfg.triangulo[t]}`).join("; ")}.`);
+    L.push(`Ter o counter multiplica suas tropas por ${cfg.bonus_forca_triangulo} — mas o NUMERO de tropas continua a decidir.`);
     L.push("O tipo com MAIS tropas em cada exercito define o matchup.");
     L.push("");
     L.push("CONTA DA BATALHA:");
@@ -1329,9 +1332,10 @@
     L.push("  Voce vence se ATACANTE for MAIOR que DEFENSOR. Empate: o defensor segura.");
     L.push("");
     L.push("EXEMPLOS COM OS NUMEROS DESTE JOGO (cada aldeia neutra tem 1 tropa):");
-    L.push(`  1 arqueiro ataca aldeia de 1 lanceiro: voce ${1 * B} contra ${1 * bA} -> VENCE com 1 tropa.`);
-    L.push(`  1 arqueiro ataca aldeia de 1 arqueiro: voce 1 contra ${1 * bA} -> PERDE. Leve 2.`);
-    L.push(`  1 arqueiro ataca aldeia de 1 cavaleiro: voce 1 contra ${(1 * B * bA).toFixed(2)} -> PERDE. Leve 2.`);
+    L.push(`  1 arqueiro ataca aldeia de 1 lanceiro: voce ${1 * B} contra ${1 * bA} -> VENCE com 1 tropa (tem o bonus).`);
+    L.push(`  1 lanceiro ataca aldeia de 1 cavaleiro: voce ${1 * B} contra ${1 * bA} -> VENCE com 1 tropa (tem o bonus).`);
+    L.push(`  1 cavaleiro ataca aldeia de 1 lanceiro: voce 1 contra ${(1 * B * bA).toFixed(2)} -> PERDE (ele tem o bonus). Leve 2.`);
+    L.push(`  10 lanceiros atacam 20 cavaleiros em campo aberto: ${10 * B} contra 20 -> PERDE. O bonus nao salva de estar em menor numero.`);
     L.push("Com o counter certo, 1 tropa basta contra uma aldeia de 1 tropa. Sem o counter, leve 2.");
     L.push("Antes de enviar, faca a conta com os numeros do relatorio.");
     return L.join("\n");
@@ -1372,7 +1376,8 @@
     const L = [];
     // TOPO: identidade + tarefa (curto)
     L.push('Voce e o Rei. As aldeias listadas em "SUAS ALDEIAS" pertencem a voce.');
-    L.push("Seu objetivo e vencer eliminando o inimigo.");
+    L.push("Seu objetivo e conquistar a CAPITAL inimiga. A capital tem o maior bonus de defesa do jogo: e o alvo mais caro do mapa, e so cai com um exercito grande.");
+    L.push("Conquiste aldeias neutras primeiro: cada aldeia produz recursos por turno, e sao os recursos que constroem esse exercito.");
     L.push("");
     // P1 troca SO o bloco de combate pela conta explicita; P0/P2 usam o padrao.
     L.push(variante === "P1" ? regrasCombateTextoP1(visao.config) : regrasCombateTexto(visao.config));

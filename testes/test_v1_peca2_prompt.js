@@ -36,7 +36,8 @@ const iExemplo = prompt.lastIndexOf("{");
 
 console.log("Conferencias do Pedaco 1:");
 checa("funcao pura (mesma visao -> mesmo prompt)", prompt === Engine.montarPrompt(visao));
-checa("TOPO: identidade + tarefa", iTopo >= 0 && /objetivo e vencer/.test(prompt));
+checa("TOPO: objetivo = conquistar a capital (nao 'eliminar')",
+  iTopo >= 0 && /conquistar a CAPITAL inimiga/.test(prompt) && !/eliminando o inimigo/.test(prompt));
 checa("MEIO: relatorioTexto integral injetado", iDados > iTopo && prompt.includes("=== ALDEIAS NEUTRAS"));
 checa("FIM: instrucao de formato presente", iFormato > iDados);
 // A frase de cautela ("E melhor nao fazer nada...") foi removida em
@@ -55,7 +56,16 @@ checa('topo NAO nomeia "lado A/B"', !/lado [AB]/i.test(prompt));
 const iRegras = prompt.indexOf("=== REGRAS DE COMBATE ===");
 checa("REGRAS: bloco presente entre topo e dados", iRegras > iTopo && iRegras < iDados);
 checa("REGRAS: bonus vem da CONFIG", prompt.includes(`tropas x ${CONFIG.bonus_forca_triangulo}`));
-checa("REGRAS: triangulo por extenso", prompt.includes("lanceiro vence cavaleiro"));
+// Guarda DERIVADA da CONFIG (nao fixa a redacao): os tres pares do triangulo
+// e o multiplicador presentes no bloco de combate. Sobrevive a mudancas de texto.
+const blocoCombate = prompt.slice(iRegras, prompt.indexOf("=== REGRAS DE ECONOMIA ==="));
+for (const t of ["lanceiro", "arqueiro", "cavaleiro"]) {
+  const alvoTri = CONFIG.triangulo[t];
+  checa(`REGRAS: par de counter ${t}->${alvoTri} presente (sem fixar redacao)`,
+    new RegExp(`${t}\\b[^\\n]*\\b${alvoTri}\\b`).test(blocoCombate));
+}
+checa("REGRAS: multiplicador do triangulo vem da CONFIG",
+  blocoCombate.includes(String(CONFIG.bonus_forca_triangulo)));
 checa("REGRAS: exemplo numerico presente", /-> o atacante vence/.test(prompt));
 
 // REGRAS DE ECONOMIA: bloco gerado da CONFIG, entre topo e dados

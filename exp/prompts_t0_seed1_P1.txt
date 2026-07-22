@@ -1,0 +1,88 @@
+Voce e o Rei. As aldeias listadas em "SUAS ALDEIAS" pertencem a voce.
+Seu objetivo e conquistar a CAPITAL inimiga. A capital tem o maior bonus de defesa do jogo: e o alvo mais caro do mapa, e so cai com um exercito grande.
+Conquiste aldeias neutras primeiro: cada aldeia produz recursos por turno, e sao os recursos que constroem esse exercito.
+
+=== REGRAS DE COMBATE ===
+Cada tropa vale 1. A batalha compara a FORCA EFETIVA dos dois lados.
+Triangulo de counters (BONUS, nao vitoria automatica): lanceiro tem bonus contra cavaleiro; arqueiro tem bonus contra lanceiro; cavaleiro tem bonus contra arqueiro.
+Ter o counter multiplica suas tropas por 1.5 — mas o NUMERO de tropas continua a decidir.
+O tipo com MAIS tropas em cada exercito define o matchup.
+
+CONTA DA BATALHA:
+  ATACANTE = numero de tropas x 1.5 se voce tem o counter; senao x 1
+  DEFENSOR = numero de tropas x 1.5 se ele tem o counter; senao x 1
+             ... e ainda x 1.25 se esta numa aldeia, x 1.5 se e capital
+  Voce vence se ATACANTE for MAIOR que DEFENSOR. Empate: o defensor segura.
+
+EXEMPLOS COM OS NUMEROS DESTE JOGO (cada aldeia neutra tem 1 tropa):
+  1 arqueiro ataca aldeia de 1 lanceiro: voce 1.5 contra 1.25 -> VENCE com 1 tropa (tem o bonus).
+  1 lanceiro ataca aldeia de 1 cavaleiro: voce 1.5 contra 1.25 -> VENCE com 1 tropa (tem o bonus).
+  1 cavaleiro ataca aldeia de 1 lanceiro: voce 1 contra 1.88 -> PERDE (ele tem o bonus). Leve 2.
+  10 lanceiros atacam 20 cavaleiros em campo aberto: 15 contra 20 -> PERDE. O bonus nao salva de estar em menor numero.
+Com o counter certo, 1 tropa basta contra uma aldeia de 1 tropa. Sem o counter, leve 2.
+Antes de enviar, faca a conta com os numeros do relatorio.
+
+=== REGRAS DE ECONOMIA ===
+lanceiro: custa 15 madeira + 0 ferro, fica pronto em 1 turno, velocidade lenta.
+arqueiro: custa 20 madeira + 10 ferro, fica pronto em 1 turno, velocidade media.
+cavaleiro: custa 30 madeira + 30 ferro, fica pronto em 2 turnos, velocidade rapida.
+Cada aldeia sua produz 10 madeira e 6 ferro por turno.
+Teto por aldeia: quando a forca das tropas em casa atinge 300, a aldeia PARA de construir (mas segue produzindo recursos e pode receber reforcos).
+So ordene construir se a aldeia tem recursos para pagar o custo AGORA.
+
+TURNO 0 - Voce e o Rei A.
+
+=== SUAS ALDEIAS (1) ===
+[0] | recursos: 0 madeira, 0 ferro
+       tropas em casa: 5 lanceiros, 4 arqueiros, 3 cavaleiros
+       construindo: nada
+
+=== ALDEIAS NEUTRAS (22) - ordenadas por distancia da sua mais proxima ===
+[2] 1 lanceiros | 1 turnos de marcha
+[4] 1 arqueiros | 1 turnos de marcha
+[6] 1 cavaleiros | 2 turnos de marcha
+[8] 1 cavaleiros | 2 turnos de marcha
+[10] 1 lanceiros | 2 turnos de marcha
+[14] 1 lanceiros | 2 turnos de marcha
+[16] 1 lanceiros | 2 turnos de marcha
+[18] 1 arqueiros | 2 turnos de marcha
+[22] 1 cavaleiros | 2 turnos de marcha
+[12] 1 lanceiros | 3 turnos de marcha
+[20] 1 lanceiros | 4 turnos de marcha
+[21] 1 lanceiros | 4 turnos de marcha
+[11] 1 lanceiros | 5 turnos de marcha
+[13] 1 lanceiros | 5 turnos de marcha
+[15] 1 lanceiros | 5 turnos de marcha
+[3] 1 lanceiros | 6 turnos de marcha
+[7] 1 cavaleiros | 6 turnos de marcha
+[9] 1 cavaleiros | 6 turnos de marcha
+[17] 1 lanceiros | 6 turnos de marcha
+[19] 1 arqueiros | 6 turnos de marcha
+[5] 1 arqueiros | 7 turnos de marcha
+[23] 1 cavaleiros | 7 turnos de marcha
+
+=== INIMIGO (Rei B) - 1 aldeia(s) ===
+[1] 5 lanceiros, 4 arqueiros, 3 cavaleiros | 7 turnos de marcha
+
+=== EXERCITOS EM TRANSITO ===
+SEUS:
+- nenhum
+INIMIGOS:
+- nenhum
+
+=== O QUE ACONTECEU NO ULTIMO TURNO ===
+- nada de relevante
+
+Responda APENAS com um JSON valido no formato abaixo. Nenhum texto antes ou depois do JSON.
+
+Antes de responder: em 'origemId' e em 'aldeiaId' use SOMENTE ids que aparecem na secao SUAS ALDEIAS. Escolha o 'destinoId' entre os ids das secoes ALDEIAS NEUTRAS e INIMIGO. Nao envie tropas que voce nao tem: se uma aldeia esta sem tropas, nao a use em 'envios'. O exemplo abaixo so mostra o FORMATO com ids reais deste turno; nao copie os numeros dele como se fossem sua jogada.
+
+{
+  "construir": [
+    {"aldeiaId": 0, "tipo": "lanceiro"}
+  ],
+  "envios": [
+    {"origemId": 0, "destinoId": 2, "tropas": {"lanceiro": 2, "arqueiro": 2, "cavaleiro": 1}},
+    {"origemId": 0, "destinoId": 3, "tropas": {"lanceiro": 2, "arqueiro": 2, "cavaleiro": 1}}
+  ]
+}
