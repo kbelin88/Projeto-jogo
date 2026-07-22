@@ -1016,8 +1016,12 @@
 
   // VISAO: relatorio (somente leitura) do que aquele jogador conhece.
   // SEM fog of war: tropas reais dos alvos e transito de todos sao visiveis.
-  function montarVisao(estado, dono) {
+  function montarVisao(estado, dono, opcoes) {
     const copiaTropas = (t) => ({ lanceiro: t.lanceiro, arqueiro: t.arqueiro, cavaleiro: t.cavaleiro });
+    // HOOK atras de flag: so com opcoes.minimos === true a visao ganha
+    // `capital` e `minimos` por alvo. SEM a flag, o objeto e byte-identico
+    // ao de sempre (todo o benchmark anterior continua comparavel).
+    const comMinimos = !!(opcoes && opcoes.minimos === true);
     return {
       dono,
       turno: estado.turno,
@@ -1028,11 +1032,22 @@
         tropas: copiaTropas(a.tropas),
         construindo: a.construindo.map((c) => ({ tipo: c.tipo, turnosRestantes: c.turnosRestantes })),
       })),
-      alvos: estado.aldeias.filter((a) => a.dono !== dono).map((a) => ({
-        id: a.id, x: a.x, y: a.y, dono: a.dono, tipo: a.tipo,
-        tropas: copiaTropas(a.tropas),
-        forcaDefesa: forcaDefesa(estado, a), // usado pelo jogador burro
-      })),
+      alvos: estado.aldeias.filter((a) => a.dono !== dono).map((a) => {
+        const alvo = {
+          id: a.id, x: a.x, y: a.y, dono: a.dono, tipo: a.tipo,
+          tropas: copiaTropas(a.tropas),
+          forcaDefesa: forcaDefesa(estado, a), // usado pelo jogador burro
+        };
+        if (comMinimos) {
+          alvo.capital = !!a.capital;
+          alvo.minimos = {
+            lanceiro:  minimoParaTomar(estado, "lanceiro",  a),
+            arqueiro:  minimoParaTomar(estado, "arqueiro",  a),
+            cavaleiro: minimoParaTomar(estado, "cavaleiro", a),
+          };
+        }
+        return alvo;
+      }),
       // todos os exercitos em transito (meus e inimigos). destinoDono = dono atual do destino.
       transito: estado.movimentos.map((m) => ({
         dono: m.dono, origemId: m.origemId, destinoId: m.destinoId,
