@@ -1765,7 +1765,7 @@
     L.push(`COMBATES  : ${combates.length} no total | ${conquistas.length} conquista(s)`);
     const MOSTRA = 15;
     conquistas.slice(0, MOSTRA).forEach((c) => {
-      L.push(`  T${c.turno}: Rei ${c.atacante} tomou [${c.alvoId}] ${c.alvoNome} (Fatk ${c.Fatk} vs Fdef ${c.Fdef}, m=${c.m.toFixed(2)})`);
+      L.push(`  T${c.turno}: Rei ${c.atacante} tomou [${c.alvoId}] ${c.alvoNome} (Fatk ${c.Fatk} vs Fdef ${c.Fdef}, ef ${c.FatkEf} vs ${c.FdefEf}, v=${c.vantagem})`);
     });
     if (conquistas.length > MOSTRA) L.push(`  (+${conquistas.length - MOSTRA} conquista(s) nao listada(s))`);
     L.push(barra);
