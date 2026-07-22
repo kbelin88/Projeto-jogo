@@ -1306,14 +1306,14 @@
     }
     const bA = cfg.combate && cfg.combate.bonus_defesa_aldeia, bC = cfg.combate && cfg.combate.bonus_defesa_castelo;
     if (bA || bC)
-      L.push(`Defender e mais facil: tropas paradas numa aldeia contam x ${bA}; num castelo (capital), x ${bC}. Em campo aberto (na estrada) nao ha bonus. Para TOMAR uma aldeia, leve tropas com folga — 1 unidade nao conquista nada.`);
+      L.push(`Defender e mais facil: tropas paradas numa aldeia contam x ${bA}; num castelo (capital), x ${bC}. Em campo aberto (na estrada) nao ha bonus.`);
     return L.join("\n");
   }
 
   // VARIANTE P1: regras de combate com a CONTA EXPLICITA da forca efetiva.
-  // Numeros TODOS derivados da cfg (nada hard-coded). Nao usa minimos. NAO
-  // inclui a frase "1 unidade nao conquista nada" (falsa com esta CONFIG:
-  // 1 tropa com counter certo = 1.5 > 1.25 e conquista).
+  // Numeros TODOS derivados da cfg (nada hard-coded). Nao usa minimos.
+  // Ensina o counter como BONUS x1.5 (nao vitoria automatica): 1 tropa com
+  // counter certo (1.5) conquista uma neutra de 1 numa aldeia (1.25).
   function regrasCombateTextoP1(cfg) {
     const B = cfg.bonus_forca_triangulo;
     const bA = cfg.combate.bonus_defesa_aldeia;
