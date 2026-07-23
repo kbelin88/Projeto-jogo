@@ -114,6 +114,23 @@
       tipos_sorteaveis: ["lanceiro", "arqueiro", "cavaleiro"],
       forca_min: 1, forca_max: 1,
       endurecimento: 1, endurecimento_intervalo: 5, teto_forca: 300,
+      // GRADIENTE DE GUARNICAO POR DISTANCIA (proposta 23/07): trava a corrida
+      // por aldeias barbaras no inicio. Neutra perto de um rei nasce fraca (1);
+      // no miolo nasce forte (3). Medida: distancia ao rei MAIS PROXIMO,
+      // normalizada pela METADE da separacao entre os reis -> 0 (no rei) a
+      // ~1 (centro). SIMETRICO por construcao (layout v2 espelhado): o par
+      // recebe a MESMA guarnicao, entao e fair. So muda a QUANTIDADE — o tipo
+      // e a posicao das neutras seguem byte-identicos (o rng e consumido igual).
+      //   ativo: false => usa forca_min/forca_max (comportamento antigo).
+      //   faixas: primeira cujo `ate` (fracao) >= frac define as tropas.
+      guarnicao_gradiente: {
+        ativo: true,
+        faixas: [
+          { ate: 0.40, tropas: 1 }, // perto da base
+          { ate: 0.72, tropas: 2 }, // media distancia
+          { ate: 999,  tropas: 3 }, // miolo (pega o resto)
+        ],
+      },
     },
 
     // TEATRO: regiao contida do mapa 200x200 onde rola a partida.
@@ -221,6 +238,24 @@
     return gerarTeatroV1(config);
   }
 
+  // GUARNICAO INICIAL de uma neutra pelo GRADIENTE de distancia (v2).
+  // frac = dist(neutra, rei mais proximo) / (separacao_reis / 2): 0 no rei,
+  // ~1 no centro. Devolve as tropas da 1a faixa cujo `ate` >= frac. Gradiente
+  // inativo (ou sem reis) -> devolve `fallback` (o sorteio forca_min/max).
+  function guarnicaoNeutra(config, q, reiA, reiB, fallback) {
+    const g = config.neutra && config.neutra.guarnicao_gradiente;
+    if (!g || !g.ativo || !reiA || !reiB) return fallback;
+    const distReis = Math.hypot(reiA.x - reiB.x, reiA.y - reiB.y);
+    if (!(distReis > 0)) return fallback;
+    const d = Math.min(
+      Math.hypot(q.x - reiA.x, q.y - reiA.y),
+      Math.hypot(q.x - reiB.x, q.y - reiB.y)
+    );
+    const frac = d / (distReis / 2);
+    for (const f of g.faixas) if (frac <= f.ate) return f.tropas;
+    return g.faixas[g.faixas.length - 1].tropas;
+  }
+
   // ===== MUNDO v2 (17/07) — layout ESPELHADO ponto-central =====
   // Regras aprovadas pelo Lucas: reis no eixo horizontal (oeste/leste,
   // faixa vertical central); TODAS as neutras nascem na metade oeste e sao
@@ -318,11 +353,16 @@
       for (const tp of ["lanceiro", "arqueiro", "cavaleiro"]) ald.tropas[tp] = ti[tp] || 0;
       aldeias.push(ald);
     }
+    const reiB = esp(reiA); // rei espelhado (posicao) — usado pelo gradiente
     function parNeutra(p) {
       // tipo e forca sorteados UMA vez e aplicados aos DOIS lados (fairness)
       const pool = config.neutra.tipos_sorteaveis;
       const tipo = pool[Math.floor(rng() * pool.length)];
-      const n = rngInt(rng, config.neutra.forca_min, config.neutra.forca_max);
+      // rngInt e SEMPRE consumido (mantem o stream do rng estavel: tipo e
+      // posicao das neutras seguintes nao mudam). O gradiente so SOBREPOE o
+      // valor. p e esp(p) sao equidistantes dos reis -> mesma guarnicao (fair).
+      const nBase = rngInt(rng, config.neutra.forca_min, config.neutra.forca_max);
+      const n = guarnicaoNeutra(config, p, reiA, reiB, nBase);
       for (const q of [p, esp(p)]) {
         const ald = criarAldeia(id++, q.x, q.y, World.villageName(q.x, q.y), null);
         ald.tipo = tipo; ald.tropas[tipo] = n;
