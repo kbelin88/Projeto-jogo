@@ -118,6 +118,7 @@ async function rodarPartida(seed) {
   let vencedor = null, turnosCompletados = 0, errosRede = 0;
 
   while (estado.turno < turnos) {
+    const tTurno = Date.now();
     Engine.tick(estado);
     for (const dono of ["A", "B"]) {
       if (!Engine.aldeiasDe(estado, dono).length) continue;
@@ -151,6 +152,11 @@ async function rodarPartida(seed) {
       }
     }
     turnosCompletados = estado.turno;
+    // Progresso por turno (so em modo --stream, p/ modelos lentos como o qwen3):
+    // mostra que esta vivo e mede o tempo de CADA turno. Nao afeta os CSVs.
+    if (usaStream) {
+      console.log(`    [seed ${seed}] turno ${estado.turno}/${turnos} | aceites-acum ${enviosAceites} | ${((Date.now() - tTurno) / 1000).toFixed(0)}s neste turno`);
+    }
     vencedor = Engine.checarVitoria(estado);
     if (vencedor) break;
   }
