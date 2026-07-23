@@ -1,0 +1,110 @@
+========================================================================
+ BRIEFING DE SESSAO — 23/07/2026
+ (ancoragem do exemplo + gradiente de neutras + OpenRouter no jogo)
+========================================================================
+
+O QUE FOI FEITO NESTA SESSAO (3 frentes)
+
+------------------------------------------------------------------------
+1) EXP DUAS FASES (decomposicao + tamanho de contexto)  [branch exp-duas-fases]
+------------------------------------------------------------------------
+- Runner novo runners/exp_duas_fases.js + prompts runners/fases.js.
+  engine.js INTOCADO (benchmark antigo segue byte-identico).
+- 4 bracos x 5 seeds (F0 monolitico / F1 integral / F2 resumido / F3 minimo),
+  qwen2.5:3b, 15t, temp0, vs burro. 20 partidas.
+- ACHADO: unico efeito limpo e F0->F1 (decompor a SAIDA): suicidio 51.7%->28%,
+  MAS trocado por desperdicio (26.7%->66%), nao por otimo; e rejeicoes SOBEM
+  (contra a hipotese). Cortar contexto (F1->F2->F3) nao rende. Triangulo imune
+  aos dois eixos (~acaso). 0 vitorias em todos. n=5 sugestivo, nao promover.
+- Detalhe em exp/duasfases_COMPARACAO.txt. Commit 87bf4a9.
+
+------------------------------------------------------------------------
+2) EXP ANCORAGEM DO EXEMPLO  [branch exp-exemplo-ancora]  <-- ONDE PARAMOS
+------------------------------------------------------------------------
+- engine.js: exemploAncorado(visao, opcoes) + planoExemplo(visao, opcoes) novos.
+  opcoes.rotativo = { tipo, comprimento }. Sem opcoes = BYTE-IDENTICO (70/70
+  golden). PRNG semeado por (seed,turno,dono) via criarRng. Suite 17/17.
+- Runner runners/exp_exemplo_ancora.js. CSV por envio com colunas novas
+  exemploTipo e exemploNEnvios (de planoExemplo, mesma fonte do prompt).
+- Rotacao real medida (5 seeds,15t): E1(tipo)=8.4  E2(compr)=10.4  E3(ambos)=12.6
+  turnos de 15. (Lucas: >10 segue; E1 em 8.4 ficou fora da zona de 5-6, seguimos.)
+- 4 bracos x 5 seeds corridos (E0-E3). NUMEROS REPORTADOS (ver abaixo). Conteudo
+  assertado (rotacao registrada como esperado). Commits 2d33839 (engine),
+  398b426 (runner), 12596ed (dados).
+- RESULTADO (pooled, % envio com lanceiro é a metrica-chave da hipotese):
+    lanc%:   E0 70 | E1 67 | E2 77 | E3 62
+    otimo%:  E0 20 | E1 19 | E2 12 | E3 14
+    suic%:   E0 57 | E1 52 | E2 60 | E3 59
+    ctr certo (tipado): E0 50 | E1 42 | E2 49 | E3 58
+  => rotacionar o exemplo NAO derrubou o vies do lanceiro de forma limpa
+     (E3, que rotaciona os dois eixos, foi o menor lanc% 62, mas dentro do ruido).
+     Interpretacao/decisao FICA COM O LUCAS (o briefing pediu numeros, sem recomendacao).
+- PENDENTE se quiser reforcar E1: opcao discutida — quando NENHUM tipo e pagavel,
+  mostrar o tipo sorteado mesmo assim (a linha de construir impagavel gera
+  rejeicao que o modelo veria de qualquer forma). Nao implementado (E1=8.4 nao
+  disparou a regra). Trivial de adicionar em planoExemplo.
+
+------------------------------------------------------------------------
+3) GRADIENTE DE GUARNICAO DAS NEUTRAS  [MERGEADO NO MAIN]
+------------------------------------------------------------------------
+- Neutra perto de um rei nasce com 1 tropa; media distancia 2; miolo 3.
+  Medida: dist ao rei mais proximo / (separacao_reis/2). Simetrico (layout v2
+  espelhado) -> fair. So muda a QUANTIDADE (rng consumido igual). Atras de
+  CONFIG.neutra.guarnicao_gradiente (ativo/faixas), reversivel.
+- Faixas afinadas em 0.47/0.80 = tercos iguais (~33/36/31 pooled).
+- Medido (burro-vs-burro): o gradiente NAO trava a largada (anel perto do rei
+  = 1 tropa nas duas condicoes), mas PRESERVA um nucleo central disputado —
+  no t30 sobram ~9 neutras livres (vs ~4 sem o gradiente). Ressalva: burro é
+  fraco; jogador forte ainda racha o centro (tera que CONSTRUIR pra isso).
+- Commits 4fe4985 + 6f749a2, mergeados no main (fast-forward).
+
+------------------------------------------------------------------------
+4) OPENROUTER NO JOGO  [branch jogo-openrouter]
+------------------------------------------------------------------------
+- index.html: provedor OpenRouter (API OpenAI-compativel, = schema do Grok):
+  gerarOpenRouter + pedirChaveOpenRouter (chave no localStorage, pedida 1x),
+  caso em fabricarGerador, pre-checagem em runDuelo. 4 modelos :free nos dois
+  dropdowns: gpt-oss 20B, Gemma-4 31B, Nemotron-nano 9B, Nemotron 120B.
+- Chaves testadas (ambas validas, free tier, inferencia real OK): as DUAS sao
+  da MESMA conta -> dividem a MESMA cota diaria (nao dobram o free tier).
+  .env tem OPENROUTER_API_KEY e OPENROUTER2_API_KEY (gitignored, NAO vao pro git).
+- No browser a chave NAO vem do .env: cole no prompt uma vez (fica no localStorage).
+- Commit 261c004.
+
+>>> CUIDADO PRO BENCHMARK (importante):
+    OpenRouter NAO troca o modelo (Gemma-4 = Gemma-4), mas pode servir o mesmo
+    id por PROVEDORES/QUANTIZACOES diferentes entre chamadas -> variancia que o
+    Ollama local nao tem. Para benchmark rigoroso, FIXAR o provedor na requisicao
+    (provider:{order:[...], allow_fallbacks:false}) ou filtrar quantizacao.
+    NAO implementado ainda — a integracao atual e para "brincar"/testar, nao
+    para matriz comparavel. Fazer isso ANTES de usar OpenRouter em benchmark.
+    (Evitei openrouter/auto e openrouter/free nos dropdowns: esses SIM roteiam
+     entre modelos diferentes.)
+
+------------------------------------------------------------------------
+CORS AINDA NAO VERIFICADO AO VIVO
+------------------------------------------------------------------------
+- A extensao do Chrome nao estava conectada. Alta confianca de que funciona
+  (Grok, tambem OpenAI-compativel, ja roda desta pagina file://; OpenRouter
+  manda CORS *). Teste rapido: abrir index.html, escolher "Gemma-4 31B ·OR"
+  no Rei B, dar Play, colar a chave 1 (sk-or-v1-243b...). Se bloquear, o console
+  mostra e adiciona-se um contorno.
+
+========================================================================
+DE ONDE CONTINUAR NA PROXIMA SESSAO (opcoes)
+========================================================================
+A) Verificar o OpenRouter no jogo ponta-a-ponta (conectar extensao do Chrome
+   OU teste manual). Confirmar CORS.
+B) Se for usar OpenRouter em BENCHMARK: implementar provider pinning
+   (allow_fallbacks:false + quantizacao fixa) no runner/rei.js antes de rodar.
+C) Rodar um experimento com os modelos MAIORES de graca (Gemma-4 31B / Nemotron
+   120B) — ex.: repetir a matriz de ancoragem ou o triangulo, que travou no
+   teto do 3B, para ver se um modelo maior sobe do "degrau estrategia".
+D) exp-exemplo-ancora: decidir a leitura dos numeros e se implementa a variante
+   E1 reforcada (mostrar tipo impagavel).
+
+BRANCHES (pushados pro github nesta sessao):
+  main (neutras) | exp-duas-fases | exp-exemplo-ancora | jogo-openrouter
+NAO mergeados no main: exp-duas-fases, exp-exemplo-ancora, jogo-openrouter
+  (decisao de merge fica com o Lucas).
+========================================================================
