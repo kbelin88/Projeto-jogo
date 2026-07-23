@@ -1,0 +1,80 @@
+========================================================================
+ EXPERIMENTO — DECOMPOSICAO E TAMANHO DE CONTEXTO (22/07 sessao 2)
+ qwen2.5:3b | 4 bracos x 5 seeds (1..5) x 15 turnos | temp 0 | vs burro
+ 20 partidas. Base P2. F0 == P2 monolitico (ponte com a manha).
+========================================================================
+
+BRACOS
+  F0 CONTROLO   P2 monolitico, 1 chamada/turno
+  F1 INTEGRAL   2 fases, relatorio COMPLETO nas duas (so a saida separa)
+  F2 RESUMIDO   2 fases, construcao com neutras resumidas por tipo
+  F3 MINIMO     2 fases, construcao SEM neutras
+  (fase de ENVIO identica em F1/F2/F3 — so a construcao varia)
+
+------------------------------------------------------------------------
+ TABELA (metricas por ENVIO ACEITE, pooled sobre as 5 seeds)
+------------------------------------------------------------------------
+ braco  nEnv  suic%  otimo%  desp%   counter%(so tipado)  lanc%  gapMed
+  F0     60   51.7   21.7    26.7    44.1 (n=34)           71.7    2
+  F1     50   28.0    6.0    66.0    41.4 (n=29)           88.0    1
+  F2     62   46.8    9.7    43.5    50.0 (n=34)           87.1    1
+  F3     65   41.5   10.8    47.7    42.1 (n=38)           83.1    1
+
+ por PARTIDA (media +- desvio entre seeds):
+ braco  aldeiasLLM   rejConstr   rejEnvio   envPropostos  chars(constr/envio)  s/turno
+  F0    4.60+-1.14   5.60+-1.52  13.2+-3.1  25.2+-5.4     5716 (mono)          4.07
+  F1    4.80+-1.92  11.00+-5.15  20.0+-3.1  30.0+-0.0     4413 / 4673          6.79
+  F2    5.60+-1.67  13.20+-5.40  17.0+-3.3  29.4+-0.9     2524 / 4808          6.55
+  F3    4.80+-2.49  12.00+-3.74  16.8+-2.4  29.8+-0.5     2403 / 4766          6.42
+
+ vitorias LLM: 0/5 em TODOS os bracos. burro fecha com ~10 aldeias sempre.
+
+========================================================================
+ LEITURA
+========================================================================
+
+(a) DECOMPOSICAO  F0 -> F1  (mesmo contexto, so a saida separa)
+  - SUICIDIO CAI FORTE: 51.7% -> 28.0% (pooled 31/60 -> 14/50). gap 2 -> 1.
+  - MAS otimo tambem CAI (21.7 -> 6.0) e DESPERDICIO DISPARA (26.7 -> 66.0).
+  => Separar a saida NAO ensinou o numero certo: DESLOCOU o vies de
+     "manda de menos" (suicidio) para "manda de mais" (desperdicio).
+     Menos ataque fatal, mais tropa desperdicada. aldeias ~igual (4.6->4.8).
+  - REJEICOES NAO CAIRAM — SUBIRAM (construcao 5.6->11.0, envio 13.2->20.0).
+     A hipotese previa que AMBAS caissem. Nenhuma caiu. Explicacao "outra":
+     isolar a fase de envio AUMENTOU a agencia (propostos 25->30, sempre 30),
+     e mais propostas = mais rejeicoes. A melhora do suicidio e uma mudanca de
+     COMPOSICAO entre os aceites, nao uma reducao de erros.
+
+(b) CONTEXTO  F1 -> F2 -> F3  (mesmo n de fases, contexto decrescente)
+  - Cortar contexto NAO ajudou: suicidio VOLTA a subir (28 -> 47 -> 42),
+    regredindo para perto do F0. otimo fica baixo e chato (~10%).
+  - F2 -> F3 (tirar a lista de neutras da construcao) foi ~NULO: 2524->2403
+    chars, metricas praticamente iguais. Neutras na construcao nao informam
+    O QUE construir — cortalas nao custa nem rende.
+  => A "atencao curta / menos contexto ajuda" NAO se sustenta nesta tarefa.
+
+TRIANGULO (counter) — invariante ao desenho:
+  counter certo entre envios TIPADOS: 44 / 41 / 50 / 42 %  = no chao do acaso
+  (~50% quando o matchup e tipado). Nem decompor nem cortar contexto mexeu.
+  O triangulo segue no teto de capacidade do 3B (degrau estrategia).
+
+VIES DE ORDENACAO (lanceiro):
+  % envio com lanceiro SOBE em toda fase separada (72% -> 83-88%). Isolar o
+  envio reforca o vies pelo 1o tipo do schema/exemplo. Confirma o achado da
+  manha (o exemplo ancora o lanceiro).
+
+CUSTO:
+  2 chamadas custam ~1.6x o tempo/turno (4.07s -> ~6.5s), NAO 2x: cada chamada
+  encurta (prompt e resposta menores), entao o dobro de chamadas nao dobra.
+
+------------------------------------------------------------------------
+ CONCLUSAO
+------------------------------------------------------------------------
+ - O unico efeito limpo e F0->F1: decompor a SAIDA reduz o suicidio pela
+   metade, mas trocando-o por desperdicio (nao por otimo) e SUBINDO as
+   rejeicoes. Nao e um ganho de compreensao — e um deslocamento de vies.
+ - Cortar CONTEXTO (b) nao rendeu nada aqui; a neutras-na-construcao e inerte.
+ - O triangulo e imune aos dois eixos: erro de ESTRATEGIA, nao de sobrecarga.
+ - n=5: F0->F1 no suicidio e sugestivo (pooled 31/60 vs 14/50), o resto e
+   dominado por ruido entre seeds. Nao promover a producao sem replicar.
+========================================================================
