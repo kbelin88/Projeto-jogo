@@ -1544,6 +1544,7 @@
     etiquetaA = document.getElementById("gmodA").value;
     etiquetaB = document.getElementById("gmodB").value;
     contadores = { A: cont0(), B: cont0() }; // metricas por partida
+    motivoInterrupcao = null;
     geminiLog = []; // log zera AQUI (ponto unico, junto dos contadores) — nunca no Play/resume
     game = Engine.criarEstadoInicial(Engine.CONFIG);
     // indice celula -> aldeia (posicoes fixas): filtro rapido no render
@@ -1576,8 +1577,11 @@
   // METRICA NOVA (handoff 03/07): ENVIOS/TURNO (agencia) separada de
   // validade — o llama3 8B teve validade perfeita e agencia ZERO. Contado
   // por rei, zera em novaPartida, vira bloco RESUMO no fim do .txt.
-  const cont0 = () => ({ turnos: 0, valido: 0, enviosAceitos: 0, constrAceitas: 0, rejeicoes: 0, normalizacoes: 0 });
+  // errosRede fica FORA de turnos/valido: turno que o modelo nao chegou a
+  // responder nao e amostra do modelo (ver decidirLado, bug de 23/07).
+  const cont0 = () => ({ turnos: 0, valido: 0, enviosAceitos: 0, constrAceitas: 0, rejeicoes: 0, normalizacoes: 0, errosRede: 0 });
   let contadores = { A: cont0(), B: cont0() };
+  let motivoInterrupcao = null; // preenchido quando a partida para por erro de rede
   let etiquetaB = "gemini"; // rotulo do decisor do Rei B no log (gemini | ollama:<modelo>)
   function lsGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
@@ -1705,16 +1709,22 @@
   // combates do turno + placar. Esse buffer vira o .txt do eval.
   function registrarTurnoLado(lado, rotulo, r) {
     const ct = contadores[lado];
-    ct.turnos++;
-    if (r.ok) ct.valido++;
-    ct.normalizacoes += (r.normalizacoes || []).length;
-    if (r.diag) {
-      ct.enviosAceitos += r.diag.aceitoEnvios.length;
-      ct.constrAceitas += r.diag.aceitoConstruir.length;
-      ct.rejeicoes += r.diag.rejeicoes.length;
+    // Turno que morreu na rede nao entra em NENHUMA metrica do modelo: nao e
+    // turno valido nem invalido, e ausencia de amostra. Contado a parte.
+    if (r.erroRede) ct.errosRede++;
+    else {
+      ct.turnos++;
+      if (r.ok) ct.valido++;
+      ct.normalizacoes += (r.normalizacoes || []).length;
+      if (r.diag) {
+        ct.enviosAceitos += r.diag.aceitoEnvios.length;
+        ct.constrAceitas += r.diag.aceitoConstruir.length;
+        ct.rejeicoes += r.diag.rejeicoes.length;
+      }
     }
     const L = [];
     L.push("########## TURNO " + game.turno + " \u2014 Rei " + lado + " (" + rotulo + ") ##########");
+    if (r.erroRede) L.push(">>> ERRO DE REDE \u2014 turno NAO contabilizado (sem resposta do modelo)");
     L.push("resposta crua: " + JSON.stringify(r.cru));
     L.push("ordem.construir: " + JSON.stringify(r.ordem.construir || []));
     L.push("ordem.envios   : " + JSON.stringify(r.ordem.envios || []));
@@ -1722,7 +1732,7 @@
     // txt, p/ o eval contar "quantas vezes o modelo errou a grafia" separado
     // de "quantas ordens valeram".
     (r.normalizacoes || []).forEach((n) => L.push("NORMALIZADO: " + n));
-    const diag = r.diag;
+    const diag = r.erroRede ? null : r.diag; // sem resposta nao ha o que aceitar/rejeitar
     if (diag) {
       if (!diag.aceitoConstruir.length && !diag.aceitoEnvios.length) L.push("ACEITO: (nada \u2014 passou o turno)");
       diag.aceitoConstruir.forEach((c) => L.push("ACEITO construir " + c.tipo + " em [" + c.aldeiaId + "]"));
@@ -1759,12 +1769,18 @@
     const resumo = ["", "================== RESUMO =================="];
     for (const lado of ["A", "B"]) {
       const c = contadores[lado], rot = lado === "A" ? etiquetaA : etiquetaB;
-      if (!c.turnos) continue;
-      const ag = (c.enviosAceitos / c.turnos).toFixed(2);
-      resumo.push("Rei " + lado + " (" + rot + "): " + c.turnos + " turnos | " +
+      if (!c.turnos && !c.errosRede) continue;
+      const ag = c.turnos ? (c.enviosAceitos / c.turnos).toFixed(2) : "n/a";
+      resumo.push("Rei " + lado + " (" + rot + "): " + c.turnos + " turnos respondidos | " +
         "AGENCIA " + ag + " envios/turno (" + c.enviosAceitos + " envios, " + c.constrAceitas + " constr) | " +
         "validade " + c.valido + "/" + c.turnos + " | rejeicoes " + c.rejeicoes +
-        " | normalizacoes " + c.normalizacoes);
+        " | normalizacoes " + c.normalizacoes +
+        (c.errosRede ? " | ERROS DE REDE " + c.errosRede + " (fora das metricas)" : ""));
+    }
+    if (contadores.A.errosRede || contadores.B.errosRede) {
+      resumo.push("*** ATENCAO: houve turno sem resposta do modelo (erro de rede). Os");
+      resumo.push("*** turnos afetados estao FORA dos contadores acima, mas o mapa correu");
+      resumo.push("*** sem as ordens desse rei. NAO use esta partida como dado de benchmark.");
     }
     resumo.push("============================================");
     const blob = new Blob([geminiLog.concat(resumo).join("\n")], { type: "text/plain;charset=utf-8" });
@@ -1852,13 +1868,25 @@
     // A visao precisa de {minimos:true} p/ o P2 mostrar "| para tomar: ...".
     const prompt = Engine.montarPrompt(Engine.montarVisao(game, lado, { minimos: true }), { variante: "P2" });
     setStatus("Rei " + lado + " pensando... (" + rotulo + ")");
-    let cru = "";
+    let cru = "", erroRede = null;
     tokensUltimaChamada = null; // zera ANTES: erro de rede nao herda tokens do turno anterior
     try { cru = await gerador(prompt); }
-    catch (e) { cru = "[ERRO DE REDE] " + e.message; }
+    catch (e) { cru = "[ERRO DE REDE] " + e.message; erroRede = e.message; }
     const tokensDoLado = tokensUltimaChamada;
     setStatus("");
     if (runId !== meuRun) return "abort"; // resposta atrasada de run antigo
+    // BUG 23/07 (OpenRouter 429): erro de rede NAO pode passar pelo parser. O
+    // corpo do erro HTTP e JSON, entao extrairBlocoJSON pegava o {...} do erro,
+    // JSON.parse aceitava, faltavam construir/envios -> ordem vazia com ok:true.
+    // Resultado: 14 turnos de 429 viraram "validade 16/16, rejeicoes 0" e o Rei
+    // passou o turno em silencio ate perder o mapa. Curto-circuito aqui.
+    if (erroRede) {
+      const vazia = { construir: [], envios: [] };
+      const dgErro = Engine.diagnosticarOrdem(game, lado, vazia);
+      Engine.executarOrdem(game, lado, vazia); // limpa rejeicoesAnteriores do lado
+      coletarDiag(lado, vazia, dgErro, false, null);
+      return { cru, ordem: vazia, diag: dgErro, ok: false, normalizacoes: [], erroRede };
+    }
     const p = Engine.parsearOrdem(cru);                       // sem retry (benchmark)
     const ordem = p.ordem;
     const diag = Engine.diagnosticarOrdem(game, lado, ordem); // ANTES de executar
@@ -1880,6 +1908,17 @@
     if (rA) registrarTurnoLado("A", vA, rA);
     if (rB) registrarTurnoLado("B", vB, rB);
     if (rA || rB) registrarEventosTurno();
+    // Erro de rede PARA a partida: seguir jogando so produz turnos vazios que
+    // entregam o mapa ao oponente e um .txt que nao vale como dado (23/07).
+    const eRede = (rA && rA.erroRede) || (rB && rB.erroRede);
+    if (eRede) {
+      const quem = rA && rA.erroRede ? "Rei A (" + vA + ")" : "Rei B (" + vB + ")";
+      motivoInterrupcao = "erro de rede no " + quem + " no turno " + game.turno + ": " + eRede;
+      pause();
+      setTimeout(() => alert("PARTIDA PAUSADA no turno " + game.turno + " — " + quem +
+        " nao respondeu:\n\n" + eRede +
+        "\n\nOs turnos com erro NAO contam nas metricas. Play retoma de onde parou."), 0);
+    }
     registrarEfeitosTurno(game.turno);
     if (rA) cronicaTurnoLado("A", game.turno, rA.diag);
     if (rB) cronicaTurnoLado("B", game.turno, rB.diag);
@@ -1929,6 +1968,7 @@
       // codigo da pra saber se a rodada foi baseline ou rejfim.
       geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=baseline v2 (rejeicoes no meio, sem rejfim) | normalizacao H3 ativa\n");
     }
+    motivoInterrupcao = null; // Play/resume limpa: so vale a interrupcao deste run
     while (playing && runId === meuRun && game && !Engine.checarVitoria(game) && game.turno < maxT) {
       await passoTurnoDuelo(meuRun);
     }
@@ -1937,7 +1977,7 @@
     updateGameHUD();
     const venc = Engine.checarVitoria(game);
     geminiLog.push("=== FIM === turno " + game.turno + " | resultado: " +
-      (venc ? "vitoria " + venc : "limite de turnos") +
+      (motivoInterrupcao ? "INTERROMPIDA (" + motivoInterrupcao + ")" : venc ? "vitoria " + venc : "limite de turnos") +
       " | A " + Engine.aldeiasDe(game, "A").length + " ald | B " + Engine.aldeiasDe(game, "B").length +
       " ald | neutras " + Engine.aldeiasDe(game, null).length);
     baixarLogGemini(); // baixa o .txt automaticamente no fim da partida
