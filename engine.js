@@ -126,8 +126,8 @@
       guarnicao_gradiente: {
         ativo: true,
         faixas: [
-          { ate: 0.40, tropas: 1 }, // perto da base
-          { ate: 0.72, tropas: 2 }, // media distancia
+          { ate: 0.47, tropas: 1 }, // perto da base
+          { ate: 0.80, tropas: 2 }, // media distancia
           { ate: 999,  tropas: 3 }, // miolo (pega o resto)
         ],
       },
