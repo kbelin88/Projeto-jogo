@@ -376,6 +376,10 @@
       <option value="ollama:qwen2.5:3b">qwen2.5:3b</option>
       <option value="ollama:llama3.2:3b">llama3.2:3b</option>
       <option value="ollama:llama3:latest">llama3 8B</option>
+      <option value="openrouter:openai/gpt-oss-20b:free">gpt-oss 20B ·OR</option>
+      <option value="openrouter:google/gemma-4-31b-it:free">Gemma-4 31B ·OR</option>
+      <option value="openrouter:nvidia/nemotron-nano-9b-v2:free">Nemotron-nano 9B ·OR</option>
+      <option value="openrouter:nvidia/nemotron-3-super-120b-a12b:free">Nemotron 120B ·OR</option>
     </select>
   </label>
   <label title="Quem decide pelo Rei B">Rei B
@@ -387,6 +391,10 @@
       <option value="ollama:qwen2.5:3b">qwen2.5:3b</option>
       <option value="ollama:llama3.2:3b">llama3.2:3b</option>
       <option value="ollama:llama3:latest">llama3 8B</option>
+      <option value="openrouter:openai/gpt-oss-20b:free">gpt-oss 20B ·OR</option>
+      <option value="openrouter:google/gemma-4-31b-it:free">Gemma-4 31B ·OR</option>
+      <option value="openrouter:nvidia/nemotron-nano-9b-v2:free">Nemotron-nano 9B ·OR</option>
+      <option value="openrouter:nvidia/nemotron-3-super-120b-a12b:free">Nemotron 120B ·OR</option>
     </select>
   </label>
   <label>turnos <input id="gmax" type="number" min="1" max="80" value="6" style="width:48px"></label>
@@ -1647,6 +1655,43 @@
     }
   }
 
+  // ----- OPENROUTER: API OpenAI-compativel (mesmo schema do Grok). Da acesso
+  // a modelos :free (sem custo, cota diaria por CONTA). Chave fica so neste
+  // navegador (localStorage), pedida uma vez. O modelo vai no valor da opcao,
+  // ex.: "openrouter:google/gemma-4-31b-it:free" -> modelo com os dois-pontos.
+  const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+  let openrouterKey = lsGet("OPENROUTER_API_KEY") || "";
+  let ultimoEnvioOR = 0;
+  function pedirChaveOpenRouter() {
+    if (!openrouterKey) {
+      const k = (window.prompt("Cole sua OPENROUTER_API_KEY (sk-or-..., fica so neste navegador):") || "").trim();
+      if (k) { openrouterKey = k; lsSet("OPENROUTER_API_KEY", k); }
+    }
+    return openrouterKey;
+  }
+  async function gerarOpenRouter(prompt, modelo) {
+    const faltam = 300 - (Date.now() - ultimoEnvioOR); // pacing leve p/ rate limit
+    if (faltam > 0) await espera(faltam);
+    ultimoEnvioOR = Date.now();
+    for (let tentativa = 1; ; tentativa++) {
+      const resp = await fetch(OPENROUTER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + openrouterKey },
+        body: JSON.stringify({ model: modelo, messages: [{ role: "user", content: prompt }], temperature: tempLLM, stream: false }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const u = data.usage;
+        tokensUltimaChamada = u ? { prompt: u.prompt_tokens || 0, resposta: u.completion_tokens || 0 } : null;
+        const c = data.choices && data.choices[0];
+        return (c && c.message && c.message.content) || "";
+      }
+      const corpo = await resp.text().catch(() => "");
+      if ((resp.status !== 429 && resp.status !== 503) || tentativa >= 6) throw new Error("OpenRouter HTTP " + resp.status + ": " + corpo);
+      await espera(Math.min(1000 * 2 ** tentativa, 40000) + 500); // backoff p/ throttle (429 = cota free)
+    }
+  }
+
   // composicao curta p/ o log (ex.: "10L+5C")
   function compStrG(t) {
     const p = [];
@@ -1766,6 +1811,7 @@
     if (valor === "burro") return null; // burro decide sem rede
     if (valor === "gemini") return (p) => gerarGemini(p);
     if (valor.startsWith("grok:")) { const m = valor.slice("grok:".length); return (p) => gerarGrok(p, m); }
+    if (valor.startsWith("openrouter:")) { const m = valor.slice("openrouter:".length); return (p) => gerarOpenRouter(p, m); }
     const modelo = valor.slice("ollama:".length);
     return (p) => gerarOllama(p, modelo);
   }
@@ -1850,6 +1896,9 @@
     }
     if ((vA.startsWith("grok:") || vB.startsWith("grok:")) && !pedirChaveGrok()) {
       pause(); alert("Sem GROK_API_KEY: nao da pra rodar o Grok."); return;
+    }
+    if ((vA.startsWith("openrouter:") || vB.startsWith("openrouter:")) && !pedirChaveOpenRouter()) {
+      pause(); alert("Sem OPENROUTER_API_KEY: nao da pra rodar os modelos do OpenRouter."); return;
     }
     const usaOllama = [vA, vB].find((v) => v.startsWith("ollama:"));
     if (usaOllama) { // sanity check (e teste de CORS)
