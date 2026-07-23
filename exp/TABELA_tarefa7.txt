@@ -60,3 +60,23 @@ NOTAS FACTUAIS:
   partidas que NAO completaram 15 turnos: nenhuma
   seeds com falha (checkpoint ausente / erro de rede): nenhuma
 ------------------------------------------------------------------------------
+
+==============================================================================
+  SONDA qwen3:8b — SECAO SEPARADA (n=1, sem estatistica, NAO comparavel)
+  Pergunta unica: o qwen3 arranca a jogar ou congela?
+==============================================================================
+  RESSALVA HONESTA: o cliente streaming corta cada geracao a 30 min
+  (TIMEOUT_STREAM_MS). Turnos que precisam de >30 min sao ABORTADOS e
+  contam como "erro de rede" no CSV — mas NAO e rede, e o corte de 30 min.
+  Nesses turnos o Rei passa (ordem vazia). Interpretar os numeros com isso.
+
+  qwen3:8b / P0 / seed 1 / 10 turnos:
+    resposta: ARRANCA (produziu ordens; nao congelou)
+    envios: propostos 7 | aceites 4 | rejeitados 3
+    turnos truncados pelo corte de 30 min (rotulados 'erro de rede'): 3
+    aldeias LLM (fim): 3 | vencedor: limite
+    counter: sim 0 | nao 2 | neutro 2 (de 4 aceites)
+    classif: otimo 0 | desperdicio 2 | suicidio 2
+  (so P0 correu; P1/P2 nao rodados — decisao do Lucas: ~3h/partida e
+   turnos de >30 min nao se justificam. Sonda encerrada no P0.)
+==============================================================================

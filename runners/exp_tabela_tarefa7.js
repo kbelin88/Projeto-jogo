@@ -109,6 +109,36 @@ L.push(`  seeds com falha (checkpoint ausente / erro de rede): ${linhasFalha.len
 for (const s of linhasFalha) L.push(`    - ${s}`);
 L.push("-".repeat(78));
 
+// ---- SONDA qwen3:8b (secao SEPARADA, sem estatistica — n=1, observacao de arranque) ----
+const sondaVars = VARS.map((v) => ({ v, parts: carregar("qwen3-8b", v) })).filter((x) => x.parts);
+if (sondaVars.length) {
+  L.push("");
+  L.push("=".repeat(78));
+  L.push("  SONDA qwen3:8b — SECAO SEPARADA (n=1, sem estatistica, NAO comparavel)");
+  L.push("  Pergunta unica: o qwen3 arranca a jogar ou congela?");
+  L.push("=".repeat(78));
+  L.push("  RESSALVA HONESTA: o cliente streaming corta cada geracao a 30 min");
+  L.push("  (TIMEOUT_STREAM_MS). Turnos que precisam de >30 min sao ABORTADOS e");
+  L.push('  contam como "erro de rede" no CSV — mas NAO e rede, e o corte de 30 min.');
+  L.push("  Nesses turnos o Rei passa (ordem vazia). Interpretar os numeros com isso.");
+  for (const { v, parts } of sondaVars) {
+    const p = parts[0];
+    L.push("");
+    L.push(`  qwen3:8b / ${v} / seed ${p.seed} / ${p.turnosCompletados} turnos:`);
+    L.push(`    resposta: ARRANCA (produziu ordens; nao congelou)`);
+    L.push(`    envios: propostos ${p.enviosPropostos} | aceites ${p.enviosAceites} | rejeitados ${p.enviosRejeitados}`);
+    L.push(`    turnos truncados pelo corte de 30 min (rotulados 'erro de rede'): ${p.errosRede}`);
+    L.push(`    aldeias LLM (fim): ${p.aldeiasLLM} | vencedor: ${p.vencedor}`);
+    const es = p.envios;
+    const cc = (k, val) => es.filter((e) => e[k] === val).length;
+    L.push(`    counter: sim ${cc("counter","sim")} | nao ${cc("counter","nao")} | neutro ${cc("counter","neutro")} (de ${es.length} aceites)`);
+    L.push(`    classif: otimo ${cc("classif","otimo")} | desperdicio ${cc("classif","desperdicio")} | suicidio ${cc("classif","suicidio")}`);
+  }
+  L.push("  (so P0 correu; P1/P2 nao rodados — decisao do Lucas: ~3h/partida e");
+  L.push("   turnos de >30 min nao se justificam. Sonda encerrada no P0.)");
+  L.push("=".repeat(78));
+}
+
 const out = L.join("\n") + "\n";
 fs.writeFileSync(path.join(EXP, "TABELA_tarefa7.txt"), out);
 process.stdout.write(out);
