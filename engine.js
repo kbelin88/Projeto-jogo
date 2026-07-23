@@ -1238,7 +1238,18 @@
   //     presente na visao).
   // NAO ensina a DECISAO: alvo e tropas sao genericos/arbitrarios (1a aldeia,
   // 1o alvo, numero redondo qualquer), NAO a jogada otima.
-  function exemploAncorado(visao) {
+  // PLANO do exemplo (parte PURA e deterministica): decide origem, tipo da
+  // construcao, quantidades e a lista de destinos. exemploAncorado so RENDERIZA
+  // este plano. Fonte UNICA da verdade -> o runner do experimento loga o mesmo
+  // `tipo` e `nEnvios` que entraram no prompt (colunas exemploTipo/exemploNEnvios).
+  //
+  // ROTACAO (experimento exp-exemplo-ancora, 23/07): opcoes.rotativo =
+  //   { tipo:bool, comprimento:bool }. Sem rotacao => plano BYTE-IDENTICO ao
+  //   de sempre (tipo "lanceiro", 1-2 envios pela regra atual). A rotacao sai
+  //   de um PRNG SEMEADO por (seed da partida, turno, dono) — determinismo
+  //   total, nunca Math.random. Consumo do rng: tipo ANTES de comprimento.
+  function planoExemplo(visao, opcoes) {
+    const rot = (opcoes && opcoes.rotativo) || {};
     const minhas = (visao && visao.minhas) || [];
     const alvos = (visao && visao.alvos) || [];
     const a0 = minhas.length ? minhas[0] : null;
@@ -1247,32 +1258,77 @@
     // ataque suicida a capital inimiga. Cai p/ qualquer alvo se nao houver neutra.
     const neutras = alvos.filter((a) => a.dono === null);
     const poolAlvo = neutras.length ? neutras : alvos;
-    const alvoAtk = poolAlvo.length ? poolAlvo[0].id : origem;
-    const tropas = (l, a, c) => `{"lanceiro": ${l}, "arqueiro": ${a}, "cavaleiro": ${c}}`;
 
-    // ANCORAGEM DAS QUANTIDADES (19/07): os modelos fracos copiam o exemplo ao
-    // pe da letra. Antes o exemplo pedia 10 lanceiros / 5 arqueiros — mais do que
-    // o rei tem (5/4/3) -> copia = 100% rejeitada. Agora as quantidades saem das
-    // tropas REAIS da 1a aldeia (metade de cada): um copia-cola sai VALIDO, e
-    // ainda sobra guarnicao (2x floor(n/2) <= n). Numeros = os do turno, nao fixos.
+    // ANCORAGEM DAS QUANTIDADES (19/07 — NAO e variavel deste experimento):
+    // metade de cada tipo real da 1a aldeia (copia-cola sai VALIDO e sobra
+    // guarnicao). Aldeia quase vazia: manda 1 de um tipo que exista (so o molde).
     const tr = a0 ? a0.tropas : { lanceiro: 0, arqueiro: 0, cavaleiro: 0 };
     let hl = Math.floor((tr.lanceiro || 0) / 2), ha = Math.floor((tr.arqueiro || 0) / 2), hc = Math.floor((tr.cavaleiro || 0) / 2);
-    if (hl + ha + hc === 0) { // aldeia quase vazia: manda 1 de um tipo que exista (senao so o molde)
+    if (hl + ha + hc === 0) {
       if ((tr.lanceiro || 0) > 0) hl = 1; else if ((tr.arqueiro || 0) > 0) ha = 1; else if ((tr.cavaleiro || 0) > 0) hc = 1;
     }
-    const envios = [
-      `    {"origemId": ${origem}, "destinoId": ${alvoAtk}, "tropas": ${tropas(hl, ha, hc)}}`,
-    ];
-    // 2a linha mostra o molde com 2 envios; mesmas quantidades (2x metade <= total),
-    // destino = outro id real. So aparece se ha um 2o alvo E tropas p/ enviar.
-    const segundoDestino = poolAlvo.length >= 2 ? poolAlvo[1].id : (minhas.length >= 2 ? minhas[1].id : null);
-    if (segundoDestino != null && hl + ha + hc > 0) {
-      envios.push(`    {"origemId": ${origem}, "destinoId": ${segundoDestino}, "tropas": ${tropas(hl, ha, hc)}}`);
+    const temTropas = hl + ha + hc > 0;
+
+    // PRNG semeado por (seed, turno, dono) — so criado se ha rotacao.
+    let rng = null;
+    if (rot.tipo || rot.comprimento) {
+      const seed = (visao && visao.config && visao.config.seed) || 0;
+      const turno = (visao && visao.turno) || 0;
+      const donoNum = (visao && visao.dono === "B") ? 1 : 0;
+      // mistura em 32 bits (constantes de hash espacial) antes de semear o rng
+      const semente = (((seed >>> 0) * 73856093) ^ ((turno + 1) * 19349663) ^ (donoNum * 83492791)) >>> 0;
+      rng = criarRng(semente);
     }
+
+    // TIPO da construcao. Rotativo: sorteia entre os CONSTRUIVEIS (a a0 paga o
+    // custo AGORA) — senao criaria rejeicao artificial. Nenhum pagavel => "lanceiro".
+    let tipo = "lanceiro";
+    if (rot.tipo) {
+      const rec = a0 ? a0.recursos : { madeira: 0, ferro: 0 };
+      const cfg = visao && visao.config;
+      const pagaveis = TIPOS.filter((t) => {
+        const c = cfg && cfg.tropas[t] && cfg.tropas[t].custo;
+        return c && rec.madeira >= c.madeira && rec.ferro >= c.ferro;
+      });
+      tipo = pagaveis.length ? pagaveis[Math.floor(rng() * pagaveis.length)] : "lanceiro";
+    }
+
+    // DESTINOS (comprimento da lista de envios).
+    let destinos;
+    if (rot.comprimento) {
+      // candidatos DISTINTOS: alvos do pool primeiro, depois outras aldeias minhas.
+      const cand = [];
+      for (const a of poolAlvo) cand.push(a.id);
+      for (const a of minhas) if (a.id !== origem && cand.indexOf(a.id) < 0) cand.push(a.id);
+      if (!temTropas) {
+        // sem tropas: so o molde de 1 envio (como hoje) — nada a enviar de facto.
+        destinos = [poolAlvo.length ? poolAlvo[0].id : origem];
+      } else {
+        const maxN = Math.min(3, Math.max(1, cand.length)); // limita pelos destinos reais
+        const n = maxN <= 1 ? 1 : rngInt(rng, 1, maxN);
+        destinos = [];
+        for (let i = 0; i < n; i++) destinos.push(cand.length ? cand[i % cand.length] : origem);
+      }
+    } else {
+      // REGRA ATUAL (byte-identica): 1 envio, +1 condicional se ha 2o alvo E tropas.
+      const alvoAtk = poolAlvo.length ? poolAlvo[0].id : origem;
+      destinos = [alvoAtk];
+      const segundoDestino = poolAlvo.length >= 2 ? poolAlvo[1].id : (minhas.length >= 2 ? minhas[1].id : null);
+      if (segundoDestino != null && temTropas) destinos.push(segundoDestino);
+    }
+
+    return { origem, tipo, hl, ha, hc, destinos, nEnvios: destinos.length };
+  }
+
+  function exemploAncorado(visao, opcoes) {
+    const p = planoExemplo(visao, opcoes);
+    const tropas = `{"lanceiro": ${p.hl}, "arqueiro": ${p.ha}, "cavaleiro": ${p.hc}}`;
+    const envios = p.destinos.map((d) =>
+      `    {"origemId": ${p.origem}, "destinoId": ${d}, "tropas": ${tropas}}`);
     return [
       "{",
       '  "construir": [',
-      `    {"aldeiaId": ${origem}, "tipo": "lanceiro"}`,
+      `    {"aldeiaId": ${p.origem}, "tipo": "${p.tipo}"}`,
       "  ],",
       '  "envios": [',
       envios.join(",\n"),
@@ -1401,7 +1457,9 @@
     // ancorar nos ids REAIS da visao em vez de copiar numeros do exemplo.
     L.push("Antes de responder: em 'origemId' e em 'aldeiaId' use SOMENTE ids que aparecem na secao SUAS ALDEIAS. Escolha o 'destinoId' entre os ids das secoes ALDEIAS NEUTRAS e INIMIGO. Nao envie tropas que voce nao tem: se uma aldeia esta sem tropas, nao a use em 'envios'. O exemplo abaixo so mostra o FORMATO com ids reais deste turno; nao copie os numeros dele como se fossem sua jogada.");
     L.push("");
-    L.push(exemploAncorado(visao));
+    // encaminha opcoes.rotativo (experimento exp-exemplo-ancora). Sem ela,
+    // exemploAncorado(visao, undefined) e byte-identico ao de sempre.
+    L.push(exemploAncorado(visao, opcoes && opcoes.rotativo ? { rotativo: opcoes.rotativo } : undefined));
     if (rejNoFim) {
       // FIM ABSOLUTO (H2): modelos pequenos pesam mais o rabo do prompt.
       L.push("");
@@ -1917,6 +1975,7 @@
     // V1 Peca 2 (Rei IA): partes puras (prompt + parsing)
     montarPrompt,
     exemploAncorado,
+    planoExemplo,
     extrairBlocoJSON,
     parsearOrdem,
     diagnosticarOrdem,
