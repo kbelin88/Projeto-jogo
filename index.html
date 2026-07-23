@@ -1801,7 +1801,10 @@
       coletarDiag(lado, ordemB, dgB, true, null);
       return null;
     }
-    const prompt = Engine.montarPrompt(Engine.montarVisao(game, lado));
+    // PROMPT PADRAO OFICIAL DO JOGO = P2 (minimo pre-calculado por alvo no
+    // relatorio). Decisao do Lucas apos o experimento v3 (exp-prompt-tropas).
+    // A visao precisa de {minimos:true} p/ o P2 mostrar "| para tomar: ...".
+    const prompt = Engine.montarPrompt(Engine.montarVisao(game, lado, { minimos: true }), { variante: "P2" });
     setStatus("Rei " + lado + " pensando... (" + rotulo + ")");
     let cru = "";
     tokensUltimaChamada = null; // zera ANTES: erro de rede nao herda tokens do turno anterior
