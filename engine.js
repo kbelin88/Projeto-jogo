@@ -912,7 +912,10 @@
     }
     const destinoReal = caminho[caminho.length - 1];
     const turnos = turnosPorDist(estado, distanciaRota(estado, caminho), carga);
-    const mov = { dono: o.dono, origemId, destinoId: destinoReal, tropas: carga, caminho,
+    // destinoPedido preserva o alvo PEDIDO (destinoId original): destinoReal pode
+    // diferir quando a marcha para na 1a aldeia nao-sua do caminho (L2: o relatorio
+    // avisa o modelo do redirecionamento). Nao e rejeicao — a ordem FOI executada.
+    const mov = { dono: o.dono, origemId, destinoId: destinoReal, destinoPedido: destinoId, tropas: carga, caminho,
       turnosRestantes: turnos, turnosTotal: turnos };
     estado.movimentos.push(mov);
     return mov;
@@ -1088,9 +1091,13 @@
         }
         return alvo;
       }),
+      // REDE DE ESTRADAS (grafo fixo da partida): so leitura, p/ o relatorio
+      // mostrar a topologia ao modelo. null em estados sinteticos sem rede.
+      estradas: (estado.estradas && estado.estradas.adj) || null,
       // todos os exercitos em transito (meus e inimigos). destinoDono = dono atual do destino.
+      // destinoPedido preserva a INTENCAO original (antes da interceptacao redirecionar).
       transito: estado.movimentos.map((m) => ({
-        dono: m.dono, origemId: m.origemId, destinoId: m.destinoId,
+        dono: m.dono, origemId: m.origemId, destinoId: m.destinoId, destinoPedido: m.destinoPedido,
         tropas: copiaTropas(m.tropas), turnosRestantes: m.turnosRestantes,
         destinoDono: (aldeiaPorId(estado, m.destinoId) || {}).dono,
       })),
@@ -1240,11 +1247,33 @@
     }
     L.push("");
 
+    // REDE DE ESTRADAS (topologia FIXA da partida): mostra as conexoes diretas de
+    // CADA aldeia do mapa. Repeticao simetrica ([0] lista [2] e [2] lista [0]) e
+    // intencional — ajuda o modelo a raciocinar "de onde estou, para onde vou".
+    // So leitura do grafo (estradas.adj); nao altera nada. Ausente em estados
+    // sinteticos sem rede.
+    const semRede = !!(opcoes && opcoes.semRede); // validador nao precisa da topologia
+    if (visao.estradas && !semRede) {
+      L.push(`=== REDE DE ESTRADAS (por onde os exercitos marcham) ===`);
+      const idsRede = Object.keys(visao.estradas).map(Number).sort((a, b) => a - b);
+      for (const id of idsRede) {
+        const viz = (visao.estradas[id] || []).slice().sort((a, b) => a - b);
+        L.push(`Aldeia [${id}] liga-se a: ${viz.map((v) => `[${v}]`).join(", ")}`);
+      }
+      L.push("");
+    }
+
     // EXERCITOS EM TRANSITO
     L.push(`=== EXERCITOS EM TRANSITO ===`);
     const meus = visao.transito.filter((m) => m.dono === me);
     const dele = visao.transito.filter((m) => m.dono !== me);
-    const linhaMov = (m) => `- ${compTexto(m.tropas)}: aldeia [${m.origemId}] -> aldeia [${m.destinoId}] (${classifica(m.destinoDono)}), chega em ${m.turnosRestantes} turnos`;
+    const linhaMov = (m) => {
+      let s = `- ${compTexto(m.tropas)}: aldeia [${m.origemId}] -> aldeia [${m.destinoId}] (${classifica(m.destinoDono)}), chega em ${m.turnosRestantes} turnos`;
+      // L2: envio redirecionado pela interceptacao. NAO e rejeicao — foi executado.
+      if (m.destinoPedido != null && m.destinoPedido !== m.destinoId)
+        s += ` [REDIRECIONADO: voce pediu [${m.destinoPedido}], parou na primeira aldeia nao-sua do caminho]`;
+      return s;
+    };
     L.push("SEUS:");
     if (!meus.length) L.push("- nenhum");
     else meus.forEach((m) => L.push(linhaMov(m)));
@@ -1401,6 +1430,19 @@
     return L.join("\n");
   }
 
+  // REGRAS DE MOVIMENTO em texto (mesmo padrao das outras regras): declara a
+  // mecanica de marcha para o modelo poder usa-la. Depende do bloco REDE DE
+  // ESTRADAS (no relatorio) para a topologia. cfg fica na assinatura por padrao,
+  // ainda que o texto seja estrutural (as regras nao variam com a config hoje).
+  function regrasMovimentoTexto(cfg) {
+    const L = [];
+    L.push("=== REGRAS DE MOVIMENTO ===");
+    L.push("Seu exercito marcha pela REDE DE ESTRADAS que liga as aldeias, nao em linha reta. O tempo de viagem e medido ao longo dessa rede: uma aldeia que parece perto no mapa pode estar longe pela estrada. Consulte o bloco REDE DE ESTRADAS para ver as conexoes.");
+    L.push("O exercito PARA na primeira aldeia que nao e sua no caminho e luta ali, mesmo que voce tenha ordenado um destino mais distante. Nao da para pular uma aldeia inimiga ou neutra para atacar outra atras dela. Para chegar a um alvo distante, conquiste primeiro as aldeias do caminho.");
+    L.push("Tropas enviadas de aldeias DIFERENTES nao somam forcas, mesmo chegando no mesmo turno ao mesmo alvo: cada envio luta sozinho, um de cada vez. Para atacar com forca concentrada, primeiro reuna as tropas numa aldeia sua (enviando-as para la como reforco) e depois ataque a partir dessa aldeia num unico envio.");
+    return L.join("\n");
+  }
+
   // opcoes (H2, experimento de POSICAO do feedback — uma variavel):
   //   { rejeicaoNoFim: true } MOVE o bloco de rejeicoes do meio do relatorio
   //   para o FIM ABSOLUTO do prompt (depois do exemplo), com a instrucao
@@ -1423,6 +1465,8 @@
     L.push(variante === "P1" ? regrasCombateTextoP1(visao.config) : regrasCombateTexto(visao.config));
     L.push("");
     L.push(regrasEconomiaTexto(visao.config));
+    L.push("");
+    L.push(regrasMovimentoTexto(visao.config));
     L.push("");
     // MEIO: dados do turno (relatorio integral)
     L.push(relatorioTexto(visao, rejNoFim ? { semRejeicoes: true } : undefined));
@@ -1929,6 +1973,7 @@
     tipoDominante,
     regrasCombateTexto,
     regrasEconomiaTexto,
+    regrasMovimentoTexto,
     preverCombate,
     minimoParaTomar,
     vantagem,

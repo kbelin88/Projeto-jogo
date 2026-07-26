@@ -1596,6 +1596,22 @@
   }
   const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 
+  // CONTRATO (thinking sempre-ligado): todo gerarX() devolve { texto, raciocinio }.
+  // texto = resposta final (alimenta parsearOrdem, SEM raciocinio); raciocinio =
+  // pensamento em texto, ou null se o backend nao suporta. separarThink extrai o
+  // <think>...</think> inline (qwen3 e afins) do texto do Ollama.
+  function separarThink(s) {
+    s = s || "";
+    const blocos = [];
+    const re = /<think>([\s\S]*?)<\/think>/gi;
+    let m;
+    while ((m = re.exec(s))) blocos.push(m[1].trim());
+    if (!blocos.length) return { texto: s, raciocinio: null };
+    const texto = s.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+    const raciocinio = blocos.join("\n").trim();
+    return { texto, raciocinio: raciocinio || null };
+  }
+
   async function gerarGemini(prompt) {
     const faltam = MIN_INTERVALO_G - (Date.now() - ultimoEnvioG);
     if (faltam > 0) await espera(faltam); // pacing p/ caber no free tier
@@ -1604,7 +1620,7 @@
       const resp = await fetch(GEMINI_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: tempLLM } }),
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: tempLLM, thinkingConfig: { includeThoughts: true } } }),
       });
       if (resp.ok) {
         const data = await resp.json();
@@ -1613,8 +1629,11 @@
           ? { prompt: um.promptTokenCount || 0, resposta: (um.candidatesTokenCount || 0) + (um.thoughtsTokenCount || 0) }
           : null;
         const c = data.candidates && data.candidates[0];
-        const parts = c && c.content && c.content.parts;
-        return (parts || []).map((p) => p.text || "").join("");
+        const parts = (c && c.content && c.content.parts) || [];
+        // CRITICO: separar por p.thought, senao o raciocinio contamina o texto.
+        let texto = "", raciocinio = "";
+        for (const p of parts) { if (p.thought === true) raciocinio += p.text || ""; else texto += p.text || ""; }
+        return { texto, raciocinio: raciocinio || null };
       }
       const corpo = await resp.text().catch(() => "");
       if ((resp.status !== 429 && resp.status !== 503) || tentativa >= 6) throw new Error("Gemini HTTP " + resp.status + ": " + corpo);
@@ -1650,8 +1669,8 @@
         const data = await resp.json();
         const u = data.usage;
         tokensUltimaChamada = u ? { prompt: u.prompt_tokens || 0, resposta: u.completion_tokens || 0 } : null;
-        const c = data.choices && data.choices[0];
-        return (c && c.message && c.message.content) || "";
+        const msg = (data.choices && data.choices[0] && data.choices[0].message) || {};
+        return { texto: msg.content || "", raciocinio: msg.reasoning_content || msg.reasoning || null };
       }
       const corpo = await resp.text().catch(() => "");
       if ((resp.status !== 429 && resp.status !== 503) || tentativa >= 6) throw new Error("Grok HTTP " + resp.status + ": " + corpo);
@@ -1681,14 +1700,19 @@
       const resp = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + openrouterKey },
-        body: JSON.stringify({ model: modelo, messages: [{ role: "user", content: prompt }], temperature: tempLLM, stream: false }),
+        body: JSON.stringify({ model: modelo, messages: [{ role: "user", content: prompt }], temperature: tempLLM, stream: false, reasoning: { enabled: true } }),
       });
       if (resp.ok) {
         const data = await resp.json();
         const u = data.usage;
         tokensUltimaChamada = u ? { prompt: u.prompt_tokens || 0, resposta: u.completion_tokens || 0 } : null;
-        const c = data.choices && data.choices[0];
-        return (c && c.message && c.message.content) || "";
+        const msg = (data.choices && data.choices[0] && data.choices[0].message) || {};
+        // OpenRouter devolve o raciocinio em message.reasoning (texto) e/ou
+        // reasoning_details (estruturado); message.content e a resposta final.
+        let raciocinio = msg.reasoning || null;
+        if (!raciocinio && Array.isArray(msg.reasoning_details))
+          raciocinio = msg.reasoning_details.map((d) => (d && (d.text || d.summary)) || "").join("\n").trim() || null;
+        return { texto: msg.content || "", raciocinio };
       }
       const corpo = await resp.text().catch(() => "");
       if ((resp.status !== 429 && resp.status !== 503) || tentativa >= 6) throw new Error("OpenRouter HTTP " + resp.status + ": " + corpo);
@@ -1726,6 +1750,7 @@
     L.push("########## TURNO " + game.turno + " \u2014 Rei " + lado + " (" + rotulo + ") ##########");
     if (r.erroRede) L.push(">>> ERRO DE REDE \u2014 turno NAO contabilizado (sem resposta do modelo)");
     L.push("resposta crua: " + JSON.stringify(r.cru));
+    L.push(r.raciocinio ? "raciocinio: " + r.raciocinio : "raciocinio: (nao capturado)");
     L.push("ordem.construir: " + JSON.stringify(r.ordem.construir || []));
     L.push("ordem.envios   : " + JSON.stringify(r.ordem.envios || []));
     // H3: a normalizacao NAO esconde o desvio — cada correcao vira linha no
@@ -1817,7 +1842,7 @@
     tokensUltimaChamada = (data.prompt_eval_count != null || data.eval_count != null)
       ? { prompt: data.prompt_eval_count || 0, resposta: data.eval_count || 0 }
       : null; // backend nao reportou: null, nunca estimar
-    return data.response || "";
+    return separarThink(data.response || ""); // { texto, raciocinio }
   }
 
   // ===== DUELO: qualquer combinacao de reis (burro / gemini / ollama) =====
@@ -1868,9 +1893,9 @@
     // A visao precisa de {minimos:true} p/ o P2 mostrar "| para tomar: ...".
     const prompt = Engine.montarPrompt(Engine.montarVisao(game, lado, { minimos: true }), { variante: "P2" });
     setStatus("Rei " + lado + " pensando... (" + rotulo + ")");
-    let cru = "", erroRede = null;
+    let cru = "", raciocinio = null, erroRede = null;
     tokensUltimaChamada = null; // zera ANTES: erro de rede nao herda tokens do turno anterior
-    try { cru = await gerador(prompt); }
+    try { const g = await gerador(prompt); cru = g.texto; raciocinio = g.raciocinio; }
     catch (e) { cru = "[ERRO DE REDE] " + e.message; erroRede = e.message; }
     const tokensDoLado = tokensUltimaChamada;
     setStatus("");
@@ -1885,14 +1910,14 @@
       const dgErro = Engine.diagnosticarOrdem(game, lado, vazia);
       Engine.executarOrdem(game, lado, vazia); // limpa rejeicoesAnteriores do lado
       coletarDiag(lado, vazia, dgErro, false, null);
-      return { cru, ordem: vazia, diag: dgErro, ok: false, normalizacoes: [], erroRede };
+      return { cru, raciocinio: null, ordem: vazia, diag: dgErro, ok: false, normalizacoes: [], erroRede };
     }
     const p = Engine.parsearOrdem(cru);                       // sem retry (benchmark)
     const ordem = p.ordem;
     const diag = Engine.diagnosticarOrdem(game, lado, ordem); // ANTES de executar
     Engine.executarOrdem(game, lado, ordem);
     coletarDiag(lado, ordem, diag, p.ok, tokensDoLado);
-    return { cru, ordem, diag, ok: p.ok, normalizacoes: p.normalizacoes || [] }; // H3: p/ o txt
+    return { cru, raciocinio, ordem, diag, ok: p.ok, normalizacoes: p.normalizacoes || [] }; // H3: p/ o txt
   }
 
   async function passoTurnoDuelo(meuRun) {
@@ -1966,7 +1991,7 @@
       // PROVENIENCIA (13/07): registrar as condicoes do experimento no proprio
       // log. Descoberto na analise da partida de 13/07: sem isso, so lendo o
       // codigo da pra saber se a rodada foi baseline ou rejfim.
-      geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=baseline v2 (rejeicoes no meio, sem rejfim) | normalizacao H3 ativa\n");
+      geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=baseline v2 (rejeicoes no meio, sem rejfim) | normalizacao H3 ativa | thinking=on\n");
     }
     motivoInterrupcao = null; // Play/resume limpa: so vale a interrupcao deste run
     while (playing && runId === meuRun && game && !Engine.checarVitoria(game) && game.turno < maxT) {

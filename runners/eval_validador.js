@@ -319,7 +319,7 @@ async function rodar(cliente, estado, dono, visao, casosEmbaralhados, nRodadas, 
       const c = casosEmbaralhados[i];
       const prompt = listar ? montarPromptListador(visao, c.ordem) : Rei.montarPromptValidador(visao, c.ordem);
       let cru = "";
-      try { cru = await cliente.gerar(prompt); }
+      try { cru = (await cliente.gerar(prompt)).texto; }
       catch (e) {
         cru = ""; errosRede++;
         console.error(`  !! ERRO rede r${r} ${c.id}: ${e.message}`); // grita NA HORA (licao do 404 silencioso)

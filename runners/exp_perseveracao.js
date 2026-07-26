@@ -177,6 +177,11 @@ function onTurno(reg) {
   // ---------- metricas ----------
   const regs = res.registros;
   const n = regs.length || 1;
+  // TERCEIRA categoria (handoff pend.1): turno perdido na INFRA (erroRede) nao e
+  // falha do modelo — fica FORA do denominador de agencia e validade. nValidos =
+  // turnos que o modelo respondeu; n segue como total (perseveranca usa o total).
+  const nInfra = regs.filter((r) => r.erroRede).length;
+  const nValidos = (regs.length - nInfra) || 1;
   const nValido = regs.filter((r) => r.jsonValido).length;
   // com --clamp, agencia conta o EXECUTADO real (pos-ajuste); reincidencia
   // (acima, em onTurno) segue sobre reg.rejeicoes da proposta CRUA.
@@ -185,8 +190,9 @@ function onTurno(reg) {
   const nRejeicoes = regs.reduce((s, r) => s + r.rejeicoes.length, 0);
   const nNormalizacoes = regs.reduce((s, r) => s + (r.normalizacoes || []).length, 0);
   const nPassou = regs.filter((r) => !r.aceito.construir.length && !r.aceito.envios.length).length;
-  const agencia = (enviosAceitos / n).toFixed(2);
+  const agencia = (enviosAceitos / nValidos).toFixed(2); // sobre turnos respondidos, nao o total
   const pct = (x) => ((100 * x) / n).toFixed(0) + "%";
+  const pctV = (x) => ((100 * x) / nValidos).toFixed(0) + "%"; // pct sobre turnos validos
 
   const R = [];
   R.push("================== RESUMO ==================");
@@ -200,11 +206,12 @@ function onTurno(reg) {
   R.push(`    total de reincidencias               : ${reincidencias}`);
   R.push(`    maior streak de uma acao             : ${reincMax} (${reincSig})`);
   R.push(`AGENCIA (separada de validade — licao do 8B):`);
-  R.push(`  envios aceitos                         : ${enviosAceitos}  ->  ${agencia} envios/turno`);
+  R.push(`  envios aceitos                         : ${enviosAceitos}  ->  ${agencia} envios/turno (sobre ${nValidos} validos)`);
   R.push(`  construcoes aceitas                    : ${constrAceitas}`);
   R.push(`  turnos em que passou                   : ${nPassou} (${pct(nPassou)})`);
   R.push(`VALIDADE:`);
-  R.push(`  JSON valido                            : ${nValido}/${n} (${pct(nValido)})`);
+  R.push(`  JSON valido                            : ${nValido}/${nValidos} (${pctV(nValido)})`);
+  R.push(`  infra-falhas (erroRede, fora de ag/val): ${nInfra}`);
   R.push(`  rejeicoes totais                       : ${nRejeicoes}`);
   if (clamp) {
     R.push(`  -- CLAMP (H5: afford do motor) --`);
@@ -238,7 +245,7 @@ function onTurno(reg) {
   const linha = [ts, cliente.nome, `temp=${temp}`, rejfim ? "rejfim=1" : "rejfim=0", `seed=${seed}`,
     `turnosRei=${n}`, `seqMax=${seqMax}`, `repetidos=${turnosRepetidos}`,
     `reincid=${reincidencias}`, `reincMax=${reincMax}(${reincSig})`,
-    `enviosAceitos=${enviosAceitos}`, `agencia=${agencia}`, `validade=${nValido}/${n}`,
+    `enviosAceitos=${enviosAceitos}`, `agencia=${agencia}`, `validade=${nValido}/${nValidos}`, `infra=${nInfra}`,
     `rejeicoes=${nRejeicoes}`, `normalizacoes=${nNormalizacoes}`,
     composto ? `composto=1(val=${clienteValidador.nome})` : "composto=0",
     clamp ? "clamp=1" : "clamp=0",

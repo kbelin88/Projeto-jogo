@@ -38,6 +38,24 @@ function carregarEnv(caminho) {
   return process.env;
 }
 
+// ---- CONTRATO DE RETORNO (thinking sempre-ligado): todo gerar() devolve
+// { texto, raciocinio }. texto = resposta final (o que alimenta parsearOrdem,
+// SEM raciocinio); raciocinio = string do pensamento, ou null se o backend
+// nao suporta. Quem so quer a ordem le .texto; quem loga guarda .raciocinio.
+// separarThink: modelos Ollama estilo qwen3 emitem <think>...</think> inline
+// no data.response — extrai p/ raciocinio e limpa o texto. Sem bloco = null.
+function separarThink(s) {
+  s = s || "";
+  const blocos = [];
+  const re = /<think>([\s\S]*?)<\/think>/gi;
+  let m;
+  while ((m = re.exec(s))) blocos.push(m[1].trim());
+  if (!blocos.length) return { texto: s, raciocinio: null };
+  const texto = s.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  const raciocinio = blocos.join("\n").trim();
+  return { texto, raciocinio: raciocinio || null };
+}
+
 // ---- BACKEND: cliente Ollama (trocavel por um cliente de API depois) ----
 function clienteOllama(opcoes) {
   opcoes = opcoes || {};
@@ -61,7 +79,7 @@ function clienteOllama(opcoes) {
       this.ultimosTokens = (data.prompt_eval_count != null || data.eval_count != null)
         ? { prompt: data.prompt_eval_count || 0, resposta: data.eval_count || 0 }
         : null;
-      return data.response || "";
+      return separarThink(data.response || ""); // { texto, raciocinio }
     },
   };
 }
@@ -110,7 +128,9 @@ function clienteGemini(opcoes) {
           headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: temperatura },
+            // thinking sempre-ligado: pede os thought parts de volta (senao o
+            // texto do raciocinio nunca chega — so o thoughtsTokenCount).
+            generationConfig: { temperature: temperatura, thinkingConfig: { includeThoughts: true } },
           }),
         });
         if (resp.ok) {
@@ -120,8 +140,15 @@ function clienteGemini(opcoes) {
             ? { prompt: um.promptTokenCount || 0, resposta: (um.candidatesTokenCount || 0) + (um.thoughtsTokenCount || 0) }
             : null;
           const cand = data.candidates && data.candidates[0];
-          const parts = cand && cand.content && cand.content.parts;
-          return (parts || []).map((p) => p.text || "").join("");
+          const parts = (cand && cand.content && cand.content.parts) || [];
+          // CRITICO: separar por p.thought. Sem isso o raciocinio entra em
+          // texto e quebra o parsearOrdem (texto tem que ser SO o JSON).
+          let texto = "", raciocinio = "";
+          for (const p of parts) {
+            if (p.thought === true) raciocinio += p.text || "";
+            else texto += p.text || "";
+          }
+          return { texto, raciocinio: raciocinio || null };
         }
         const corpo = await resp.text().catch(() => "");
         const recuperavel = resp.status === 429 || resp.status === 503;
@@ -135,9 +162,86 @@ function clienteGemini(opcoes) {
   };
 }
 
+// ---- BACKEND: cliente OpenRouter (API OpenAI-compativel) — MESMA interface,
+// mesma disciplina do clienteGemini. Traz os modelos :free do OpenRouter p/ os
+// runners de linha de comando (antes so existia no index.html/browser).
+function clienteOpenRouter(opcoes) {
+  opcoes = opcoes || {};
+  const modelo = opcoes.modelo || "nvidia/nemotron-3-super-120b-a12b:free";
+  const temperatura = opcoes.temperatura != null ? opcoes.temperatura : 0;
+  carregarEnv();
+  const apiKey = opcoes.apiKey || process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error("OPENROUTER_API_KEY ausente (defina no .env desta pasta)");
+  const url = opcoes.url || "https://openrouter.ai/api/v1/chat/completions";
+  // Backoff SO p/ throttle de transporte (429/503) — mesma regra do Gemini:
+  // o modelo nunca respondeu, entao repetir nao "esconde" decisao ruim. NUNCA
+  // retry em resposta invalida (essa o Rei "passa" o turno).
+  const maxTentativas = opcoes.maxTentativas != null ? opcoes.maxTentativas : 6;
+  const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+  // OpenRouter sinaliza throttle via header Retry-After (segundos); as vezes um
+  // retryDelay/retry_after no corpo do erro. Respeitamos o que vier (como o Gemini).
+  function delayServidor(resp, corpo) {
+    const h = resp && resp.headers && resp.headers.get && resp.headers.get("retry-after");
+    if (h) { const s = parseFloat(h); if (isFinite(s)) return Math.ceil(s * 1000); }
+    const m = /"retry(?:_after|Delay)"\s*:\s*"?(\d+(?:\.\d+)?)s?"?/.exec(corpo || "");
+    return m ? Math.ceil(parseFloat(m[1]) * 1000) : null;
+  }
+  // PACING: piso entre chamadas. O free tier do OpenRouter tem janela PROPRIA
+  // (cota diaria por conta + rate por minuto), diferente dos 5 req/min do Gemini
+  // — por isso NAO herda o 13s do Gemini. Default folgado; suba via
+  // opcoes.minIntervaloMs se tomar 429. 0 desliga.
+  const minIntervaloMs = opcoes.minIntervaloMs != null ? opcoes.minIntervaloMs : 3000;
+  let ultimoEnvio = 0;
+  async function respeitarPiso() {
+    const faltam = minIntervaloMs - (Date.now() - ultimoEnvio);
+    if (faltam > 0) await espera(faltam);
+    ultimoEnvio = Date.now();
+  }
+  return {
+    nome: `openrouter:${modelo}`,
+    ultimosTokens: null, // E3/1b — mesmo canal lateral dos outros clientes
+    async gerar(prompt) {
+      for (let tentativa = 1; ; tentativa++) {
+        await respeitarPiso();
+        const resp = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + apiKey },
+          body: JSON.stringify({
+            model: modelo,
+            messages: [{ role: "user", content: prompt }],
+            temperature: temperatura,
+            stream: false,
+            reasoning: { enabled: true }, // thinking sempre-ligado
+          }),
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          const u = data.usage;
+          this.ultimosTokens = u ? { prompt: u.prompt_tokens || 0, resposta: u.completion_tokens || 0 } : null;
+          const msg = (data.choices && data.choices[0] && data.choices[0].message) || {};
+          // raciocinio em message.reasoning (texto) e/ou reasoning_details
+          // (estruturado); content = resposta final (SO o JSON de ordens).
+          let raciocinio = msg.reasoning || null;
+          if (!raciocinio && Array.isArray(msg.reasoning_details))
+            raciocinio = msg.reasoning_details.map((d) => (d && (d.text || d.summary)) || "").join("\n").trim() || null;
+          return { texto: msg.content || "", raciocinio };
+        }
+        const corpo = await resp.text().catch(() => "");
+        const recuperavel = resp.status === 429 || resp.status === 503;
+        if (!recuperavel || tentativa >= maxTentativas) {
+          throw new Error(`OpenRouter HTTP ${resp.status}: ${corpo}`);
+        }
+        const ms = delayServidor(resp, corpo) || Math.min(1000 * 2 ** tentativa, 40000);
+        await espera(ms + 500); // folga p/ a janela de quota virar
+      }
+    },
+  };
+}
+
 // criarCliente(id) — ponto unico p/ trocar qual modelo roda.
 // id = "backend:modelo" (ex.: "ollama:qwen2.5:3b", "ollama:llama3.2:3b",
-// "gemini:gemini-2.5-flash"). Split no PRIMEIRO ":" so: o backend e o
+// "gemini:gemini-2.5-flash", "openrouter:nvidia/nemotron-3-super-120b-a12b:free").
+// Split no PRIMEIRO ":" so: o backend e o
 // prefixo, o RESTO e o nome do modelo (que tambem tem ":" — qwen2.5:3b).
 // Sem o ":" o id inteiro vale como backend (cai no modelo default do cliente).
 // Sem argumento = "ollama:qwen2.5:3b" (comportamento de hoje).
@@ -151,7 +255,8 @@ function criarCliente(id, opcoes) {
   const opc = modelo ? Object.assign({}, opcoes, { modelo }) : opcoes;
   if (backend === "gemini") return clienteGemini(opc);
   if (backend === "ollama") return clienteOllama(opc);
-  throw new Error(`backend desconhecido: "${backend}" (use "ollama" ou "gemini")`);
+  if (backend === "openrouter") return clienteOpenRouter(opc);
+  throw new Error(`backend desconhecido: "${backend}" (use "ollama", "gemini" ou "openrouter")`);
 }
 
 // criarReiIA(cliente) -> decisor ASSINCRONO reiIA(visao) -> Promise<ordem>.
@@ -160,8 +265,8 @@ function criarCliente(id, opcoes) {
 function criarReiIA(cliente) {
   return async function reiIA(visao) {
     const prompt = Engine.montarPrompt(visao);
-    const cru = await cliente.gerar(prompt);
-    return Engine.parsearOrdem(cru).ordem;
+    const { texto } = await cliente.gerar(prompt); // so a ordem interessa aqui
+    return Engine.parsearOrdem(texto).ordem;
   };
 }
 
@@ -170,15 +275,15 @@ function criarReiIA(cliente) {
 async function decidirRei(estado, dono, cliente, opcoesPrompt) {
   const visao = Engine.montarVisao(estado, dono);
   const prompt = Engine.montarPrompt(visao, opcoesPrompt); // H2: variante opcional
-  let cru = "", erroRede = null;
-  try { cru = await cliente.gerar(prompt); }
+  let cru = "", raciocinio = null, erroRede = null;
+  try { const r = await cliente.gerar(prompt); cru = r.texto; raciocinio = r.raciocinio; }
   catch (e) { erroRede = e.message; }
   const p = Engine.parsearOrdem(cru);
   const diag = Engine.diagnosticarOrdem(estado, dono, p.ordem);
   return {
     ordem: p.ordem,
     registro: {
-      turno: estado.turno, dono, prompt, cru,
+      turno: estado.turno, dono, prompt, cru, raciocinio,
       erroRede,
       jsonValido: p.ok, erroParse: p.erro,
       normalizacoes: p.normalizacoes || [], // H3: cru -> canonico, p/ o log contar o desvio
@@ -214,7 +319,7 @@ function montarPromptValidador(visao, ordem) {
   // vazamento de papel que confunde validador 3B. Neutraliza SO AQUI
   // (o relatorioTexto do motor alimenta o prompt v2 do benchmark e fica
   // congelado; uma variavel por vez).
-  L.push(Engine.relatorioTexto(visao, { semRejeicoes: true })
+  L.push(Engine.relatorioTexto(visao, { semRejeicoes: true, semRede: true })
     .replace(/Voce e o Rei (\w+)\./, "Relatorio do Rei $1 (o jogador cuja ordem voce confere)."));
   L.push("");
   L.push("ORDEM PROPOSTA (confira item por item):");
@@ -234,12 +339,12 @@ async function decidirReiComposto(estado, dono, cliente, opcoesPrompt, composto)
   const visao = Engine.montarVisao(estado, dono);
   const prompt = Engine.montarPrompt(visao, opcoesPrompt);
 
-  let cru = "", erroRede = null;
-  try { cru = await cliente.gerar(prompt); }
+  let cru = "", raciocinio = null, erroRede = null;
+  try { const r = await cliente.gerar(prompt); cru = r.texto; raciocinio = r.raciocinio; }
   catch (e) { erroRede = e.message; }
   let p = Engine.parsearOrdem(cru);
 
-  const info = { chamadas: 1, veredito: "-", vetou: false, motivo: "", cruProposta: "", cruValidador: "" };
+  const info = { chamadas: 1, veredito: "-", vetou: false, motivo: "", cruProposta: "", cruValidador: "", raciocinioValidador: null };
 
   // So valida proposta parseavel COM conteudo: JSON invalido ou ordem vazia
   // nao tem o que conferir — segue direto (o motor e a rede final).
@@ -247,7 +352,9 @@ async function decidirReiComposto(estado, dono, cliente, opcoesPrompt, composto)
     (((p.ordem.construir || []).length + (p.ordem.envios || []).length) > 0);
   if (!erroRede && temConteudo) {
     let cruVal = "";
-    try { cruVal = await validador.gerar(montarPromptValidador(visao, p.ordem)); info.chamadas++; }
+    // O raciocinio do validador NAO e descartado: vai p/ info.raciocinioValidador
+    // (auditavel — por que ele vetou/aprovou), separado do texto do veredito.
+    try { const rv = await validador.gerar(montarPromptValidador(visao, p.ordem)); cruVal = rv.texto; info.raciocinioValidador = rv.raciocinio; info.chamadas++; }
     catch (e) { cruVal = ""; } // validador fora do ar -> segue sem validar
     info.cruValidador = cruVal;
     const linha1 = (cruVal || "").split("\n").map((s) => s.trim()).filter(Boolean)[0] || "";
@@ -265,7 +372,8 @@ async function decidirReiComposto(estado, dono, cliente, opcoesPrompt, composto)
         "ORDEM VETADA: " + JSON.stringify(p.ordem) + "\n" +
         "MOTIVO DO VETO: " + (info.motivo || "nao informado") + "\n" +
         "Corrija o problema e responda novamente APENAS com o JSON da ordem, no mesmo formato.";
-      try { cru = await cliente.gerar(promptRev); info.chamadas++; }
+      // revisao e a decisao FINAL: seu raciocinio sobrescreve o da proposta.
+      try { const rr = await cliente.gerar(promptRev); cru = rr.texto; raciocinio = rr.raciocinio; info.chamadas++; }
       catch (e) { erroRede = e.message; }
       p = Engine.parsearOrdem(cru);
     }
@@ -275,7 +383,7 @@ async function decidirReiComposto(estado, dono, cliente, opcoesPrompt, composto)
   return {
     ordem: p.ordem,
     registro: {
-      turno: estado.turno, dono, prompt, cru,
+      turno: estado.turno, dono, prompt, cru, raciocinio,
       erroRede,
       jsonValido: p.ok, erroParse: p.erro,
       normalizacoes: p.normalizacoes || [],
@@ -336,6 +444,10 @@ async function rodarPartidaRei(opcoes) {
   const maxTurnos = opcoes.maxTurnos || config.max_turnos || 500;
   const onTurno = opcoes.onTurno || function () {};
   const opcoesPrompt = opcoes.opcoesPrompt || undefined; // H2: { rejeicaoNoFim: true }
+  // ABORT DE INFRA: N erros de rede SEGUIDOS -> partida abortada (nao vira
+  // derrota falsa por turnos vazios). Zera a cada turno que o modelo responde.
+  const maxFalhasInfra = opcoes.maxFalhasInfra != null ? opcoes.maxFalhasInfra : 5;
+  let falhasInfraSeguidas = 0, abortadoInfra = null;
 
   const estado = Engine.criarEstadoInicial(config);
   const registros = [];
@@ -370,17 +482,32 @@ async function rodarPartidaRei(opcoes) {
         }
         registros.push(registro);
         onTurno(registro, estado);
+        // contador de infra: erro de rede seguido -> aborta; sucesso zera.
+        if (registro.erroRede) {
+          falhasInfraSeguidas++;
+          if (falhasInfraSeguidas >= maxFalhasInfra) {
+            abortadoInfra = { turno: estado.turno, falhasSeguidas: falhasInfraSeguidas };
+            console.error(`\n[ABORT-INFRA] ${falhasInfraSeguidas} erros de rede seguidos ate o turno ${estado.turno} -> partida abortada (nao contabilizada como derrota).`);
+            break; // sai do for(dono)
+          }
+        } else {
+          falhasInfraSeguidas = 0;
+        }
       } else {
         Engine.executarOrdem(estado, dono, Engine.jogadorBurro(Engine.montarVisao(estado, dono)));
       }
     }
+    if (abortadoInfra) break; // sai do while
     vencedor = Engine.checarVitoria(estado);
     if (vencedor) break;
   }
 
   return {
-    vencedor: vencedor || "limite",
-    motivo: vencedor ? (vencedor === "empate" ? "empate" : "eliminacao") : "limite",
+    vencedor: abortadoInfra ? "abortada-infra" : (vencedor || "limite"),
+    motivo: abortadoInfra
+      ? `abortada-infra (${abortadoInfra.falhasSeguidas} erros de rede seguidos @turno ${abortadoInfra.turno})`
+      : (vencedor ? (vencedor === "empate" ? "empate" : "eliminacao") : "limite"),
+    abortadoInfra, // null se a partida terminou normalmente
     turnos: estado.turno,
     ladoRei,
     registros,
@@ -389,4 +516,4 @@ async function rodarPartidaRei(opcoes) {
   };
 }
 
-module.exports = { clienteOllama, clienteGemini, criarCliente, carregarEnv, criarReiIA, decidirRei, decidirReiComposto, montarPromptValidador, avaliarCounter, rodarPartidaRei };
+module.exports = { clienteOllama, clienteGemini, clienteOpenRouter, criarCliente, carregarEnv, criarReiIA, decidirRei, decidirReiComposto, montarPromptValidador, avaliarCounter, rodarPartidaRei };

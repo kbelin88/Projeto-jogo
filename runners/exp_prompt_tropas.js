@@ -101,7 +101,7 @@ async function decidir(estado, cliente, variante) {
   const visao = Engine.montarVisao(estado, "B", variante === "P2" ? { minimos: true } : undefined);
   const prompt = Engine.montarPrompt(visao, { variante });
   let cru = "", erroRede = null;
-  try { cru = await cliente.gerar(prompt); } catch (e) { erroRede = e.message; }
+  try { cru = (await cliente.gerar(prompt)).texto; } catch (e) { erroRede = e.message; }
   const p = Engine.parsearOrdem(cru);
   const diag = Engine.diagnosticarOrdem(estado, "B", p.ordem);
   return { ordem: p.ordem, jsonValido: p.ok, erroRede, diag,

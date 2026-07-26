@@ -47,6 +47,13 @@ function imprimirTurno(reg) {
   console.log(`\n----- RESPOSTA CRUA DO MODELO (${etiqueta}, com a sujeira que vier) -----`);
   console.log(reg.erroRede ? "[ERRO DE REDE] " + reg.erroRede : JSON.stringify(reg.cru));
 
+  if (reg.raciocinio) {
+    console.log(`\n----- RACIOCINIO DO MODELO -----`);
+    console.log(reg.raciocinio);
+  } else {
+    console.log(`\n----- RACIOCINIO: (nao capturado) -----`);
+  }
+
   console.log(`\n----- JSON valido? ${reg.jsonValido ? "SIM" : "NAO — " + reg.erroParse} -----`);
 
   console.log("----- ORDEM PARSEADA -----");
@@ -83,7 +90,7 @@ function imprimirTurno(reg) {
     process.exit(2);
   }
 
-  console.log(`Partida: Rei ${ladoRei} (${cliente.nome}) vs jogadorBurro | maxTurnos=${maxTurnos}`);
+  console.log(`Partida: Rei ${ladoRei} (${cliente.nome}) vs jogadorBurro | maxTurnos=${maxTurnos} | thinking=on`);
   console.log("(o log por turno abaixo E o eval — leitura crua de como o Rei joga)\n");
 
   const t0 = Date.now();
@@ -96,16 +103,24 @@ function imprimirTurno(reg) {
   // ----------------- METRICAS (spec) -----------------
   const regs = res.registros;
   const nTurnos = regs.length;
-  const nValido = regs.filter((r) => r.jsonValido).length;
-  const nErroRede = regs.filter((r) => r.erroRede).length;
-  const nPassou = regs.filter((r) => !r.aceito.construir.length && !r.aceito.envios.length).length;
-  const nComRejeicao = regs.filter((r) => r.rejeicoes.length).length;
-  const nAceitouAlgo = regs.filter((r) => r.aceito.construir.length || r.aceito.envios.length).length;
+  // TRES CATEGORIAS de turno (handoff pend.1): (a) respondido, (b) invalido por
+  // falha do MODELO — conta contra validade, (c) invalido por falha de INFRA
+  // (erroRede) — NAO entra no denominador de agencia nem de validade. Metricas
+  // do modelo rodam SO sobre os turnos respondidos.
+  const nInfra = regs.filter((r) => r.erroRede).length;         // falha de rede (429/timeout)
+  const respondidos = regs.filter((r) => !r.erroRede);          // o modelo respondeu
+  const nValidos = respondidos.length;                          // denominador de agencia/validade
+  const nValido = respondidos.filter((r) => r.jsonValido).length;
+  const enviosAceitos = respondidos.reduce((s, r) => s + r.aceito.envios.length, 0);
+  const agencia = nValidos ? (enviosAceitos / nValidos).toFixed(2) : "n/a";
+  const nPassou = respondidos.filter((r) => !r.aceito.construir.length && !r.aceito.envios.length).length;
+  const nComRejeicao = respondidos.filter((r) => r.rejeicoes.length).length;
+  const nAceitouAlgo = respondidos.filter((r) => r.aceito.construir.length || r.aceito.envios.length).length;
 
   // METRICA-CHAVE da iteracao: ids reais da visao x ids inexistentes (copiados)
-  const nEmitiuIds = regs.filter((r) => r.ids.emitidos.length).length;
-  const nSoIdsReais = regs.filter((r) => r.ids.todosExistem).length;
-  const nComIdInexistente = regs.filter((r) => r.ids.inexistentes.length).length;
+  const nEmitiuIds = respondidos.filter((r) => r.ids.emitidos.length).length;
+  const nSoIdsReais = respondidos.filter((r) => r.ids.todosExistem).length;
+  const nComIdInexistente = respondidos.filter((r) => r.ids.inexistentes.length).length;
 
   const counters = regs.flatMap((r) => r.counter);
   const nCounterCerto = counters.filter((c) => c.ehCounter).length;
@@ -123,17 +138,18 @@ function imprimirTurno(reg) {
   console.log(`Vencedor: ${res.vencedor} (${res.motivo}) | duracao: ${res.turnos} turnos | tempo real: ${segundos}s`);
   console.log(`Aldeias finais — A(burro): ${Engine.aldeiasDe(res.estado, "A").length} | B(rei): ${Engine.aldeiasDe(res.estado, "B").length}`);
   console.log("");
-  console.log(`Turnos do Rei: ${nTurnos}`);
-  console.log(`  JSON valido            : ${nValido}/${nTurnos} (${pct(nValido, nTurnos)})`);
-  console.log(`  erro de rede           : ${nErroRede}`);
-  console.log(`  turnos em que "passou" : ${nPassou} (${pct(nPassou, nTurnos)})`);
-  console.log(`  turnos com >=1 rejeicao: ${nComRejeicao} (${pct(nComRejeicao, nTurnos)})`);
+  console.log(`Turnos do Rei: ${nTurnos} (respondidos: ${nValidos} | infra-falhas: ${nInfra})`);
+  console.log(`  AGENCIA                : ${enviosAceitos} envios -> ${agencia} envios/turno (sobre ${nValidos} validos)`);
+  console.log(`  JSON valido            : ${nValido}/${nValidos} (${pct(nValido, nValidos)})`);
+  console.log(`  infra-falhas (erroRede): ${nInfra} (fora de agencia e validade)`);
+  console.log(`  turnos em que "passou" : ${nPassou} (${pct(nPassou, nValidos)})`);
+  console.log(`  turnos com >=1 rejeicao: ${nComRejeicao} (${pct(nComRejeicao, nValidos)})`);
   console.log("");
-  console.log(`ANCORAGEM (metrica-chave da iteracao):`);
-  console.log(`  turnos que emitiram algum id     : ${nEmitiuIds} (${pct(nEmitiuIds, nTurnos)})`);
-  console.log(`  turnos SO com ids reais da visao : ${nSoIdsReais} (${pct(nSoIdsReais, nTurnos)})`);
-  console.log(`  turnos com >=1 id INEXISTENTE    : ${nComIdInexistente} (${pct(nComIdInexistente, nTurnos)})`);
-  console.log(`  turnos com >=1 ordem ACEITA      : ${nAceitouAlgo} (${pct(nAceitouAlgo, nTurnos)})`);
+  console.log(`ANCORAGEM (metrica-chave da iteracao — sobre turnos respondidos):`);
+  console.log(`  turnos que emitiram algum id     : ${nEmitiuIds} (${pct(nEmitiuIds, nValidos)})`);
+  console.log(`  turnos SO com ids reais da visao : ${nSoIdsReais} (${pct(nSoIdsReais, nValidos)})`);
+  console.log(`  turnos com >=1 id INEXISTENTE    : ${nComIdInexistente} (${pct(nComIdInexistente, nValidos)})`);
+  console.log(`  turnos com >=1 ordem ACEITA      : ${nAceitouAlgo} (${pct(nAceitouAlgo, nValidos)})`);
   console.log("");
   console.log(`Counter vs neutra (achado):`);
   console.log(`  envios aceitos contra neutra : ${counters.length}`);

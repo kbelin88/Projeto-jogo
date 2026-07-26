@@ -14,8 +14,8 @@ function fetchFalso(corpo) {
 caso("ollama reporta -> ultimosTokens preenchido", async () => {
   global.fetch = fetchFalso({ response: "OI", prompt_eval_count: 123, eval_count: 45 });
   const c = clienteOllama({ modelo: "fake" });
-  const txt = await c.gerar("prompt qualquer");
-  if (txt !== "OI") throw new Error("gerar() mudou de contrato: " + txt);
+  const { texto } = await c.gerar("prompt qualquer"); // contrato: { texto, raciocinio }
+  if (texto !== "OI") throw new Error("gerar() mudou de contrato: " + texto);
   if (!c.ultimosTokens) throw new Error("ultimosTokens vazio com backend reportando");
   if (c.ultimosTokens.prompt !== 123 || c.ultimosTokens.resposta !== 45)
     throw new Error("tokens errados: " + JSON.stringify(c.ultimosTokens));
