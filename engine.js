@@ -1158,11 +1158,28 @@
     const L = [];
 
     const passoRef = cfg.velocidade_passo[cfg.relatorio.velocidade_referencia];
-    // turnos de marcha da MINHA aldeia mais proxima ate (x,y)
-    const marcha = (x, y) => {
+    // L3 (26/07): a marcha mostrada usa a distancia PELA REDE DE ESTRADAS (a
+    // mesma rota que o motor viaja em enviarExercito), nao a linha reta. Antes
+    // era Math.hypot -> o numero divergia do que o motor praticava e o modelo
+    // se confundia (o Nemotron flagrou "that seems off"). Reusa as funcoes do
+    // motor (caminhoEntre + distanciaRota) via um shim SO-LEITURA montado da
+    // visao: minhas+alvos trazem id/x/y e visao.estradas e o adj. Sem rede
+    // (estados sinteticos), cai na linha reta de antes. passoRef inalterado:
+    // o relatorio nao sabe a composicao do exercito, entao segue a velocidade
+    // de referencia (mesma aproximacao de sempre) — a correcao e so a DISTANCIA.
+    const temRede = !!visao.estradas;
+    const shim = temRede ? { estradas: { adj: visao.estradas }, aldeias: visao.minhas.concat(visao.alvos) } : null;
+    // turnos de marcha da MINHA aldeia mais proxima (POR ESTRADA) ate o alvo
+    const marcha = (alvo) => {
       let best = Infinity;
       for (const m of visao.minhas) {
-        const d = Math.hypot(m.x - x, m.y - y);
+        let d;
+        if (temRede) {
+          const caminho = caminhoEntre(shim, m.id, alvo.id);
+          d = caminho ? distanciaRota(shim, caminho) : Math.hypot(m.x - alvo.x, m.y - alvo.y);
+        } else {
+          d = Math.hypot(m.x - alvo.x, m.y - alvo.y);
+        }
         if (d < best) best = d;
       }
       return best === Infinity ? "?" : Math.max(1, Math.ceil(best / passoRef));
@@ -1228,7 +1245,7 @@
 
     // ALDEIAS NEUTRAS (ordenadas por distancia da minha mais proxima)
     const neutras = visao.alvos.filter((a) => a.dono === null)
-      .map((a) => ({ a, t: marcha(a.x, a.y) }))
+      .map((a) => ({ a, t: marcha(a) }))
       .sort((p, q) => p.t - q.t || p.a.id - q.a.id);
     L.push(`=== ALDEIAS NEUTRAS (${neutras.length}) - ordenadas por distancia da sua mais proxima ===`);
     for (const { a, t } of neutras) {
@@ -1238,7 +1255,7 @@
 
     // INIMIGO
     const inimigas = visao.alvos.filter((a) => a.dono === inimigo)
-      .map((a) => ({ a, t: marcha(a.x, a.y) }))
+      .map((a) => ({ a, t: marcha(a) }))
       .sort((p, q) => p.t - q.t || p.a.id - q.a.id);
     L.push(`=== INIMIGO (Rei ${inimigo}) - ${inimigas.length} aldeia(s) ===`);
     if (!inimigas.length) L.push("(nenhuma aldeia inimiga)");
