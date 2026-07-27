@@ -1831,11 +1831,21 @@
   // A pagina abre via file:// (origin "null") e o Ollama bloqueia por CORS
   // por padrao -> precisa de OLLAMA_ORIGINS=* (o alerta do runDuelo instrui).
   const OLLAMA_URL = "http://localhost:11434/api/generate";
+  // JANELA DE CONTEXTO EXPLICITA (achado de 27/07/2026, ver
+  // docs/ACHADO_2026-07-27_truncamento_ollama.txt). Sem num_ctx o Ollama usa
+  // 4096 e, quando o prompt passa disso, DESCARTA METADE DA JANELA em silencio
+  // — e a metade descartada e o COMECO (identidade + tarefa + parte do
+  // relatorio), porque a politica de corte foi desenhada p/ chat, onde o fim
+  // e o que importa. O prompt do jogo cruza 4096 por volta do T15: dali em
+  // diante o modelo jogava vendo ~2050 de ~4700 tokens, sem erro nenhum.
+  // 8192 cobre o pior prompt medido (4755) com folga e custa ~0.1 GB de VRAM
+  // nos 3B (segue 100% na GPU). 16384 derrama p/ CPU na 3050 Ti — nao subir.
+  const OLLAMA_NUM_CTX = 8192;
   async function gerarOllama(prompt, modelo) {
     const resp = await fetch(OLLAMA_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: modelo, prompt, stream: false, options: { temperature: tempLLM } }),
+      body: JSON.stringify({ model: modelo, prompt, stream: false, options: { temperature: tempLLM, num_ctx: OLLAMA_NUM_CTX } }),
     });
     if (!resp.ok) throw new Error("Ollama HTTP " + resp.status);
     const data = await resp.json();

@@ -60,7 +60,10 @@ function clienteStream(modelo) {
       try {
         const resp = await fetch("http://localhost:11434/api/generate", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ model: modelo, prompt, stream: true, options: { temperature: 0 } }),
+          // num_ctx explicito: sem ele o Ollama corta o prompt em silencio a
+          // partir de 4096 tok (achado de 27/07, ver docs/ACHADO_2026-07-27_
+          // truncamento_ollama.txt). Tem que casar com o rei.js.
+          body: JSON.stringify({ model: modelo, prompt, stream: true, options: { temperature: 0, num_ctx: 8192 } }),
           signal: ac.signal,
         });
         if (!resp.ok) throw new Error(`Ollama HTTP ${resp.status}`);
