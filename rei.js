@@ -56,12 +56,25 @@ function separarThink(s) {
   return { texto, raciocinio: raciocinio || null };
 }
 
+// JANELA DE CONTEXTO EXPLICITA (achado de 27/07/2026, ver
+// docs/ACHADO_2026-07-27_truncamento_ollama.txt). Sem num_ctx o Ollama usa 4096
+// e, quando o prompt passa disso, DESCARTA METADE DA JANELA em silencio — e a
+// metade descartada e o COMECO (identidade + tarefa + parte do relatorio),
+// porque a politica de corte foi desenhada p/ chat, onde o fim e o que importa.
+// O prompt do jogo cruza 4096 por volta do T15: dali em diante o modelo jogava
+// vendo ~2050 de ~4700 tokens, sem erro nenhum — formato perfeito, jogo nenhum.
+// 8192 cobre o pior prompt medido (4755) com folga e custa ~0.1 GB de VRAM nos
+// 3B (segue 100% na GPU). 16384 derrama p/ CPU na 3050 Ti — nao subir sem medir.
+// Guarda de regressao: node runners/medir_contexto.js --ctx 8192
+const OLLAMA_NUM_CTX = 8192;
+
 // ---- BACKEND: cliente Ollama (trocavel por um cliente de API depois) ----
 function clienteOllama(opcoes) {
   opcoes = opcoes || {};
   const url = opcoes.url || "http://localhost:11434/api/generate";
   const modelo = opcoes.modelo || "qwen2.5:3b";
   const temperatura = opcoes.temperatura != null ? opcoes.temperatura : 0;
+  const numCtx = opcoes.numCtx != null ? opcoes.numCtx : OLLAMA_NUM_CTX;
   return {
     nome: `ollama:${modelo}`,
     // E3/1b — canal LATERAL de tokens: gerar() segue devolvendo so a string
@@ -72,7 +85,7 @@ function clienteOllama(opcoes) {
       const resp = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: modelo, prompt, stream: false, options: { temperature: temperatura } }),
+        body: JSON.stringify({ model: modelo, prompt, stream: false, options: { temperature: temperatura, num_ctx: numCtx } }),
       });
       if (!resp.ok) throw new Error(`Ollama HTTP ${resp.status}`);
       const data = await resp.json();

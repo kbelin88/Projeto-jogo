@@ -1,0 +1,268 @@
+============================================================
+ ACHADO 27/07/2026 — O OLLAMA TRUNCA O PROMPT EM SILENCIO
+ (e por isso os modelos locais "nao conseguem desenvolver um jogo")
+============================================================
+
+ORIGEM: o Lucas ia rodar uma bateria de 10 partidas por modelo p/
+decidir quais modelos locais aposentar. Antes de desenhar o protocolo,
+medimos o prompt de hoje. O teste ficou p/ outro dia; este documento
+guarda o que a medicao mostrou.
+
+RESUMO EM UMA LINHA: a partir do T15, todo modelo local joga vendo
+menos da metade do relatorio, sem nenhum erro visivel. Nao e teto de
+capacidade dos modelos — e a bancada.
+
+INSTRUMENTO PERMANENTE: runners/medir_contexto.js (repro de tudo aqui).
+
+
+------------------------------------------------------------
+1. O QUE FOI MEDIDO
+------------------------------------------------------------
+Prompt real do jogo (seed 1, burro vs burro so p/ crescer o mapa) vs
+o que o Ollama diz ter avaliado (prompt_eval_count). Modelo qwen2.5:3b,
+Ollama 0.32.3.
+
+  turno | chars | real (tok) | o modelo ve | veredito
+  ------+-------+------------+-------------+---------------------------
+  T1    |  5807 |    2343    |    2343     | ok
+  T5    |  6703 |    2701    |    2701     | ok
+  T10   |  9825 |    3979    |    3979     | ok
+  T15   | 11245 |    4564    |    2050     | CORTOU  -2514 (55% perdido)
+  T20   | 11623 |    4724    |    2050     | CORTOU  -2674 (57% perdido)
+  T30   | 11685 |    4755    |    2050     | CORTOU  -2705 (57% perdido)
+
+O penhasco e exatamente 4096. Varredura com prompt sintetico:
+
+  4065 tok -> passa inteiro
+  4525 tok -> despenca p/ 2050
+  5445 tok -> despenca p/ 2050   (o teto e fixo, nao proporcional)
+
+CAUSA NO CODIGO: gerarOllama (index.html, ~L1838) e clienteOllama
+(rei.js, ~L75) mandam so { temperature }. Nenhum num_ctx. O default do
+Ollama 0.32.3 e 4096.
+
+O prompt cresceu ate cruzar 4096 quando a rede de estradas entrou no
+relatorio (ver memoria "estradas-no-prompt-estado"). Em 20/07 o prompt
+tinha 1352 tokens e o truncamento foi descartado como hipotese — com
+razao, na epoca. O chao mudou embaixo do teste.
+
+
+------------------------------------------------------------
+2. QUAL METADE SOME: O COMECO
+------------------------------------------------------------
+Sonda com a mesma senha em duas posicoes, prompt de 5463 tokens,
+pergunta sempre no fim:
+
+  senha no TOPO, ctx folgado : "BANANA"
+  senha no TOPO, default     : "Nao ha uma senha mencionada no texto"  <-- apagada
+  senha no FIM,  ctx folgado : "BANANA"
+  senha no FIM,  default     : "BANANA"
+
+Ele joga fora o comeco e guarda o fim.
+
+Agora cruze com a ordem do montarPrompt:
+  TOPO  = identidade + tarefa          -> APAGADO
+  MEIO  = relatorio (aldeias, estradas)-> APAGADO em boa parte
+  FIM   = formato JSON + exemplo ancorado -> SEMPRE SOBREVIVE
+
+Retrato que isso produz: formato perfeito, jogo nenhum. Que e
+exatamente a assinatura de falha que perseguimos ha meses
+("validade alta + agencia baixa"). E explica retroativamente o velho
+"o modelo copia o exemplo": o exemplo e a unica coisa que nunca e
+cortada.
+
+
+------------------------------------------------------------
+3. POR QUE O OLLAMA FAZ ISSO
+------------------------------------------------------------
+Nao sao os modelos que cortam. O modelo nunca ve o prompt inteiro —
+quem corta e o servidor, antes de qualquer token chegar na rede.
+
+(a) POR QUE EXISTE LIMITE. Ao carregar o modelo, o Ollama pre-aloca na
+    VRAM um buffer de tamanho fixo (o KV cache) dimensionado por
+    num_ctx. E memoria de trabalho da atencao, decidida no
+    carregamento; nao da p/ crescer no meio da requisicao.
+    ATENCAO A PEGADINHA: /api/tags anuncia context_length 32768 p/ o
+    qwen2.5:3b. Isso e o que o modelo foi TREINADO p/ aguentar, nao o
+    que esta alocado. O Ollama aloca 4096 por default, como teto de
+    seguranca de memoria.
+
+(b) POR QUE METADE, E NAO SO O EXCEDENTE. Otimizacao herdada do
+    llama.cpp: se aparasse so o suficiente p/ caber (4724 -> 4096), o
+    primeiro token GERADO ja estouraria de novo, disparando outro corte
+    por token, cada um reprocessando o cache. Descartando metade da
+    janela de uma vez, compra ~2048 tokens de folga e corta uma vez so.
+    Troca contexto por vazao. Dai o 2050 constante = 2048 + tokens
+    especiais reinseridos depois do corte.
+    (Isto e a racionalizacao do mecanismo, da linhagem llama.cpp; nao
+    abrimos o fonte do 0.32.3 linha a linha. O resto desta secao 1-2
+    foi MEDIDO nesta maquina.)
+
+(c) POR QUE GUARDA O FIM. A politica foi desenhada p/ CHAT, onde o fim
+    e a pergunta atual e o comeco sao turnos velhos descartaveis. Boa
+    heuristica nesse formato. O nosso prompt nao e chat: e um documento
+    unico com a tarefa no topo e o mapa no meio. A heuristica do chat,
+    aplicada a esse formato, preserva a parte cerimonial e apaga a
+    parte informativa.
+
+(d) POR QUE NINGUEM PERCEBEU. O modelo nao tem como saber que foi
+    truncado: recebe um texto que comeca no meio de uma lista de
+    aldeias e trata aquilo como o mundo inteiro. Sem sinal de corte,
+    sem erro, HTTP 200, JSON bem formado. Responde com confianca total
+    sobre metade do mapa. A unica testemunha e o prompt_eval_count, que
+    ninguem olhava por nao ser metrica de jogo.
+
+
+------------------------------------------------------------
+4. CUSTO DE VRAM DO num_ctx (medido nesta maquina)
+------------------------------------------------------------
+RTX 3050 Ti Laptop, 4096 MiB total (~3.5 GB livres).
+Lido em `ollama ps` logo apos carregar com cada janela:
+
+  modelo        num_ctx |  tamanho | processador
+  ----------------------+----------+---------------------
+  qwen2.5:3b       4096 |   2.2 GB | 100% GPU
+  qwen2.5:3b       8192 |   2.3 GB | 100% GPU        <-- +0.1 GB, de graca
+  qwen2.5:3b      16384 |   2.9 GB | 79% GPU / 21% CPU
+  llama3.1:8b      4096 |   5.6 GB | 42% GPU / 58% CPU
+  llama3.1:8b      8192 |   6.2 GB | 36% GPU / 64% CPU
+
+LEITURA: 8192 e praticamente de graca nos 3B (o custo do KV cache e
+pequeno perto do peso do modelo) e cabe 100% na GPU. 16384 estoura e
+derrama p/ CPU. O 8B ja estava derramando com 4096 — subir p/ 8192
+piora pouco algo que ja estava ruim.
+
+RECOMENDACAO: num_ctx = 8192 explicito nos dois clientes. Cobre o pior
+prompt medido (4755) com folga de ~70% p/ o mapa crescer.
+
+
+------------------------------------------------------------
+5. CONTORNOS (do mais direto ao mais estrutural)
+------------------------------------------------------------
+1) num_ctx: 8192 explicito. Nao e contorno, e o conserto. Custo ~0.1 GB
+   nos 3B. [APLICADO em 27/07/2026 — ver secao 9]
+
+2) GUARDA NA BANCADA. Comparar prompt_eval_count com o tamanho esperado
+   a cada turno e marcar o turno como contaminado se divergir. E a licao
+   dos dois bugs de metrica silenciosos que ja nos pegaram (o exemplo
+   fixo e o erroRede virando turno valido): a bancada tem que gritar,
+   nao adivinhar. Base pronta em runners/medir_contexto.js.
+
+3) ENCOLHER O PROMPT. O lever de maior retorno, e independente do
+   num_ctx: relatorio so com a vizinhanca relevante, tabela de estradas
+   comprimida, exemplo ancorado mais curto. Ajuda TODO modelo (inclusive
+   os pagos, onde token custa dinheiro) e melhora o sinal do benchmark.
+
+4) REORDENAR O PROMPT. Mesmo com janela folgada, o FIM e a regiao mais
+   protegida contra qualquer truncamento futuro. Vale mover o essencial
+   (objetivo, regras de movimento) p/ perto do fim, e deixar no topo o
+   que da p/ perder. Defesa em profundidade.
+
+5) KV CACHE QUANTIZADO (OLLAMA_FLASH_ATTENTION=1 +
+   OLLAMA_KV_CACHE_TYPE=q8_0) — corta ~metade da memoria do KV cache e
+   deixaria 16384 caber na GPU nos 3B. CUIDADO: muda a numerica do
+   modelo e portanto MUDA O SUJEITO do benchmark, mesma objecao do
+   reasoning:{enabled:false} do Nemotron. So com decisao explicita e
+   registrada. NAO usar no meio de uma serie ja comecada.
+
+6) OLLAMA_CONTEXT_LENGTH (env do servidor) resolve global, mas depende
+   de como o servidor foi iniciado — fragil e invisivel no repo.
+   Prefira o num_ctx por requisicao, que fica versionado no codigo.
+
+
+------------------------------------------------------------
+6. IMPACTO NOS DADOS ANTIGOS
+------------------------------------------------------------
+Todo eval LOCAL (Ollama) rodado depois que as estradas entraram no
+relatorio esta viesado a partir do ~T15. Antes disso o prompt nao
+cruzava 4096 e os dados valem.
+
+NAO afeta: Gemini, Grok, OpenRouter (Nemotron etc.) — o corte e do
+runtime local. O salto de patamar do Nemotron 120B continua valido.
+
+Mesma familia do bug corrigido em 241b658 (erro de rede virando turno
+valido): metrica que parecia boa porque a falha era muda.
+
+
+------------------------------------------------------------
+7. PROTOCOLO PROPOSTO P/ QUANDO O TESTE VOLTAR
+------------------------------------------------------------
+PASSO 0: FEITO em 27/07 (secao 9). Falta so medir tempo/turno por
+modelo p/ dimensionar a bateria antes de disparar.
+
+A hipotese que faltava na lista do Lucas (prompt / memoria do modelo /
+contexto do turno / capacidade) era uma quinta: BANCADA. Depois do
+passo 0 ela sai da mesa e as outras quatro ficam testaveis.
+
+1) PROVA ESCRITA ANTES DAS PARTIDAS. Nos moldes do eval_validador.js:
+   estado real deterministico + ~20 perguntas com gabarito do proprio
+   motor ("quantos arqueiros em [12]?", "qual neutra mais perto de [7]
+   pela estrada?", "da p/ pagar 3 lanceiros?"). Separa "nao entendeu o
+   relatorio" de "entendeu e jogou mal" em minutos, nao em horas. E a
+   hipotese "incapacidade com o contexto do turno" virando numero.
+
+2) DOSE-RESPOSTA DE PROMPT — o teste que decide aposentar ou nao.
+   Mesmo modelo, mesmas seeds, relatorio em 3 tamanhos (completo / sem
+   estradas / so vizinhanca). Se o desempenho VOLTA com prompt curto, e
+   contexto, e o veredito e "cortar o relatorio", nao "cortar o modelo".
+   Se nao volta com nada, ai sim e teto de capacidade. 10 partidas
+   cegas nao respondem isso; esta responde.
+
+3) PISO E TETO NA MESMA BATERIA. Burro (piso) e Nemotron 120B (teto)
+   nas mesmas seeds. Sem regua, "10 partidas ruins" nao vira veredito;
+   com regua, "perde do burro em 8/10" vira.
+
+4) SEEDS PAREADAS. As mesmas 10 seeds p/ todos os modelos, todos vs
+   burro (nao modelo vs modelo, que confunde duas variaveis). Pareamento
+   derruba mais variancia do que aumentar o n.
+
+5) CRITERIO DE CORTE ESCRITO ANTES DE RODAR (gabarito, como sempre).
+   Ex.: apto = >=80% turnos validos E agencia >=1,0 envio/turno E >=3
+   vitorias em 10 contra o burro.
+
+DISTINCAO P/ O VEREDITO FINAL: "reprovado no benchmark" != "fora do
+jogo". Um 3B pode ser inutil como jogador e seguir util como oponente
+barato.
+
+
+------------------------------------------------------------
+8. COMO REPRODUZIR
+------------------------------------------------------------
+  node runners/medir_contexto.js                      (default do Ollama)
+  node runners/medir_contexto.js --ctx 8192            (depois do conserto)
+  node runners/medir_contexto.js --modelo llama3.2:3b --turnos 40
+
+  Custo de VRAM: carregar com o num_ctx desejado e ler `ollama ps`
+  (colunas SIZE / PROCESSOR / CONTEXT).
+
+
+------------------------------------------------------------
+9. CONSERTO APLICADO (27/07/2026)
+------------------------------------------------------------
+num_ctx: 8192 explicito nos TRES pontos que falam com o Ollama (eram
+dois na primeira leitura; o terceiro apareceu no grep por "11434"):
+
+  index.html   ~L1833  const OLLAMA_NUM_CTX = 8192  -> gerarOllama
+  rei.js       ~L59    const OLLAMA_NUM_CTX = 8192  -> clienteOllama
+                       (sobrescrivel por opcoes.numCtx)
+  runners/exp_prompt_tropas.js ~L63  clienteStream (tem que casar com
+                       o rei.js, senao o experimento roda com outra
+                       janela que o jogo)
+
+VERIFICACAO (as tres):
+  1. medir_contexto.js --ctx 8192, T1..T30: zero corte
+     (T30 real 4755 = visto 4755; antes era 2050).
+  2. Ponta a ponta pelo caminho de producao: prompt do T30 via
+     Rei.clienteOllama().gerar() -> ultimosTokens.prompt = 4755,
+     resposta JSON bem formada.
+  3. Testes de guarda verdes: test_v1_peca2_prompt, _parsing,
+     test_v1_peca1, test_v1_relatorio, test_peca6_estradas.
+
+NAO MEXEMOS em montarPrompt, formato, ordem do prompt nem em nada de
+jogo — o conserto e so a janela. Os contornos 3 e 4 da secao 5
+(encolher e reordenar o prompt) seguem em aberto e valem por si.
+
+REGRESSAO A VIGIAR: se o mapa crescer muito ou o relatorio ganhar mais
+secoes, 8192 volta a ser apertado. Rodar medir_contexto.js depois de
+qualquer mudanca que engorde o prompt.
+============================================================
