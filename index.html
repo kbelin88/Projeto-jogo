@@ -405,6 +405,7 @@
 </div>
 
 <script src="world.js"></script>
+<script src="world-iberia.js"></script>
 <script src="engine.js"></script>
 <script>
 (() => {
@@ -417,7 +418,7 @@
 
   // ---------- Configuração de render ----------
   const TILE = 32;          // pixels de mundo por coordenada
-  const MIN_SCALE = 0.55;   // zoom máximo afastado (folga p/ ver todo o teatro)
+  let MIN_SCALE = 0.55;     // zoom máximo afastado (folga p/ ver todo o teatro)
   const MAX_SCALE = 4.0;    // zoom máximo aproximado (vilas detalhadas)
 
   // ---------- Canvas ----------
@@ -448,9 +449,43 @@
     panY = VH / 2 - cy * TILE * scale;
   }
 
+  // ---------- MAPA DA IBERIA (mapa autoral) ----------
+  // As cidades vem em px do viewBox do world-iberia ('130 144 1429 886'), nao
+  // em celula de mundo. IB converte para a MESMA unidade que a camera usa,
+  // entao todo o resto do render (pan, zoom, clamp) continua valendo.
+  //
+  // O fundo cobre o retangulo do viewBox com escala uniforme ancorada no topo
+  // (preserveAspectRatio="xMidYMin slice"). E a amarra entre a imagem e as
+  // x,y calibradas: qualquer outro encaixe desloca as cidades.
+  const IB = (Engine.CONFIG.layout === "iberia" && typeof Iberia !== "undefined") ? {
+    ox: 130, oy: 144, larg: 1429, alt: 886,
+    // Quantas CELULAS o mapa ocupa. Nao e arbitrario: o sprite de capital tem
+    // 3.2 celulas de largura e o de aldeia 2.4, entao as duas cidades mais
+    // proximas (Lisboa-Santarem, 65.6px de viewBox) precisam ficar a mais de
+    // 2.8 celulas uma da outra. 90 celulas -> 4.1, com folga.
+    largCels: 90,
+    img: null, pronto: false,
+  } : null;
+  if (IB) {
+    IB.div = IB.larg / IB.largCels;
+    IB.cels = { w: IB.largCels, h: IB.alt / IB.div };   // 90 x ~55.8 celulas
+    MIN_SCALE = 0.20;      // o mapa inteiro e maior que o teatro procedural
+    IB.img = new Image();
+    IB.img.onload = () => { IB.pronto = true; draw(); };
+    IB.img.src = "Generated%20Image%20July%2027,%202026%20-%2012_32AM.png";
+  }
+  // px do viewBox -> celula de mundo. Sem Iberia: identidade.
+  const celX = (v) => (IB ? (v - IB.ox) / IB.div : v);
+  const celY = (v) => (IB ? (v - IB.oy) / IB.div : v);
+  // celula -> tela. No mapa procedural a coordenada e o CANTO da celula (dai o
+  // + cs/2 para centralizar); na Iberia ela ja e a ancora exata da cidade.
+  const SX = (v) => celX(v) * (TILE * scale) + panX + (IB ? 0 : TILE * scale / 2);
+  const SY = (v) => celY(v) * (TILE * scale) + panY + (IB ? 0 : TILE * scale / 2);
+
   // Prende a câmera às bordas do mundo: o mapa sempre preenche a tela toda
   function clampPan() {
-    const cs = TILE * scale, wpx = WORLD * cs, wpy = WORLD * cs;
+    const cs = TILE * scale;
+    const wpx = (IB ? IB.cels.w : WORLD) * cs, wpy = (IB ? IB.cels.h : WORLD) * cs;
     panX = wpx >= VW ? Math.min(0, Math.max(VW - wpx, panX)) : (VW - wpx) / 2;
     panY = wpy >= VH ? Math.min(0, Math.max(VH - wpy, panY)) : (VH - wpy) / 2;
   }
@@ -733,6 +768,21 @@
     clampPan();
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     ctx.clearRect(0, 0, VW, VH);
+
+    // MAPA DA IBERIA: o fundo e a imagem limpa; o motor desenha o resto por
+    // cima lendo o world-iberia. Nada de terreno procedural aqui.
+    if (IB) {
+      ctx.fillStyle = "#1d4a5c";                      // mar, fora da imagem
+      ctx.fillRect(0, 0, VW, VH);
+      if (IB.pronto) {
+        const cs0 = TILE * scale;
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(IB.img, panX, panY, IB.cels.w * cs0, IB.cels.h * cs0);
+      }
+      desenharEstradasIberia();
+      drawGame();
+      return;
+    }
 
     // céu/fundo de água profunda
     ctx.fillStyle = "#6fa867";
@@ -1523,6 +1573,12 @@
 
   // enquadra a camera no teatro da partida
   function enquadrarTeatro() {
+    if (IB) {                                  // Iberia: enquadra o mapa inteiro
+      const fit = Math.min(VW / (IB.cels.w * TILE), VH / (IB.cels.h * TILE));
+      scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, fit));
+      centerOn(IB.cels.w / 2, IB.cels.h / 2);
+      return;
+    }
     const t = Engine.CONFIG.teatro;
     const fit = Math.min(VW / (t.w * TILE), VH / (t.h * TILE));
     scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, fit * 0.96));
@@ -2179,6 +2235,32 @@
     return { x: pts[pts.length - 1].x, y: pts[pts.length - 1].y, seg: pts.length - 2 };
   }
 
+  // As 41 estradas do world-iberia, desenhadas do arquivo (nao derivadas).
+  // Tracejado = via de contorno; a espessura segue o custo, entao serra
+  // (cara) aparece mais fina que costa (barata) — a rede conta o terreno.
+  function desenharEstradasIberia() {
+    if (!IB || !game) return;
+    const porSlug = {};
+    for (const a of game.aldeias) porSlug[a.slug] = a;
+    const contorno = new Set((Iberia.MAPA.viasDeContorno || []).map((p) => p.slice().sort().join("|")));
+    ctx.save();
+    ctx.lineCap = "round";
+    for (const e of Iberia.ESTRADAS) {
+      const a = porSlug[e.de], b = porSlug[e.para];
+      if (!a || !b) continue;
+      const ehContorno = contorno.has([e.de, e.para].slice().sort().join("|"));
+      ctx.strokeStyle = "rgba(244,230,200,.55)";
+      ctx.lineWidth = Math.max(1.2, (TILE * scale) * (ehContorno ? 0.045 : 0.075));
+      ctx.setLineDash(ehContorno ? [10, 8] : []);
+      ctx.beginPath();
+      ctx.moveTo(SX(a.x), SY(a.y));
+      ctx.lineTo(SX(b.x), SY(b.y));
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
   function drawGame() {
     if (!game) return;
     const cs = TILE * scale;
@@ -2188,7 +2270,7 @@
     // o mapa vira paisagem. territorioCelulas() segue definida caso volte.
 
     for (const a of game.aldeias) {
-      const sx = a.x * cs + panX + cs / 2, sy = a.y * cs + panY + cs / 2;
+      const sx = SX(a.x), sy = SY(a.y);
       if (sx < -60 || sy < -60 || sx > VW + 60 || sy > VH + 60) continue;
       const col = a.dono === null ? COR.neutra : COR[a.dono];
       const r = Math.max(20, cs * 0.59);
@@ -2228,9 +2310,9 @@
       const prog = m.turnosTotal ? (m.turnosTotal - m.turnosRestantes) / m.turnosTotal : 1;
       const pts = pontosCaminho(m);                       // motor #1: segue a estrada
       const p = pts ? pontoNaRota(pts, prog) : { x: lerp(o.x, d.x, prog), y: lerp(o.y, d.y, prog), seg: 0 };
-      const mx = p.x * cs + panX + cs / 2;
-      const my = p.y * cs + panY + cs / 2;
-      const dx = d.x * cs + panX + cs / 2, dy = d.y * cs + panY + cs / 2;
+      const mx = SX(p.x);
+      const my = SY(p.y);
+      const dx = SX(d.x), dy = SY(d.y);
       const col = COR[m.dono];
 
       // ALERTA DE ATAQUE (E2): a 1 turno de chegar, halo na COR DO
@@ -2259,7 +2341,7 @@
       const ehAtaque = d && d.dono !== m.dono;
       ctx.save();
       ctx.beginPath(); ctx.moveTo(mx, my);              // motor #1: rota restante pela estrada
-      if (pts) { for (let i = p.seg + 1; i < pts.length; i++) ctx.lineTo(pts[i].x * cs + panX + cs / 2, pts[i].y * cs + panY + cs / 2); }
+      if (pts) { for (let i = p.seg + 1; i < pts.length; i++) ctx.lineTo(SX(pts[i].x), SY(pts[i].y)); }
       else ctx.lineTo(dx, dy);
       if (ehAtaque) {
         // E2: rota de ataque = pontilhado PRETO fino, do ponto atual ao
@@ -2309,7 +2391,7 @@
         continue;
       }
       if (e.dano) { // numero de dano flutuante: sobe e esmaece
-        const ex2 = e.x * cs + panX + cs / 2, ey2 = e.y * cs + panY + cs / 2;
+        const ex2 = SX(e.x), ey2 = SY(e.y);
         const fd = Math.max(11, cs * 0.30);
         ctx.globalAlpha = 1 - p;
         ctx.font = `bold ${fd}px Verdana`; ctx.textAlign = "center";
@@ -2321,7 +2403,7 @@
         ctx.globalAlpha = 1;
         continue;
       }
-      const ex = e.x * cs + panX + cs / 2, ey = e.y * cs + panY + cs / 2;
+      const ex = SX(e.x), ey = SY(e.y);
       const raio = Math.max(8, cs * 0.45) * (1 + p * 1.6);
       ctx.globalAlpha = (1 - p) * 0.9;
       ctx.lineWidth = Math.max(2, cs * 0.08);

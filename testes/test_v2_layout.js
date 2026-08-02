@@ -15,7 +15,7 @@ let casos = 0;
 function ok(cond, msg) { if (!cond) throw new Error("FALHOU: " + msg); casos++; }
 
 for (const seed of [1, 7, 42, 99, 123]) {
-  const g = E.gerarTeatro(Object.assign({}, E.CONFIG, { seed }));
+  const g = E.gerarTeatro(Object.assign({}, E.CONFIG, { layout: "v2", seed }));
   const alds = g.aldeias;
   ok(alds.length === 24, "seed " + seed + ": 24 aldeias (veio " + alds.length + ")");
 
@@ -50,7 +50,7 @@ for (const seed of [1, 7, 42, 99, 123]) {
     }
 
   // determinismo: mesma seed, mesmo mundo (byte a byte)
-  const g2 = E.gerarTeatro(Object.assign({}, E.CONFIG, { seed }));
+  const g2 = E.gerarTeatro(Object.assign({}, E.CONFIG, { layout: "v2", seed }));
   ok(JSON.stringify(g2.aldeias) === JSON.stringify(alds), "seed " + seed + ": deterministico");
 }
 
