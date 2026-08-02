@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Calibrador de coordenadas — Mapa da Iberia (dev tool)</title>
+<style>
+  :root{
+    --bg:#12151a; --panel:#1a1f27; --line:#2c3440; --txt:#e6e9ee; --dim:#93a0b1;
+    --oeste:#e0b341; --este:#5aa9e6; --ok:#4caf7d; --warn:#e0803a; --err:#e05a5a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+       font:13px/1.45 ui-sans-serif,system-ui,'Segoe UI',sans-serif;
+       display:flex;height:100vh;overflow:hidden}
+
+  /* ---------- painel esquerdo ---------- */
+  #lado{width:340px;flex:0 0 340px;background:var(--panel);border-right:1px solid var(--line);
+        display:flex;flex-direction:column;overflow:hidden}
+  #cab{padding:10px 12px;border-bottom:1px solid var(--line)}
+  #cab h1{margin:0 0 2px;font-size:14px;letter-spacing:.2px}
+  #cab .sub{color:var(--dim);font-size:11px}
+
+  #atual{padding:10px 12px;border-bottom:1px solid var(--line);background:#20262f}
+  #progresso{font-size:11px;color:var(--dim);margin-bottom:3px}
+  #nomeAtual{font-size:19px;font-weight:600;line-height:1.15}
+  #metaAtual{font-size:11px;color:var(--dim);margin-top:3px;font-family:ui-monospace,Consolas,monospace}
+  #dica{font-size:11px;color:var(--warn);margin-top:6px}
+
+  #lista{flex:1;overflow-y:auto;padding:4px 0}
+  .cid{display:flex;align-items:center;gap:7px;padding:3px 12px;cursor:pointer;
+       font-family:ui-monospace,Consolas,monospace;font-size:11.5px;border-left:3px solid transparent}
+  .cid:hover{background:#232a34}
+  .cid.sel{background:#2b3644;border-left-color:#fff}
+  .cid .bola{width:8px;height:8px;border-radius:50%;flex:0 0 8px}
+  .cid.O .bola{background:var(--oeste)} .cid.E .bola{background:var(--este)}
+  .cid .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cid .xy{color:var(--dim);font-size:10.5px}
+  .cid.novo .xy{color:var(--ok)}
+  .cid .marca{width:11px;text-align:center;color:var(--ok)}
+
+  #ctrl{border-top:1px solid var(--line);padding:9px 12px;display:flex;flex-wrap:wrap;gap:6px}
+  button{background:#2b3441;color:var(--txt);border:1px solid #3a4553;border-radius:4px;
+         padding:5px 9px;font-size:11.5px;cursor:pointer;font-family:inherit}
+  button:hover{background:#374252}
+  button.pri{background:#2f6d4f;border-color:#3d8b66}
+  button.pri:hover{background:#3a8460}
+  label.chk{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--dim);cursor:pointer}
+
+  #estado{border-top:1px solid var(--line);padding:8px 12px;font-size:11px;min-height:34px}
+  .lin{margin:1px 0} .lin.ok{color:var(--ok)} .lin.warn{color:var(--warn)} .lin.err{color:var(--err)}
+
+  /* ---------- mapa ---------- */
+  #mapa{flex:1;position:relative;overflow:hidden;background:#0d1015;
+        display:flex;align-items:center;justify-content:center}
+  #caixa{position:relative;aspect-ratio:1429/886;max-width:100%;max-height:100%;
+         width:100%;box-shadow:0 0 0 1px var(--line)}
+  #fundo{position:absolute;inset:0;width:100%;height:100%;
+         object-fit:cover;object-position:center top;user-select:none;-webkit-user-drag:none}
+  #svg{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
+  #falhaImg{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+            text-align:center;padding:30px;color:var(--err);font-size:13px;background:#161a20}
+
+  .estrada{stroke:#f4e6c8;stroke-opacity:.5;stroke-width:2.5;fill:none;stroke-linecap:round}
+  .estrada.contorno{stroke-dasharray:9 7;stroke-opacity:.38}
+  .fantasma{fill:none;stroke:#ffffff;stroke-opacity:.28;stroke-width:1.5}
+  .rot{font:600 15px ui-sans-serif,system-ui,sans-serif;paint-order:stroke fill;
+       stroke:#0b0e12;stroke-width:4px;stroke-linejoin:round;pointer-events:none}
+  .rot.O{fill:#f4cf6a} .rot.E{fill:#8fc9f2}
+  .mira{pointer-events:none}
+
+  /* ---------- saida ---------- */
+  #saidaBox{position:absolute;inset:0;background:rgba(8,10,14,.95);display:none;
+            flex-direction:column;padding:16px;z-index:5}
+  #saidaBox h2{margin:0 0 4px;font-size:14px}
+  #saidaBox .nota{color:var(--dim);font-size:11.5px;margin-bottom:8px}
+  #saida{flex:1;width:100%;background:#0f1319;color:#d7e2c9;border:1px solid var(--line);
+         border-radius:4px;padding:10px;font:11.5px/1.5 ui-monospace,Consolas,monospace;
+         white-space:pre;overflow:auto;resize:none}
+  #saidaCtrl{display:flex;gap:8px;margin-top:9px;align-items:center}
+</style>
+</head>
+<body>
+
+<div id="lado">
+  <div id="cab">
+    <h1>Calibrador — Mapa da Iberia</h1>
+    <div class="sub">dev tool efemera · so mexe em x,y · viewBox 130 144 1429 886</div>
+  </div>
+
+  <div id="atual">
+    <div id="progresso">—</div>
+    <div id="nomeAtual">—</div>
+    <div id="metaAtual">—</div>
+    <div id="dica">Clique no mapa para fixar esta cidade.</div>
+  </div>
+
+  <div id="lista"></div>
+
+  <div id="ctrl">
+    <button id="bAnt">◀ Anterior</button>
+    <button id="bProx">Proxima ▶</button>
+    <button id="bPular">Pular</button>
+    <button id="bLimpar1">Limpar esta</button>
+    <button id="bSemente">Restaurar semente</button>
+    <button id="bZerar">Zerar tudo</button>
+    <button class="pri" id="bGerar">Gerar array ▸</button>
+    <label class="chk"><input type="checkbox" id="cEstradas" checked> estradas</label>
+    <label class="chk"><input type="checkbox" id="cNomes" checked> nomes</label>
+    <label class="chk"><input type="checkbox" id="cAntigas"> x,y antigas</label>
+  </div>
+
+  <div id="estado"></div>
+</div>
+
+<div id="mapa">
+  <div id="caixa">
+    <img id="fundo" alt="Peninsula Iberica (mapa limpo)">
+    <div id="falhaImg">
+      Nao consegui carregar a imagem de fundo.<br><br>
+      Esperado ao lado deste arquivo:<br>
+      <code>Generated Image July 27, 2026 - 12_32AM.png</code>
+    </div>
+    <svg id="svg" viewBox="130 144 1429 886" preserveAspectRatio="xMidYMid meet">
+      <g id="gEstradas"></g>
+      <g id="gAntigas"></g>
+      <g id="gCidades"></g>
+      <g id="gRotulos"></g>
+    </svg>
+  </div>
+
+  <div id="saidaBox">
+    <h2>Array CIDADES — colar no world-iberia.js (substitui as linhas 24–49)</h2>
+    <div class="nota">Somente os campos <b>x</b> e <b>y</b> foram reescritos. Cada linha e a linha
+      original do arquivo com os dois numeros trocados: id, nome, lado, papel, tamanho, sprite,
+      dono, par, custoLisboa e custoBarcelona saem intactos, caractere por caractere.</div>
+    <textarea id="saida" spellcheck="false" readonly></textarea>
+    <div id="saidaCtrl">
+      <button class="pri" id="bCopiar">Copiar</button>
+      <button id="bFechar">Fechar</button>
+      <span id="saidaMsg" class="sub" style="color:var(--dim)"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ------------------------------------------------------------------
+   FUNDO
+   A imagem (1215x864) cobre o viewBox (1429x886) com escala uniforme
+   1429/1215 = 1.17613, ancorada no topo:  object-fit:cover + top,
+   equivalente a preserveAspectRatio="xMidYMin slice".
+   Sem distorcao e sem faixas vazias; o que sai do quadro e so mar do
+   rodape. Na Fase 3 o motor reproduz isso com uma linha:
+     <image href="..." x="130" y="144" width="1429" height="886"
+            preserveAspectRatio="xMidYMin slice"/>
+------------------------------------------------------------------- */
+const IMG = 'Generated%20Image%20July%2027,%202026%20-%2012_32AM.png';
+const fundo = document.getElementById('fundo');
+fundo.onerror = () => { fundo.style.display='none';
+                        document.getElementById('falhaImg').style.display='flex'; };
+fundo.src = IMG;
+
+/* ------------------------------------------------------------------
+   LINHAS ORIGINAIS DO ARQUIVO, VERBATIM (world-iberia.js, linhas 25-48).
+   A saida e sempre gerada a partir daqui: trocamos so os numeros de
+   x: e y: e devolvemos o resto da linha sem tocar. E a garantia
+   mecanica de que nenhum outro campo pode ser alterado.
+------------------------------------------------------------------- */
+const LINHAS = [
+"  { id:'lisboa',    nome:'Lisboa',      x:  240.0, y:  688.0, lado:'O', papel:'capital', tamanho:'capital',  sprite:'castelo',       dono:'oeste', par:'barcelona', custoLisboa:  0.0, custoBarcelona: 18.0 },",
+"  { id:'santarem',  nome:'Santarem',    x:  284.6, y:  638.2, lado:'O', papel:'anel1a',  tamanho:'pequena',  sprite:'aldeia_neutra', dono:null,    par:'tarragona', custoLisboa:  1.0, custoBarcelona: 17.0 },",
+"  { id:'evora',     nome:'Evora',       x:  361.8, y:  702.4, lado:'O', papel:'anel1b',  tamanho:'pequena',  sprite:'aldeia_neutra', dono:null,    par:'girona',    custoLisboa:  1.5, custoBarcelona: 19.5 },",
+"  { id:'coimbra',   nome:'Coimbra',     x:  310.2, y:  545.1, lado:'O', papel:'anel2a',  tamanho:'pequena',  sprite:'aldeia_neutra', dono:null,    par:'castellon', custoLisboa:  2.5, custoBarcelona: 16.5 },",
+"  { id:'porto',     nome:'Porto',       x:  292.5, y:  455.0, lado:'O', papel:'anel3a',  tamanho:'grande',   sprite:'aldeia_neutra', dono:null,    par:'valencia',  custoLisboa:  3.5, custoBarcelona: 16.5 },",
+"  { id:'badajoz',   nome:'Badajoz',     x:  454.9, y:  672.6, lado:'O', papel:'anel2b',  tamanho:'media',    sprite:'aldeia_neutra', dono:null,    par:'zaragoza',  custoLisboa:  4.0, custoBarcelona: 14.0 },",
+"  { id:'faro',      nome:'Faro',        x:  359.8, y:  850.9, lado:'O', papel:'anel2c',  tamanho:'pequena',  sprite:'aldeia_neutra', dono:null,    par:'huesca',    custoLisboa:  5.0, custoBarcelona: 16.0 },",
+"  { id:'vigo',      nome:'Vigo',        x:  281.6, y:  350.7, lado:'O', papel:'anel4a',  tamanho:'pequena',  sprite:'aldeia_neutra', dono:null,    par:'murcia',    custoLisboa:  5.0, custoBarcelona: 15.0 },",
+"  { id:'salamanca', nome:'Salamanca',   x:  584.6, y:  472.3, lado:'O', papel:'anel3c',  tamanho:'media',    sprite:'aldeia_neutra', dono:null,    par:'teruel',    custoLisboa:  6.5, custoBarcelona: 12.5 },",
+"  { id:'sevilha',   nome:'Sevilha',     x:  553.0, y:  815.5, lado:'O', papel:'anel3b',  tamanho:'pequena',  sprite:'aldeia_neutra', dono:null,    par:'pamplona',  custoLisboa:  7.0, custoBarcelona: 14.5 },",
+"  { id:'cordoba',   nome:'Cordoba',     x:  671.8, y:  767.5, lado:'O', papel:'anel4b',  tamanho:'media',    sprite:'aldeia_neutra', dono:null,    par:'burgos',    custoLisboa:  8.0, custoBarcelona: 12.0 },",
+"  { id:'toledo',    nome:'Toledo',      x:  747.0, y:  578.7, lado:'O', papel:'centro',  tamanho:'grande',   sprite:'aldeia_neutra', dono:null,    par:'madrid',    custoLisboa:  8.5, custoBarcelona:  9.5 },",
+"  { id:'barcelona', nome:'Barcelona',   x: 1360.2, y:  432.2, lado:'E', papel:'capital', tamanho:'capital',  sprite:'castelo',       dono:'este',  par:'lisboa',    custoLisboa: 18.0, custoBarcelona:  0.0 },",
+"  { id:'tarragona', nome:'Tarragona',   x: 1269.0, y:  457.9, lado:'E', papel:'anel1a',  tamanho:'pequena',  sprite:'aldeia_neutra', dono:null,    par:'santarem',  custoLisboa: 17.0, custoBarcelona:  1.0 },",
+"  { id:'girona',    nome:'Girona',      x: 1424.5, y:  375.5, lado:'E', papel:'anel1b',  tamanho:'pequena',  sprite:'aldeia_neutra', dono:null,    par:'evora',     custoLisboa: 19.5, custoBarcelona:  1.5 },",
+"  { id:'castellon', nome:'Castellon',   x: 1141.3, y:  566.2, lado:'E', papel:'anel2a',  tamanho:'pequena',  sprite:'aldeia_neutra', dono:null,    par:'coimbra',   custoLisboa: 16.5, custoBarcelona:  2.5 },",
+"  { id:'valencia',  nome:'Valencia',    x: 1107.5, y:  616.2, lado:'E', papel:'anel3a',  tamanho:'grande',   sprite:'aldeia_neutra', dono:null,    par:'porto',     custoLisboa: 16.5, custoBarcelona:  3.5 },",
+"  { id:'zaragoza',  nome:'Zaragoza',    x: 1057.1, y:  407.2, lado:'E', papel:'anel2b',  tamanho:'media',    sprite:'aldeia_neutra', dono:null,    par:'badajoz',   custoLisboa: 14.0, custoBarcelona:  4.0 },",
+"  { id:'huesca',    nome:'Huesca',      x: 1104.6, y:  360.2, lado:'E', papel:'anel2c',  tamanho:'pequena',  sprite:'aldeia_neutra', dono:null,    par:'faro',      custoLisboa: 16.0, custoBarcelona:  5.0 },",
+"  { id:'murcia',    nome:'Murcia',      x: 1033.3, y:  758.9, lado:'E', papel:'anel4a',  tamanho:'pequena',  sprite:'aldeia_neutra', dono:null,    par:'vigo',      custoLisboa: 15.0, custoBarcelona:  5.0 },",
+"  { id:'teruel',    nome:'Teruel',      x: 1035.4, y:  532.8, lado:'E', papel:'anel3c',  tamanho:'media',    sprite:'aldeia_neutra', dono:null,    par:'salamanca', custoLisboa: 12.5, custoBarcelona:  6.5 },",
+"  { id:'pamplona',  nome:'Pamplona',    x:  981.8, y:  295.0, lado:'E', papel:'anel3b',  tamanho:'pequena',  sprite:'aldeia_neutra', dono:null,    par:'sevilha',   custoLisboa: 14.5, custoBarcelona:  7.0 },",
+"  { id:'burgos',    nome:'Burgos',      x:  778.7, y:  341.1, lado:'E', papel:'anel4b',  tamanho:'media',    sprite:'aldeia_neutra', dono:null,    par:'cordoba',   custoLisboa: 12.0, custoBarcelona:  8.0 },",
+"  { id:'madrid',    nome:'Madrid',      x:  778.7, y:  525.1, lado:'E', papel:'centro',  tamanho:'grande',   sprite:'aldeia_neutra', dono:null,    par:'toledo',    custoLisboa:  9.5, custoBarcelona:  8.5 },",
+];
+
+const ESTRADAS = [
+ ['lisboa','santarem'],['barcelona','tarragona'],['evora','lisboa'],['barcelona','girona'],
+ ['coimbra','santarem'],['castellon','tarragona'],['badajoz','santarem'],['tarragona','zaragoza'],
+ ['evora','faro'],['girona','huesca'],['badajoz','faro'],['huesca','zaragoza'],
+ ['coimbra','porto'],['castellon','valencia'],['coimbra','salamanca'],['castellon','teruel'],
+ ['porto','vigo'],['murcia','valencia'],['salamanca','vigo'],['murcia','teruel'],
+ ['badajoz','salamanca'],['teruel','zaragoza'],['badajoz','cordoba'],['burgos','zaragoza'],
+ ['badajoz','toledo'],['madrid','zaragoza'],['faro','sevilha'],['huesca','pamplona'],
+ ['cordoba','sevilha'],['burgos','pamplona'],['cordoba','toledo'],['burgos','madrid'],
+ ['salamanca','toledo'],['madrid','teruel'],['cordoba','madrid'],['burgos','toledo'],
+ ['madrid','salamanca'],['teruel','toledo'],['cordoba','murcia'],['burgos','vigo'],
+ ['madrid','toledo'],
+];
+const CONTORNO = new Set(['cordoba|murcia','burgos|vigo']);
+
+/* SEMENTE: posicoes derivadas da geografia real projetada sobre ESTA imagem.
+   Transformacao afim lon/lat -> pixel ajustada por minimos quadrados em 6
+   pontos de controle lidos da propria costa do render (Cabo da Roca, Cap de
+   Creus, Estaca de Bares, Tarifa, Mallorca, Ibiza); residuo maximo ~18px.
+   Depois cada cidade foi empurrada para dentro da costa o minimo necessario
+   para o sprite nao ficar sobre a agua (Lisboa 9px, Barcelona 6px, Porto e
+   Tarragona ~1px; as outras 20 nao precisaram sair do lugar).
+   E so um ponto de partida: sobrescreva clicando. */
+const SEMENTE = {
+  lisboa:[312.3,665.0],   santarem:[350.5,615.7],  evora:[418.2,687.8],   coimbra:[386.0,522.2],
+  porto:[405.2,434.5],    badajoz:[512.0,664.7],   faro:[399.5,840.3],    vigo:[398.2,327.5],
+  salamanca:[660.6,469.2],sevilha:[591.0,819.2],   cordoba:[711.9,779.4], toledo:[805.3,591.3],
+  barcelona:[1415.5,482.7],tarragona:[1326.1,507.4],girona:[1487.0,436.4],castellon:[1190.4,609.9],
+  valencia:[1152.1,658.4],zaragoza:[1126.7,439.7], huesca:[1178.1,395.2], murcia:[1063.9,798.3],
+  teruel:[1091.3,567.0],  pamplona:[1067.1,319.6], burgos:[863.9,349.6],  madrid:[843.1,538.7],
+};
+
+const RE_X = /(^|[,\s])x:\s*-?[\d.]+/;
+const RE_Y = /(^|[,\s])y:\s*-?[\d.]+/;
+const num = v => v.toFixed(1).padStart(7);   // mesma largura de coluna do arquivo
+
+// metadados extraidos das proprias linhas — nada digitado a mao
+const CIDADES = LINHAS.map((ln, i) => {
+  const g = s => (ln.match(new RegExp(s + ":'([^']*)'")) || [,''])[1];
+  return {
+    i, id:g('id'), nome:g('nome'), lado:g('lado'), papel:g('papel'),
+    tamanho:g('tamanho'), sprite:g('sprite'),
+    xAntigo:parseFloat(ln.match(RE_X)[0].split(':')[1]),
+    yAntigo:parseFloat(ln.match(RE_Y)[0].split(':')[1]),
+  };
+});
+const porId = Object.fromEntries(CIDADES.map(c => [c.id, c]));
+
+const pos = {};                       // id -> [x,y] marcado nesta sessao
+let sel = 0;                          // indice da cidade selecionada
+
+/* ---------------- conversao tela -> viewBox ---------------- */
+const svg = document.getElementById('svg');
+function paraViewBox(ev){
+  const p = svg.createSVGPoint();
+  p.x = ev.clientX; p.y = ev.clientY;
+  return p.matrixTransform(svg.getScreenCTM().inverse());
+}
+
+/* ---------------- desenho ---------------- */
+const gE = document.getElementById('gEstradas'), gA = document.getElementById('gAntigas'),
+      gC = document.getElementById('gCidades'), gR = document.getElementById('gRotulos');
+const el = (t,a) => { const n=document.createElementNS('http://www.w3.org/2000/svg',t);
+                      for(const k in a) n.setAttribute(k,a[k]); return n; };
+const P = id => pos[id];
+
+const RAIO = { capital:17, grande:13, media:11, pequena:9 };
+
+function desenhar(){
+  gE.textContent=''; gA.textContent=''; gC.textContent=''; gR.textContent='';
+
+  if (document.getElementById('cEstradas').checked)
+    for (const [a,b] of ESTRADAS){
+      if (!P(a) || !P(b)) continue;                    // so entre cidades ja postas
+      const k = [a,b].sort().join('|');
+      gE.appendChild(el('line',{x1:P(a)[0],y1:P(a)[1],x2:P(b)[0],y2:P(b)[1],
+        class:'estrada'+(CONTORNO.has(k)?' contorno':'')}));
+    }
+
+  if (document.getElementById('cAntigas').checked)
+    for (const c of CIDADES){
+      gA.appendChild(el('circle',{cx:c.xAntigo,cy:c.yAntigo,r:7,class:'fantasma'}));
+      if (P(c.id)) gA.appendChild(el('line',{x1:c.xAntigo,y1:c.yAntigo,
+        x2:P(c.id)[0],y2:P(c.id)[1],class:'fantasma'}));
+    }
+
+  for (const c of CIDADES){
+    const p = P(c.id); if (!p) continue;
+    const cor = c.lado==='O' ? '#e0b341' : '#5aa9e6';
+    const r = RAIO[c.tamanho] || 10;
+    const alvo = c.i === sel;
+    if (c.sprite === 'castelo'){
+      gC.appendChild(el('rect',{x:p[0]-r,y:p[1]-r*1.15,width:r*2,height:r*2,
+        fill:cor,stroke:'#0b0e12','stroke-width':3,rx:2}));
+    } else {
+      gC.appendChild(el('circle',{cx:p[0],cy:p[1],r:r,
+        fill:cor,stroke:'#0b0e12','stroke-width':3}));
+    }
+    gC.appendChild(el('circle',{cx:p[0],cy:p[1],r:2,fill:'#0b0e12'}));   // ancora exata
+    if (alvo){
+      const m = el('g',{class:'mira'});
+      m.appendChild(el('circle',{cx:p[0],cy:p[1],r:r+9,fill:'none',
+        stroke:'#fff','stroke-width':2.5,'stroke-dasharray':'6 5'}));
+      gC.appendChild(m);
+    }
+    if (document.getElementById('cNomes').checked)
+      gR.appendChild(Object.assign(el('text',{x:p[0],y:p[1]-r-7,
+        class:'rot '+c.lado,'text-anchor':'middle'}),{textContent:c.nome}));
+  }
+}
+
+/* ---------------- painel ---------------- */
+function pintarLista(){
+  const L = document.getElementById('lista');
+  L.textContent='';
+  for (const c of CIDADES){
+    const p = P(c.id), novo = !!p;
+    const d = document.createElement('div');
+    d.className = 'cid '+c.lado+(c.i===sel?' sel':'')+(novo?' novo':'');
+    d.innerHTML = `<span class="marca">${novo?'✓':''}</span><span class="bola"></span>`+
+      `<span class="nm">${c.nome}</span>`+
+      `<span class="xy">${novo ? p[0].toFixed(1)+' '+p[1].toFixed(1) : '— —'}</span>`;
+    d.onclick = () => { sel=c.i; atualizar(); };
+    L.appendChild(d);
+  }
+  const alvo = L.children[sel]; if (alvo) alvo.scrollIntoView({block:'nearest'});
+}
+
+function pintarAtual(){
+  const c = CIDADES[sel];
+  const feitos = CIDADES.filter(k => P(k.id)).length;
+  document.getElementById('progresso').textContent =
+    `${sel+1}/24 na lista · ${feitos}/24 marcadas`;
+  document.getElementById('nomeAtual').textContent = c.nome;
+  document.getElementById('metaAtual').textContent =
+    `id:${c.id} · ${c.lado==='O'?'Oeste':'Este'} · ${c.papel} · ${c.tamanho}`;
+  document.getElementById('dica').textContent = P(c.id)
+    ? 'Ja marcada. Clique de novo no mapa para reposicionar, ou use as setas para ajustar fino.'
+    : 'Clique no mapa para fixar esta cidade.';
+}
+
+function pintarEstado(){
+  const E = document.getElementById('estado'); E.textContent='';
+  const add = (t,cl='') => { const d=document.createElement('div');
+                             d.className='lin '+cl; d.textContent=t; E.appendChild(d); };
+  const postas = CIDADES.filter(c => P(c.id));
+  if (postas.length < 24) add(`faltam ${24-postas.length} cidade(s)`, 'warn');
+  else add('24/24 marcadas', 'ok');
+
+  const fora = postas.filter(c => { const [x,y]=P(c.id);
+    return x<130 || x>1559 || y<144 || y>1030; });
+  if (fora.length) add('fora do viewBox: '+fora.map(c=>c.nome).join(', '), 'err');
+
+  let pior = Infinity, par = null;
+  for (let i=0;i<postas.length;i++) for (let j=i+1;j<postas.length;j++){
+    const a=P(postas[i].id), b=P(postas[j].id);
+    const d = Math.hypot(a[0]-b[0], a[1]-b[1]);
+    if (d < pior) { pior = d; par = [postas[i].nome, postas[j].nome]; }
+  }
+  if (par) add(`menor distancia: ${pior.toFixed(0)}px (${par[0]}–${par[1]})`,
+               pior < 45 ? 'err' : pior < 70 ? 'warn' : 'ok');
+}
+
+function atualizar(){ pintarAtual(); pintarLista(); pintarEstado(); desenhar(); }
+
+/* ---------------- interacao ---------------- */
+svg.addEventListener('click', ev => {
+  const p = paraViewBox(ev);
+  pos[CIDADES[sel].id] = [Math.round(p.x*10)/10, Math.round(p.y*10)/10];
+  const prox = CIDADES.findIndex(c => !P(c.id));      // avanca para a proxima sem marca
+  if (prox !== -1) sel = prox;
+  atualizar();
+});
+
+document.addEventListener('keydown', ev => {
+  if (ev.target.tagName === 'TEXTAREA') return;
+  const c = CIDADES[sel], p = P(c.id);
+  const passo = ev.shiftKey ? 10 : 1;
+  const mover = (dx,dy) => { if(!p) return;
+    pos[c.id] = [Math.round((p[0]+dx)*10)/10, Math.round((p[1]+dy)*10)/10];
+    ev.preventDefault(); atualizar(); };
+  if (ev.key==='ArrowLeft')  mover(-passo,0);
+  if (ev.key==='ArrowRight') mover(passo,0);
+  if (ev.key==='ArrowUp')    mover(0,-passo);
+  if (ev.key==='ArrowDown')  mover(0,passo);
+  if (ev.key==='Tab' || ev.key==='Enter'){ sel=(sel+1)%24; ev.preventDefault(); atualizar(); }
+  if (ev.key==='Backspace' || ev.key==='Delete'){ delete pos[c.id]; atualizar(); }
+});
+
+const on = (id,fn) => document.getElementById(id).onclick = fn;
+on('bAnt',   () => { sel=(sel+23)%24; atualizar(); });
+on('bProx',  () => { sel=(sel+1)%24;  atualizar(); });
+on('bPular', () => { sel=(sel+1)%24;  atualizar(); });
+on('bLimpar1',()=> { delete pos[CIDADES[sel].id]; atualizar(); });
+on('bZerar', () => { if(confirm('Apagar todas as marcacoes?')){
+                       for(const k in pos) delete pos[k]; sel=0; atualizar(); } });
+on('bSemente',()=> { for (const id in SEMENTE) pos[id] = SEMENTE[id].slice(); atualizar(); });
+for (const id of ['cEstradas','cNomes','cAntigas'])
+  document.getElementById(id).onchange = desenhar;
+
+/* ---------------- saida ---------------- */
+function gerar(){
+  const linhas = LINHAS.map((ln, i) => {
+    const p = P(CIDADES[i].id);
+    if (!p) return ln;                                  // nao marcada: linha original intacta
+    return ln.replace(RE_X, (m,pre) => pre + 'x:' + num(p[0]))
+             .replace(RE_Y, (m,pre) => pre + 'y:' + num(p[1]));
+  });
+  return 'export const CIDADES = [\n' + linhas.join('\n') + '\n];';
+}
+
+on('bGerar', () => {
+  const faltam = CIDADES.filter(c => !P(c.id));
+  if (faltam.length && !confirm(
+      `${faltam.length} cidade(s) sem marcar (${faltam.map(c=>c.nome).join(', ')}).\n`+
+      `Elas saem com o x,y ANTIGO. Gerar assim mesmo?`)) return;
+  document.getElementById('saida').value = gerar();
+  document.getElementById('saidaMsg').textContent = '';
+  document.getElementById('saidaBox').style.display = 'flex';
+});
+on('bFechar', () => document.getElementById('saidaBox').style.display='none');
+on('bCopiar', () => {
+  const t = document.getElementById('saida');
+  t.select(); t.setSelectionRange(0, 1e6);
+  navigator.clipboard.writeText(t.value)
+    .then(()=> document.getElementById('saidaMsg').textContent='copiado ✓')
+    .catch(()=> document.getElementById('saidaMsg').textContent=
+                'clipboard bloqueada no file:// — use Ctrl+C, ja esta selecionado');
+});
+
+/* comeca com a semente carregada; "Zerar tudo" da a tela em branco */
+for (const id in SEMENTE) pos[id] = SEMENTE[id].slice();
+atualizar();
+</script>
+</body>
+</html>
