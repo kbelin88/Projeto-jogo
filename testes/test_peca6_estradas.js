@@ -10,7 +10,10 @@
 // ============================================================
 "use strict";
 const Engine = require("../engine.js");
-const CONFIG = Engine.CONFIG;
+// layout fixado: este arquivo testa a rede DERIVADA das posicoes (procedural).
+// O default do motor virou "iberia" (rede autoral) em 02/08, entao herdar
+// o default aqui faria o teste medir outra coisa.
+const CONFIG = Object.assign({}, Engine.CONFIG, { layout: "v2" });
 
 let falhas = 0;
 function checa(nome, cond, detalhe) {

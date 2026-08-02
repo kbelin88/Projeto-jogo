@@ -143,7 +143,11 @@
 
     // MUNDO v2 (17/07): layout espelhado p/ fairness de benchmark.
     // "v1" reproduz os numeros antigos; "v2" e o padrao daqui em diante.
-    layout: "v2",
+    // "iberia" (02/08): mapa AUTORAL, 24 cidades reais e 41 estradas escritas
+    // a mao, com custo de marcha em turnos. Substitui o v2 procedural.
+    // ZERA a comparabilidade com o historico: partidas do v2 viram historia,
+    // nao baseline. O ELO comeca do zero neste mapa (decisao do Lucas).
+    layout: "iberia",
     teatro_v2: {
       // palco proprio da v2 (calibrado 17/07 v2): 60x34 — WIDESCREEN.
       // Gate do Lucas revelou: teatro quase quadrado estoura a tela na
