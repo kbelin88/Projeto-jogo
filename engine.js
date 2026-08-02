@@ -14,15 +14,17 @@
 //  Node (module.exports, require('./world')).
 // ============================================================
 (function (root, factory) {
-  let World;
+  let World, Iberia;
   if (typeof module !== "undefined" && module.exports) {
     World = require("./world.js");
-    module.exports = factory(World);
+    Iberia = require("./world-iberia.js");
+    module.exports = factory(World, Iberia);
   } else {
     World = root.World;
-    root.Engine = factory(World);
+    Iberia = root.Iberia;
+    root.Engine = factory(World, Iberia);
   }
-})(typeof self !== "undefined" ? self : this, function (World) {
+})(typeof self !== "undefined" ? self : this, function (World, Iberia) {
   "use strict";
 
   // ==========================================================
@@ -234,9 +236,102 @@
   //     o resto vira neutra de UM tipo sorteado, com N unidades na faixa.
   // ==========================================================
   function gerarTeatro(config) {
-    if ((config.layout || "v1") === "v2") return gerarTeatroV2(config);
+    const layout = config.layout || "v1";
+    if (layout === "iberia") return gerarTeatroIberia(config);
+    if (layout === "v2") return gerarTeatroV2(config);
     return gerarTeatroV1(config);
   }
+
+  // ===== MUNDO IBERIA (02/08) — mapa AUTORAL, nao procedural =====
+  // Diferenca de especie em relacao ao v1/v2: as 24 cidades e as 41 estradas
+  // sao ESCRITAS A MAO em world-iberia.js, e o custo de cada estrada ja vem
+  // em TURNOS (com o multiplicador de terreno embutido). Aqui nao se sorteia
+  // posicao nem se deriva rede: le-se o arquivo.
+  //
+  // O equilibrio do mapa vive nos custos, NAO nos pixels — em linha reta o
+  // mapa nao e espelhado (19 das 24 cidades quebram o espelho euclidiano por
+  // mais de 30px). Por isso a marcha tem de sair de `rota()`, nunca de
+  // Math.hypot. Ver pesoTrecho()/turnosViagem().
+  //
+  // ids: indice no array CIDADES (0..23) — o motor inteiro usa id numerico.
+  // O id textual do arquivo ('lisboa') fica em `slug`, para casar com as
+  // estradas e com o world-iberia.
+  function gerarTeatroIberia(config) {
+    const rng = criarRng(config.seed);
+    const idPorSlug = {};
+    Iberia.CIDADES.forEach((c, i) => { idPorSlug[c.id] = i; });
+
+    // separacao das capitais em custo de marcha: base do gradiente de guarnicao
+    const custoEntreCapitais = Iberia.rota(
+      Iberia.MAPA.capitais.oeste, Iberia.MAPA.capitais.este).custo;
+
+    const aldeias = Iberia.CIDADES.map((c, i) => {
+      const dono = c.dono === "oeste" ? "A" : c.dono === "este" ? "B" : null;
+      const ald = criarAldeia(i, c.x, c.y, c.nome, dono);
+      ald.slug = c.id;                     // ligacao com world-iberia
+      ald.papel = c.papel;                 // anel1a, centro, capital...
+      ald.tamanho = c.tamanho;             // usado pelo desenho (sprite)
+      ald.sprite = c.sprite;
+      ald.par = c.par;                     // gemea estrutural (espelho)
+      if (c.papel === "capital") {
+        ald.capital = true;
+        const ti = (config.rei && config.rei.tropas_iniciais) || {};
+        for (const tp of TIPOS) ald.tropas[tp] = ti[tp] || 0;
+      }
+      return ald;
+    });
+
+    // NEUTRAS: tipo e forca sorteados UMA vez por PAR e aplicados aos dois
+    // lados — mesma regra de fairness do v2. Percorre so o Oeste e espelha
+    // via `par`, entao o stream do rng nao depende da ordem do array.
+    const pool = config.neutra.tipos_sorteaveis;
+    for (const c of Iberia.CIDADES) {
+      if (c.lado !== "O" || c.papel === "capital") continue;
+      const tipo = pool[Math.floor(rng() * pool.length)];
+      // rngInt SEMPRE consumido (estabilidade do stream), o gradiente so sobrepoe
+      const nBase = rngInt(rng, config.neutra.forca_min, config.neutra.forca_max);
+      const n = guarnicaoIberia(config, c, custoEntreCapitais, nBase);
+      for (const id of [idPorSlug[c.id], idPorSlug[c.par]]) {
+        const ald = aldeias[id];
+        ald.tipo = tipo;
+        ald.tropas[tipo] = n;
+      }
+    }
+
+    return montarJogo(config, aldeias, estradasIberia(idPorSlug));
+  }
+
+  // Guarnicao da neutra pelo GRADIENTE, versao Iberia: a distancia usada e o
+  // CUSTO DE MARCHA ate a capital mais proxima (custoLisboa/custoBarcelona do
+  // arquivo), nao a linha reta. frac = 0 na capital, ~1 no meio do mapa.
+  // Como custoLisboa/custoBarcelona sao espelhados entre `par`, as duas
+  // cidades de um par recebem SEMPRE o mesmo frac -> mesma guarnicao.
+  function guarnicaoIberia(config, cidade, custoEntreCapitais, fallback) {
+    const g = config.neutra && config.neutra.guarnicao_gradiente;
+    if (!g || !g.ativo || !(custoEntreCapitais > 0)) return fallback;
+    const d = Math.min(cidade.custoLisboa, cidade.custoBarcelona);
+    const frac = d / (custoEntreCapitais / 2);
+    for (const f of g.faixas) if (frac <= f.ate) return f.tropas;
+    return g.faixas[g.faixas.length - 1].tropas;
+  }
+
+  // Rede de estradas da Iberia: adjacencia + CUSTO AUTORAL por trecho.
+  // Mesma forma do construirEstradas ({ adj }) mais o mapa `custo`, cuja
+  // presenca e o que faz o motor marchar por custo em vez de por pixel.
+  function estradasIberia(idPorSlug) {
+    const adjSet = {}, custo = {};
+    for (const s in idPorSlug) adjSet[idPorSlug[s]] = new Set();
+    for (const e of Iberia.ESTRADAS) {
+      const a = idPorSlug[e.de], b = idPorSlug[e.para];
+      adjSet[a].add(b); adjSet[b].add(a);
+      custo[chaveTrecho(a, b)] = e.custo;
+    }
+    const adj = {};
+    for (const id in adjSet) adj[id] = [...adjSet[id]].sort((x, y) => x - y);
+    return { adj, custo };
+  }
+
+  function chaveTrecho(a, b) { return Math.min(a, b) + "|" + Math.max(a, b); }
 
   // GUARNICAO INICIAL de uma neutra pelo GRADIENTE de distancia (v2).
   // frac = dist(neutra, rei mais proximo) / (separacao_reis / 2): 0 no rei,
@@ -524,12 +619,14 @@
   }
 
   // estado inicial da partida a partir das aldeias — COMPARTILHADO v1/v2
-  function montarJogo(config, aldeias) {
+  // `estradas` pre-montadas (mapa autoral) tem precedencia; sem elas, a rede
+  // e derivada das posicoes como sempre (v1/v2 procedurais).
+  function montarJogo(config, aldeias, estradas) {
     return {
       config,
       turno: 0,
       aldeias,
-      estradas: construirEstradas(aldeias,
+      estradas: estradas || construirEstradas(aldeias,
         (config.estradas && config.estradas.vizinhos) != null ? config.estradas.vizinhos : 3,
         (config.estradas && config.estradas.travessias) != null ? config.estradas.travessias : 5),
       movimentos: [],   // exercitos em transito (PECA 3)
@@ -844,6 +941,54 @@
     const passo = estado.config.velocidade_passo[velExercito(estado, tropas)];
     return Math.max(1, Math.ceil(dist / passo));
   }
+
+  // ---- PESO DE TRECHO: a unica coisa que o motor conta para medir marcha ----
+  // Mapa AUTORAL (Iberia): peso = custo em turnos escrito no arquivo, que ja
+  // embute o terreno. Mapa PROCEDURAL (v1/v2): peso = distancia em pixels,
+  // como sempre foi. A presenca de `estradas.custo` decide.
+  //
+  // Por que nao usar pixel no mapa autoral: a razao (dist/pxPorTurno)/custo
+  // varia de 0.57 a 1.94 entre as 41 estradas — medir por pixel erraria ate
+  // 3.4x de uma estrada para outra e destruiria o espelhamento do mapa.
+  function temCustoAutoral(estado) {
+    return !!(estado.estradas && estado.estradas.custo);
+  }
+  function pesoTrecho(estado, aId, bId) {
+    if (temCustoAutoral(estado)) {
+      const c = estado.estradas.custo[chaveTrecho(aId, bId)];
+      if (c != null) return c;
+      // trecho fora da rede (estado sintetico / marcha em reta): converte a
+      // linha reta para turnos pela escala do mapa, para ficar na mesma unidade
+      const a = aldeiaPorId(estado, aId), b = aldeiaPorId(estado, bId);
+      if (a && b) return distancia(a, b) / (Iberia.MAPA.pxPorTurno || 1);
+      return 0;
+    }
+    const a = aldeiaPorId(estado, aId), b = aldeiaPorId(estado, bId);
+    return (a && b) ? distancia(a, b) : 0;
+  }
+  function pesoRota(estado, caminho) {
+    let p = 0;
+    for (let i = 0; i + 1 < caminho.length; i++) p += pesoTrecho(estado, caminho[i], caminho[i + 1]);
+    return p;
+  }
+
+  // TURNOS de marcha de um caminho.
+  // Mapa autoral: turnos = custo_da_rota * (passoRef / passoDaTropa). A escala
+  // por tropa e UNIFORME, entao (a) cavaleiro segue chegando antes de lanceiro
+  // e (b) o espelho do mapa sobrevive — os dois lados escalam pelo mesmo fator,
+  // e o caminho mais curto e o mesmo para toda tropa.
+  // Mapa procedural: comportamento antigo, distancia / passo.
+  function turnosDeCaminho(estado, caminho, tropas) {
+    if (!temCustoAutoral(estado)) return turnosPorDist(estado, distanciaRota(estado, caminho), tropas);
+    const cfg = estado.config;
+    const ref = (cfg.relatorio && cfg.relatorio.velocidade_referencia) || "media";
+    const passoRef = cfg.velocidade_passo[ref];
+    const passoTropa = cfg.velocidade_passo[velExercito(estado, tropas)];
+    return Math.max(1, Math.ceil(pesoRota(estado, caminho) * (passoRef / passoTropa)));
+  }
+  // LINHA RETA entre dois pontos, ignorando a rede. NAO e o tempo de marcha
+  // real — quem manda na marcha e turnosDeCaminho(), pela rota. Fica como
+  // referencia/diagnostico (e e o que os testes de peca 3 e 6 medem).
   function turnosViagem(estado, origem, destino, tropas) {
     return turnosPorDist(estado, distancia(origem, destino), tropas);
   }
@@ -870,7 +1015,10 @@
       visto[u] = true;
       for (const v of est.adj[u]) {
         if (visto[v]) continue;
-        const nd = dist[u] + Math.hypot(pos[u].x - pos[v].x, pos[u].y - pos[v].y);
+        // peso do trecho: custo autoral no mapa da Iberia, pixel no procedural
+        const w = est.custo ? est.custo[chaveTrecho(u, v)]
+                            : Math.hypot(pos[u].x - pos[v].x, pos[u].y - pos[v].y);
+        const nd = dist[u] + (w != null ? w : Math.hypot(pos[u].x - pos[v].x, pos[u].y - pos[v].y));
         if (dist[v] == null || nd < dist[v]) { dist[v] = nd; prev[v] = u; }
       }
     }
@@ -911,7 +1059,7 @@
       if (passo && passo.dono !== o.dono) { caminho = caminho.slice(0, i + 1); break; }
     }
     const destinoReal = caminho[caminho.length - 1];
-    const turnos = turnosPorDist(estado, distanciaRota(estado, caminho), carga);
+    const turnos = turnosDeCaminho(estado, caminho, carga);
     // destinoPedido preserva o alvo PEDIDO (destinoId original): destinoReal pode
     // diferir quando a marcha para na 1a aldeia nao-sua do caminho (L2: o relatorio
     // avisa o modelo do redirecionamento). Nao e rejeicao — a ordem FOI executada.
@@ -942,12 +1090,16 @@
   function posicaoRota(estado, mov) {
     const cam = mov.caminho;
     if (!cam || cam.length < 2) return null;
-    const total = distanciaRota(estado, cam);
+    // Progresso medido no MESMO peso que define os turnos (custo autoral na
+    // Iberia, pixel no procedural). Se andasse por pixel enquanto o tempo corre
+    // por custo, o exercito atravessaria a serra rapido demais na tela — e o
+    // combate de estrada, que le esta posicao, decidiria encontro errado.
+    const total = pesoRota(estado, cam);
     const frac = mov.turnosTotal ? (mov.turnosTotal - mov.turnosRestantes) / mov.turnosTotal : 1;
     let alvo = Math.max(0, frac) * total;
     for (let i = 0; i + 1 < cam.length; i++) {
       const a = aldeiaPorId(estado, cam[i]), b = aldeiaPorId(estado, cam[i + 1]);
-      const seg = distancia(a, b);
+      const seg = pesoTrecho(estado, cam[i], cam[i + 1]);
       if (alvo <= seg || i + 2 === cam.length) {
         const t = seg > 0 ? Math.max(0, Math.min(1, alvo / seg)) : 0;
         return { aId: cam[i], bId: cam[i + 1], t, x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
@@ -1094,6 +1246,11 @@
       // REDE DE ESTRADAS (grafo fixo da partida): so leitura, p/ o relatorio
       // mostrar a topologia ao modelo. null em estados sinteticos sem rede.
       estradas: (estado.estradas && estado.estradas.adj) || null,
+      // custo autoral por trecho (mapa da Iberia). Vai junto para o relatorio
+      // poder medir a marcha do MESMO jeito que o motor mede — sem isto o
+      // relatorio volta a medir por pixel e a lacuna L3 reabre (foi o que o
+      // Nemotron flagrou em 26/07, agora pelo mapa novo).
+      estradasCusto: (estado.estradas && estado.estradas.custo) || null,
       // todos os exercitos em transito (meus e inimigos). destinoDono = dono atual do destino.
       // destinoPedido preserva a INTENCAO original (antes da interceptacao redirecionar).
       transito: estado.movimentos.map((m) => ({
@@ -1168,21 +1325,29 @@
     // o relatorio nao sabe a composicao do exercito, entao segue a velocidade
     // de referencia (mesma aproximacao de sempre) — a correcao e so a DISTANCIA.
     const temRede = !!visao.estradas;
-    const shim = temRede ? { estradas: { adj: visao.estradas }, aldeias: visao.minhas.concat(visao.alvos) } : null;
-    // turnos de marcha da MINHA aldeia mais proxima (POR ESTRADA) ate o alvo
+    const shim = temRede ? { config: cfg, estradas: { adj: visao.estradas, custo: visao.estradasCusto || null },
+                             aldeias: visao.minhas.concat(visao.alvos) } : null;
+    // Turnos de marcha da MINHA aldeia mais proxima ate o alvo, POR ESTRADA.
+    // Mapa autoral (Iberia): o peso da rota JA esta em turnos, e a velocidade
+    // de referencia e o proprio divisor da formula (fator 1) -> ceil(custo).
+    // Mapa procedural: peso em pixels -> ceil(pixels / passoRef), como antes.
+    // Nos dois casos o numero mostrado e o que o motor pratica: mesma funcao
+    // de peso, mesma rota. Se isto divergir, a lacuna L3 reabre.
+    const porCusto = temRede && !!visao.estradasCusto;
     const marcha = (alvo) => {
       let best = Infinity;
       for (const m of visao.minhas) {
         let d;
         if (temRede) {
           const caminho = caminhoEntre(shim, m.id, alvo.id);
-          d = caminho ? distanciaRota(shim, caminho) : Math.hypot(m.x - alvo.x, m.y - alvo.y);
+          d = caminho ? pesoRota(shim, caminho) : Math.hypot(m.x - alvo.x, m.y - alvo.y);
         } else {
           d = Math.hypot(m.x - alvo.x, m.y - alvo.y);
         }
         if (d < best) best = d;
       }
-      return best === Infinity ? "?" : Math.max(1, Math.ceil(best / passoRef));
+      if (best === Infinity) return "?";
+      return Math.max(1, Math.ceil(porCusto ? best : best / passoRef));
     };
     const classifica = (dono) => (dono === me ? "SUA" : dono === null ? "NEUTRA" : "INIMIGA");
 
@@ -2002,6 +2167,11 @@
     construirEstradas,
     caminhoEntre,
     distanciaRota,
+    // Iberia (mapa autoral): peso/marcha por custo de estrada
+    pesoTrecho,
+    pesoRota,
+    turnosDeCaminho,
+    estradasIberia,
     posicaoRota,
     cruzaramNaEstrada,
     resolverCombateEstrada,
