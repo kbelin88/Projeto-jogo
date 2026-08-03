@@ -119,6 +119,22 @@
   #sb-status:empty { display: none; }
   body.replay #banner, body.cinema #banner { top: 104px; }
 
+  #edTexto {
+    position: fixed; inset: 8% 12%; z-index: 12; display: none; flex-direction: column;
+    background: rgba(18,14,9,.97); border: 2px solid #6b4a22; border-radius: 10px;
+    padding: 10px; color: #f0e3c0; font: 12px 'Trebuchet MS', sans-serif;
+  }
+  .edt-cab { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .edt-cab button {
+    background: #3a2b18; color: #f0e3c0; border: 1px solid #6b4a22; border-radius: 5px;
+    padding: 3px 9px; cursor: pointer; font: inherit;
+  }
+  #edtArea {
+    flex: 1; width: 100%; background: #0f1319; color: #d7e2c9; border: 1px solid #3a2b18;
+    border-radius: 4px; padding: 8px; resize: none; white-space: pre;
+    font: 11.5px/1.5 Consolas, monospace;
+  }
+
   /* ===== BARRA DO EDITOR DE MAPA ===== */
   #editorbar {
     position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
@@ -1282,10 +1298,25 @@
   function desenharAlcasEditor() {
     if (!game) return;
     ctx.save();
+    // realce do que esta sob o cursor: some a duvida sobre o que vai ser pego
+    const sob = ED.pegou ? null : edSobreCidade(mouseSX, mouseSY);
     for (const a of game.aldeias) {
       const x = SX(a.x), y = SY(a.y);
-      ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(255,238,150,.95)"; ctx.fill();
+      const vivo = (ED.pegou && ED.pegou.tipo === "cidade" && ED.pegou.ald === a) || sob === a;
+      if (vivo) {
+        const cs = TILE * scale, cap = capitalIds.has(a.id);
+        const larg = cs * (cap ? 3.2 : 2.4);
+        const spr = cap ? SPR.castelo : SPR.aldeia_neutra;
+        const alt = alturaSprite(spr && spr.pronto ? spr : null, larg, Math.max(20, cs * 0.59));
+        const yB = baseVisualIB(a);
+        ctx.lineWidth = 2; ctx.strokeStyle = "rgba(255,238,150,.9)";
+        ctx.setLineDash([5, 4]);
+        ctx.strokeRect(x - larg / 2, yB - alt, larg, alt + 6);
+        ctx.setLineDash([]);
+        ctx.beginPath(); ctx.moveTo(x, yB); ctx.lineTo(x, y); ctx.stroke();
+      }
+      ctx.beginPath(); ctx.arc(x, y, vivo ? 6 : 4, 0, Math.PI * 2);
+      ctx.fillStyle = vivo ? "#fff3b0" : "rgba(255,238,150,.95)"; ctx.fill();
       ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(40,32,18,.9)"; ctx.stroke();
     }
     for (const k in IB.vias) {
@@ -1309,7 +1340,12 @@
       const larg = cs * (cap ? 3.2 : 2.4);
       const spr = cap ? SPR.castelo : SPR.aldeia_neutra;
       const alt = alturaSprite(spr && spr.pronto ? spr : null, larg, Math.max(20, cs * 0.59));
-      const x = SX(a.x), yB = baseVisualIB(a);
+      const x = SX(a.x), yB = baseVisualIB(a), yA = SY(a.y);
+      // DUAS areas: o desenho da cidade E a alca, que fica na ancora — logo
+      // ABAIXO do sprite, porque IB.levanta sobe a arte 30%. Sem a segunda,
+      // clicar no ponto amarelo errava a cidade e criava curva na estrada
+      // (era o "nao consigo mexer so a aldeia", 03/08).
+      if (Math.hypot(sx - x, sy - yA) <= 12) return a;
       if (sx >= x - larg / 2 && sx <= x + larg / 2 && sy >= yB - alt && sy <= yB + 6) return a;
     }
     return null;
@@ -1382,13 +1418,48 @@
     for (const k in a.vias) L.push("    \"" + k + "\": " + JSON.stringify(a.vias[k]) + ",");
     L.push("  },");
     L.push("};");
-    const blob = new Blob([L.join("\n") + "\n"], { type: "text/javascript" });
-    const el = document.createElement("a");
-    el.href = URL.createObjectURL(blob);
-    el.download = "mapa-ajustes.js";
-    el.click();
-    setTimeout(function () { URL.revokeObjectURL(el.href); }, 4000);
-    edAviso("mapa-ajustes.js baixado — ponha na pasta do jogo");
+    const texto = L.join("\n") + "\n";
+    // Servido por http (servir.py): grava direto no disco, sem download.
+    if (location.protocol === "http:" || location.protocol === "https:") {
+      fetch("/salvar-mapa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ arquivo: "mapa-ajustes.js", texto: texto }),
+      }).then(function (r) {
+        edAviso(r.ok ? "gravado em mapa-ajustes.js" : "servidor recusou — copie o texto");
+        if (!r.ok) edMostrarTexto(texto);
+      }).catch(function () {
+        edAviso("sem servidor — copie o texto");
+        edMostrarTexto(texto);
+      });
+      return;
+    }
+    // file://: baixar um .js faz o Chrome avisar que "pode danificar o
+    // dispositivo". Entao nao baixa nada — mostra para copiar.
+    edMostrarTexto(texto);
+    edAviso("copie o texto e salve como mapa-ajustes.js");
+  }
+
+  // Painel de texto copiavel (mesmo caminho do calibrar-mapa, que funcionou).
+  function edMostrarTexto(texto) {
+    let cx = document.getElementById("edTexto");
+    if (!cx) {
+      cx = document.createElement("div");
+      cx.id = "edTexto";
+      cx.innerHTML = '<div class="edt-cab">mapa-ajustes.js &mdash; copie e salve na pasta do jogo' +
+        ' <button id="edtCopiar">copiar</button><button id="edtFechar">fechar</button></div>' +
+        '<textarea id="edtArea" spellcheck="false" readonly></textarea>';
+      document.body.appendChild(cx);
+      document.getElementById("edtFechar").onclick = function () { cx.style.display = "none"; };
+      document.getElementById("edtCopiar").onclick = function () {
+        const t = document.getElementById("edtArea");
+        t.select(); t.setSelectionRange(0, 999999);
+        if (navigator.clipboard) navigator.clipboard.writeText(t.value).catch(function () {});
+        edAviso("copiado (ou use Ctrl+C, ja esta selecionado)");
+      };
+    }
+    cx.style.display = "flex";
+    document.getElementById("edtArea").value = texto;
   }
 
   let edAvisoT = null;
@@ -1403,6 +1474,11 @@
   // Sem mapa autoral nao ha o que editar (o v1/v2 e procedural, gerado por
   // seed) — a barra some inteira em vez de oferecer botao que quebraria.
   if (!IB) document.getElementById("editorbar").style.display = "none";
+  // servido por http o botao grava mesmo; em file:// so mostra para copiar
+  if (location.protocol === "http:" || location.protocol === "https:") {
+    const b = document.getElementById("edExportar");
+    if (b) { b.textContent = "gravar no disco"; b.title = "Grava mapa-ajustes.js na pasta do jogo"; }
+  }
 
   document.getElementById("edToggle").onclick = function () {
     ED.ativo = !ED.ativo;
