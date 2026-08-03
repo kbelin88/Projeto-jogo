@@ -1,0 +1,288 @@
+====================================================================
+HANDOFF — SESSAO 03-04/08/2026 — MAPA DA IBERIA INTEGRADO AO JOGO
+====================================================================
+Projeto: Arena dos Reis (Projeto Jogo)
+Repo: https://github.com/kbelin88/Projeto-jogo.git
+Branch de trabalho: mapa-iberia -> mergeada na main
+Escrito para: continuar em nova sessao E levar para conversa no Claude web
+
+
+--------------------------------------------------------------------
+1. O QUE ESTA SESSAO ENTREGOU
+--------------------------------------------------------------------
+
+O jogo saiu do mapa procedural (world.js, terreno gerado por seed) e
+passou a rodar no MAPA AUTORAL DA IBERIA: 24 cidades reais e 41 estradas
+escritas a mao, sobre uma arte de fundo da peninsula.
+
+FASE 2 — CALIBRACAO
+  - calibrar-mapa.html: ferramenta standalone (dev tool, fora do build)
+    para marcar as 24 cidades por cima da imagem limpa.
+  - As x,y foram semeadas por projecao geografica real (transformacao
+    afim lon/lat -> pixel, ajustada por minimos quadrados em 6 pontos da
+    costa) e depois ajustadas a mao pelo Lucas.
+
+FASE 3 — INTEGRACAO AO MOTOR
+  - engine.js ganhou layout "iberia" (agora o DEFAULT, era "v2").
+  - As 24 cidades e 41 estradas vem do arquivo; nada e sorteado.
+  - MARCHA POR CUSTO DE ESTRADA (fecha a lacuna L3 de vez):
+      turnos = ceil(custo_da_rota * passoRef/passoTropa)
+    Escala uniforme por tropa, entao cavaleiro segue chegando antes do
+    lanceiro E o espelhamento do mapa sobrevive.
+  - Guarnicao inicial das neutras usa o CUSTO ate a capital mais proxima,
+    nao a linha reta.
+
+FASE 3 — UI
+  - index.html desenha a imagem limpa como fundo, no encaixe calibrado.
+  - Mar infinito: um retalho de agua da propria arte, espelhado 2x2 e
+    repetido para fora. A peninsula flutua num oceano sem fim.
+  - Estradas ladrilhadas com os sprites do kit (estrada_reta /
+    estrada_reta2), giradas para acompanhar cada trecho.
+  - Capitais: castelo cru + BANDEIRA do time (nao mais o sprite tingido).
+  - Placar de transmissao do topo virou so o quadrado do TURNO.
+
+EDITOR DE MAPA EM JOGO (pedido do Lucas, para nao depender de mim)
+  - Botao "editar mapa" no canto inferior esquerdo.
+  - Arrastar cidade move o ponto real (a rede acompanha).
+  - SHIFT+arrastar move SO o desenho (campo `desloc`), sem tocar na rede.
+  - Clicar numa estrada cria ponto de curva (campo `via`); direito apaga.
+  - Salva em localStorage (rascunho) e exporta mapa-ajustes.js (arquivo).
+  - servir.py: servidor local que grava mapa-ajustes.js DIRETO NO DISCO.
+
+O mapa ajustado pelo Lucas foi ASSADO no world-iberia.js (x,y + desloc +
+via). O arquivo e a verdade; mapa-ajustes.js e so rascunho (gitignored).
+
+
+--------------------------------------------------------------------
+2. COMO ABRIR O JOGO (IMPORTANTE — MUDOU)
+--------------------------------------------------------------------
+
+    python servir.py
+
+NAO abrir o index.html com duplo clique. Em file:// o navegador trata a
+pagina como "origem nenhuma" e bloqueia: fetch de arquivo local, leitura
+de pixel do canvas (fica tainted), download de .js, e as vezes
+localStorage. Cada uma dessas restricoes custou uma solucao torta nesta
+sessao. Servido por http://localhost:8000 nada disso se aplica, e o
+botao do editor grava no disco de verdade.
+
+
+--------------------------------------------------------------------
+3. ARQUIVOS NOVOS / ALTERADOS (tudo pushado)
+--------------------------------------------------------------------
+  world-iberia.js ......... UMD; x,y calibradas; campos desloc e via
+  engine.js ............... layout "iberia" (default), pesoTrecho(),
+                            turnosDeCaminho(), estradasIberia()
+  index.html .............. fundo, mar infinito, estradas de sprite,
+                            editor de mapa, barra do turno
+  calibrar-mapa.html ...... dev tool de calibracao (efemera)
+  servir.py ............... servidor local + POST /salvar-mapa
+  Generated Image July 27, 2026 - 12_32AM.png ... arte de fundo
+  testes/test_iberia_marcha.js .... 14 testes: mundo, marcha, espelho, L3
+  testes/test_iberia_ajustes.js ... prova que x,y/via/desloc sao cosmeticos
+  testes/test_index_carrega.js .... executa o script do index num sandbox
+  .gitignore .............. + mapa-ajustes.js
+
+  Suite: 20 arquivos, 0 falhas. verificarEquilibrio(): 0 falhas.
+
+
+--------------------------------------------------------------------
+4. INVARIANTES QUE NAO PODEM QUEBRAR
+--------------------------------------------------------------------
+
+(a) ENCAIXE DA IMAGEM
+    A arte e 1215x864 e o MAPA.viewBox e '130 144 1429 886'. O encaixe e
+    escala uniforme 1429/1215 = 1.17613 ANCORADA NO TOPO
+    (preserveAspectRatio="xMidYMin slice"). Qualquer outro encaixe
+    desloca as 24 cidades. Ja mordeu uma vez: um "esticao" achatava 13%
+    na vertical e jogava 7 cidades na agua.
+
+(b) MARCHA NUNCA POR PIXEL
+    Em linha reta o mapa NAO e espelhado: 19 das 24 cidades quebram o
+    espelho euclidiano por +30px, e a razao (dist/pxPorTurno)/custo varia
+    de 0.57 a 1.94 entre as 41 estradas. O equilibrio vive so nos custos
+    autorais. pesoTrecho() decide: custo no mapa autoral, pixel no
+    procedural.
+
+(c) O SPRITE E DESENHADO LEVANTADO
+    IB.levanta = 0.30 sobe a arte 30% acima da ancora. Tudo que precise
+    casar visualmente com a cidade tem que usar baseVisualIB() ou
+    subidaVisualVB(), nunca SY(a.y) cru. Essa armadilha mordeu TRES vezes
+    nesta sessao: estradas por baixo das aldeias, tropas marchando ao
+    lado da estrada, e a alca do editor caindo fora da area de clique.
+
+(d) COSMETICO E COSMETICO
+    x,y / via / desloc nao entram em custo, rota, par nem equilibrio.
+    testes/test_iberia_ajustes.js embaralha as 24 posicoes de proposito e
+    exige que verificarEquilibrio() siga zerado e as 552 rotas nao mudem.
+
+(e) TESTES QUE LEEM O DEFAULT GLOBAL
+    test_v2_layout e test_peca6_estradas testam o layout PROCEDURAL e
+    agora fixam layout:"v2". Teste novo que use Engine.CONFIG cru vai
+    herdar "iberia".
+
+(f) node --check NAO BASTA
+    Ele so valida sintaxe e ja deixou passar DOIS erros que quebraram o
+    jogo em tela (constante apagada; TDZ do chaveVia). Use
+    testes/test_index_carrega.js, que EXECUTA o script do index.
+
+
+--------------------------------------------------------------------
+5. AS DUAS PARTIDAS RODADAS — ACHADOS
+--------------------------------------------------------------------
+
+PARTIDA 1: qwen2.5:3b (A) vs nemotron-nano-9b-v2 free (B)
+  seed 1 | maxTurnos 63 | INTERROMPIDA no turno 52
+  Resultado: A 5 aldeias / B 6 aldeias / 13 neutras
+  A: 0.54 envios/turno, 39 rejeicoes | B: 1.06 envios/turno, 18 rejeicoes
+
+  * MORREU POR COTA, NAO POR JOGO. OpenRouter free = 50 requisicoes/dia.
+    B respondeu 51 turnos e levou HTTP 429. Qualquer partida >50 turnos
+    com modelo free do OpenRouter e estruturalmente impossivel.
+    (O tratamento de erro de rede funcionou: nao contou o turno e marcou
+    a partida como imprestavel para benchmark.)
+
+  * CONCENTRACAO E O BLOQUEIO, agora quantificado: B atacou Girona [14]
+    cerca de 28 vezes entre os turnos 12 e 50, com forca media ~1.5,
+    contra um alvo que exigia 7 arqueiros. Zero vitorias. Moeu a defesa
+    ate 1 tropa e AINDA perdeu, porque continuou mandando 1 (empate vai
+    para o defensor). Contraprova na mesma partida: Zaragoza caiu no
+    turno 43 quando ele finalmente mandou 5 de uma vez.
+
+  * A PARTIDA TRAVA: 6 conquistas ate o turno 9, depois 24 TURNOS SEM
+    NENHUMA. Os dois reis pegam o que da com as tropas iniciais e depois
+    nao conseguem mais montar forca suficiente.
+
+  * ERRO DE EXECUCAO DOMINANTE: tropa em transito tratada como tropa em
+    casa. O raciocinio do Nemotron mostra isso literalmente ("the army is
+    already in transit, so the user can order it to attack"). E problema
+    de PROMPT, nao de modelo.
+
+  * qwen2.5:3b esta abaixo da barra: 5 vezes seguidas o mesmo erro de
+    formato (construir sem o campo "tipo") apesar da rejeicao explicita,
+    e perseveracao pesada (mesma ordem invalida repetida 3-6x).
+
+
+PARTIDA 2: gemini (A) vs llama3:latest (B)
+  seed 1 | maxTurnos 20 | terminou por limite de turnos
+  Resultado: A 7 aldeias / forca 25 | B 5 aldeias / forca 15 | 12 neutras
+  A: 2.50 envios/turno, 9 rejeicoes | B: 0.90 envios/turno, 14 rejeicoes
+
+  * PRIMEIRA VEZ QUE UM MODELO MOSTRA ESTRATEGIA (degrau 3).
+    No turno 10 o Gemini escreve, no proprio raciocinio:
+      "the critical rule of separate combat engagements based on arrival
+       time necessitates a more coordinated strategy... I am now moving
+       all available troops towards a central staging point: village [5]"
+    Ele LEU a regra de que cada chegada e um combate separado, entendeu a
+    consequencia e mudou de doutrina no meio da partida. Executou nos
+    turnos 10,12,14,15,17,18,19,20. Tambem raciocina sobre counter antes
+    de escolher tropa, reconhece custo afundado, e usa a rede de estradas
+    corretamente ("route [0]-[1]-[5], 2 turns").
+
+  * MAS A ESTRATEGIA NUNCA FOI TESTADA. Do turno 10 ao 20 ele fez apenas
+    DOIS ataques. A pilha em Badajoz chegou a ~25 arqueiros e nunca
+    atacou. O unico ataque grande (5 arqueiros para Faro, turno 16) ainda
+    estava em marcha quando a partida acabou. Nao da para distinguir
+    entre concentracao prestes a compensar e acumulo eterno.
+    ESSA E A PERGUNTA MAIS VALIOSA EM ABERTO.
+
+  * UNICA FRAQUEZA DO GEMINI: aritmetica de recurso. As 9 rejeicoes dele
+    sao TODAS "recurso insuficiente" — zero erro de estado, zero tropa
+    inexistente, zero erro de formato. E sempre nas mesmas 3 aldeias,
+    tentando arqueiro (20 madeira) numa aldeia que produz 10/turno e onde
+    ele manda construir toda rodada. Ele nao percebeu que precisa poupar
+    um turno.
+
+  * llama3 TRAVOU NUM LACO: do turno 9 ao 20, DOZE TURNOS SEGUIDOS com a
+    ordem identica {"origemId":12,"destinoId":16,"tropas":{"lanceiro":1}}.
+    Duas causas mecanicas: (a) manda construir numa aldeia e enviar de
+    OUTRA; (b) manda enviar no mesmo turno em que manda construir, e a
+    unidade so fica pronta no turno seguinte.
+
+  * O MAPA ESTA EQUILIBRADO. Ate o turno 10 a expansao foi quase
+    perfeitamente espelhada pelos pares `par` do arquivo (Santarem<->
+    Tarragona, Evora<->Girona, Coimbra<->Castellon, Badajoz<->Zaragoza).
+    O 7x5 so aparece DEPOIS que o llama3 travou. O placar reflete
+    diferenca de modelo, nao vantagem de lado. E a melhor evidencia que o
+    mapa da Iberia produziu ate agora.
+
+
+ACHADO DE BALANCEAMENTO (as duas partidas)
+  O FERRO E UM RECURSO MORTO E A MADEIRA ESTRANGULA O JOGO.
+  Producao: 10 madeira + 6 ferro por aldeia/turno.
+  Custos: lanceiro 15m/0f | arqueiro 20m/10f | cavaleiro 30m/30f.
+  Partida 1: a aldeia [12] chegou a 216 de ferro com ~20 de madeira.
+  Partida 2: [0] chegou a 40 de ferro com 10 de madeira em 20 turnos.
+  Cavaleiros construidos: 1 na partida 1, ZERO na partida 2.
+  O cavaleiro e o unico sumidouro de ferro e e caro demais em madeira.
+  Metade da economia nao faz nada. DECISAO DE MOTOR PENDENTE.
+
+
+COMPARATIVO ENTRE MODELOS (escala de degraus 0=formato .. 3=estrategia)
+  modelo             agencia   aceitas   erro dominante   degrau
+  qwen2.5:3b          0.54       ~57%    formato+estado     0
+  llama3:latest       0.90        71%    estado             1
+  nemotron-9b free    1.06        ~88%   estado             2
+  gemini              2.50        92%    recurso            3
+
+
+--------------------------------------------------------------------
+6. DECISOES EM ABERTO (para levar a conversa no Claude web)
+--------------------------------------------------------------------
+
+(1) ECONOMIA: como consertar o ferro morto?
+    Opcoes: baratear o cavaleiro em madeira; subir a producao de madeira;
+    dar outro uso ao ferro (muralha? upgrade de aldeia?); ou aceitar e
+    remover o ferro. Isso muda o balanceamento inteiro e zera de novo a
+    comparabilidade — decidir ANTES de gastar credito de API.
+
+(2) PROMPT: como matar o erro "tropa em transito != tropa em casa"?
+    E o erro de execucao mais frequente dos modelos medianos e o mais
+    barato de consertar. Provavelmente basta o relatorio dizer
+    explicitamente quanto esta DISPONIVEL PARA ENVIAR.
+
+(3) CONCENTRACAO: o Gemini realmente ataca, ou acumula para sempre?
+    So descobre rodando 40+ turnos. E a pergunta que mais vale.
+
+(4) QUAIS MODELOS COMPRAR CREDITO PARA TESTAR?
+    O Gemini foi o unico a chegar no degrau 3. Vale testar modelos da
+    mesma classe ou acima em partidas longas. Os modelos free do
+    OpenRouter NAO servem para partida longa (cota de 50/dia).
+
+(5) MAPA: o Lucas disse que ha "alguns detalhes para corrigir", mas que
+    por enquanto esta bom. O editor em jogo ja resolve ajuste cosmetico
+    sozinho; se for mudar a REDE (criar/apagar estrada, mudar terreno),
+    isso mexe no equilibrio e precisa de revalidacao.
+
+
+--------------------------------------------------------------------
+7. PROXIMOS PASSOS SUGERIDOS (ordem)
+--------------------------------------------------------------------
+  1. Consertar o prompt (item 2 acima). Barato, e todo benchmark depois
+     dele fica mais limpo.
+  2. Decidir a economia do ferro (item 1). Muda tudo, entao vem cedo.
+  3. So entao: gemini x nemotron, 45 turnos, com credito. Primeiro par
+     onde os dois lados passam do degrau 1 — ai o resultado mede
+     estrategia de verdade.
+  4. Aposentar qwen2.5:3b dos pares de benchmark.
+
+
+--------------------------------------------------------------------
+8. AVISOS
+--------------------------------------------------------------------
+  * DUAS CHAVES DE API FORAM EXPOSTAS em conversa nesta sessao (uma do
+    OpenRouter, uma do Google/Gemini, ambas vindas do .env). REVOGAR AS
+    DUAS e gerar novas.
+  * O .env esta no .gitignore e NAO foi para o GitHub.
+  * maxTurnos > 50 com modelo free do OpenRouter nao termina.
+  * O thinking do Gemini esta sendo cortado no meio (turnos 5 e 16 da
+    partida 2). Se o raciocinio for usado como dado, subir o teto de
+    tokens de saida.
+  * Commits desta sessao foram limpos dos rodapes de atribuicao antes do
+    push. Commits ANTIGOS ja no GitHub ainda contem o link de sessao —
+    limpar exige reescrever historico publico (force-push), decisao do
+    Lucas.
+
+====================================================================
+FIM DO HANDOFF
+====================================================================
