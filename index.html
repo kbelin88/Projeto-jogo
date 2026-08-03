@@ -103,9 +103,15 @@
   #pt-turno {
     align-self: center; padding: 6px 14px; margin: 0 4px;
     font: bold 15px Consolas, monospace; color: #d9a441;
-    border-left: 1px solid rgba(107,74,34,.6); border-right: 1px solid rgba(107,74,34,.6);
     white-space: nowrap;
   }
+  /* 03/08: o placar de transmissao saiu do topo — cabo de guerra, forca e
+     contagem de aldeias ja vivem nos paineis laterais, e a faixa larga
+     atrapalhava a leitura do mapa. Sobra a MOLDURA com o turno.
+     Escondido por CSS, nao removido do DOM: o codigo de atualizacao segue
+     escrevendo em pt-a-f, pt-cabo-a e companhia sem quebrar. */
+  #pt-cabo, .pt-linha > .pt-lado { display: none; }
+  #placarTop { min-width: 0; padding-bottom: 0; }
   #sb-status { text-align: center; font: 11px Consolas, monospace; color: #d9a441; padding: 0 8px 5px; background: rgba(0,0,0,.18); }
   #sb-status:empty { display: none; }
   body.replay #banner, body.cinema #banner { top: 104px; }
@@ -2415,8 +2421,8 @@
           ctx.setLineDash(sec ? [cs * 0.30, cs * 0.24] : []);
         }
         ctx.beginPath();
-        ctx.moveTo(SX(a.x), SY(a.y));
-        ctx.lineTo(SX(b.x), SY(b.y));
+        ctx.moveTo(SX(a.x), baseVisualIB(a));
+        ctx.lineTo(SX(b.x), baseVisualIB(b));
         ctx.stroke();
       }
     }
@@ -2426,6 +2432,18 @@
 
   function alturaSprite(spr, larg, r) {
     return spr ? larg * spr.height / spr.width : r * 2;
+  }
+
+  // Onde a cidade ASSENTA na tela, ja contando o levante do sprite (IB.levanta).
+  // As estradas tem de terminar exatamente aqui: mirando na ancora crua elas
+  // passavam por BAIXO das aldeias (11px numa aldeia, 20px numa capital).
+  function baseVisualIB(a) {
+    const cs = TILE * scale;
+    const cap = capitalIds.has(a.id);
+    const spr = cap ? (SPR.castelo && SPR.castelo.pronto ? SPR.castelo : null)
+                    : (SPR.aldeia_neutra && SPR.aldeia_neutra.pronto ? SPR.aldeia_neutra : null);
+    const larg = cs * (cap ? 3.2 : 2.4);
+    return SY(a.y) - alturaSprite(spr, larg, Math.max(20, cs * 0.59)) * IB.levanta;
   }
 
   function drawGame() {
@@ -2458,7 +2476,7 @@
       // IB.levanta: quanto o sprite sobe alem da ancora, em fracao da propria
       // altura. Botao de GOSTO (feedback Lucas 03/08) — a ancora geometrica e
       // 0; subir um pouco assenta melhor a cidade no relevo.
-      const yBase = sy + (IB ? -alturaSprite(sprB, larg, r) * IB.levanta : r * 0.5);
+      const yBase = IB ? baseVisualIB(a) : sy + r * 0.5;
       if (sprB) {
         // Sprite CRU, sempre: quem marca a posse e a BANDEIRA, nao a tinta.
         // (feedback Lucas 03/08: a capital tingida virava um bloco azul ou
