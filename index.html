@@ -468,10 +468,31 @@
   } : null;
   if (IB) {
     IB.div = IB.larg / IB.largCels;
-    IB.cels = { w: IB.largCels, h: IB.alt / IB.div };   // 90 x ~55.8 celulas
-    MIN_SCALE = 0.20;      // o mapa inteiro e maior que o teatro procedural
+    IB.cels = { w: IB.largCels, h: IB.alt / IB.div };   // retangulo do VIEWBOX
+    // Ate a imagem carregar, assume o retangulo do viewBox.
+    IB.imgCels = { w: IB.cels.w, h: IB.cels.h };
+    MIN_SCALE = 0.10;      // o mapa inteiro e maior que o teatro procedural
+    // foco da camera: centro do retangulo das CIDADES (o miolo jogavel), que
+    // nao e o centro da imagem — sobra muito mar no sul e a leste.
+    const xs = Iberia.CIDADES.map((c) => c.x), ys = Iberia.CIDADES.map((c) => c.y);
+    IB.foco = {
+      x: ((Math.min.apply(null, xs) + Math.max.apply(null, xs)) / 2 - IB.ox) / IB.div,
+      y: ((Math.min.apply(null, ys) + Math.max.apply(null, ys)) / 2 - IB.oy) / IB.div,
+    };
     IB.img = new Image();
-    IB.img.onload = () => { IB.pronto = true; draw(); };
+    IB.img.onload = () => {
+      IB.pronto = true;
+      // COVER ancorado no topo (xMidYMin slice): escala UNIFORME, a largura
+      // casa com o viewBox e a altura sobra por baixo (so mar). Esticar a
+      // imagem para dentro do retangulo do viewBox achata 13% na vertical e
+      // joga as cidades da costa para dentro da agua — foi o bug de 02/08.
+      IB.imgCels = {
+        w: IB.largCels,
+        h: IB.largCels * IB.img.naturalHeight / IB.img.naturalWidth,
+      };
+      enquadrarTeatro();
+      draw();
+    };
     IB.img.src = "Generated%20Image%20July%2027,%202026%20-%2012_32AM.png";
   }
   // px do viewBox -> celula de mundo. Sem Iberia: identidade.
@@ -485,7 +506,7 @@
   // Prende a câmera às bordas do mundo: o mapa sempre preenche a tela toda
   function clampPan() {
     const cs = TILE * scale;
-    const wpx = (IB ? IB.cels.w : WORLD) * cs, wpy = (IB ? IB.cels.h : WORLD) * cs;
+    const wpx = (IB ? IB.imgCels.w : WORLD) * cs, wpy = (IB ? IB.imgCels.h : WORLD) * cs;
     panX = wpx >= VW ? Math.min(0, Math.max(VW - wpx, panX)) : (VW - wpx) / 2;
     panY = wpy >= VH ? Math.min(0, Math.max(VH - wpy, panY)) : (VH - wpy) / 2;
   }
@@ -777,7 +798,7 @@
       if (IB.pronto) {
         const cs0 = TILE * scale;
         ctx.imageSmoothingEnabled = true;
-        ctx.drawImage(IB.img, panX, panY, IB.cels.w * cs0, IB.cels.h * cs0);
+        ctx.drawImage(IB.img, panX, panY, IB.imgCels.w * cs0, IB.imgCels.h * cs0);
       }
       desenharEstradasIberia();
       drawGame();
@@ -1573,10 +1594,13 @@
 
   // enquadra a camera no teatro da partida
   function enquadrarTeatro() {
-    if (IB) {                                  // Iberia: enquadra o mapa inteiro
-      const fit = Math.min(VW / (IB.cels.w * TILE), VH / (IB.cels.h * TILE));
-      scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, fit));
-      centerOn(IB.cels.w / 2, IB.cels.h / 2);
+    if (IB) {
+      // COVER: a imagem preenche a tela inteira, sem faixas vazias nas
+      // laterais (era o "sobrou espaco nos lados"). O que passa da borda e
+      // mar do rodape. Enquadra pelo centro das CIDADES, nao da imagem.
+      const cover = Math.max(VW / (IB.imgCels.w * TILE), VH / (IB.imgCels.h * TILE));
+      scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, cover));
+      centerOn(IB.foco.x, IB.foco.y);
       return;
     }
     const t = Engine.CONFIG.teatro;
@@ -2238,24 +2262,43 @@
   // As 41 estradas do world-iberia, desenhadas do arquivo (nao derivadas).
   // Tracejado = via de contorno; a espessura segue o custo, entao serra
   // (cara) aparece mais fina que costa (barata) — a rede conta o terreno.
+  // As 41 estradas do world-iberia, desenhadas do arquivo (nao derivadas).
+  // Nao e uma linha: cada estrada tem BORDA escura (o corte no terreno) e
+  // LEITO claro de terra batida por cima. Via de contorno = leito mais
+  // estreito e pontilhado (caminho secundario).
+  //
+  // Duas passadas: TODAS as bordas primeiro, depois TODOS os leitos. Numa
+  // passada so, a borda de uma estrada cortaria o leito da outra em cada
+  // cruzamento — e o mapa tem varios (Toledo, Madrid, Badajoz).
   function desenharEstradasIberia() {
     if (!IB || !game) return;
     const porSlug = {};
     for (const a of game.aldeias) porSlug[a.slug] = a;
-    const contorno = new Set((Iberia.MAPA.viasDeContorno || []).map((p) => p.slice().sort().join("|")));
+    const contorno = new Set((Iberia.MAPA.viasDeContorno || [])
+      .map((par) => par.slice().sort().join("|")));
+    const cs = TILE * scale;
     ctx.save();
-    ctx.lineCap = "round";
-    for (const e of Iberia.ESTRADAS) {
-      const a = porSlug[e.de], b = porSlug[e.para];
-      if (!a || !b) continue;
-      const ehContorno = contorno.has([e.de, e.para].slice().sort().join("|"));
-      ctx.strokeStyle = "rgba(244,230,200,.55)";
-      ctx.lineWidth = Math.max(1.2, (TILE * scale) * (ehContorno ? 0.045 : 0.075));
-      ctx.setLineDash(ehContorno ? [10, 8] : []);
-      ctx.beginPath();
-      ctx.moveTo(SX(a.x), SY(a.y));
-      ctx.lineTo(SX(b.x), SY(b.y));
-      ctx.stroke();
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    for (const passada of [0, 1]) {
+      for (const e of Iberia.ESTRADAS) {
+        const a = porSlug[e.de], b = porSlug[e.para];
+        if (!a || !b) continue;
+        const sec = contorno.has([e.de, e.para].slice().sort().join("|"));
+        const larg = Math.max(4, cs * (sec ? 0.24 : 0.34));
+        if (passada === 0) {
+          ctx.strokeStyle = "rgba(62,48,32,.42)";      // borda / corte no terreno
+          ctx.lineWidth = larg;
+          ctx.setLineDash([]);
+        } else {
+          ctx.strokeStyle = sec ? "#c2ac81" : "#d9c49a"; // leito de terra batida
+          ctx.lineWidth = Math.max(2, larg * 0.62);
+          ctx.setLineDash(sec ? [cs * 0.30, cs * 0.24] : []);
+        }
+        ctx.beginPath();
+        ctx.moveTo(SX(a.x), SY(a.y));
+        ctx.lineTo(SX(b.x), SY(b.y));
+        ctx.stroke();
+      }
     }
     ctx.setLineDash([]);
     ctx.restore();
@@ -2287,19 +2330,22 @@
       const larg = cs * (ehCapital ? 3.2 : 2.4);
       const yBase = sy + r * 0.5;                    // base-centro no pe do plot
       if (sprB) {
-        // capital tingida na cor do dono (bandeiras vem azuis de fabrica);
-        // aldeia = sprite cru (a bandeira marca a posse). Tinta cacheada por cor.
-        desenharSprite(ehCapital ? spriteTintado(sprB, col) : sprB, sx, yBase, larg);
+        // Sprite CRU, sempre: quem marca a posse e a BANDEIRA, nao a tinta.
+        // (feedback Lucas 03/08: a capital tingida virava um bloco azul ou
+        // vermelho e comia o desenho do castelo.)
+        desenharSprite(sprB, sx, yBase, larg);
       } else if (r >= 15) {                          // fallback procedural
         if (ehCapital) desenharTorreao(sx, sy, r, col);
         else desenharCabana(sx, sy, r);
       }
 
-      // BANDEIRA do time sobre a aldeia DOMINADA (nao-capital): a capital ja
-      // veste a cor no proprio castelo, entao so as aldeias tomadas recebem.
-      if (!ehCapital && a.dono !== null) {
+      // BANDEIRA do time: a UNICA marca de posse, tanto na capital quanto na
+      // aldeia tomada. Na capital ela sobe um pouco mais (o castelo e alto).
+      if (a.dono !== null) {
         const alt = sprB ? larg * sprB.height / sprB.width : r * 2;
-        desenharBandeira(sx, yBase - alt * 0.55, r * 1.25, col);
+        // capital: hasteia no alto do castelo (0.92); aldeia: no telhado (0.55)
+        desenharBandeira(sx, yBase - alt * (ehCapital ? 0.92 : 0.55),
+                         r * (ehCapital ? 1.5 : 1.25), col);
       }
     }
 
