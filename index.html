@@ -434,6 +434,7 @@
     canvas.height = Math.floor(VH * DPR);
     canvas.style.width = VW + "px";
     canvas.style.height = VH + "px";
+    ajustarZoomMinimoIB();     // a viewport mudou -> o piso do zoom mudou
     draw();
   }
   window.addEventListener("resize", resize);
@@ -471,7 +472,9 @@
     IB.cels = { w: IB.largCels, h: IB.alt / IB.div };   // retangulo do VIEWBOX
     // Ate a imagem carregar, assume o retangulo do viewBox.
     IB.imgCels = { w: IB.cels.w, h: IB.cels.h };
-    MIN_SCALE = 0.10;      // o mapa inteiro e maior que o teatro procedural
+    // MIN_SCALE vira o zoom de COVER, recalculado a cada resize: afastar
+    // alem disso mostraria fundo azul nas beiradas e travaria o arrasto (a
+    // camera nao tem para onde ir). Igual ao mapa antigo: a imagem E a tela.
     // foco da camera: centro do retangulo das CIDADES (o miolo jogavel), que
     // nao e o centro da imagem — sobra muito mar no sul e a leste.
     const xs = Iberia.CIDADES.map((c) => c.x), ys = Iberia.CIDADES.map((c) => c.y);
@@ -490,11 +493,23 @@
         w: IB.largCels,
         h: IB.largCels * IB.img.naturalHeight / IB.img.naturalWidth,
       };
+      ajustarZoomMinimoIB();
       enquadrarTeatro();
       draw();
     };
     IB.img.src = "Generated%20Image%20July%2027,%202026%20-%2012_32AM.png";
   }
+  // Zoom em que a imagem cobre exatamente a viewport (piso do afastamento).
+  function escalaCoverIB() {
+    if (!IB) return MIN_SCALE;
+    return Math.max(VW / (IB.imgCels.w * TILE), VH / (IB.imgCels.h * TILE));
+  }
+  function ajustarZoomMinimoIB() {
+    if (!IB) return;
+    MIN_SCALE = escalaCoverIB();
+    if (scale < MIN_SCALE) scale = MIN_SCALE;
+  }
+
   // px do viewBox -> celula de mundo. Sem Iberia: identidade.
   const celX = (v) => (IB ? (v - IB.ox) / IB.div : v);
   const celY = (v) => (IB ? (v - IB.oy) / IB.div : v);
@@ -2328,7 +2343,10 @@
         ? (SPR.castelo && SPR.castelo.pronto ? SPR.castelo : null)
         : (SPR.aldeia_neutra && SPR.aldeia_neutra.pronto ? SPR.aldeia_neutra : null);
       const larg = cs * (ehCapital ? 3.2 : 2.4);
-      const yBase = sy + r * 0.5;                    // base-centro no pe do plot
+      // Iberia: (x,y) JA e a ancora da base (o ponto marcado na calibracao),
+      // entao o sprite assenta exatamente ali. No procedural, (x,y) e o centro
+      // da celula e o sprite desce meio raio para "pisar" nela.
+      const yBase = sy + (IB ? 0 : r * 0.5);
       if (sprB) {
         // Sprite CRU, sempre: quem marca a posse e a BANDEIRA, nao a tinta.
         // (feedback Lucas 03/08: a capital tingida virava um bloco azul ou
