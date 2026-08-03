@@ -472,9 +472,22 @@
     IB.cels = { w: IB.largCels, h: IB.alt / IB.div };   // retangulo do VIEWBOX
     // Ate a imagem carregar, assume o retangulo do viewBox.
     IB.imgCels = { w: IB.cels.w, h: IB.cels.h };
-    // MIN_SCALE vira o zoom de COVER, recalculado a cada resize: afastar
-    // alem disso mostraria fundo azul nas beiradas e travaria o arrasto (a
-    // camera nao tem para onde ir). Igual ao mapa antigo: a imagem E a tela.
+    // MAR INFINITO (03/08): fora da imagem o canvas pinta o MESMO mar, num
+    // gradiente amostrado da propria arte (5 paradas na faixa limpa a oeste).
+    // Com isso a peninsula pode flutuar num oceano sem fim e o zoom deixa de
+    // ser refem do cover: da para afastar ate tirar as cidades de tras dos
+    // paineis laterais (320px de cada lado comiam as bordas do mapa).
+    // 9 paradas amostradas das COLUNAS DE BORDA da propria arte (esquerda +
+    // direita, mediana por faixa de altura). Sao exatamente as cores que a
+    // agua pintada encosta na emenda lateral, entao a costura some.
+    // Amostrado offline de proposito: o jogo roda em file://, e desenhar a
+    // imagem no canvas o "tinge" (tainted) — getImageData ia estourar.
+    IB.mar = [[0.000,"rgb(35,49,46)"],  [0.125,"rgb(56,77,75)"], [0.250,"rgb(63,84,81)"],
+              [0.375,"rgb(63,85,83)"],  [0.500,"rgb(64,89,87)"], [0.625,"rgb(59,84,83)"],
+              [0.750,"rgb(57,78,76)"],  [0.875,"rgb(51,67,64)"], [1.000,"rgb(45,46,40)"]];
+    // quanto da imagem ainda precisa caber na tela no zoom mais afastado
+    IB.afastamento = 0.5;
+    IB.levanta = 0.30;
     // foco da camera: centro do retangulo das CIDADES (o miolo jogavel), que
     // nao e o centro da imagem — sobra muito mar no sul e a leste.
     const xs = Iberia.CIDADES.map((c) => c.x), ys = Iberia.CIDADES.map((c) => c.y);
@@ -504,9 +517,23 @@
     if (!IB) return MIN_SCALE;
     return Math.max(VW / (IB.imgCels.w * TILE), VH / (IB.imgCels.h * TILE));
   }
+  // Fundo de mar que continua para fora da imagem. O gradiente e ancorado na
+  // POSICAO DA IMAGEM na tela, entao a agua pintada encosta na agua desenhada
+  // com a mesma cor — a emenda some. Alem das pontas o canvas repete a cor da
+  // parada extrema, e o oceano segue por quanto for preciso.
+  function pintarMarIB() {
+    const cs = TILE * scale;
+    const y0 = panY, y1 = panY + IB.imgCels.h * cs;
+    const g = ctx.createLinearGradient(0, y0, 0, y1);
+    for (const [t, cor] of IB.mar) g.addColorStop(t, cor);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, VW, VH);
+  }
   function ajustarZoomMinimoIB() {
     if (!IB) return;
-    MIN_SCALE = escalaCoverIB();
+    // o piso e uma FRACAO do cover: com mar infinito, afastar alem do cover
+    // nao mostra fundo — mostra oceano, que e o que o mapa deveria ter.
+    MIN_SCALE = escalaCoverIB() * IB.afastamento;
     if (scale < MIN_SCALE) scale = MIN_SCALE;
   }
 
@@ -522,6 +549,17 @@
   function clampPan() {
     const cs = TILE * scale;
     const wpx = (IB ? IB.imgCels.w : WORLD) * cs, wpy = (IB ? IB.imgCels.h : WORLD) * cs;
+    if (IB) {
+      // Limite simetrico: a imagem nunca sai inteira da tela, mas DESLIZA
+      // livremente nos dois sentidos, tambem quando esta menor que a viewport
+      // (antes o else centralizava e travava o arrasto). E assim que se puxa
+      // uma cidade de tras do painel lateral para o meio da tela.
+      const loX = Math.min(0, VW - wpx), hiX = Math.max(0, VW - wpx);
+      const loY = Math.min(0, VH - wpy), hiY = Math.max(0, VH - wpy);
+      panX = Math.max(loX, Math.min(hiX, panX));
+      panY = Math.max(loY, Math.min(hiY, panY));
+      return;
+    }
     panX = wpx >= VW ? Math.min(0, Math.max(VW - wpx, panX)) : (VW - wpx) / 2;
     panY = wpy >= VH ? Math.min(0, Math.max(VH - wpy, panY)) : (VH - wpy) / 2;
   }
@@ -808,8 +846,7 @@
     // MAPA DA IBERIA: o fundo e a imagem limpa; o motor desenha o resto por
     // cima lendo o world-iberia. Nada de terreno procedural aqui.
     if (IB) {
-      ctx.fillStyle = "#1d4a5c";                      // mar, fora da imagem
-      ctx.fillRect(0, 0, VW, VH);
+      pintarMarIB();                                  // oceano sem fim
       if (IB.pronto) {
         const cs0 = TILE * scale;
         ctx.imageSmoothingEnabled = true;
@@ -2319,6 +2356,10 @@
     ctx.restore();
   }
 
+  function alturaSprite(spr, larg, r) {
+    return spr ? larg * spr.height / spr.width : r * 2;
+  }
+
   function drawGame() {
     if (!game) return;
     const cs = TILE * scale;
@@ -2346,7 +2387,10 @@
       // Iberia: (x,y) JA e a ancora da base (o ponto marcado na calibracao),
       // entao o sprite assenta exatamente ali. No procedural, (x,y) e o centro
       // da celula e o sprite desce meio raio para "pisar" nela.
-      const yBase = sy + (IB ? 0 : r * 0.5);
+      // IB.levanta: quanto o sprite sobe alem da ancora, em fracao da propria
+      // altura. Botao de GOSTO (feedback Lucas 03/08) — a ancora geometrica e
+      // 0; subir um pouco assenta melhor a cidade no relevo.
+      const yBase = sy + (IB ? -alturaSprite(sprB, larg, r) * IB.levanta : r * 0.5);
       if (sprB) {
         // Sprite CRU, sempre: quem marca a posse e a BANDEIRA, nao a tinta.
         // (feedback Lucas 03/08: a capital tingida virava um bloco azul ou
@@ -2360,7 +2404,7 @@
       // BANDEIRA do time: a UNICA marca de posse, tanto na capital quanto na
       // aldeia tomada. Na capital ela sobe um pouco mais (o castelo e alto).
       if (a.dono !== null) {
-        const alt = sprB ? larg * sprB.height / sprB.width : r * 2;
+        const alt = alturaSprite(sprB, larg, r);
         // capital: hasteia no alto do castelo (0.92); aldeia: no telhado (0.55)
         desenharBandeira(sx, yBase - alt * (ehCapital ? 0.92 : 0.55),
                          r * (ehCapital ? 1.5 : 1.25), col);
