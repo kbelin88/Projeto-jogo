@@ -636,7 +636,10 @@
 
   // Chave de estrada: sempre em ordem alfabetica, para os dois sentidos
   // caírem no mesmo registro.
-  const chaveVia = (a, b) => [a, b].sort().join("|");
+  // declaracao de FUNCAO de proposito (hoisted): o bloco do IB, la em cima,
+  // chama isto ao montar IB.vias. Com `const` cai na zona morta temporal e o
+  // script inteiro morre no carregamento — foi a tela marrom de 03/08.
+  function chaveVia(a, b) { return [a, b].sort().join("|"); }
   // Pontos de curva de uma estrada, JA no sentido pedido (a -> b).
   function pontosVia(a, b) {
     if (!IB || !IB.vias) return [];
