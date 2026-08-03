@@ -136,9 +136,12 @@
   }
 
   /* ===== BARRA DO EDITOR DE MAPA ===== */
+  /* canto inferior ESQUERDO: a #gamebar (play/passo/modelo) mora no centro
+     de baixo e as duas se cobriam. */
   #editorbar {
-    position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+    position: fixed; bottom: 14px; left: 14px;
     z-index: 8; display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+    max-width: 46vw; flex-wrap: wrap;
     background: linear-gradient(180deg, rgba(43,32,20,.95), rgba(30,21,9,.95));
     border: 2px solid #6b4a22; border-radius: 10px; color: #f0e3c0;
     font: 12px 'Trebuchet MS', sans-serif; box-shadow: 0 6px 24px rgba(0,0,0,.55);
@@ -569,10 +572,12 @@
     // JSON (fetch e bloqueado), dai o formato ser um .js que declara global.
     IB.CHAVE_RASCUNHO = "iberia-ajustes";
     IB.ajustes = { cidades: {}, vias: {} };
+    IB.ajustes.desloc = {};
     const juntar = (a) => {
       if (!a) return;
       Object.assign(IB.ajustes.cidades, a.cidades || {});
       Object.assign(IB.ajustes.vias, a.vias || {});
+      Object.assign(IB.ajustes.desloc, a.desloc || {});
     };
     juntar(window.IBERIA_AJUSTES);
     try { juntar(JSON.parse(localStorage.getItem(IB.CHAVE_RASCUNHO) || "null")); } catch (e) {}
@@ -581,6 +586,9 @@
       if (q) { c.x = q[0]; c.y = q[1]; }
     }
     IB.vias = IB.ajustes.vias;
+    // Deslocamento SO do desenho da cidade (Shift+arrastar). A estrada segue
+    // ancorada no x,y — serve para assentar a arte no relevo sem mexer na rede.
+    IB.desloc = IB.ajustes.desloc || {};
 
     IB.img = new Image();
     IB.img.onload = () => {
@@ -604,6 +612,21 @@
   // tela -> px do viewBox (inverso de SX/SY). So faz sentido no mapa autoral.
   const vbX = (sx) => (sx - panX) / (TILE * scale) * IB.div + IB.ox;
   const vbY = (sy) => (sy - panY) / (TILE * scale) * IB.div + IB.oy;
+
+  // Quanto o ponto visual da cidade sobe em relacao a ancora, JA convertido
+  // para px do viewBox. E constante por tipo de cidade: a altura do sprite
+  // escala com o zoom e o zoom se cancela na conta.
+  //   tela: SY(v) = (v-oy)/div*cs + panY   e   base = SY(y) - H*levanta
+  //   com H = cs*cels*ratio  ->  v = y - cels*ratio*levanta*div
+  // Sem isto o exercito marcha pela ancora enquanto a estrada e desenhada na
+  // base do sprite, e a tropa anda ao LADO da estrada (visto em jogo 03/08).
+  function subidaVisualVB(a) {
+    if (!IB) return 0;
+    const cap = capitalIds.has(a.id);
+    const spr = cap ? SPR.castelo : SPR.aldeia_neutra;
+    if (!spr || !spr.pronto) return 0;         // fallback procedural: sem subida
+    return (cap ? 3.2 : 2.4) * (spr.height / spr.width) * IB.levanta * IB.div;
+  }
 
   // Chave de estrada: sempre em ordem alfabetica, para os dois sentidos
   // caírem no mesmo registro.
@@ -1290,7 +1313,7 @@
   // COSMETICO — x,y e pontos de curva nao entram em custo, rota, par nem
   // equilibrio, entao nao ha como desbalancear o mapa por aqui.
   const ED = { ativo: false, pegou: null, offX: 0, offY: 0 };
-  const ED_DICA = "arraste as cidades \u00b7 clique numa estrada p/ curvar \u00b7 botao direito apaga a curva";
+  const ED_DICA = "arraste a cidade \u00b7 SHIFT+arraste move so o desenho \u00b7 clique na estrada p/ curvar \u00b7 direito apaga";
 
   // Alcas do editor: um ponto no chao de cada cidade (o x,y de verdade, que e
   // o que se arrasta) e um losango em cada curva de estrada. So aparecem com o
@@ -1340,7 +1363,11 @@
       const larg = cs * (cap ? 3.2 : 2.4);
       const spr = cap ? SPR.castelo : SPR.aldeia_neutra;
       const alt = alturaSprite(spr && spr.pronto ? spr : null, larg, Math.max(20, cs * 0.59));
-      const x = SX(a.x), yB = baseVisualIB(a), yA = SY(a.y);
+      const dl = (IB.desloc[a.slug]) || [0, 0];
+      const cs2 = TILE * scale;
+      const x = SX(a.x) + dl[0] / IB.div * cs2;
+      const yB = baseVisualIB(a) + dl[1] / IB.div * cs2;
+      const yA = SY(a.y);
       // DUAS areas: o desenho da cidade E a alca, que fica na ancora — logo
       // ABAIXO do sprite, porque IB.levanta sobe a arte 30%. Sem a segunda,
       // clicar no ponto amarelo errava a cidade e criava curva na estrada
@@ -1395,11 +1422,17 @@
     const vias = {};
     for (const k in IB.vias) if (IB.vias[k] && IB.vias[k].length)
       vias[k] = IB.vias[k].map(function (q) { return [+q[0].toFixed(1), +q[1].toFixed(1)]; });
+    const desloc = {};
+    for (const k in IB.desloc) {
+      const d = IB.desloc[k];
+      if (d && (Math.abs(d[0]) > 0.05 || Math.abs(d[1]) > 0.05))
+        desloc[k] = [+d[0].toFixed(1), +d[1].toFixed(1)];
+    }
     try {
-      localStorage.setItem(IB.CHAVE_RASCUNHO, JSON.stringify({ cidades: cidades, vias: vias }));
+      localStorage.setItem(IB.CHAVE_RASCUNHO, JSON.stringify({ cidades: cidades, vias: vias, desloc: desloc }));
       edAviso("rascunho salvo neste navegador");
     } catch (err) { edAviso("nao consegui guardar aqui — use exportar"); }
-    return { cidades: cidades, vias: vias };
+    return { cidades: cidades, vias: vias, desloc: desloc };
   }
 
   function edExportar() {
@@ -1416,6 +1449,9 @@
     L.push("  },");
     L.push("  vias: {");
     for (const k in a.vias) L.push("    \"" + k + "\": " + JSON.stringify(a.vias[k]) + ",");
+    L.push("  },");
+    L.push("  desloc: {");
+    for (const k in a.desloc) L.push("    " + k + ": " + JSON.stringify(a.desloc[k]) + ",");
     L.push("  },");
     L.push("};");
     const texto = L.join("\n") + "\n";
@@ -1508,8 +1544,13 @@
     if (ED.ativo && IB && e.button === 0) {
       const cid = edSobreCidade(e.clientX, e.clientY);
       if (cid) {
-        ED.pegou = { tipo: "cidade", ald: cid };
-        ED.offX = SX(cid.x) - e.clientX; ED.offY = SY(cid.y) - e.clientY;
+        if (e.shiftKey) {                    // SO o desenho; a estrada fica
+          const d = IB.desloc[cid.slug] || [0, 0];
+          ED.pegou = { tipo: "desloc", ald: cid, base: [d[0], d[1]], px: e.clientX, py: e.clientY };
+        } else {
+          ED.pegou = { tipo: "cidade", ald: cid };
+          ED.offX = SX(cid.x) - e.clientX; ED.offY = SY(cid.y) - e.clientY;
+        }
         return;
       }
       const cur = edSobreCurva(e.clientX, e.clientY);
@@ -1545,6 +1586,15 @@
     mouseSX = e.clientX; mouseSY = e.clientY;
     if (ED.pegou) {
       const vx = vbX(e.clientX + ED.offX), vy = vbY(e.clientY + ED.offY);
+      if (ED.pegou.tipo === "desloc") {
+        const cs3 = TILE * scale;
+        IB.desloc[ED.pegou.ald.slug] = [
+          ED.pegou.base[0] + (e.clientX - ED.pegou.px) / cs3 * IB.div,
+          ED.pegou.base[1] + (e.clientY - ED.pegou.py) / cs3 * IB.div,
+        ];
+        draw();
+        return;
+      }
       if (ED.pegou.tipo === "cidade") {
         const a = ED.pegou.ald;
         a.x = vx; a.y = vy;
@@ -2728,7 +2778,7 @@
       // as curvas do editor entram na rota do exercito tambem, senao a tropa
       // marcharia por fora da estrada que esta desenhada embaixo dela
       if (ant && IB) for (const w of pontosVia(ant.slug, a.slug)) pts.push({ x: w[0], y: w[1] });
-      pts.push({ x: a.x, y: a.y });
+      pts.push({ x: a.x, y: a.y - subidaVisualVB(a) });
       ant = a;
     }
     return pts.length >= 2 ? pts : null;
@@ -2846,6 +2896,8 @@
     ctx.restore();
   }
 
+  function IB2div() { return IB ? IB.div : 1; }
+
   function alturaSprite(spr, larg, r) {
     return spr ? larg * spr.height / spr.width : r * 2;
   }
@@ -2871,7 +2923,7 @@
     // o mapa vira paisagem. territorioCelulas() segue definida caso volte.
 
     for (const a of game.aldeias) {
-      const sx = SX(a.x), sy = SY(a.y);
+      let sx = SX(a.x); const sy = SY(a.y);
       if (sx < -60 || sy < -60 || sx > VW + 60 || sy > VH + 60) continue;
       const col = a.dono === null ? COR.neutra : COR[a.dono];
       const r = Math.max(20, cs * 0.59);
@@ -2892,7 +2944,9 @@
       // IB.levanta: quanto o sprite sobe alem da ancora, em fracao da propria
       // altura. Botao de GOSTO (feedback Lucas 03/08) — a ancora geometrica e
       // 0; subir um pouco assenta melhor a cidade no relevo.
-      const yBase = IB ? baseVisualIB(a) : sy + r * 0.5;
+      const dl = (IB && IB.desloc[a.slug]) || [0, 0];
+      const yBase = (IB ? baseVisualIB(a) : sy + r * 0.5) + dl[1] / IB2div() * (TILE * scale);
+      sx += IB ? dl[0] / IB2div() * (TILE * scale) : 0;
       if (sprB) {
         // Sprite CRU, sempre: quem marca a posse e a BANDEIRA, nao a tinta.
         // (feedback Lucas 03/08: a capital tingida virava um bloco azul ou
