@@ -585,10 +585,16 @@
       const q = IB.ajustes.cidades[c.id];
       if (q) { c.x = q[0]; c.y = q[1]; }
     }
-    IB.vias = IB.ajustes.vias;
-    // Deslocamento SO do desenho da cidade (Shift+arrastar). A estrada segue
-    // ancorada no x,y — serve para assentar a arte no relevo sem mexer na rede.
-    IB.desloc = IB.ajustes.desloc || {};
+    // BASE: curvas e deslocamentos assados no world-iberia.js (o mapa oficial,
+    // versionado). O mapa-ajustes.js e so a camada de rascunho por cima.
+    IB.vias = {};
+    for (const e of Iberia.ESTRADAS)
+      if (e.via && e.via.length) IB.vias[chaveVia(e.de, e.para)] = e.via.map(function (q) { return [q[0], q[1]]; });
+    IB.desloc = {};
+    for (const c of Iberia.CIDADES)
+      if (c.desloc) IB.desloc[c.id] = [c.desloc[0], c.desloc[1]];
+    Object.assign(IB.vias, IB.ajustes.vias);
+    Object.assign(IB.desloc, IB.ajustes.desloc || {});
 
     IB.img = new Image();
     IB.img.onload = () => {
@@ -733,12 +739,14 @@
     const cs = TILE * scale;
     const wpx = (IB ? IB.imgCels.w : WORLD) * cs, wpy = (IB ? IB.imgCels.h : WORLD) * cs;
     if (IB) {
-      // Limite simetrico: a imagem nunca sai inteira da tela, mas DESLIZA
-      // livremente nos dois sentidos, tambem quando esta menor que a viewport
-      // (antes o else centralizava e travava o arrasto). E assim que se puxa
-      // uma cidade de tras do painel lateral para o meio da tela.
-      const loX = Math.min(0, VW - wpx), hiX = Math.max(0, VW - wpx);
-      const loY = Math.min(0, VH - wpy), hiY = Math.max(0, VH - wpy);
+      // FOLGA alem da imagem. Sem ela a borda do mapa so chega ate a borda da
+      // TELA — e como os paineis laterais tem 320px, Barcelona e as aldeias
+      // das pontas ficavam presas embaixo deles, sem como puxar (visto em
+      // jogo 03/08). Com a folga, a beirada do mapa alcanca o meio da tela.
+      // So e possivel porque fora da imagem tem oceano, nao vazio.
+      const fx = Math.max(360, VW * 0.30), fy = Math.max(140, VH * 0.22);
+      const loX = Math.min(-fx, VW - wpx - fx), hiX = Math.max(fx, VW - wpx + fx);
+      const loY = Math.min(-fy, VH - wpy - fy), hiY = Math.max(fy, VH - wpy + fy);
       panX = Math.max(loX, Math.min(hiX, panX));
       panY = Math.max(loY, Math.min(hiY, panY));
       return;
