@@ -477,11 +477,21 @@
     // Com isso a peninsula pode flutuar num oceano sem fim e o zoom deixa de
     // ser refem do cover: da para afastar ate tirar as cidades de tras dos
     // paineis laterais (320px de cada lado comiam as bordas do mapa).
-    // 9 paradas amostradas das COLUNAS DE BORDA da propria arte (esquerda +
-    // direita, mediana por faixa de altura). Sao exatamente as cores que a
-    // agua pintada encosta na emenda lateral, entao a costura some.
-    // Amostrado offline de proposito: o jogo roda em file://, e desenhar a
-    // imagem no canvas o "tinge" (tainted) — getImageData ia estourar.
+    // RETALHO DE AGUA: um pedaco de mar ABERTO da propria arte, espelhado e
+    // repetido para fora. Nao e cor chapada — leva a textura de onda junto,
+    // entao o oceano de fora e o mesmo oceano de dentro.
+    // A faixa e o mar ao sul da peninsula: 1085x146px, 100% agua (conferido
+    // contra a mascara de terra; exclui a rosa dos ventos e as marcas de
+    // pagina da borda esquerda, que viravam listras verticais quando tentei
+    // usar a faixa oeste).
+    IB.retalho = { x: 15, y: 712, w: 1085, h: 146 };
+    // Desvanecer a beirada da arte para o mar de fora. A arte tem uma vinheta
+    // escura nas bordas (papel envelhecido) e era ELA que denunciava o
+    // retangulo, mesmo com a agua casando. 16px cabe com folga: a terra mais
+    // proxima de uma borda esta a 24px (norte); nos outros lados, 35px+.
+    IB.esfumar = 16;
+    // Gradiente so como PLANO B, se o padrao nao puder ser criado. 9 paradas
+    // medianas das colunas de borda da arte.
     IB.mar = [[0.000,"rgb(35,49,46)"],  [0.125,"rgb(56,77,75)"], [0.250,"rgb(63,84,81)"],
               [0.375,"rgb(63,85,83)"],  [0.500,"rgb(64,89,87)"], [0.625,"rgb(59,84,83)"],
               [0.750,"rgb(57,78,76)"],  [0.875,"rgb(51,67,64)"], [1.000,"rgb(45,46,40)"]];
@@ -506,6 +516,8 @@
         w: IB.largCels,
         h: IB.largCels * IB.img.naturalHeight / IB.img.naturalWidth,
       };
+      montarPadraoMarIB();
+      montarArteEsfumadaIB();
       ajustarZoomMinimoIB();
       enquadrarTeatro();
       draw();
@@ -521,10 +533,66 @@
   // POSICAO DA IMAGEM na tela, entao a agua pintada encosta na agua desenhada
   // com a mesma cor — a emenda some. Alem das pontas o canvas repete a cor da
   // parada extrema, e o oceano segue por quanto for preciso.
+  // Monta o ladrilho de mar: o retalho e as suas 3 imagens espelhadas num
+  // bloco 2x2. Espelhar e o que faz as emendas sumirem — cada borda do bloco
+  // encontra a sua propria reflexao, entao a repeticao nao deixa costura.
+  // So drawImage aqui: o jogo roda em file://, o canvas fica "tainted" e
+  // qualquer getImageData estouraria. Ler pixel nao e preciso.
+  function montarPadraoMarIB() {
+    const P = IB.retalho, lona = document.createElement("canvas");
+    lona.width = P.w * 2; lona.height = P.h * 2;
+    const c = lona.getContext("2d");
+    const por = (dx, dy, fx, fy) => {
+      c.save();
+      c.translate(dx + (fx ? P.w : 0), dy + (fy ? P.h : 0));
+      c.scale(fx ? -1 : 1, fy ? -1 : 1);
+      c.drawImage(IB.img, P.x, P.y, P.w, P.h, 0, 0, P.w, P.h);
+      c.restore();
+    };
+    por(0, 0, false, false);   por(P.w, 0, true, false);
+    por(0, P.h, false, true);  por(P.w, P.h, true, true);
+    try { IB.padraoMar = ctx.createPattern(lona, "repeat"); } catch (e) { IB.padraoMar = null; }
+  }
+
+  // Copia da arte com as 4 beiradas desvanecidas (alpha -> 0). Feita UMA vez,
+  // no load. destination-out apaga o que o gradiente pinta, entao a borda vira
+  // transparente e deixa passar o oceano ladrilhado de tras.
+  function montarArteEsfumadaIB() {
+    const n = IB.esfumar, w = IB.img.naturalWidth, h = IB.img.naturalHeight;
+    const lona = document.createElement("canvas");
+    lona.width = w; lona.height = h;
+    const c = lona.getContext("2d");
+    c.drawImage(IB.img, 0, 0);
+    c.globalCompositeOperation = "destination-out";
+    const som = "rgba(0,0,0,1)", nada = "rgba(0,0,0,0)";
+    const faixa = (x0, y0, x1, y1, x, y, lw, lh) => {
+      const g = c.createLinearGradient(x0, y0, x1, y1);
+      g.addColorStop(0, som); g.addColorStop(1, nada);
+      c.fillStyle = g; c.fillRect(x, y, lw, lh);
+    };
+    faixa(0, 0, n, 0, 0, 0, n, h);                 // oeste
+    faixa(w, 0, w - n, 0, w - n, 0, n, h);         // leste
+    faixa(0, 0, 0, n, 0, 0, w, n);                 // norte
+    faixa(0, h, 0, h - n, 0, h - n, w, n);         // sul
+    IB.arte = lona;
+  }
+
+  // Oceano sem fim. Desenhado no referencial da IMAGEM (mesma origem, mesma
+  // escala), entao a agua de fora nao "nada" quando a camera anda ou aproxima
+  // — ela se move junto com o mapa, como agua de verdade faria.
   function pintarMarIB() {
     const cs = TILE * scale;
-    const y0 = panY, y1 = panY + IB.imgCels.h * cs;
-    const g = ctx.createLinearGradient(0, y0, 0, y1);
+    if (IB.padraoMar) {
+      const k = (IB.imgCels.w * cs) / IB.img.naturalWidth;   // px de tela por px da arte
+      ctx.save();
+      ctx.translate(panX, panY);
+      ctx.scale(k, k);
+      ctx.fillStyle = IB.padraoMar;
+      ctx.fillRect(-panX / k, -panY / k, VW / k, VH / k);
+      ctx.restore();
+      return;
+    }
+    const g = ctx.createLinearGradient(0, panY, 0, panY + IB.imgCels.h * cs);
     for (const [t, cor] of IB.mar) g.addColorStop(t, cor);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, VW, VH);
@@ -850,7 +918,7 @@
       if (IB.pronto) {
         const cs0 = TILE * scale;
         ctx.imageSmoothingEnabled = true;
-        ctx.drawImage(IB.img, panX, panY, IB.imgCels.w * cs0, IB.imgCels.h * cs0);
+        ctx.drawImage(IB.arte || IB.img, panX, panY, IB.imgCels.w * cs0, IB.imgCels.h * cs0);
       }
       desenharEstradasIberia();
       drawGame();
