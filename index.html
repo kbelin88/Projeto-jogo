@@ -110,7 +110,10 @@
      atrapalhava a leitura do mapa. Sobra a MOLDURA com o turno.
      Escondido por CSS, nao removido do DOM: o codigo de atualizacao segue
      escrevendo em pt-a-f, pt-cabo-a e companhia sem quebrar. */
-  #pt-cabo, .pt-linha > .pt-lado { display: none; }
+  /* especificidade de DOIS ids de proposito: mais abaixo o #pt-cabo e
+     redefinido com display:flex, e uma regra de um id so perderia por vir
+     antes. Assim a ordem no arquivo deixa de importar. */
+  #placarTop #pt-cabo, #placarTop .pt-lado { display: none; }
   #placarTop { min-width: 0; padding-bottom: 0; }
   #sb-status { text-align: center; font: 11px Consolas, monospace; color: #d9a441; padding: 0 8px 5px; background: rgba(0,0,0,.18); }
   #sb-status:empty { display: none; }
@@ -742,7 +745,8 @@
   const SPR = {};
   (function () {
     if (typeof Image === "undefined") return;
-    for (const nome of ["bosque", "serra_grande", "serra_pequena", "castelo", "aldeia_neutra"]) {
+    for (const nome of ["bosque", "serra_grande", "serra_pequena", "castelo", "aldeia_neutra",
+                        "estrada_reta", "estrada_reta2"]) {
       const img = new Image();
       img.onload = function () { img.pronto = true; if (typeof draw === "function") draw(); };
       img.src = "assets/sprites/" + nome + ".png";
@@ -2385,24 +2389,76 @@
     return { x: pts[pts.length - 1].x, y: pts[pts.length - 1].y, seg: pts.length - 2 };
   }
 
+  // ===== ESTRADAS DE VERDADE (ladrilho de sprite) =====
+  // O caminho vem desenhado NA DIAGONAL dentro do PNG, e o traçado nao passa
+  // pelo centro da imagem. Estes numeros saem de PCA sobre os pixels opacos de
+  // cada sprite: `ang` e o angulo do eixo do caminho, (cx,cy) o centro do
+  // traçado, `along` a extensao util ao longo dele. Sem corrigir os tres, o
+  // ladrilho sai torto e com emenda.
+  const ESTRADA_SPR = {
+    estrada_reta:  { ang: -29.41, cx: 77.5, cy: 47.8, along: 165, cels: 2.0 },
+    estrada_reta2: { ang:  29.64, cx: 71.4, cy: 45.1, along: 188, cels: 2.0 },
+  };
+  // Passo entre ladrilhos, em fracao do comprimento util. 0.55 medido na
+  // bancada: acima de ~0.7 o caminho ABRE BURACOS (o `along` vem de PCA e
+  // inclui pixels de canto, entao a ponta do sprite afina antes do fim);
+  // abaixo de ~0.45 so gasta desenho e a repeticao comeca a aparecer.
+  const ESTRADA_SOBREPOR = 0.55;
+
   // As 41 estradas do world-iberia, desenhadas do arquivo (nao derivadas).
-  // Tracejado = via de contorno; a espessura segue o custo, entao serra
-  // (cara) aparece mais fina que costa (barata) — a rede conta o terreno.
-  // As 41 estradas do world-iberia, desenhadas do arquivo (nao derivadas).
-  // Nao e uma linha: cada estrada tem BORDA escura (o corte no terreno) e
-  // LEITO claro de terra batida por cima. Via de contorno = leito mais
-  // estreito e pontilhado (caminho secundario).
-  //
-  // Duas passadas: TODAS as bordas primeiro, depois TODOS os leitos. Numa
-  // passada so, a borda de uma estrada cortaria o leito da outra em cada
-  // cruzamento — e o mapa tem varios (Toledo, Madrid, Badajoz).
+  // Cada estrada e LADRILHADA com o sprite do kit, peca a peca, girado para
+  // acompanhar a direcao do trecho. Via de contorno sai menor e mais apagada
+  // (caminho secundario). Em zoom muito afastado o ladrilho vira sujeira:
+  // abaixo de 8px por celula cai no traco simples.
   function desenharEstradasIberia() {
     if (!IB || !game) return;
+    const cs = TILE * scale;
     const porSlug = {};
     for (const a of game.aldeias) porSlug[a.slug] = a;
     const contorno = new Set((Iberia.MAPA.viasDeContorno || [])
       .map((par) => par.slice().sort().join("|")));
-    const cs = TILE * scale;
+    const pecas = ["estrada_reta", "estrada_reta2"].filter((n) => SPR[n] && SPR[n].pronto);
+    if (!pecas.length || cs < 8) { desenharEstradasTraco(porSlug, contorno, cs); return; }
+
+    ctx.save();
+    let n = 0;
+    for (const e of Iberia.ESTRADAS) {
+      let a = porSlug[e.de], b = porSlug[e.para];
+      if (!a || !b) continue;
+      // sempre da esquerda para a direita: assim o sprite nunca sai de cabeca
+      // para baixo (o giro ficaria alem de +-90 graus).
+      if (SX(a.x) > SX(b.x)) { const t = a; a = b; b = t; }
+      const sec = contorno.has([e.de, e.para].slice().sort().join("|"));
+      const ax = SX(a.x), ay = baseVisualIB(a), bx = SX(b.x), by = baseVisualIB(b);
+      const dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy);
+      if (L < 1) continue;
+      const th = Math.atan2(dy, dx);
+      ctx.globalAlpha = sec ? 0.72 : 1;
+      let t = 0, i = 0;
+      while (t < L) {
+        const nome = pecas[(n + i) % pecas.length];
+        const spr = SPR[nome], m = ESTRADA_SPR[nome];
+        const k = (m.cels * cs) / spr.width * (sec ? 0.72 : 1);
+        const passo = m.along * k * ESTRADA_SOBREPOR;
+        const meio = Math.min(t + passo / 2, L);
+        ctx.save();
+        ctx.translate(ax + dx * meio / L, ay + dy * meio / L);
+        ctx.rotate(th - m.ang * Math.PI / 180);
+        ctx.scale(k, k);
+        ctx.drawImage(spr, -m.cx, -m.cy);
+        ctx.restore();
+        t += passo; i++;
+        if (i > 200) break;                 // guarda contra passo degenerado
+      }
+      n++;
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  // Plano B (zoom afastado ou sprite ainda carregando): leito claro com borda
+  // escura, em duas passadas para o cruzamento nao cortar.
+  function desenharEstradasTraco(porSlug, contorno, cs) {
     ctx.save();
     ctx.lineCap = "round"; ctx.lineJoin = "round";
     for (const passada of [0, 1]) {
@@ -2411,15 +2467,9 @@
         if (!a || !b) continue;
         const sec = contorno.has([e.de, e.para].slice().sort().join("|"));
         const larg = Math.max(4, cs * (sec ? 0.24 : 0.34));
-        if (passada === 0) {
-          ctx.strokeStyle = "rgba(62,48,32,.42)";      // borda / corte no terreno
-          ctx.lineWidth = larg;
-          ctx.setLineDash([]);
-        } else {
-          ctx.strokeStyle = sec ? "#c2ac81" : "#d9c49a"; // leito de terra batida
-          ctx.lineWidth = Math.max(2, larg * 0.62);
-          ctx.setLineDash(sec ? [cs * 0.30, cs * 0.24] : []);
-        }
+        if (passada === 0) { ctx.strokeStyle = "rgba(62,48,32,.42)"; ctx.lineWidth = larg; ctx.setLineDash([]); }
+        else { ctx.strokeStyle = sec ? "#c2ac81" : "#d9c49a"; ctx.lineWidth = Math.max(2, larg * 0.62);
+               ctx.setLineDash(sec ? [cs * 0.30, cs * 0.24] : []); }
         ctx.beginPath();
         ctx.moveTo(SX(a.x), baseVisualIB(a));
         ctx.lineTo(SX(b.x), baseVisualIB(b));
