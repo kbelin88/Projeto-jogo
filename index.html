@@ -119,6 +119,26 @@
   #sb-status:empty { display: none; }
   body.replay #banner, body.cinema #banner { top: 104px; }
 
+  /* ===== BARRA DO EDITOR DE MAPA ===== */
+  #editorbar {
+    position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+    z-index: 8; display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+    background: linear-gradient(180deg, rgba(43,32,20,.95), rgba(30,21,9,.95));
+    border: 2px solid #6b4a22; border-radius: 10px; color: #f0e3c0;
+    font: 12px 'Trebuchet MS', sans-serif; box-shadow: 0 6px 24px rgba(0,0,0,.55);
+  }
+  #editorbar button {
+    background: #3a2b18; color: #f0e3c0; border: 1px solid #6b4a22; border-radius: 5px;
+    padding: 4px 9px; cursor: pointer; font: inherit;
+  }
+  #editorbar button:hover { background: #4a3720; }
+  #edToggle.ativo { background: #6b8f3a; border-color: #9ac05e; }
+  #edDica, #edSalvar, #edExportar, #edLimpar { display: none; }
+  #editorbar.on #edDica, #editorbar.on #edSalvar,
+  #editorbar.on #edExportar, #editorbar.on #edLimpar { display: inline; }
+  #edDica { color: #cfc4a4; }
+  body.replay #editorbar, body.cinema #editorbar { display: none; }
+
   /* ===== REPLAYBAR: cockpit do replay ===== */
   #replaybar {
     position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
@@ -356,6 +376,13 @@
 </div>
 <div id="cartaoFinal"><button id="cartaoFechar" title="Fechar o cartao">&#10005;</button><div id="cartaoCaixa"></div></div>
 <div id="banner"></div>
+<div id="editorbar">
+  <button id="edToggle" title="Ligar/desligar o modo de ajuste do mapa">&#9998; editar mapa</button>
+  <span id="edDica">arraste as cidades &middot; clique numa estrada p/ curvar &middot; botao direito apaga a curva</span>
+  <button id="edSalvar" title="Guarda como rascunho neste navegador">salvar rascunho</button>
+  <button id="edExportar" title="Baixa mapa-ajustes.js para colocar na pasta do jogo">exportar arquivo</button>
+  <button id="edLimpar" title="Joga fora o rascunho e volta ao arquivo">descartar</button>
+</div>
 <div id="replaybar">
   <button id="grepRestart" title="Recomecar o replay">&#9198;</button>
   <button id="grepPlay" title="Pausar/continuar">&#9208;</button>
@@ -415,6 +442,9 @@
 
 <script src="world.js"></script>
 <script src="world-iberia.js"></script>
+<!-- Ajustes cosmeticos do mapa, gerados pelo editor em jogo. O arquivo pode
+     nao existir: o 404 e inofensivo e o jogo cai no mapa original. -->
+<script src="mapa-ajustes.js"></script>
 <script src="engine.js"></script>
 <script>
 (() => {
@@ -514,6 +544,28 @@
       x: ((Math.min.apply(null, xs) + Math.max.apply(null, xs)) / 2 - IB.ox) / IB.div,
       y: ((Math.min.apply(null, ys) + Math.max.apply(null, ys)) / 2 - IB.oy) / IB.div,
     };
+    // ---------- AJUSTES COSMETICOS (editor em jogo) ----------
+    // x,y das cidades e as curvas das estradas NAO entram em custo, rota, par
+    // nem equilibrio — por isso podem ser editados em jogo e salvos sem
+    // encostar no motor. verificarEquilibrio() segue zerado por construcao.
+    // Duas camadas: mapa-ajustes.js (o arquivo, versionavel) e um rascunho no
+    // localStorage por cima. Em file:// nao da para escrever no disco nem ler
+    // JSON (fetch e bloqueado), dai o formato ser um .js que declara global.
+    IB.CHAVE_RASCUNHO = "iberia-ajustes";
+    IB.ajustes = { cidades: {}, vias: {} };
+    const juntar = (a) => {
+      if (!a) return;
+      Object.assign(IB.ajustes.cidades, a.cidades || {});
+      Object.assign(IB.ajustes.vias, a.vias || {});
+    };
+    juntar(window.IBERIA_AJUSTES);
+    try { juntar(JSON.parse(localStorage.getItem(IB.CHAVE_RASCUNHO) || "null")); } catch (e) {}
+    for (const c of Iberia.CIDADES) {
+      const q = IB.ajustes.cidades[c.id];
+      if (q) { c.x = q[0]; c.y = q[1]; }
+    }
+    IB.vias = IB.ajustes.vias;
+
     IB.img = new Image();
     IB.img.onload = () => {
       IB.pronto = true;
@@ -533,6 +585,21 @@
     };
     IB.img.src = "Generated%20Image%20July%2027,%202026%20-%2012_32AM.png";
   }
+  // tela -> px do viewBox (inverso de SX/SY). So faz sentido no mapa autoral.
+  const vbX = (sx) => (sx - panX) / (TILE * scale) * IB.div + IB.ox;
+  const vbY = (sy) => (sy - panY) / (TILE * scale) * IB.div + IB.oy;
+
+  // Chave de estrada: sempre em ordem alfabetica, para os dois sentidos
+  // caírem no mesmo registro.
+  const chaveVia = (a, b) => [a, b].sort().join("|");
+  // Pontos de curva de uma estrada, JA no sentido pedido (a -> b).
+  function pontosVia(a, b) {
+    if (!IB || !IB.vias) return [];
+    const v = IB.vias[chaveVia(a, b)];
+    if (!v || !v.length) return [];
+    return a <= b ? v : v.slice().reverse();
+  }
+
   // Zoom em que a imagem cobre exatamente a viewport (piso do afastamento).
   function escalaCoverIB() {
     if (!IB) return MIN_SCALE;
@@ -932,6 +999,7 @@
       }
       desenharEstradasIberia();
       drawGame();
+      if (ED.ativo) desenharAlcasEditor();
       return;
     }
 
@@ -1201,14 +1269,219 @@
   // ---------- Interação ----------
   let dragging = false, lastX = 0, lastY = 0, moved = 0;
 
+  // ================= EDITOR DE MAPA (em jogo) =================
+  // Move cidade e curva estrada direto na tela. Tudo que ele mexe e
+  // COSMETICO — x,y e pontos de curva nao entram em custo, rota, par nem
+  // equilibrio, entao nao ha como desbalancear o mapa por aqui.
+  const ED = { ativo: false, pegou: null, offX: 0, offY: 0 };
+  const ED_DICA = "arraste as cidades \u00b7 clique numa estrada p/ curvar \u00b7 botao direito apaga a curva";
+
+  // Alcas do editor: um ponto no chao de cada cidade (o x,y de verdade, que e
+  // o que se arrasta) e um losango em cada curva de estrada. So aparecem com o
+  // modo ligado — o mapa fica limpo o resto do tempo.
+  function desenharAlcasEditor() {
+    if (!game) return;
+    ctx.save();
+    for (const a of game.aldeias) {
+      const x = SX(a.x), y = SY(a.y);
+      ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255,238,150,.95)"; ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(40,32,18,.9)"; ctx.stroke();
+    }
+    for (const k in IB.vias) {
+      for (const q of IB.vias[k]) {
+        const x = SX(q[0]), y = SY(q[1]);
+        ctx.beginPath();
+        ctx.moveTo(x, y - 6); ctx.lineTo(x + 6, y); ctx.lineTo(x, y + 6); ctx.lineTo(x - 6, y);
+        ctx.closePath();
+        ctx.fillStyle = "rgba(150,215,255,.95)"; ctx.fill();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(20,40,60,.9)"; ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  function edSobreCidade(sx, sy) {
+    if (!game) return null;
+    const cs = TILE * scale;
+    for (const a of game.aldeias) {
+      const cap = capitalIds.has(a.id);
+      const larg = cs * (cap ? 3.2 : 2.4);
+      const spr = cap ? SPR.castelo : SPR.aldeia_neutra;
+      const alt = alturaSprite(spr && spr.pronto ? spr : null, larg, Math.max(20, cs * 0.59));
+      const x = SX(a.x), yB = baseVisualIB(a);
+      if (sx >= x - larg / 2 && sx <= x + larg / 2 && sy >= yB - alt && sy <= yB + 6) return a;
+    }
+    return null;
+  }
+
+  // distancia de um ponto ao segmento, com a projecao
+  function edNoSegmento(px, py, ax, ay, bx, by) {
+    const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+    const t = L2 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / L2)) : 0;
+    const qx = ax + dx * t, qy = ay + dy * t;
+    return { d: Math.hypot(px - qx, py - qy), qx: qx, qy: qy };
+  }
+
+  function edSobreCurva(sx, sy) {
+    for (const k in IB.vias) {
+      const v = IB.vias[k];
+      for (let i = 0; i < v.length; i++)
+        if (Math.hypot(sx - SX(v[i][0]), sy - SY(v[i][1])) < 11) return { chave: k, i: i };
+    }
+    return null;
+  }
+
+  // estrada sob o cursor + onde encaixar uma curva nova
+  function edSobreEstrada(sx, sy) {
+    if (!game) return null;
+    const porSlug = {};
+    for (const a of game.aldeias) porSlug[a.slug] = a;
+    let melhor = null;
+    for (const e of Iberia.ESTRADAS) {
+      const a = porSlug[e.de], b = porSlug[e.para];
+      if (!a || !b) continue;
+      const pts = [{ x: SX(a.x), y: baseVisualIB(a) }];
+      for (const w of pontosVia(a.slug, b.slug)) pts.push({ x: SX(w[0]), y: SY(w[1]) });
+      pts.push({ x: SX(b.x), y: baseVisualIB(b) });
+      for (let g = 0; g + 1 < pts.length; g++) {
+        const r = edNoSegmento(sx, sy, pts[g].x, pts[g].y, pts[g + 1].x, pts[g + 1].y);
+        if (r.d < 10 && (!melhor || r.d < melhor.d))
+          melhor = { d: r.d, de: a.slug, para: b.slug, pos: g, qx: r.qx, qy: r.qy };
+      }
+    }
+    return melhor;
+  }
+
+  function edSalvarRascunho() {
+    const cidades = {};
+    for (const c of Iberia.CIDADES) cidades[c.id] = [+c.x.toFixed(1), +c.y.toFixed(1)];
+    const vias = {};
+    for (const k in IB.vias) if (IB.vias[k] && IB.vias[k].length)
+      vias[k] = IB.vias[k].map(function (q) { return [+q[0].toFixed(1), +q[1].toFixed(1)]; });
+    try {
+      localStorage.setItem(IB.CHAVE_RASCUNHO, JSON.stringify({ cidades: cidades, vias: vias }));
+      edAviso("rascunho salvo neste navegador");
+    } catch (err) { edAviso("nao consegui guardar aqui — use exportar"); }
+    return { cidades: cidades, vias: vias };
+  }
+
+  function edExportar() {
+    const a = edSalvarRascunho();
+    const L = [];
+    L.push("// mapa-ajustes.js — gerado pelo editor de mapa do proprio jogo.");
+    L.push("// SO COSMETICO: x,y das cidades e pontos de curva das estradas.");
+    L.push("// Nao toca em custo, rota, par nem equilibrio — verificarEquilibrio()");
+    L.push("// segue zerado. Deixe este arquivo na pasta do jogo.");
+    L.push("window.IBERIA_AJUSTES = {");
+    L.push("  cidades: {");
+    for (const c of Iberia.CIDADES)
+      L.push("    " + c.id + ": [" + a.cidades[c.id][0].toFixed(1) + ", " + a.cidades[c.id][1].toFixed(1) + "],");
+    L.push("  },");
+    L.push("  vias: {");
+    for (const k in a.vias) L.push("    \"" + k + "\": " + JSON.stringify(a.vias[k]) + ",");
+    L.push("  },");
+    L.push("};");
+    const blob = new Blob([L.join("\n") + "\n"], { type: "text/javascript" });
+    const el = document.createElement("a");
+    el.href = URL.createObjectURL(blob);
+    el.download = "mapa-ajustes.js";
+    el.click();
+    setTimeout(function () { URL.revokeObjectURL(el.href); }, 4000);
+    edAviso("mapa-ajustes.js baixado — ponha na pasta do jogo");
+  }
+
+  let edAvisoT = null;
+  function edAviso(txt) {
+    const el = document.getElementById("edDica");
+    if (!el) return;
+    el.textContent = txt;
+    clearTimeout(edAvisoT);
+    edAvisoT = setTimeout(function () { el.textContent = ED_DICA; }, 3200);
+  }
+
+  // Sem mapa autoral nao ha o que editar (o v1/v2 e procedural, gerado por
+  // seed) — a barra some inteira em vez de oferecer botao que quebraria.
+  if (!IB) document.getElementById("editorbar").style.display = "none";
+
+  document.getElementById("edToggle").onclick = function () {
+    ED.ativo = !ED.ativo;
+    document.getElementById("edToggle").classList.toggle("ativo", ED.ativo);
+    document.getElementById("editorbar").classList.toggle("on", ED.ativo);
+    draw();
+  };
+  document.getElementById("edSalvar").onclick = function () { edSalvarRascunho(); };
+  document.getElementById("edExportar").onclick = function () { edExportar(); };
+  document.getElementById("edLimpar").onclick = function () {
+    if (!confirm("Descartar o rascunho e voltar ao que esta no arquivo?")) return;
+    try { localStorage.removeItem(IB.CHAVE_RASCUNHO); } catch (e) {}
+    location.reload();
+  };
+
+  canvas.addEventListener("contextmenu", function (e) {
+    if (!ED.ativo || !IB) return;
+    const alvo = edSobreCurva(e.clientX, e.clientY);
+    if (!alvo) return;
+    e.preventDefault();
+    IB.vias[alvo.chave].splice(alvo.i, 1);
+    if (!IB.vias[alvo.chave].length) delete IB.vias[alvo.chave];
+    edSalvarRascunho(); draw();
+  });
+
   canvas.addEventListener("mousedown", (e) => {
+    if (ED.ativo && IB && e.button === 0) {
+      const cid = edSobreCidade(e.clientX, e.clientY);
+      if (cid) {
+        ED.pegou = { tipo: "cidade", ald: cid };
+        ED.offX = SX(cid.x) - e.clientX; ED.offY = SY(cid.y) - e.clientY;
+        return;
+      }
+      const cur = edSobreCurva(e.clientX, e.clientY);
+      if (cur) {
+        ED.pegou = { tipo: "curva", chave: cur.chave, i: cur.i };
+        const q = IB.vias[cur.chave][cur.i];
+        ED.offX = SX(q[0]) - e.clientX; ED.offY = SY(q[1]) - e.clientY;
+        return;
+      }
+      const est = edSobreEstrada(e.clientX, e.clientY);
+      if (est) {                              // curva NOVA no ponto clicado
+        const k = chaveVia(est.de, est.para);
+        if (!IB.vias[k]) IB.vias[k] = [];
+        // `pos` conta do lado `de`; a chave e alfabetica, entao inverte quando precisa
+        const idx = (est.de <= est.para) ? est.pos : IB.vias[k].length - est.pos;
+        const j = Math.max(0, Math.min(IB.vias[k].length, idx));
+        IB.vias[k].splice(j, 0, [vbX(est.qx), vbY(est.qy)]);
+        ED.pegou = { tipo: "curva", chave: k, i: j };
+        ED.offX = 0; ED.offY = 0;
+        draw();
+        return;
+      }
+    }
     usuarioAssumiuCamera();
     dragging = true; moved = 0; lastX = e.clientX; lastY = e.clientY;
     canvas.classList.add("dragging");
   });
-  window.addEventListener("mouseup", () => { dragging = false; canvas.classList.remove("dragging"); });
+  window.addEventListener("mouseup", () => {
+    if (ED.pegou) { ED.pegou = null; edSalvarRascunho(); }
+    dragging = false; canvas.classList.remove("dragging");
+  });
   window.addEventListener("mousemove", (e) => {
     mouseSX = e.clientX; mouseSY = e.clientY;
+    if (ED.pegou) {
+      const vx = vbX(e.clientX + ED.offX), vy = vbY(e.clientY + ED.offY);
+      if (ED.pegou.tipo === "cidade") {
+        const a = ED.pegou.ald;
+        a.x = vx; a.y = vy;
+        // grava tambem na FONTE, senao a proxima partida volta ao antigo
+        const c = Iberia.CIDADES.find(function (z) { return z.id === a.slug; });
+        if (c) { c.x = vx; c.y = vy; }
+      } else {
+        const v = IB.vias[ED.pegou.chave];
+        if (v && v[ED.pegou.i]) v[ED.pegou.i] = [vx, vy];
+      }
+      draw();
+      return;
+    }
     if (dragging) {
       const dx = e.clientX - lastX, dy = e.clientY - lastY;
       panX += dx; panY += dy; lastX = e.clientX; lastY = e.clientY;
@@ -2372,7 +2645,16 @@
   function pontosCaminho(m) {
     const cam = (m.caminho && m.caminho.length >= 2) ? m.caminho : [m.origemId, m.destinoId];
     const pts = [];
-    for (const id of cam) { const a = game.aldeias.find((v) => v.id === id); if (a) pts.push({ x: a.x, y: a.y }); }
+    let ant = null;
+    for (const id of cam) {
+      const a = game.aldeias.find((v) => v.id === id);
+      if (!a) continue;
+      // as curvas do editor entram na rota do exercito tambem, senao a tropa
+      // marcharia por fora da estrada que esta desenhada embaixo dela
+      if (ant && IB) for (const w of pontosVia(ant.slug, a.slug)) pts.push({ x: w[0], y: w[1] });
+      pts.push({ x: a.x, y: a.y });
+      ant = a;
+    }
     return pts.length >= 2 ? pts : null;
   }
   function pontoNaRota(pts, prog) {
@@ -2429,26 +2711,33 @@
       // para baixo (o giro ficaria alem de +-90 graus).
       if (SX(a.x) > SX(b.x)) { const t = a; a = b; b = t; }
       const sec = contorno.has([e.de, e.para].slice().sort().join("|"));
-      const ax = SX(a.x), ay = baseVisualIB(a), bx = SX(b.x), by = baseVisualIB(b);
-      const dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy);
-      if (L < 1) continue;
-      const th = Math.atan2(dy, dx);
+      // poligonal: cidade, curvas do editor, cidade
+      const pts = [{ x: SX(a.x), y: baseVisualIB(a) }];
+      for (const w of pontosVia(a.slug, b.slug)) pts.push({ x: SX(w[0]), y: SY(w[1]) });
+      pts.push({ x: SX(b.x), y: baseVisualIB(b) });
       ctx.globalAlpha = sec ? 0.72 : 1;
-      let t = 0, i = 0;
-      while (t < L) {
-        const nome = pecas[(n + i) % pecas.length];
-        const spr = SPR[nome], m = ESTRADA_SPR[nome];
-        const k = (m.cels * cs) / spr.width * (sec ? 0.72 : 1);
-        const passo = m.along * k * ESTRADA_SOBREPOR;
-        const meio = Math.min(t + passo / 2, L);
-        ctx.save();
-        ctx.translate(ax + dx * meio / L, ay + dy * meio / L);
-        ctx.rotate(th - m.ang * Math.PI / 180);
-        ctx.scale(k, k);
-        ctx.drawImage(spr, -m.cx, -m.cy);
-        ctx.restore();
-        t += passo; i++;
-        if (i > 200) break;                 // guarda contra passo degenerado
+      let i = 0;
+      for (let g = 0; g + 1 < pts.length; g++) {
+        const ax = pts[g].x, ay = pts[g].y, bx = pts[g + 1].x, by = pts[g + 1].y;
+        const dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy);
+        if (L < 1) continue;
+        const th = Math.atan2(dy, dx);
+        let t = 0;
+        while (t < L) {
+          const nome = pecas[(n + i) % pecas.length];
+          const spr = SPR[nome], m = ESTRADA_SPR[nome];
+          const k = (m.cels * cs) / spr.width * (sec ? 0.72 : 1);
+          const passo = m.along * k * ESTRADA_SOBREPOR;
+          const meio = Math.min(t + passo / 2, L);
+          ctx.save();
+          ctx.translate(ax + dx * meio / L, ay + dy * meio / L);
+          ctx.rotate(th - m.ang * Math.PI / 180);
+          ctx.scale(k, k);
+          ctx.drawImage(spr, -m.cx, -m.cy);
+          ctx.restore();
+          t += passo; i++;
+          if (i > 400) break;               // guarda contra passo degenerado
+        }
       }
       n++;
     }
@@ -2472,6 +2761,7 @@
                ctx.setLineDash(sec ? [cs * 0.30, cs * 0.24] : []); }
         ctx.beginPath();
         ctx.moveTo(SX(a.x), baseVisualIB(a));
+        for (const w of pontosVia(a.slug, b.slug)) ctx.lineTo(SX(w[0]), SY(w[1]));
         ctx.lineTo(SX(b.x), baseVisualIB(b));
         ctx.stroke();
       }
