@@ -30,10 +30,23 @@ const CHEAPEST_WOOD = Math.min(
 );
 const TIPOS = ["lanceiro", "arqueiro", "cavaleiro"];
 
-function cfgPara(seed) {
+// economia:
+//   undefined -> usa a CONFIG viva (o que estiver no engine agora)
+//   "velha"   -> forca a economia PRE-Fase-4 (10 madeira, cavaleiro 30/30)
+//   "nova"    -> forca a economia POS-Fase-4 (15 madeira, cavaleiro 20/20)
+// O override existe so para medir os DOIS bracos com o MESMO instrumento, sem
+// git-checkout. lanceiro/arqueiro nunca mudam. Nada mais e tocado.
+function cfgPara(seed, economia) {
   const c = JSON.parse(JSON.stringify(Engine.CONFIG));
   c.layout = "iberia";
   c.seed = seed;
+  if (economia === "velha") {
+    c.producao.madeira = 10;
+    c.tropas.cavaleiro.custo = { madeira: 30, ferro: 30 };
+  } else if (economia === "nova") {
+    c.producao.madeira = 15;
+    c.tropas.cavaleiro.custo = { madeira: 20, ferro: 20 };
+  }
   return c;
 }
 
@@ -72,6 +85,7 @@ function makeSpy(cfg, rec) {
       if (tot > 0) {
         rec.sendCount++;
         rec.sendTotal += tot;
+        if (tot > rec.maiorEnvio) rec.maiorEnvio = tot; // gabarito 5.2: maior envio unico
       }
     }
 
@@ -87,13 +101,14 @@ function estatistica(valores) {
   return { min, max, media: Math.round(media * 100) / 100 };
 }
 
-function rodarSeed(seed, turnos) {
-  const cfg = cfgPara(seed);
+function rodarSeed(seed, turnos, economia) {
+  const cfg = cfgPara(seed, economia);
   const rec = {
     built: { lanceiro: 0, arqueiro: 0, cavaleiro: 0 },
     strangledWoodTurns: 0,
     sendCount: 0,
     sendTotal: 0,
+    maiorEnvio: 0,
   };
   const spy = makeSpy(cfg, rec);
   const res = Engine.rodarPartida(cfg, { A: spy, B: spy }, { maxTurnos: turnos });
@@ -109,6 +124,9 @@ function rodarSeed(seed, turnos) {
   const ultimaConquista = conquistas.length
     ? Math.max(...conquistas.map((c) => c.turno))
     : null;
+  // gabarito 5.2: conquistas contra alvo endurecido (defesa >= 3 tropas). Fdef e
+  // a forca crua do defensor no combate (forca achatada = contagem de tropas).
+  const conquistasDefesaGe3 = conquistas.filter((c) => (c.Fdef || 0) >= 3).length;
 
   const tamMedioEnvio = rec.sendCount
     ? Math.round((rec.sendTotal / rec.sendCount) * 100) / 100
@@ -126,8 +144,10 @@ function rodarSeed(seed, turnos) {
     cavaleiros_construidos: rec.built.cavaleiro,
     turnos_estrangulados_madeira: rec.strangledWoodTurns,
     tamanho_medio_envio: tamMedioEnvio,
+    maior_envio_unico: rec.maiorEnvio,
     envios_totais: rec.sendCount,
     turno_ultima_conquista: ultimaConquista,
+    conquistas_contra_defesa_ge3: conquistasDefesaGe3,
     // procedencia: a economia efetivamente usada, para o "depois" comparar
     economia: {
       producao: cfg.producao,
@@ -140,20 +160,24 @@ function rodarSeed(seed, turnos) {
 function main() {
   const args = process.argv.slice(2);
   let turnos = 60;
+  let outSub = "baseline";
+  let economia; // undefined = CONFIG viva
   const seeds = [];
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--turnos") { turnos = parseInt(args[++i], 10); continue; }
+    if (args[i] === "--out") { outSub = args[++i]; continue; }
+    if (args[i] === "--economia") { economia = args[++i]; continue; }
     const n = parseInt(args[i], 10);
     if (!Number.isNaN(n)) seeds.push(n);
   }
   if (!seeds.length) seeds.push(1, 2, 3);
 
-  const outDir = path.join(__dirname, "..", "resultados", "baseline");
+  const outDir = path.join(__dirname, "..", "resultados", outSub);
   fs.mkdirSync(outDir, { recursive: true });
 
   const linhas = [];
   for (const seed of seeds) {
-    const r = rodarSeed(seed, turnos);
+    const r = rodarSeed(seed, turnos, economia);
     const arq = path.join(outDir, `burro-seed${seed}.json`);
     fs.writeFileSync(arq, JSON.stringify(r, null, 2));
     linhas.push(r);
@@ -163,8 +187,9 @@ function main() {
   // tabela comparavel
   const col = (s, w) => String(s).padEnd(w);
   const num = (s, w) => String(s).padStart(w);
+  const econLabel = economia || "config-viva";
   console.log("\n" + "=".repeat(78));
-  console.log("  BASELINE BURRO x BURRO — Iberia — " + turnos + " turnos");
+  console.log("  BASELINE BURRO x BURRO — Iberia — " + turnos + " turnos — economia: " + econLabel);
   console.log("=".repeat(78));
   console.log(col("metrica", 34) + linhas.map((l) => num("seed " + l.seed, 12)).join(""));
   const row = (nome, fn) =>
@@ -179,8 +204,10 @@ function main() {
   row("cavaleiros construidos", (l) => l.tropas_construidas.cavaleiro);
   row("turnos estrangulados (madeira)", (l) => l.turnos_estrangulados_madeira);
   row("tamanho medio de envio", (l) => l.tamanho_medio_envio);
+  row("maior envio unico", (l) => l.maior_envio_unico);
   row("envios totais", (l) => l.envios_totais);
   row("turno da ultima conquista", (l) => l.turno_ultima_conquista);
+  row("conquistas c/ defesa >=3", (l) => l.conquistas_contra_defesa_ge3);
   console.log("=".repeat(78));
 }
 
