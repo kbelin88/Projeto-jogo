@@ -55,7 +55,11 @@ function aldeia(id, dono, tipo, tropas, recursos) {
   };
 }
 const estado = {
-  config: CONFIG,
+  // Esta seccao valida a CATEGORIZACAO de rejeicoes (o braco de controlo, clamp
+  // DESLIGADO). Com clamp ligado (o padrao desde a Fase 3), o "tropa que nao tem"
+  // vira AVISO em vez de rejeicao — esse caminho tem cobertura propria em
+  // testes/test_clamp_envios.js. Aqui fixamos clamp:false de proposito.
+  config: Object.assign({}, CONFIG, { clamp_envios: false }),
   turno: 1,
   movimentos: [],
   log: [],

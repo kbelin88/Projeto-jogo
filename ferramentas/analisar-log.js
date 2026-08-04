@@ -66,6 +66,7 @@ function somarComposicao(comp) {
 function novoRei() {
   return {
     enviosAceitos: 0,
+    enviosAjustados: 0,        // clamp (Fase 3): envios que sairam com quantidade reduzida
     tropasMovidas: 0,
     histogramaEnvio: {},        // tamanho -> quantos
     destinos: {},               // destinoId -> quantos envios (monomania)
@@ -99,6 +100,7 @@ function analisarLog(caminho) {
   const reHeaderTurno = /^#+\s*TURNO\s+(\d+)\s+.*Rei\s+([AB])\s+\((.+)\)\s+#+/;
   const rePartida = /^===\s*PARTIDA\s+Rei\s+A\s+\((.+?)\)\s+vs\s+Rei\s+B\s+\((.+?)\)\s*\|\s*seed\s+(\d+)\s*\|\s*maxTurnos\s+(\d+)/;
   const reAceitoEnvio = /^ACEITO envio \[(\d+)\]->\[(\d+)\]:\s*([0-9LAC+]+)/;
+  const reAjustado = /^AJUSTADO envio \[(\d+)\]->\[(\d+)\]/; // clamp (Fase 3)
   const reAceitoConstruir = /^ACEITO construir (lanceiro|arqueiro|cavaleiro) em \[(\d+)\]/;
   const reRejeitado = /^REJEITADO:\s*(.+)$/;
   const reCombate = /^COMBATE \[(\d+)\][^:]*:\s*atacante\s+([AB])\b.*?vant=(-?\d+).*?->\s*vence\s+(atacante|defensor)(\s*\(CONQUISTA\))?/;
@@ -145,6 +147,11 @@ function analisarLog(caminho) {
       r.tropasMovidas += tot;
       r.histogramaEnvio[tot] = (r.histogramaEnvio[tot] || 0) + 1;
       r.destinos[dest] = (r.destinos[dest] || 0) + 1;
+      continue;
+    }
+
+    if ((m = reAjustado.exec(linha)) && reiAtual) {
+      reis[reiAtual].enviosAjustados++;
       continue;
     }
 
@@ -207,6 +214,10 @@ function analisarLog(caminho) {
       envios_aceites: r.enviosAceitos,
       tropas_movidas: r.tropasMovidas,
       tamanho_medio_envio: r.enviosAceitos ? Math.round((r.tropasMovidas / r.enviosAceitos) * 100) / 100 : 0,
+      // clamp (Fase 3): envios que sairam reduzidos ao estoque. Denominador ao
+      // lado (envios_aceites) — a taxa sozinha nao se le.
+      envios_ajustados: r.enviosAjustados,
+      taxa_de_clamp: r.enviosAceitos ? Math.round((r.enviosAjustados / r.enviosAceitos) * 100) / 100 : null,
       envios_de_1: r.histogramaEnvio[1] || 0,
       histograma_envio: r.histogramaEnvio,
       construcoes_aceites: r.construcoesAceitas,
@@ -300,6 +311,8 @@ function main() {
   linha("construcoes (L/A/C)",
     `${A.construcoes_aceites.lanceiro}/${A.construcoes_aceites.arqueiro}/${A.construcoes_aceites.cavaleiro}`,
     `${B.construcoes_aceites.lanceiro}/${B.construcoes_aceites.arqueiro}/${B.construcoes_aceites.cavaleiro}`);
+  linha("envios ajustados (clamp)", A.envios_ajustados, B.envios_ajustados);
+  linha("taxa de clamp (ajust/aceites)", A.taxa_de_clamp, B.taxa_de_clamp);
   linha("rejeicoes total", A.rejeicoes_total, B.rejeicoes_total);
   linha("ataques (COMBATE)", A.ataques, B.ataques);
   linha("taxa counter (todos ataques)", A.taxa_counter_correto, B.taxa_counter_correto);

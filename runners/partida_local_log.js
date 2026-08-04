@@ -65,6 +65,9 @@ function logDecisao(dono, ordem, diag) {
       ` (ataque ao Rei ${alvo.dono})`;
     out(`  ACEITO envio [${e.origemId}]->[${e.destinoId}]: ${compStr(e.tropas)}${rotulo}`);
   });
+  // CLAMP (Fase 3): envio que saiu reduzido ao estoque (linha parseavel).
+  diag.aceitoEnvios.filter((e) => e.ajustado).forEach((e) =>
+    out(`  AJUSTADO envio [${e.origemId}]->[${e.destinoId}]: pediu ${compStr(e.pedido)}, enviado ${compStr(e.tropas)} (estoque real)`));
   diag.rejeicoes.forEach((m) => out("  REJEITADO: " + m));
 }
 

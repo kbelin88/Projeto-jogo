@@ -2199,7 +2199,7 @@
   // por rei, zera em novaPartida, vira bloco RESUMO no fim do .txt.
   // errosRede fica FORA de turnos/valido: turno que o modelo nao chegou a
   // responder nao e amostra do modelo (ver decidirLado, bug de 23/07).
-  const cont0 = () => ({ turnos: 0, valido: 0, enviosAceitos: 0, constrAceitas: 0, rejeicoes: 0, normalizacoes: 0, errosRede: 0 });
+  const cont0 = () => ({ turnos: 0, valido: 0, enviosAceitos: 0, ajustados: 0, constrAceitas: 0, rejeicoes: 0, normalizacoes: 0, errosRede: 0 });
   let contadores = { A: cont0(), B: cont0() };
   let motivoInterrupcao = null; // preenchido quando a partida para por erro de rede
   let etiquetaB = "gemini"; // rotulo do decisor do Rei B no log (gemini | ollama:<modelo>)
@@ -2362,6 +2362,7 @@
       ct.normalizacoes += (r.normalizacoes || []).length;
       if (r.diag) {
         ct.enviosAceitos += r.diag.aceitoEnvios.length;
+        ct.ajustados += r.diag.aceitoEnvios.filter((e) => e.ajustado).length;
         ct.constrAceitas += r.diag.aceitoConstruir.length;
         ct.rejeicoes += r.diag.rejeicoes.length;
       }
@@ -2383,6 +2384,10 @@
       diag.aceitoConstruir.forEach((c) => L.push("ACEITO construir " + c.tipo + " em [" + c.aldeiaId + "]"));
       diag.aceitoEnvios.forEach((e) => L.push("ACEITO envio [" + e.origemId + "]->[" + e.destinoId + "]: " + compStrG(e.tropas) +
         (e.alvo && e.alvo.dono === null ? " (alvo neutra " + e.alvo.tipo + ")" : "")));
+      // CLAMP (Fase 3): o envio saiu, mas reduzido ao estoque. Linha propria,
+      // parseavel (taxa de clamp) e narrativa (pediu X, enviou Y).
+      diag.aceitoEnvios.filter((e) => e.ajustado).forEach((e) =>
+        L.push("AJUSTADO envio [" + e.origemId + "]->[" + e.destinoId + "]: pediu " + compStrG(e.pedido) + ", enviado " + compStrG(e.tropas) + " (estoque real)"));
       diag.rejeicoes.forEach((m) => L.push("REJEITADO: " + m));
     }
     geminiLog.push(L.join("\n"));
@@ -2420,9 +2425,11 @@
       const c = contadores[lado], rot = lado === "A" ? etiquetaA : etiquetaB;
       if (!c.turnos && !c.errosRede) continue;
       const ag = c.turnos ? (c.enviosAceitos / c.turnos).toFixed(2) : "n/a";
+      const taxaClamp = c.enviosAceitos ? (c.ajustados / c.enviosAceitos).toFixed(2) : "n/a";
       resumo.push("Rei " + lado + " (" + rot + "): " + c.turnos + " turnos respondidos | " +
         "AGENCIA " + ag + " envios/turno (" + c.enviosAceitos + " envios, " + c.constrAceitas + " constr) | " +
         "validade " + c.valido + "/" + c.turnos + " | rejeicoes " + c.rejeicoes +
+        " | clamp " + c.ajustados + "/" + c.enviosAceitos + " (taxa " + taxaClamp + ")" +
         " | normalizacoes " + c.normalizacoes +
         (c.errosRede ? " | ERROS DE REDE " + c.errosRede + " (fora das metricas)" : ""));
     }

@@ -186,6 +186,15 @@
     // neutra entre lento (lanceiro) e rapido (cavaleiro).
     relatorio: { velocidade_referencia: "media" },
 
+    // CLAMP DE ENVIOS (Fase 3, 04/08): quando o modelo pede mais tropas do que
+    // tem numa aldeia, o motor ENVIA O QUE HA (clampeado ao estoque, por tipo)
+    // em vez de recusar o turno inteiro. O corte vai como AVISO no relatorio
+    // seguinte (canal avisosAnteriores), nunca como rejeicao silenciosa.
+    // Envio que zera apos o ajuste continua RECUSADO ("zero tropas apos ajuste").
+    // Construcao NAO e clampada. false = comportamento antigo (rejeita). O flag
+    // fica para se poder correr o braco de controlo (clamp desligado).
+    clamp_envios: true,
+
     // Guarda de seguranca do loop (NAO e regra do jogo): teto de turnos
     // para a simulacao nunca rodar para sempre. Partida real deve acabar antes.
     max_turnos: 500,
@@ -1787,9 +1796,22 @@
   //     faltar QUALQUER tipo); total > 0.
   function diagnosticarOrdem(estado, dono, ordem) {
     const rejeicoes = [];
+    const avisos = [];
     const aceitoConstruir = [], aceitoEnvios = [];
     const construir = (ordem && Array.isArray(ordem.construir)) ? ordem.construir : [];
     const envios = (ordem && Array.isArray(ordem.envios)) ? ordem.envios : [];
+
+    // CLAMP (Fase 3): quando ligado, o estoque e simulado por origem e REDUZIDO
+    // a cada envio aceite, para que dois envios da mesma aldeia no mesmo turno se
+    // resolvam por ordem de chegada — igual ao que executarOrdem vai praticar.
+    // Desligado: le o.tropas cru e nao reduz (comportamento antigo, byte a byte).
+    const clamp = !!estado.config.clamp_envios;
+    const stockSim = {};
+    const estoque = (o) => {
+      if (!clamp) return o.tropas;
+      if (!(o.id in stockSim)) stockSim[o.id] = { lanceiro: o.tropas.lanceiro, arqueiro: o.tropas.arqueiro, cavaleiro: o.tropas.cavaleiro };
+      return stockSim[o.id];
+    };
 
     const recSim = {};   // recursos restantes por aldeia (simula o gasto do turno)
     const forcaSim = {}; // forca comprometida por aldeia (simula o teto de producao)
@@ -1839,8 +1861,25 @@
       const desconhecidas = (e.tropas && typeof e.tropas === "object")
         ? Object.keys(e.tropas).filter((k) => TIPOS.indexOf(k) < 0 && Number(e.tropas[k]) > 0)
         : [];
-      const faltam = TIPOS.filter((t) => pedido[t] > o.tropas[t]);
+      const est = estoque(o);
+      const faltam = TIPOS.filter((t) => pedido[t] > est[t]);
       if (faltam.length) {
+        if (clamp) {
+          // CLAMP por tipo ao estoque restante. Zera apos ajuste -> RECUSA (nao
+          // e envio fantasma). Senao, envia o que ha e AVISA (nunca silencioso).
+          const ajust = { lanceiro: 0, arqueiro: 0, cavaleiro: 0 };
+          let total = 0;
+          for (const t of TIPOS) { ajust[t] = Math.min(pedido[t], est[t]); total += ajust[t]; }
+          if (total === 0) {
+            rejeicoes.push(`envio [${e.origemId}]->[${e.destinoId}]: zero tropas apos ajuste`);
+            continue;
+          }
+          for (const t of TIPOS) est[t] -= ajust[t];
+          const cortes = TIPOS.filter((t) => pedido[t] > ajust[t]).map((t) => `pediu ${pedido[t]} ${t}, enviado ${ajust[t]}`);
+          avisos.push(`envio [${e.origemId}]->[${e.destinoId}]: FOI executado, com a quantidade reduzida ao estoque real (${cortes.join("; ")})`);
+          aceitoEnvios.push({ origemId: e.origemId, destinoId: e.destinoId, tropas: ajust, alvo: d, ajustado: true, pedido });
+          continue;
+        }
         rejeicoes.push(`envio [${e.origemId}]->[${e.destinoId}]: tropa que nao tem (${faltam.map((t) => `pediu ${pedido[t]} ${t}, tem ${o.tropas[t]}`).join("; ")})`);
         continue;
       }
@@ -1853,10 +1892,11 @@
       if (desconhecidas.length) { // misto: a parte valida VAI (espelha o motor), mas o descarte e avisado
         rejeicoes.push(`envio [${e.origemId}]->[${e.destinoId}]: tipo desconhecido ignorado (${desconhecidas.map((k) => `"${k}"`).join(", ")}) - enviado so o que e valido`);
       }
+      if (clamp) for (const t of TIPOS) est[t] -= pedido[t]; // reduz p/ o proximo envio da mesma origem
       aceitoEnvios.push({ origemId: e.origemId, destinoId: e.destinoId, tropas: pedido, alvo: d });
     }
 
-    return { aceitoConstruir, aceitoEnvios, rejeicoes };
+    return { aceitoConstruir, aceitoEnvios, rejeicoes, avisos };
   }
 
   // ==========================================================
@@ -1982,20 +2022,36 @@
     // p/ o relatorio do PROXIMO turno (montarVisao le isto). Ordem invalida
     // continua sendo "passa o turno" — aqui so registramos o porque.
     if (!estado.rejeicoesAnteriores) estado.rejeicoesAnteriores = {};
-    if (!ordem || typeof ordem !== "object") { estado.rejeicoesAnteriores[dono] = []; return; }
-    estado.rejeicoesAnteriores[dono] = diagnosticarOrdem(estado, dono, ordem).rejeicoes;
+    if (!estado.avisosAnteriores) estado.avisosAnteriores = {};
+    if (!ordem || typeof ordem !== "object") {
+      estado.rejeicoesAnteriores[dono] = []; estado.avisosAnteriores[dono] = []; return;
+    }
+    // Um so diagnostico e a fonte da verdade: dele saem as rejeicoes e os avisos
+    // (para o proximo relatorio) e, no modo clamp, os proprios envios a executar
+    // (ja clampados ao estoque). Assim o que se loga e o que se executa nao podem
+    // divergir.
+    const diag = diagnosticarOrdem(estado, dono, ordem);
+    estado.rejeicoesAnteriores[dono] = diag.rejeicoes;
+    estado.avisosAnteriores[dono] = diag.avisos || [];
     const construir = Array.isArray(ordem.construir) ? ordem.construir : [];
-    const envios = Array.isArray(ordem.envios) ? ordem.envios
-      : Array.isArray(ordem.ataques) ? ordem.ataques : []; // aceita nome antigo
     for (const c of construir) {
       if (!c || typeof c !== "object") continue;
       const a = aldeiaPorId(estado, c.aldeiaId);
       if (a && a.dono === dono) enfileirarConstrucao(estado, c.aldeiaId, c.tipo);
     }
-    for (const e of envios) {
-      if (!e || typeof e !== "object") continue;
-      const o = aldeiaPorId(estado, e.origemId);
-      if (o && o.dono === dono) enviarExercito(estado, e.origemId, e.destinoId, sanitizarTropas(e.tropas));
+    if (estado.config.clamp_envios) {
+      // CLAMP PADRAO: executa exatamente os envios que o diagnostico resolveu
+      // (clampados ao estoque, na ordem, sem os que zeraram).
+      for (const e of diag.aceitoEnvios) enviarExercito(estado, e.origemId, e.destinoId, e.tropas);
+    } else {
+      // Comportamento antigo (rejeita quem pede mais do que tem): INALTERADO.
+      const envios = Array.isArray(ordem.envios) ? ordem.envios
+        : Array.isArray(ordem.ataques) ? ordem.ataques : []; // aceita nome antigo
+      for (const e of envios) {
+        if (!e || typeof e !== "object") continue;
+        const o = aldeiaPorId(estado, e.origemId);
+        if (o && o.dono === dono) enviarExercito(estado, e.origemId, e.destinoId, sanitizarTropas(e.tropas));
+      }
     }
   }
 
