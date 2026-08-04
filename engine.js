@@ -43,7 +43,11 @@
     partida_alvo_turnos: 30,
 
     // PRODUCAO por aldeia, por turno.
-    producao: { madeira: 10, ferro: 6 },
+    // Fase 4 (04/08): madeira 10 -> 15. Com 15/turno o FERRO passa a ser o
+    // recurso LIMITANTE do arqueiro (1.67 turnos de ferro vs 1.33 de madeira) e
+    // do cavaleiro. O ferro deixa de ser morto por PASSAR A APERTAR, nao por
+    // ganhar uso novo. Ferro inalterado (6).
+    producao: { madeira: 15, ferro: 6 },
 
     // TETO DE FORCA POR ALDEIA: SO A PRODUCAO respeita. Aldeia cuja forca
     // (em casa + ja na fila de construcao) atinge este valor PARA de construir
@@ -63,7 +67,10 @@
       // Reversivel/calibravel: p/ manter o cavaleiro forte, use 1/2/3 aqui.
       lanceiro:  { custo: { madeira: 15, ferro: 0  }, forca: 1, vel: "lenta",  turnos: 1 },
       arqueiro:  { custo: { madeira: 20, ferro: 10 }, forca: 1, vel: "media",  turnos: 1 },
-      cavaleiro: { custo: { madeira: 30, ferro: 30 }, forca: 1, vel: "rapida", turnos: 2 },
+      // Fase 4 (04/08): cavaleiro 30/30 -> 20/20. Com forca achatada ele so
+      // compra VELOCIDADE e posicao no triangulo (passo 14 vs 6 do lanceiro).
+      // A 30/30 era dominado; a 20/20 e uma escolha real. Sumidouro de ferro.
+      cavaleiro: { custo: { madeira: 20, ferro: 20 }, forca: 1, vel: "rapida", turnos: 2 },
     },
 
     // TRIANGULO pedra-papel-tesoura: cada tropa VENCE a indicada.
