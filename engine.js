@@ -1958,15 +1958,31 @@
     return melhor;
   }
 
-  // melhor alvo: entre os que podemos vencer (defesa*margem < forca),
-  // o mais proximo (desempate: mais fraco, depois id).
-  function melhorAlvo(origem, alvos, forca, config) {
+  // Chave pseudo-aleatoria SEMEADA da partida para desempatar alvos (L4/#2,
+  // 04/08). Funcao pura de (seed, turno, origem, alvo): deterministica (mesma
+  // seed -> mesmo jogo) e SEM LADO — ao contrario do id, que favorecia o Oeste
+  // (ids baixos) nos empates, e cujos empates ainda AUMENTAM com custo inteiro.
+  function chaveRngAlvo(seed, turno, origemId, alvoId) {
+    let h = (seed >>> 0) || 1;
+    h = Math.imul(h ^ (turno | 0), 0x9E3779B1);
+    h = Math.imul(h ^ (origemId | 0), 0x85EBCA77);
+    h = Math.imul(h ^ (alvoId | 0), 0xC2B2AE3D);
+    return criarRng(h >>> 0)();
+  }
+
+  // melhor alvo: entre os que podemos vencer (defesa*margem < forca), o de MENOR
+  // CUSTO DE ROTA (a mesma fonte que o motor marcha, nao pixel — conserta o L4).
+  // Desempate: [custoRota, defesa, rng]. O rng semeado substitui o id (o id nao
+  // tem lado nenhum a defender; ver chaveRngAlvo). ctx.custoRota(alvoId) vem do
+  // caller (rede da visao); sem ctx (estados sinteticos) cai na distancia reta.
+  function melhorAlvo(origem, alvos, forca, config, ctx) {
     const margem = config.jogador.margem_ataque;
     let melhor = null, melhorChave = null;
     for (const t of alvos) {
       if (t.forcaDefesa * margem >= forca) continue;
-      const d = Math.hypot(origem.x - t.x, origem.y - t.y);
-      const chave = [d, t.forcaDefesa, t.id];
+      const d = (ctx && ctx.custoRota) ? ctx.custoRota(t.id) : Math.hypot(origem.x - t.x, origem.y - t.y);
+      const r = (ctx && ctx.rngDe) ? ctx.rngDe(t.id) : t.id; // fallback so p/ estados sem rede/seed
+      const chave = [d, t.forcaDefesa, r];
       if (!melhor ||
           chave[0] < melhorChave[0] ||
           (chave[0] === melhorChave[0] && chave[1] < melhorChave[1]) ||
@@ -1983,6 +1999,13 @@
   function jogadorBurro(visao) {
     const cfg = visao.config;
     const construir = [], envios = [];
+    // Rede da visao -> custo de rota (mesma que o motor marcha). Sem rede
+    // (estados sinteticos) o melhorAlvo cai na distancia reta. L4: NUNCA decidir
+    // por pixel quando ha rede.
+    const shim = visao.estradas
+      ? { config: cfg, estradas: { adj: visao.estradas, custo: visao.estradasCusto || null },
+          aldeias: visao.minhas.concat(visao.alvos) }
+      : null;
     for (const a of visao.minhas) {
       // 1) construir
       const rec = { madeira: a.recursos.madeira, ferro: a.recursos.ferro };
@@ -1997,10 +2020,14 @@
         counts[t]++;
         construir.push({ aldeiaId: a.id, tipo: t });
       }
-      // 2) enviar (unificado: aqui o burro so ataca o mais proximo vencivel)
+      // 2) enviar (unificado: aqui o burro so ataca o alvo de menor custo de rota vencivel)
       const forca = forcaDe(a.tropas, cfg);
       if (forca > 0) {
-        const alvo = melhorAlvo(a, visao.alvos, forca, cfg);
+        const ctx = {
+          custoRota: shim ? (alvoId) => { const cam = caminhoEntre(shim, a.id, alvoId); return cam ? pesoRota(shim, cam) : Infinity; } : null,
+          rngDe: (alvoId) => chaveRngAlvo(cfg.seed, visao.turno, a.id, alvoId),
+        };
+        const alvo = melhorAlvo(a, visao.alvos, forca, cfg, ctx);
         if (alvo) envios.push({ origemId: a.id, destinoId: alvo.id, tropas: Object.assign({}, a.tropas) });
       }
     }
