@@ -74,7 +74,8 @@ function novoRei() {
     rejeicoesDetalhe: {},       // linha normalizada -> contagem (transparencia)
     rejeicoesTotal: 0,
     ataques: 0,                 // COMBATE onde este Rei e atacante
-    ataquesCounter1: 0,         // desses, com vant=1
+    ataquesCounter1: 0,         // desses, com vant=1 (todos os ataques)
+    primeiroAtaqueAlvo: {},     // alvoId -> vant do PRIMEIRO ataque a esse alvo
     conquistas: 0,
     turnoUltimaConquista: null,
     infraErros: 0,              // FORA de todos os denominadores
@@ -101,7 +102,8 @@ function analisarLog(caminho) {
   const reAceitoConstruir = /^ACEITO construir (lanceiro|arqueiro|cavaleiro) em \[(\d+)\]/;
   const reRejeitado = /^REJEITADO:\s*(.+)$/;
   const reCombate = /^COMBATE \[(\d+)\][^:]*:\s*atacante\s+([AB])\b.*?vant=(-?\d+).*?->\s*vence\s+(atacante|defensor)(\s*\(CONQUISTA\))?/;
-  const rePlacar = /^placar:\s*A\s+(\d+)\s+ald\/forca\s+(\d+)\s*\|\s*B\s+(\d+)\s+ald\/forca\s+(\d+)\s*\|\s*neutras\s+(\d+)\s*\|\s*transito\s+(\d+)/;
+  // transito por Rei (parenteses) e OPCIONAL: logs antigos (03/08) nao o tem.
+  const rePlacar = /^placar:\s*A\s+(\d+)\s+ald\/forca\s+(\d+)\s*\|\s*B\s+(\d+)\s+ald\/forca\s+(\d+)\s*\|\s*neutras\s+(\d+)\s*\|\s*transito\s+(\d+)(?:\s*\(A\s+(\d+)\s*\|\s*B\s+(\d+)\))?/;
   const reFim = /^===\s*FIM\s*===\s*turno\s+(\d+)\s*\|\s*resultado:\s*(.+)$/;
 
   for (const linha of linhas) {
@@ -165,9 +167,13 @@ function analisarLog(caminho) {
       const atacante = m[2];
       const vant = parseInt(m[3], 10);
       const conquista = !!m[5];
+      const alvoId = m[1];
       const r = reis[atacante];
       r.ataques++;
       if (vant === 1) r.ataquesCounter1++;
+      // segunda forma da taxa de counter (6.3): so o PRIMEIRO ataque a cada alvo
+      // distinto. Descontamina a monomania (martelar o mesmo alvo N vezes).
+      if (!(alvoId in r.primeiroAtaqueAlvo)) r.primeiroAtaqueAlvo[alvoId] = vant;
       if (conquista) {
         r.conquistas++;
         r.turnoUltimaConquista = turnoAtual;
@@ -182,6 +188,8 @@ function analisarLog(caminho) {
         aldeiasA: parseInt(m[1], 10), forcaA: parseInt(m[2], 10),
         aldeiasB: parseInt(m[3], 10), forcaB: parseInt(m[4], 10),
         neutras: parseInt(m[5], 10), transito: parseInt(m[6], 10),
+        transitoA: m[7] != null ? parseInt(m[7], 10) : null,
+        transitoB: m[8] != null ? parseInt(m[8], 10) : null,
       });
       continue;
     }
@@ -208,7 +216,14 @@ function analisarLog(caminho) {
       rejeicoes_detalhe_normalizado: r.rejeicoesDetalhe,
       ataques: r.ataques,
       ataques_counter1: r.ataquesCounter1,
+      // forma 1: sobre TODOS os ataques (inflada/deflacionada pela monomania)
       taxa_counter_correto: r.ataques ? Math.round((r.ataquesCounter1 / r.ataques) * 100) / 100 : null,
+      // forma 2 (6.3): so o PRIMEIRO ataque a cada alvo distinto
+      alvos_distintos_atacados: Object.keys(r.primeiroAtaqueAlvo).length,
+      taxa_counter_correto_primeiro: Object.keys(r.primeiroAtaqueAlvo).length
+        ? Math.round((Object.values(r.primeiroAtaqueAlvo).filter((v) => v === 1).length /
+            Object.keys(r.primeiroAtaqueAlvo).length) * 100) / 100
+        : null,
       conquistas: r.conquistas,
       turno_ultima_conquista: r.turnoUltimaConquista,
       indice_monomania: r.enviosAceitos ? Math.round((maxDest / r.enviosAceitos) * 100) / 100 : null,
@@ -223,7 +238,10 @@ function analisarLog(caminho) {
     };
   };
 
-  // --- indice de estrada GLOBAL (a linha placar nao separa transito por Rei) ---
+  // --- indice de estrada GLOBAL (media dos turnos) ---
+  // NOTA DE UNIDADE: 'transito' na linha placar e o NUMERO DE EXERCITOS em
+  // marcha (movimentos), e 'forca' e a contagem de tropas em casa. Sao unidades
+  // proximas mas nao identicas; o indice e um PROXY do exercito na estrada.
   let somaFrac = 0, nFrac = 0;
   for (const p of placarSerie) {
     const denom = p.forcaA + p.forcaB + p.transito;
@@ -231,17 +249,32 @@ function analisarLog(caminho) {
   }
   const indiceEstradaGlobal = nFrac ? Math.round((somaFrac / nFrac) * 1000) / 1000 : null;
 
+  // --- indice de estrada POR REI (so quando o log traz transito por Rei) ---
+  const estradaRei = (transKey, forcaKey) => {
+    let s = 0, n = 0;
+    for (const p of placarSerie) {
+      if (p[transKey] == null) continue;
+      const denom = p[forcaKey] + p[transKey];
+      if (denom > 0) { s += p[transKey] / denom; n++; }
+    }
+    return n ? Math.round((s / n) * 1000) / 1000 : null;
+  };
+  const indiceEstradaA = estradaRei("transitoA", "forcaA");
+  const indiceEstradaB = estradaRei("transitoB", "forcaB");
+
   return {
     meta,
     reis: { A: derivarRei(reis.A), B: derivarRei(reis.B) },
     partida: {
       turnos_registados: placarSerie.length,
       indice_estrada_global: indiceEstradaGlobal,
+      indice_estrada_A: indiceEstradaA,
+      indice_estrada_B: indiceEstradaB,
       turno_ultima_conquista_global: ultimaConquistaGlobal,
       placar_final: placarSerie.length ? placarSerie[placarSerie.length - 1] : null,
       resultado_final: resultadoFinal,
     },
-    _nota_estrada: "indice_estrada e GLOBAL: a linha 'placar:' traz transito somado dos dois reis, nao separado por Rei.",
+    _nota_estrada: "transito = nº de EXERCITOS em marcha (proxy). indice_estrada_A/B só existe em logs com 'transito N (A x | B y)'; os logs de 03/08 são anteriores a esse formato.",
   };
 }
 
@@ -277,7 +310,9 @@ function main() {
     `${B.construcoes_aceites.lanceiro}/${B.construcoes_aceites.arqueiro}/${B.construcoes_aceites.cavaleiro}`);
   linha("rejeicoes total", A.rejeicoes_total, B.rejeicoes_total);
   linha("ataques (COMBATE)", A.ataques, B.ataques);
-  linha("taxa counter correto", A.taxa_counter_correto, B.taxa_counter_correto);
+  linha("taxa counter (todos ataques)", A.taxa_counter_correto, B.taxa_counter_correto);
+  linha("taxa counter (1o/alvo distinto)", A.taxa_counter_correto_primeiro, B.taxa_counter_correto_primeiro);
+  linha("  alvos distintos atacados", A.alvos_distintos_atacados, B.alvos_distintos_atacados);
   linha("indice monomania", A.indice_monomania, B.indice_monomania);
   linha("alvo mais repetido", A.alvo_mais_repetido ? `[${A.alvo_mais_repetido.destinoId}]x${A.alvo_mais_repetido.envios}` : "-",
     B.alvo_mais_repetido ? `[${B.alvo_mais_repetido.destinoId}]x${B.alvo_mais_repetido.envios}` : "-");

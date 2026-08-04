@@ -2400,9 +2400,13 @@
         L.push("REFORCO [" + e.alvoId + "] " + e.alvoNome + " dono " + e.dono + ": " + compStrG(e.tropas));
     });
     const f = (d) => Engine.aldeiasDe(game, d).reduce((s2, a) => s2 + Engine.forcaDe(a.tropas, game.config), 0);
+    // transito por Rei vem do ESTADO do motor (movimentos por dono), nao de parsing.
+    const tr = (d) => game.movimentos.filter((m) => m.dono === d).length;
     L.push("placar: A " + Engine.aldeiasDe(game, "A").length + " ald/forca " + f("A") +
       " | B " + Engine.aldeiasDe(game, "B").length + " ald/forca " + f("B") +
-      " | neutras " + Engine.aldeiasDe(game, null).length + " | transito " + game.movimentos.length);
+      " | neutras " + Engine.aldeiasDe(game, null).length +
+      " | transito " + game.movimentos.length +
+      " (A " + tr("A") + " | B " + tr("B") + ")");
     L.push("");
     geminiLog.push(L.join("\n"));
   }

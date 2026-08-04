@@ -43,9 +43,12 @@ const historico = [];
 
 function placar() {
   const f = (d) => E.aldeiasDe(estado, d).reduce((s, a) => s + E.forcaDe(a.tropas, config), 0);
+  // transito por Rei vem do ESTADO do motor (movimentos por dono), nao de parsing.
+  const tr = (d) => estado.movimentos.filter((m) => m.dono === d).length;
   return `placar: A ${E.aldeiasDe(estado, "A").length} ald/forca ${f("A")} | ` +
     `B ${E.aldeiasDe(estado, "B").length} ald/forca ${f("B")} | ` +
-    `neutras ${E.aldeiasDe(estado, null).length} | transito ${estado.movimentos.length}`;
+    `neutras ${E.aldeiasDe(estado, null).length} | ` +
+    `transito ${estado.movimentos.length} (A ${tr("A")} | B ${tr("B")})`;
 }
 
 function logDecisao(dono, ordem, diag) {
