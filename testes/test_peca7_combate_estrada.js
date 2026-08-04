@@ -10,8 +10,8 @@
 "use strict";
 const Engine = require("../engine.js");
 const CONFIG = Engine.CONFIG;
-// escala classica de forca p/ os numeros conferidos a mao (default pode estar achatado)
-CONFIG.tropas.lanceiro.forca = 10; CONFIG.tropas.arqueiro.forca = 15; CONFIG.tropas.cavaleiro.forca = 30;
+// Combate v3: choque em campo aberto usa ATAQUE dos dois lados. lanceiro atq=1,
+// entao N lanceiros -> forca N (numeros abaixo em unidades de ataque).
 
 let falhas = 0;
 function checa(nome, cond, detalhe) {
@@ -103,7 +103,7 @@ console.log("\nD) Campo aberto (sem bonus de aldeia/castelo):");
     { dono: "B", tropas: { lanceiro: 100 }, caminho: [1, 0], turnosTotal: 2, turnosRestantes: 1 });
   checa("evento tipo combate_estrada", rep.ev.tipo === "combate_estrada");
   // forcas iguais: nenhum lado teve vantagem de terreno (senao um veria x1.25+)
-  checa("empate real (forcas 1000 x 1000, sem bonus)", rep.ev.Fatk === 1000 && rep.ev.Fdef === 1000);
+  checa("empate real (ataque 100 x 100, sem bonus)", rep.ev.Fatk === 100 && rep.ev.Fdef === 100);
 }
 
 console.log("");

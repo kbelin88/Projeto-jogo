@@ -1467,7 +1467,7 @@
     L.push("};");
     const texto = L.join("\n") + "\n";
     // Servido por http (servir.py): grava direto no disco, sem download.
-    if (location.protocol === "http:" || location.protocol === "https:") {
+    if (typeof location !== "undefined" && (location.protocol === "http:" || location.protocol === "https:")) {
       fetch("/salvar-mapa", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1521,8 +1521,10 @@
   // Sem mapa autoral nao ha o que editar (o v1/v2 e procedural, gerado por
   // seed) — a barra some inteira em vez de oferecer botao que quebraria.
   if (!IB) document.getElementById("editorbar").style.display = "none";
-  // servido por http o botao grava mesmo; em file:// so mostra para copiar
-  if (location.protocol === "http:" || location.protocol === "https:") {
+  // servido por http o botao grava mesmo; em file:// so mostra para copiar.
+  // typeof-guard: os smokes headless (testes_arena) fazem eval deste script sem
+  // `location` — sem o guard, quebra no load com "location is not defined".
+  if (typeof location !== "undefined" && (location.protocol === "http:" || location.protocol === "https:")) {
     const b = document.getElementById("edExportar");
     if (b) { b.textContent = "gravar no disco"; b.title = "Grava mapa-ajustes.js na pasta do jogo"; }
   }
@@ -2407,8 +2409,8 @@
     const f = (d) => Engine.aldeiasDe(game, d).reduce((s2, a) => s2 + Engine.forcaDe(a.tropas, game.config), 0);
     // transito por Rei vem do ESTADO do motor (movimentos por dono), nao de parsing.
     const tr = (d) => game.movimentos.filter((m) => m.dono === d).length;
-    L.push("placar: A " + Engine.aldeiasDe(game, "A").length + " ald/forca " + f("A") +
-      " | B " + Engine.aldeiasDe(game, "B").length + " ald/forca " + f("B") +
+    L.push("placar: A " + Engine.aldeiasDe(game, "A").length + " ald/tropas " + f("A") +
+      " | B " + Engine.aldeiasDe(game, "B").length + " ald/tropas " + f("B") +
       " | neutras " + Engine.aldeiasDe(game, null).length +
       " | transito " + game.movimentos.length +
       " (A " + tr("A") + " | B " + tr("B") + ")");
@@ -3304,8 +3306,8 @@
     const pre = emReplay ? "REPLAY \u00b7 " : "";
     document.getElementById("sbA-modelo").textContent = pre + etiquetaA;
     document.getElementById("sb-modelo").textContent = pre + etiquetaB;
-    document.getElementById("sbA-stats").textContent = "forca " + fA + " \u00b7 " + A.length + " ald";
-    document.getElementById("sbB-stats").textContent = "forca " + fB + " \u00b7 " + B.length + " ald";
+    document.getElementById("sbA-stats").textContent = "tropas " + fA + " \u00b7 " + A.length + " ald";
+    document.getElementById("sbB-stats").textContent = "tropas " + fB + " \u00b7 " + B.length + " ald";
 
     // placar de transmissao (topo, sempre visivel)
     document.getElementById("pt-turno").textContent = venc

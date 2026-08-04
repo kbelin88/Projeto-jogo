@@ -9,6 +9,7 @@
 //  referencia calculada a mao a partir da CONFIG atual:
 //    neutra = 1 tropa, bonus_defesa_aldeia 1.25, bonus_defesa_castelo 1.5,
 //    bonus_forca_triangulo 1.5, triangulo lanceiro>cavaleiro>arqueiro>lanceiro.
+//  Combate v3 (04/08): atq/def separados, counter 1.25. Tabela recalculada.
 //  Se um valor divergir, o motor mudou de comportamento — o teste FALHA e
 //  mostra o valor obtido (nao se ajusta a tabela).
 // ============================================================
@@ -28,11 +29,12 @@ function checa(nome, obtido, esperado) {
 const estado = Engine.criarEstadoInicial(CONFIG);
 
 // ---------- (A) NEUTRAS: fortaleza de 1 tropa de um tipo so ----------
-// Tabela de referencia (linhas = tipo da neutra; colunas = tipo atacante):
+// Tabela v3 (linhas = tipo da neutra; colunas = tipo atacante). def: lanc 2,
+// arq 2, cav 1; atq: lanc 1, arq 2, cav 4; aldeia x1.25; counter x1.25.
 //   alvo                 lanceiro  arqueiro  cavaleiro
-//   neutra de lanceiro      2         1         2
-//   neutra de arqueiro      2         2         1
-//   neutra de cavaleiro     1         2         2
+//   neutra de lanceiro      3         2         1
+//   neutra de arqueiro      4         2         1
+//   neutra de cavaleiro     2         1         1
 console.log("=== (A) neutras (1 tropa, aldeia x1.25) — 9 valores ===");
 
 function neutra(tipo) {
@@ -43,9 +45,9 @@ function neutra(tipo) {
 }
 
 const TAB = {
-  lanceiro:  { lanceiro: 2, arqueiro: 1, cavaleiro: 2 },
-  arqueiro:  { lanceiro: 2, arqueiro: 2, cavaleiro: 1 },
-  cavaleiro: { lanceiro: 1, arqueiro: 2, cavaleiro: 2 },
+  lanceiro:  { lanceiro: 3, arqueiro: 2, cavaleiro: 1 },
+  arqueiro:  { lanceiro: 4, arqueiro: 2, cavaleiro: 1 },
+  cavaleiro: { lanceiro: 2, arqueiro: 1, cavaleiro: 1 },
 };
 
 for (const tipoNeutra of ["lanceiro", "arqueiro", "cavaleiro"]) {
@@ -57,17 +59,18 @@ for (const tipoNeutra of ["lanceiro", "arqueiro", "cavaleiro"]) {
 }
 
 // ---------- (B) CAPITAL inimiga (castelo x1.5) ----------
-// 5 lanceiros / 4 arqueiros / 3 cavaleiros -> Fdef 12, dominante lanceiro.
-//   lanceiro 19 | arqueiro 13 | cavaleiro 28
-console.log("=== (B) capital inimiga (Fdef 12 dom. lanceiro, castelo x1.5) — 3 valores ===");
+// 5 lanceiros / 4 arqueiros / 3 cavaleiros -> defesa 5*2+4*2+3*1 = 21,
+// dominante = MAIS NUMEROSO = lanceiro (5). castelo x1.5.
+//   lanceiro 32 | arqueiro 13 | cavaleiro 10
+console.log("=== (B) capital inimiga (defesa 21 dom. lanceiro, castelo x1.5) — 3 valores ===");
 
 const capital = {
   id: 800, dono: "A", capital: true,
   tropas: { lanceiro: 5, arqueiro: 4, cavaleiro: 3 },
 };
-checa("capital <- lanceiro",  Engine.minimoParaTomar(estado, "lanceiro",  capital), 19);
+checa("capital <- lanceiro",  Engine.minimoParaTomar(estado, "lanceiro",  capital), 32);
 checa("capital <- arqueiro",  Engine.minimoParaTomar(estado, "arqueiro",  capital), 13);
-checa("capital <- cavaleiro", Engine.minimoParaTomar(estado, "cavaleiro", capital), 28);
+checa("capital <- cavaleiro", Engine.minimoParaTomar(estado, "cavaleiro", capital), 10);
 
 console.log("\n" + (falhas ? `FALHOU: ${falhas} checagem(ns)` : "TODOS OS CASOS PASSARAM"));
 process.exit(falhas ? 1 : 0);

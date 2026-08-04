@@ -55,7 +55,7 @@ checa('topo NAO nomeia "lado A/B"', !/lado [AB]/i.test(prompt));
 // REGRAS DE COMBATE (triangulo v2): bloco gerado da CONFIG, entre topo e dados
 const iRegras = prompt.indexOf("=== REGRAS DE COMBATE ===");
 checa("REGRAS: bloco presente entre topo e dados", iRegras > iTopo && iRegras < iDados);
-checa("REGRAS: bonus vem da CONFIG", prompt.includes(`tropas x ${CONFIG.bonus_forca_triangulo}`));
+checa("REGRAS: bonus vem da CONFIG", prompt.includes(`forca por ${CONFIG.bonus_forca_triangulo}`));
 // Guarda DERIVADA da CONFIG (nao fixa a redacao): os tres pares do triangulo
 // e o multiplicador presentes no bloco de combate. Sobrevive a mudancas de texto.
 const blocoCombate = prompt.slice(iRegras, prompt.indexOf("=== REGRAS DE ECONOMIA ==="));
@@ -66,7 +66,9 @@ for (const t of ["lanceiro", "arqueiro", "cavaleiro"]) {
 }
 checa("REGRAS: multiplicador do triangulo vem da CONFIG",
   blocoCombate.includes(String(CONFIG.bonus_forca_triangulo)));
-checa("REGRAS: exemplo numerico presente", /-> o atacante vence/.test(prompt));
+// COMBATE v3: a tabela atq/def vem da CONFIG (numeros no bloco de combate).
+checa("REGRAS: tabela atq/def da CONFIG presente",
+  blocoCombate.includes(`ataque ${CONFIG.tropas.cavaleiro.atq}, defesa ${CONFIG.tropas.cavaleiro.def}`));
 
 // REGRAS DE ECONOMIA: bloco gerado da CONFIG, entre topo e dados
 const iEco = prompt.indexOf("=== REGRAS DE ECONOMIA ===");
@@ -75,8 +77,8 @@ checa("ECONOMIA: custo do lanceiro vem da CONFIG",
   prompt.includes(`lanceiro: custa ${CONFIG.tropas.lanceiro.custo.madeira} madeira`));
 checa("ECONOMIA: producao por turno vem da CONFIG",
   prompt.includes(`produz ${CONFIG.producao.madeira} madeira e ${CONFIG.producao.ferro} ferro`));
-checa("ECONOMIA: teto de forca presente",
-  !CONFIG.limite_forca_aldeia || prompt.includes(`atinge ${CONFIG.limite_forca_aldeia}`));
+checa("ECONOMIA: teto de tropas presente",
+  !CONFIG.limite_tropas_aldeia || prompt.includes(`atinge ${CONFIG.limite_tropas_aldeia}`));
 
 // EXEMPLO ANCORADO: origem = id real de SUAS ALDEIAS; destino = id real de um alvo.
 const exemplo = Engine.exemploAncorado(visao);

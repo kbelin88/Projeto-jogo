@@ -105,7 +105,8 @@ function analisarLog(caminho) {
   const reRejeitado = /^REJEITADO:\s*(.+)$/;
   const reCombate = /^COMBATE \[(\d+)\][^:]*:\s*atacante\s+([AB])\b.*?vant=(-?\d+).*?->\s*vence\s+(atacante|defensor)(\s*\(CONQUISTA\))?/;
   // transito por Rei (parenteses) e OPCIONAL: logs antigos (03/08) nao o tem.
-  const rePlacar = /^placar:\s*A\s+(\d+)\s+ald\/forca\s+(\d+)\s*\|\s*B\s+(\d+)\s+ald\/forca\s+(\d+)\s*\|\s*neutras\s+(\d+)\s*\|\s*transito\s+(\d+)(?:\s*\(A\s+(\d+)\s*\|\s*B\s+(\d+)\))?/;
+  // le "ald/forca" (logs 03/08) E "ald/tropas" (v3, 7.4-C) — o campo virou contagem.
+  const rePlacar = /^placar:\s*A\s+(\d+)\s+ald\/(?:forca|tropas)\s+(\d+)\s*\|\s*B\s+(\d+)\s+ald\/(?:forca|tropas)\s+(\d+)\s*\|\s*neutras\s+(\d+)\s*\|\s*transito\s+(\d+)(?:\s*\(A\s+(\d+)\s*\|\s*B\s+(\d+)\))?/;
   const reFim = /^===\s*FIM\s*===\s*turno\s+(\d+)\s*\|\s*resultado:\s*(.+)$/;
 
   for (const linha of linhas) {
