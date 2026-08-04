@@ -102,4 +102,53 @@ t("sem nome -> linha comeca por '[0] | madeira'", () => {
   assert.ok(rel3.includes("[0] | madeira 5 "), rel3);
 });
 
+// ---- Cenario 4 (INVARIANTE, pedido do Lucas): a soma das linhas "saiu daqui"
+// de TODAS as minhas aldeias tem de igualar o total do MEU transito, sem
+// duplicacao. Blinda o filtro origemId===id && dono===me: transito inimigo NAO
+// entra, reforco a caminho da minha aldeia so conta na ORIGEM (uma vez).
+// O caso planta uma isca: exercito INIMIGO com composicao 5/4/3 (a guarnicao
+// inicial do Rei) — se o filtro de dono falhar, ele aparece indevidamente.
+const estado4 = {
+  config: CONFIG,
+  turno: 6,
+  aldeias: [
+    aldeia(0, "Lisboa", "A", null, { lanceiro: 1, arqueiro: 0, cavaleiro: 0 }, { madeira: 5, ferro: 0 }, []),
+    aldeia(2, "Evora", "A", null, { arqueiro: 3 }, { madeira: 10, ferro: 6 }, []),
+    aldeia(9, "Inimiga", "B", null, { lanceiro: 20 }),
+    aldeia(1, "Santarem", null, "arqueiro", { arqueiro: 1 }),
+  ],
+  movimentos: [
+    { dono: "A", origemId: 0, destinoId: 1, tropas: { lanceiro: 2, arqueiro: 1, cavaleiro: 0 }, turnosRestantes: 1, turnosTotal: 2 },
+    { dono: "A", origemId: 2, destinoId: 0, tropas: { lanceiro: 0, arqueiro: 0, cavaleiro: 2 }, turnosRestantes: 1, turnosTotal: 2 }, // reforco p/ MINHA [0]
+    { dono: "B", origemId: 9, destinoId: 0, tropas: { lanceiro: 5, arqueiro: 4, cavaleiro: 3 }, turnosRestantes: 2, turnosTotal: 3 }, // ISCA: composicao = guarnicao inicial
+  ],
+  log: [],
+};
+const rel4 = Engine.relatorioTexto(Engine.montarVisao(estado4, "A"));
+
+t("soma das linhas 'saiu daqui' == meu transito total (sem duplicacao, sem inimigo)", () => {
+  // esperado calculado do estado: so os movimentos dono A
+  const esperado = estado4.movimentos
+    .filter((m) => m.dono === "A")
+    .reduce((s, m) => s + m.tropas.lanceiro + m.tropas.arqueiro + m.tropas.cavaleiro, 0);
+  // soma o que o relatorio imprimiu nas linhas "saiu daqui"
+  let doRelatorio = 0;
+  for (const l of rel4.split("\n")) {
+    if (!l.includes("saiu daqui")) continue;
+    const re = /(\d+)\s+(?:lanceiro|arqueiro|cavaleiro)/g;
+    let m;
+    while ((m = re.exec(l))) doRelatorio += parseInt(m[1], 10);
+  }
+  assert.strictEqual(doRelatorio, esperado, `relatorio=${doRelatorio} esperado=${esperado}`);
+  assert.strictEqual(esperado, 5, "sanidade: 3 (de [0]) + 2 (de [2]) = 5");
+});
+t("isca inimiga 5/4/3 NAO aparece em nenhuma linha 'saiu daqui'", () => {
+  for (const l of rel4.split("\n")) {
+    if (l.includes("saiu daqui")) {
+      assert.ok(!(l.includes("5 lanceiros") && l.includes("4 arqueiros") && l.includes("3 cavaleiros")),
+        "transito inimigo vazou: " + l);
+    }
+  }
+});
+
 console.log(`\n${ok} testes ok`);

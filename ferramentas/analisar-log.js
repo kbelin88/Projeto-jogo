@@ -238,43 +238,35 @@ function analisarLog(caminho) {
     };
   };
 
-  // --- indice de estrada GLOBAL (media dos turnos) ---
-  // NOTA DE UNIDADE: 'transito' na linha placar e o NUMERO DE EXERCITOS em
-  // marcha (movimentos), e 'forca' e a contagem de tropas em casa. Sao unidades
-  // proximas mas nao identicas; o indice e um PROXY do exercito na estrada.
-  let somaFrac = 0, nFrac = 0;
-  for (const p of placarSerie) {
-    const denom = p.forcaA + p.forcaB + p.transito;
-    if (denom > 0) { somaFrac += p.transito / denom; nFrac++; }
-  }
-  const indiceEstradaGlobal = nFrac ? Math.round((somaFrac / nFrac) * 1000) / 1000 : null;
-
-  // --- indice de estrada POR REI (so quando o log traz transito por Rei) ---
-  const estradaRei = (transKey, forcaKey) => {
+  // --- EXERCITOS EM TRANSITO, media dos turnos ---
+  // Decisao 04/08 (briefing 6.3): o campo 'transito' conta EXERCITOS em marcha
+  // (movimentos.length), nao tropas. Por isso NAO se reporta "indice de estrada"
+  // nos logs historicos — seria unidade trocada (o 0.41 antigo, 17 exercitos a
+  // dividir por 25 tropas, esta RETIRADO). Reporta-se a media de exercitos em
+  // transito, com o nome certo. O indice de estrada por TROPAS so existe no
+  // harness da Fase 6, calculado de estado.movimentos (tropas_em_marcha).
+  const media = (getter) => {
     let s = 0, n = 0;
-    for (const p of placarSerie) {
-      if (p[transKey] == null) continue;
-      const denom = p[forcaKey] + p[transKey];
-      if (denom > 0) { s += p[transKey] / denom; n++; }
-    }
-    return n ? Math.round((s / n) * 1000) / 1000 : null;
+    for (const p of placarSerie) { const v = getter(p); if (v != null) { s += v; n++; } }
+    return n ? Math.round((s / n) * 100) / 100 : null;
   };
-  const indiceEstradaA = estradaRei("transitoA", "forcaA");
-  const indiceEstradaB = estradaRei("transitoB", "forcaB");
+  const exercitosTransitoMedio = media((p) => p.transito);
+  const exercitosTransitoMedioA = media((p) => p.transitoA);
+  const exercitosTransitoMedioB = media((p) => p.transitoB);
 
   return {
     meta,
     reis: { A: derivarRei(reis.A), B: derivarRei(reis.B) },
     partida: {
       turnos_registados: placarSerie.length,
-      indice_estrada_global: indiceEstradaGlobal,
-      indice_estrada_A: indiceEstradaA,
-      indice_estrada_B: indiceEstradaB,
+      exercitos_em_transito_medio: exercitosTransitoMedio,
+      exercitos_em_transito_medio_A: exercitosTransitoMedioA,
+      exercitos_em_transito_medio_B: exercitosTransitoMedioB,
       turno_ultima_conquista_global: ultimaConquistaGlobal,
       placar_final: placarSerie.length ? placarSerie[placarSerie.length - 1] : null,
       resultado_final: resultadoFinal,
     },
-    _nota_estrada: "transito = nº de EXERCITOS em marcha (proxy). indice_estrada_A/B só existe em logs com 'transito N (A x | B y)'; os logs de 03/08 são anteriores a esse formato.",
+    _nota_estrada: "'transito' conta EXERCITOS em marcha (movimentos.length), nao tropas. Por isso reporta-se exercitos_em_transito_medio, NAO 'indice de estrada' (o 0.41 antigo era unidade trocada e esta retirado). O indice por tropas (tropas_em_marcha) so existe no harness da Fase 6, de estado.movimentos. Os logs de 03/08 nao tem transito por Rei (medio_A/B = null).",
   };
 }
 
@@ -318,7 +310,7 @@ function main() {
     B.alvo_mais_repetido ? `[${B.alvo_mais_repetido.destinoId}]x${B.alvo_mais_repetido.envios}` : "-");
   linha("turno ultima conquista", A.turno_ultima_conquista, B.turno_ultima_conquista);
   linha("infra erros (fora)", A.infra_erros, B.infra_erros);
-  console.log("   indice estrada (GLOBAL): " + r.partida.indice_estrada_global);
+  console.log("   exercitos em transito (media/turno, GLOBAL): " + r.partida.exercitos_em_transito_medio);
   console.log("   ultima conquista (global): T" + r.partida.turno_ultima_conquista_global);
   console.log("   REJEICOES POR CATEGORIA:");
   for (const rei of ["A", "B"]) {

@@ -111,9 +111,9 @@
   },
   "partida": {
     "turnos_registados": 52,
-    "indice_estrada_global": 0.302,
-    "indice_estrada_A": null,
-    "indice_estrada_B": null,
+    "exercitos_em_transito_medio": 6.33,
+    "exercitos_em_transito_medio_A": null,
+    "exercitos_em_transito_medio_B": null,
     "turno_ultima_conquista_global": 43,
     "placar_final": {
       "turno": 52,
@@ -131,5 +131,5 @@
       "resultado": "INTERROMPIDA (erro de rede no Rei B (openrouter:nvidia/nemotron-nano-9b-v2:free) no turno 52: OpenRouter HTTP 429: {\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day\",\"code\":429,\"metadata\":{\"headers\":{\"X-RateLimit-Limit\":\"50\",\"X-RateLimit-Remaining\":\"0\",\"X-RateLimit-Reset\":\"1785801600000\"},\"limit_source\":\"openrouter_free_tier_daily\",\"remedy_hint\":\"Wait for the daily reset (see X-RateLimit-Reset), or purchase credits to raise your free-model daily limit.\",\"provider_name\":null}},\"user_id\":\"user_3Gv2CGmCT6QpCrhe17k10bLDJyj\"}) | A 5 ald | B 6 ald | neutras 13"
     }
   },
-  "_nota_estrada": "transito = nº de EXERCITOS em marcha (proxy). indice_estrada_A/B só existe em logs com 'transito N (A x | B y)'; os logs de 03/08 são anteriores a esse formato."
+  "_nota_estrada": "'transito' conta EXERCITOS em marcha (movimentos.length), nao tropas. Por isso reporta-se exercitos_em_transito_medio, NAO 'indice de estrada' (o 0.41 antigo era unidade trocada e esta retirado). O indice por tropas (tropas_em_marcha) so existe no harness da Fase 6, de estado.movimentos. Os logs de 03/08 nao tem transito por Rei (medio_A/B = null)."
 }

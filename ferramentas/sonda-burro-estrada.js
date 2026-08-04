@@ -54,30 +54,58 @@ function burroPorEstrada(visao) {
   return { construir: base.construir, envios };
 }
 
-function placar(res, est) {
-  return `${res.aldeiasA}/${res.aldeiasB}/${Engine.aldeiasDe(est, null).length}`;
+function placar(r) { return `${r.aldeiasA}/${r.aldeiasB}/${r.neutras}`; }
+
+// Replica rodarTurno (tick -> decisao -> vitoria) com ORDEM de decisao
+// configuravel, para testar vantagem de quem joga primeiro (ver assento-burro).
+function rodarComOrdem(cfg, decisores, maxTurnos, ordem) {
+  const estado = Engine.criarEstadoInicial(cfg);
+  let vencedor = null;
+  while (estado.turno < maxTurnos) {
+    Engine.tick(estado);
+    for (const dono of ordem) {
+      if (!Engine.aldeiasDe(estado, dono).length) continue;
+      Engine.executarOrdem(estado, dono, decisores[dono](Engine.montarVisao(estado, dono)));
+    }
+    vencedor = Engine.checarVitoria(estado);
+    if (vencedor) break;
+  }
+  return {
+    vencedor: vencedor || "limite", turnos: estado.turno,
+    aldeiasA: Engine.aldeiasDe(estado, "A").length,
+    aldeiasB: Engine.aldeiasDe(estado, "B").length,
+    neutras: Engine.aldeiasDe(estado, null).length,
+  };
 }
 
 function main() {
   const seeds = [1, 2, 3];
   const turnos = 60;
-  console.log("=".repeat(72));
+  const decEstrada = { A: burroPorEstrada, B: burroPorEstrada };
+  const w = (s, n) => String(s).padStart(n);
+
+  console.log("=".repeat(78));
   console.log("  SONDA — burro por CUSTO DE ESTRADA (jogadorBurro intacto)");
   console.log("  placar = aldeiasA / aldeiasB / neutras");
-  console.log("=".repeat(72));
-  console.log("  seed | Fase 0 (por pixel) | sonda (por estrada)");
-  console.log("  " + "-".repeat(48));
-  const w = (s, n) => String(s).padStart(n);
+  console.log("=".repeat(78));
+  console.log("  seed | pixel [A,B] | estrada [A,B] | estrada [B,A] | espelha ordem?");
+  console.log("  " + "-".repeat(70));
+  const linhas = [];
   for (const seed of seeds) {
-    const cfg0 = cfgPara(seed);
-    const r0 = Engine.rodarPartida(cfg0, { A: Engine.jogadorBurro, B: Engine.jogadorBurro }, { maxTurnos: turnos });
-    const cfg1 = cfgPara(seed);
-    const r1 = Engine.rodarPartida(cfg1, { A: burroPorEstrada, B: burroPorEstrada }, { maxTurnos: turnos });
-    console.log("  " + w(seed, 4) + " | " + w(placar(r0, r0.estado), 18) + " | " + w(placar(r1, r1.estado), 18));
+    const pixel = rodarComOrdem(cfgPara(seed), { A: Engine.jogadorBurro, B: Engine.jogadorBurro }, turnos, ["A", "B"]);
+    const estradaAB = rodarComOrdem(cfgPara(seed), decEstrada, turnos, ["A", "B"]);
+    const estradaBA = rodarComOrdem(cfgPara(seed), decEstrada, turnos, ["B", "A"]);
+    // "espelha ordem": inverter quem joga 1o troca o vencedor de lado?
+    const espelha = estradaAB.aldeiasA === estradaBA.aldeiasB && estradaAB.aldeiasB === estradaBA.aldeiasA;
+    linhas.push({ seed, pixel, estradaAB, estradaBA, espelha });
+    console.log("  " + w(seed, 4) + " | " + w(placar(pixel), 11) + " | " +
+      w(placar(estradaAB), 13) + " | " + w(placar(estradaBA), 13) + " | " + (espelha ? "SIM" : "nao"));
   }
-  console.log("=".repeat(72));
-  console.log("  Se a coluna 'por estrada' aproxima do empate, a distorcao era do");
-  console.log("  desempate por pixel do burro — nao do motor nem do mapa.");
+  console.log("=".repeat(78));
+  console.log("  Leitura:");
+  console.log("  - estrada [A,B] perto do empate (vs pixel) => distorcao era o desempate por pixel.");
+  console.log("  - estrada [A,B] -> [B,A]: se o vencedor troca de lado por margem parecida,");
+  console.log("    a vantagem e de QUEM JOGA PRIMEIRO, e fica quantificada.");
 }
 
 main();
