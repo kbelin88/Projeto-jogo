@@ -1226,7 +1226,7 @@
       turno: estado.turno,
       config: estado.config,
       minhas: aldeiasDe(estado, dono).map((a) => ({
-        id: a.id, x: a.x, y: a.y,
+        id: a.id, x: a.x, y: a.y, nome: a.nome,
         recursos: { madeira: a.recursos.madeira, ferro: a.recursos.ferro },
         tropas: copiaTropas(a.tropas),
         construindo: a.construindo.map((c) => ({ tipo: c.tipo, turnosRestantes: c.turnosRestantes })),
@@ -1370,6 +1370,9 @@
 
     // cabecalho
     L.push(`TURNO ${visao.turno} - Voce e o Rei ${me}.`);
+    // Ataca a CAUSA 1 (ancora na guarnicao inicial): reafirma que os numeros
+    // abaixo sao DESTE turno. Custo zero, risco zero.
+    L.push(`Estes numeros sao do TURNO ${visao.turno}. Ignore quantidades de turnos anteriores.`);
     L.push("");
 
     // FEEDBACK DE REJEICAO (memoria anti-loop): ecoa as ordens que o motor
@@ -1391,19 +1394,42 @@
       L.push("");
     }
 
-    // SUAS ALDEIAS
+    // SUAS ALDEIAS (relatorio v3, Fase 2 04/08): separa em TRES estados o que
+    // o modelo confundia — o que da p/ enviar AGORA, o que ja saiu (em marcha) e
+    // o que ainda vai ficar pronto. Ataca as CAUSAS 1 (ancora) e 2 (transito
+    // contado como casa). Producao vem da CONFIG, nunca hard-coded.
+    const prod = cfg.producao;
     L.push(`=== SUAS ALDEIAS (${visao.minhas.length}) ===`);
     for (const a of visao.minhas) {
-      L.push(`[${a.id}] | recursos: ${a.recursos.madeira} madeira, ${a.recursos.ferro} ferro`);
-      L.push(`       tropas em casa: ${a.tropas.lanceiro} lanceiros, ${a.tropas.arqueiro} arqueiros, ${a.tropas.cavaleiro} cavaleiros`);
+      const nome = a.nome ? ` ${a.nome}` : ""; // mapa autoral traz nome; procedural pode nao ter
+      L.push(`[${a.id}]${nome} | madeira ${a.recursos.madeira} (+${prod.madeira}/turno) | ferro ${a.recursos.ferro} (+${prod.ferro}/turno)`);
+      // DISPONIVEL PARA ENVIAR AGORA: instrucao (maiusculas), nao descricao.
+      L.push(`    DISPONIVEL PARA ENVIAR AGORA: ${a.tropas.lanceiro} lanceiros, ${a.tropas.arqueiro} arqueiros, ${a.tropas.cavaleiro} cavaleiros`);
+      // saiu daqui, ja em marcha (NAO disponivel): do transito, origem=esta
+      // aldeia, dono=me. Se nao houver, OMITE a linha inteira (linha ausente e
+      // mais barata que linha vazia).
+      const emMarcha = { lanceiro: 0, arqueiro: 0, cavaleiro: 0 };
+      let temMarcha = false;
+      if (visao.transito) {
+        for (const mv of visao.transito) {
+          if (mv.origemId === a.id && mv.dono === me) {
+            for (const t of TIPOS) emMarcha[t] += (mv.tropas[t] || 0);
+            temMarcha = true;
+          }
+        }
+      }
+      if (temMarcha && (emMarcha.lanceiro + emMarcha.arqueiro + emMarcha.cavaleiro) > 0) {
+        L.push(`    saiu daqui, ja em marcha (NAO disponivel): ${compTexto(emMarcha)}`);
+      }
+      // fica pronto: substitui "construindo". Sufixo obrigatorio. Sem construcao,
+      // OMITE (nada de "construindo: nada").
       if (a.construindo.length) {
         const cont = {};
         let maxT = 0;
         for (const c of a.construindo) { cont[c.tipo] = (cont[c.tipo] || 0) + 1; maxT = Math.max(maxT, c.turnosRestantes); }
         const desc = TIPOS.filter((t) => cont[t]).map((t) => `${cont[t]} ${t}`).join(", ");
-        L.push(`       construindo: ${desc} (pronto em ${maxT} turno(s))`);
-      } else {
-        L.push(`       construindo: nada`);
+        const quando = maxT > 1 ? `fica pronto em ${maxT} turnos` : `fica pronto no proximo turno`;
+        L.push(`    ${quando}: ${desc} (nao pode ser enviado neste turno)`);
       }
     }
     L.push("");
