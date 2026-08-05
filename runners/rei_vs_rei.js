@@ -3,23 +3,46 @@
 // logs de 03/08 (o analisar-log.js le), com checkpoint por turno (o harness com
 // fila so chega na Fase 6). Ollama local — sem cota, so tempo.
 //
-// Uso: node runners/rei_vs_rei.js <modelId> <seed> <maxTurnos> <outfile>
-//   ex.: node runners/rei_vs_rei.js ollama:llama3:latest 1 40 resultados/fase7-llama3/seed1.txt
+// Uso: node runners/rei_vs_rei.js <modelA> <modelB> <seed> <maxTurnos> <outfile>
+//   modelA/modelB = "backend:modelo" OU "burro" (jogadorBurro, zero API).
+//   ex.: node runners/rei_vs_rei.js gemini:gemini-2.5-flash openrouter:nvidia/nemotron-3-super-120b-a12b:free 1 20 out.txt
+//        node runners/rei_vs_rei.js openrouter:nvidia/nemotron-3-super-120b-a12b:free burro 1 30 out.txt
+// SEM sanity-ping (economiza cota): se o backend estiver fora, o 1o turno falha
+// como erroRede e o log mostra. Modelos REMOTOS gastam — invocacao deliberada.
 "use strict";
 const Engine = require("../engine.js");
 const Rei = require("../rei.js");
 const fs = require("fs");
 const path = require("path");
 
-const modelId = process.argv[2] || "ollama:llama3:latest";
-const seed = parseInt(process.argv[3], 10) || 1;
-const maxTurnos = parseInt(process.argv[4], 10) || 40;
-const outfile = process.argv[5] || path.join(__dirname, "..", "resultados", "fase7-llama3", `seed${seed}.txt`);
+const modelA = process.argv[2] || "ollama:llama3:latest";
+const modelB = process.argv[3] || "ollama:llama3:latest";
+const seed = parseInt(process.argv[4], 10) || 1;
+const maxTurnos = parseInt(process.argv[5], 10) || 40;
+const outfile = process.argv[6] || path.join(__dirname, "..", "resultados", "fase7-llama3", `seed${seed}.txt`);
 
 const cfg = JSON.parse(JSON.stringify(Engine.CONFIG));
 cfg.layout = "iberia"; cfg.seed = seed;
-const cliente = { A: Rei.criarCliente(modelId, { temperatura: 0 }), B: Rei.criarCliente(modelId, { temperatura: 0 }) };
-const etiqueta = cliente.A.nome;
+const ehBurro = (spec) => spec.toLowerCase() === "burro";
+const cliente = {
+  A: ehBurro(modelA) ? null : Rei.criarCliente(modelA, { temperatura: 0 }),
+  B: ehBurro(modelB) ? null : Rei.criarCliente(modelB, { temperatura: 0 }),
+};
+const etiquetaDe = { A: cliente.A ? cliente.A.nome : "burro", B: cliente.B ? cliente.B.nome : "burro" };
+const etiqueta = etiquetaDe.A + " vs " + etiquetaDe.B;
+
+// decisor de um lado: LLM (async, com registro) ou burro (sync). Devolve o
+// mesmo formato de registro para o log sair igual dos dois lados.
+async function decidirLado(estado, dono) {
+  if (cliente[dono]) return (await Rei.decidirRei(estado, dono, cliente[dono])).registro;
+  const visao = Engine.montarVisao(estado, dono);
+  const ordem = Engine.jogadorBurro(visao);
+  const diag = Engine.diagnosticarOrdem(estado, dono, ordem);
+  return {
+    cru: "(burro)", raciocinio: null, erroRede: null, ordemParseada: ordem,
+    aceito: { construir: diag.aceitoConstruir, envios: diag.aceitoEnvios }, rejeicoes: diag.rejeicoes,
+  };
+}
 
 function compStrG(t) {
   const p = [];
@@ -34,7 +57,7 @@ const L = [];
 const out = (s) => L.push(s);
 const gravar = () => fs.writeFileSync(outfile, L.join("\n"));
 
-out(`=== PARTIDA Rei A (${etiqueta}) vs Rei B (${etiqueta}) | seed ${seed} | maxTurnos ${maxTurnos} | ${new Date().toLocaleString()} ===`);
+out(`=== PARTIDA Rei A (${etiquetaDe.A}) vs Rei B (${etiquetaDe.B}) | seed ${seed} | maxTurnos ${maxTurnos} | ${new Date().toLocaleString()} ===`);
 out("condicoes: ambiente=iberia | temp=0 | prompt=relatorio v3 (disponivel-para-enviar) + combate v3 (atq/def, counter 1.25) + clamp | thinking=on");
 out("");
 
@@ -60,9 +83,6 @@ function logEventos(estado, turno) {
 const m = { A: { envios: 0, tropas: 0 }, B: { envios: 0, tropas: 0 } };
 
 async function main() {
-  try { await cliente.A.gerar("responda apenas: ok"); }
-  catch (e) { console.error(`ERRO ollama: ${e.message} — suba o Ollama e garanta 'ollama pull llama3:latest'`); process.exit(2); }
-
   fs.mkdirSync(path.dirname(outfile), { recursive: true });
   const estado = Engine.criarEstadoInicial(cfg);
   const t0 = Date.now();
@@ -73,10 +93,10 @@ async function main() {
     const turno = estado.turno;
     for (const dono of ["A", "B"]) {
       if (!Engine.aldeiasDe(estado, dono).length) continue;
-      const { registro } = await Rei.decidirRei(estado, dono, cliente[dono]);
+      const registro = await decidirLado(estado, dono);
       Engine.executarOrdem(estado, dono, registro.ordemParseada); // motor clampa (Fase 3)
 
-      out(`########## TURNO ${turno} — Rei ${dono} (${etiqueta}) ##########`);
+      out(`########## TURNO ${turno} — Rei ${dono} (${etiquetaDe[dono]}) ##########`);
       if (registro.erroRede) out(">>> ERRO DE REDE — turno NAO contabilizado (sem resposta do modelo)");
       out("resposta crua: " + JSON.stringify(registro.cru));
       out(registro.raciocinio ? "raciocinio: " + registro.raciocinio : "raciocinio: (nao capturado)");
@@ -107,7 +127,7 @@ async function main() {
   out("================== RESUMO ==================");
   for (const d of ["A", "B"]) {
     const md = (m[d].envios ? (m[d].tropas / m[d].envios) : 0).toFixed(2);
-    out(`Rei ${d} (${etiqueta}): ${m[d].envios} envios, ${m[d].tropas} tropas, tamanho medio ${md}`);
+    out(`Rei ${d} (${etiquetaDe[d]}): ${m[d].envios} envios, ${m[d].tropas} tropas, tamanho medio ${md}`);
   }
   out("============================================");
   gravar();
