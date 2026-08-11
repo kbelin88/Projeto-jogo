@@ -1678,6 +1678,8 @@
   let diagTurno = { A: null, B: null };
   let sigsRejAcum = { A: new Set(), B: new Set() };
   let tokensUltimaChamada = null; // canal lateral dos geradores do browser
+  let finishUltimaChamada = null; // A1: finish_reason da API ("length" = truncou no teto de tokens)
+  let modoRacUltimaChamada = null; // A2: modo de captura do raciocinio (completo|resumo|ausente)
   let custoTotal = 0;             // $ acumulado da partida (medidor ao vivo no titulo da aba)
   let estagCont = 0, estagPrev = ""; // detector de empate por estagnacao (modo sem-limite)
   // precos OpenRouter por 1M de tokens (in/out) p/ o medidor de custo ao vivo.
@@ -2218,7 +2220,7 @@
   // por rei, zera em novaPartida, vira bloco RESUMO no fim do .txt.
   // errosRede fica FORA de turnos/valido: turno que o modelo nao chegou a
   // responder nao e amostra do modelo (ver decidirLado, bug de 23/07).
-  const cont0 = () => ({ turnos: 0, valido: 0, enviosAceitos: 0, ajustados: 0, constrAceitas: 0, rejeicoes: 0, normalizacoes: 0, errosRede: 0, tokPrompt: 0, tokResp: 0, custo: 0 });
+  const cont0 = () => ({ turnos: 0, valido: 0, enviosAceitos: 0, ajustados: 0, constrAceitas: 0, rejeicoes: 0, normalizacoes: 0, errosRede: 0, tokPrompt: 0, tokResp: 0, custo: 0, truncamentos: 0, racCapturado: 0, modoRac: null });
   let contadores = { A: cont0(), B: cont0() };
   let motivoInterrupcao = null; // preenchido quando a partida para por erro de rede
   let etiquetaB = "gemini"; // rotulo do decisor do Rei B no log (gemini | ollama:<modelo>)
@@ -2345,12 +2347,18 @@
         const data = await resp.json();
         const u = data.usage;
         tokensUltimaChamada = u ? { prompt: u.prompt_tokens || 0, resposta: u.completion_tokens || 0 } : null;
-        const msg = (data.choices && data.choices[0] && data.choices[0].message) || {};
+        const ch = (data.choices && data.choices[0]) || {};
+        finishUltimaChamada = ch.finish_reason || null; // A1: "length" = truncou no teto
+        const msg = ch.message || {};
         // OpenRouter devolve o raciocinio em message.reasoning (texto) e/ou
         // reasoning_details (estruturado); message.content e a resposta final.
         let raciocinio = msg.reasoning || null;
         if (!raciocinio && Array.isArray(msg.reasoning_details))
           raciocinio = msg.reasoning_details.map((d) => (d && (d.text || d.summary)) || "").join("\n").trim() || null;
+        // A2: resumo (OpenAI: reasoning_details type *.summary) vs completo (cadeia crua) vs ausente
+        modoRacUltimaChamada = !raciocinio ? "ausente"
+          : (Array.isArray(msg.reasoning_details) && msg.reasoning_details.some((d) => d && /summary/.test(d.type || ""))) ? "resumo"
+          : "completo";
         return { texto: msg.content || "", raciocinio };
       }
       const corpo = await resp.text().catch(() => "");
@@ -2379,6 +2387,7 @@
       ct.turnos++;
       if (r.ok) ct.valido++;
       ct.normalizacoes += (r.normalizacoes || []).length;
+      if (r.raciocinio) { ct.racCapturado++; const md = diagTurno[lado] && diagTurno[lado].modoRac; if (md) ct.modoRac = md; } // A2
       if (r.diag) {
         ct.enviosAceitos += r.diag.aceitoEnvios.length;
         ct.ajustados += r.diag.aceitoEnvios.filter((e) => e.ajustado).length;
@@ -2399,6 +2408,7 @@
         L.push("custo turno: $" + cst.toFixed(5) + " | Rei " + lado + " acum $" + ct.custo.toFixed(4) + " | partida $" + custoTotal.toFixed(4));
       }
     }
+    if (diagTurno[lado] && diagTurno[lado].truncado) { L.push("TRUNCADO: resposta atingiu o teto de tokens do provedor (finish_reason=length) \u2014 turno conta como passado, sem retry"); ct.truncamentos++; } // A1
     if (r.erroRede) L.push(">>> ERRO DE REDE \u2014 turno NAO contabilizado (sem resposta do modelo)");
     L.push("resposta crua: " + JSON.stringify(r.cru));
     L.push(r.raciocinio ? "raciocinio: " + r.raciocinio : "raciocinio: (nao capturado)");
@@ -2461,6 +2471,8 @@
         "validade " + c.valido + "/" + c.turnos + " | rejeicoes " + c.rejeicoes +
         " | clamp " + c.ajustados + "/" + c.enviosAceitos + " (taxa " + taxaClamp + ")" +
         " | normalizacoes " + c.normalizacoes +
+        " | truncamentos " + (c.truncamentos || 0) +
+        " | raciocinio " + (c.racCapturado || 0) + "/" + c.turnos + (c.modoRac ? " (" + c.modoRac + ")" : "") +
         (c.tokPrompt || c.tokResp ? " | tokens " + c.tokPrompt + " prompt / " + c.tokResp + " resposta | CUSTO $" + (c.custo || 0).toFixed(4) : "") +
         (c.errosRede ? " | ERROS DE REDE " + c.errosRede + " (fora das metricas)" : ""));
     }
@@ -2549,12 +2561,15 @@
       reincidente,
       ataquesIniciados: atq,
       tokens: tokens || null,
+      truncado: finishUltimaChamada === "length", // A1
+      modoRac: modoRacUltimaChamada,               // A2
     };
   }
 
   // Decide e executa a ordem de UM lado. Retorna "abort" se o run mudou.
   async function decidirLado(lado, gerador, rotulo, meuRun) {
     if (!Engine.aldeiasDe(game, lado).length) return null;
+    finishUltimaChamada = null; modoRacUltimaChamada = null; // A1/A2: nao herdam do turno/lado anterior
     if (!gerador) {
       const ordemB = Engine.jogadorBurro(Engine.montarVisao(game, lado));
       const dgB = Engine.diagnosticarOrdem(game, lado, ordemB); // burro entra no registro: e a ancora do benchmark
@@ -2671,7 +2686,7 @@
       // PROVENIENCIA (13/07): registrar as condicoes do experimento no proprio
       // log. Descoberto na analise da partida de 13/07: sem isso, so lendo o
       // codigo da pra saber se a rodada foi baseline ou rejfim.
-      geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=P2 (minimo por alvo) + relatorio v3 + combate v3 | normalizacao H3 ativa | thinking=on | " + (semLimite ? "SEM LIMITE de turnos (empate por estagnacao em 30t)" : "maxTurnos " + maxT) + "\n");
+      geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=P2 (minimo por alvo) + relatorio v3 + combate v3 | normalizacao H3 ativa | thinking=on | max_tokens_resposta=default_provedor | " + (semLimite ? "SEM LIMITE de turnos (empate por estagnacao em 30t)" : "maxTurnos " + maxT) + "\n");
     }
     motivoInterrupcao = null; // Play/resume limpa: so vale a interrupcao deste run
     while (playing && runId === meuRun && game && !Engine.checarVitoria(game) && (semLimite || game.turno < maxT)) {
