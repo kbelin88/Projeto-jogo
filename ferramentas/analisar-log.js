@@ -76,16 +76,20 @@ function novoRei() {
     rejeicoesTotal: 0,
     ataques: 0,                 // COMBATE onde este Rei e atacante
     ataquesCounter1: 0,         // desses, com vant=1 (todos os ataques)
+    vant0: 0, vantM1: 0,        // A4: distribuicao de counter (vant=0 e vant=-1)
     primeiroAtaqueAlvo: {},     // alvoId -> vant do PRIMEIRO ataque a esse alvo
+    enviosLista: [],            // A3: envios EXECUTADOS (ACEITO envio) {turno,destino,tot}
+    enviosPedidosLista: [],     // A3: envios PEDIDOS (ordem.envios) — eixo de grounding vs executados
     conquistas: 0,
     turnoUltimaConquista: null,
     infraErros: 0,              // FORA de todos os denominadores
     turnosComRaciocinio: 0,
     turnosSemRaciocinio: 0,
+    truncamentos: 0,            // A1: linhas TRUNCADO (so em logs pos-A1)
   };
 }
 
-function analisarLog(caminho) {
+function analisarLog(caminho, replayPath) {
   const linhas = fs.readFileSync(caminho, "utf8").split(/\r?\n/);
 
   const meta = { arquivo: path.basename(caminho), modelos: {}, seed: null, maxTurnos: null, condicoes: null };
@@ -99,7 +103,7 @@ function analisarLog(caminho) {
 
   const reHeaderTurno = /^#+\s*TURNO\s+(\d+)\s+.*Rei\s+([AB])\s+\((.+)\)\s+#+/;
   const rePartida = /^===\s*PARTIDA\s+Rei\s+A\s+\((.+?)\)\s+vs\s+Rei\s+B\s+\((.+?)\)\s*\|\s*seed\s+(\d+)\s*\|\s*maxTurnos\s+(\d+)/;
-  const reAceitoEnvio = /^ACEITO envio \[(\d+)\]->\[(\d+)\]:\s*([0-9LAC+]+)/;
+  const reAceitoEnvio = /^ACEITO envio \[(\d+)\]->\[(\d+)\]:\s*([0-9LAC+]+)(\s*\(alvo neutra)?/;
   const reAjustado = /^AJUSTADO envio \[(\d+)\]->\[(\d+)\]/; // clamp (Fase 3)
   const reAceitoConstruir = /^ACEITO construir (lanceiro|arqueiro|cavaleiro) em \[(\d+)\]/;
   const reRejeitado = /^REJEITADO:\s*(.+)$/;
@@ -132,6 +136,22 @@ function analisarLog(caminho) {
       continue;
     }
 
+    if (linha.startsWith("TRUNCADO:")) { if (reiAtual) reis[reiAtual].truncamentos++; continue; }
+
+    // A3: envios PEDIDOS (o que o modelo emitiu, antes do clamp/rejeicao do motor)
+    if (linha.startsWith("ordem.envios") && reiAtual) {
+      try {
+        for (const e of JSON.parse(linha.replace(/^ordem\.envios\s*:\s*/, ""))) {
+          const t = e.tropas || {};
+          reis[reiAtual].enviosPedidosLista.push({
+            turno: turnoAtual, destino: e.destinoId,
+            tot: (t.lanceiro || 0) + (t.arqueiro || 0) + (t.cavaleiro || 0),
+          });
+        }
+      } catch (_) { /* linha malformada: ignora */ }
+      continue;
+    }
+
     if (linha.startsWith("raciocinio:")) {
       if (reiAtual) {
         if (linha.includes("(nao capturado)")) reis[reiAtual].turnosSemRaciocinio++;
@@ -148,6 +168,7 @@ function analisarLog(caminho) {
       r.tropasMovidas += tot;
       r.histogramaEnvio[tot] = (r.histogramaEnvio[tot] || 0) + 1;
       r.destinos[dest] = (r.destinos[dest] || 0) + 1;
+      r.enviosLista.push({ turno: turnoAtual, destino: parseInt(dest, 10), tot, neutra: !!m[4] });
       continue;
     }
 
@@ -179,6 +200,8 @@ function analisarLog(caminho) {
       const r = reis[atacante];
       r.ataques++;
       if (vant === 1) r.ataquesCounter1++;
+      else if (vant === 0) r.vant0++;
+      else if (vant === -1) r.vantM1++;
       // segunda forma da taxa de counter (6.3): so o PRIMEIRO ataque a cada alvo
       // distinto. Descontamina a monomania (martelar o mesmo alvo N vezes).
       if (!(alvoId in r.primeiroAtaqueAlvo)) r.primeiroAtaqueAlvo[alvoId] = vant;
@@ -207,6 +230,77 @@ function analisarLog(caminho) {
       continue;
     }
   }
+
+  // --- A3: reforco vs ataque pelo ESTADO DO MOTOR (replay .json), invariante g ---
+  // reforco = destino era do PROPRIO rei no INICIO do turno do envio (frame do turno
+  // anterior). Sem replay, os campos A3 saem como indisponivel.
+  let framesByTurno = null;
+  if (replayPath) {
+    try {
+      const rep = JSON.parse(fs.readFileSync(replayPath, "utf8"));
+      framesByTurno = {};
+      for (const f of (rep.frames || [])) {
+        const mm = {};
+        for (const a of (f.aldeias || [])) mm[a.id] = a.dono;
+        framesByTurno[f.turno] = mm;
+      }
+    } catch (e) { framesByTurno = null; }
+  }
+  const _mediana = (arr) => {
+    if (!arr.length) return null;
+    const s = arr.slice().sort((a, b) => a - b), n = s.length;
+    return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
+  };
+  const _r2 = (x) => Math.round(x * 100) / 100;
+  const _soma = (a) => a.reduce((x, y) => x + y, 0);
+  const a3De = (r, lado) => {
+    if (!framesByTurno) return "indisponivel: sem replay .json (passe-o como 2o argumento ou --replay)";
+    const donoNoInicio = (T, d) => {
+      const fr = framesByTurno[T - 1] || framesByTurno[T] || framesByTurno[1];
+      return fr ? fr[d] : undefined;
+    };
+    // classifica reforco (destino do PROPRIO rei no inicio do turno) vs ataque.
+    const classifica = (lista) => {
+      const ref = [], atk = [];
+      for (const e of lista) (donoNoInicio(e.turno, e.destino) === lado ? ref : atk).push(e);
+      return { ref, atk };
+    };
+    const exec = classifica(r.enviosLista);        // EXECUTADOS (ACEITO = o motor aceitou)
+    const ped = classifica(r.enviosPedidosLista);  // PEDIDOS (ordem.envios = o que o modelo pediu)
+    const reforco = exec.ref, ataque = exec.atk;   // metricas de tropa vem do EXECUTADO (invariante g)
+    const totsAtq = ataque.map((e) => e.tot);
+    const destRef = {}; for (const e of reforco) destRef[e.destino] = (destRef[e.destino] || 0) + 1;
+    const maxRef = Object.values(destRef).reduce((a, b) => Math.max(a, b), 0);
+    const destAtqSet = new Set(ataque.map((e) => e.destino));
+    const faixas = {};
+    for (const e of ataque) { const f = Math.floor((e.turno - 1) / 10); (faixas[f] = faixas[f] || []).push(e.tot); }
+    const serieFaixa = Object.keys(faixas).sort((a, b) => a - b).map((f) => ({
+      turnos: (f * 10 + 1) + "-" + (f * 10 + 10), media: _r2(_soma(faixas[f]) / faixas[f].length), n: faixas[f].length,
+    }));
+    return {
+      // EIXO DE GROUNDING (decisao Lucas 11/08): PEDIDOS (ordem.envios, o que o modelo
+      // pediu) vs EXECUTADOS (ACEITO/replay, o que o motor aceitou). A diferenca sao os
+      // envios clampados a zero / rejeitados = a MESMA taxa de grounding, medida por outra
+      // via. NAO COLAPSAR num numero so: "quantas ordens o modelo emitiu" e "quantas o
+      // mundo aceitou" sao os dois lados do grounding. Dois numeros parecidos AQUI NAO sao
+      // duplicacao — nao "consertar" unificando.
+      envios_reforco_pedidos: ped.ref.length,
+      envios_reforco_executados: reforco.length,
+      envios_ataque_pedidos: ped.atk.length,
+      envios_ataque_executados: ataque.length,
+      // tropas/medias abaixo vem do EXECUTADO (o que de facto se moveu no mundo):
+      tropas_por_reforco: reforco.length ? _r2(_soma(reforco.map((e) => e.tot)) / reforco.length) : null,
+      tropas_por_ataque_media: ataque.length ? _r2(_soma(totsAtq) / ataque.length) : null,
+      tropas_por_ataque_mediana: _mediana(totsAtq),
+      share_ataques_de_1_tropa: ataque.length ? _r2(ataque.filter((e) => e.tot === 1).length / ataque.length) : null,
+      alvos_distintos_atacados: destAtqSet.size,
+      reincidencia: ataque.length ? _r2((ataque.length - destAtqSet.size) / ataque.length) : null,
+      concentracao_logistica: reforco.length ? _r2(maxRef / reforco.length) : null,
+      tropas_por_ataque_por_faixa_de_10t: serieFaixa,
+      _nota: "reforco/ataque classificado pelo dono NO INICIO do turno (replay). taxa_ataque_viavel (em derivarRei) e conquistas/COMBATES, nao /envios.",
+    };
+  };
+  const a3 = { A: a3De(reis.A, "A"), B: a3De(reis.B, "B") };
 
   // --- derivadas por Rei ---
   const derivarRei = (r) => {
@@ -247,6 +341,16 @@ function analisarLog(caminho) {
       infra_erros: r.infraErros,
       turnos_com_raciocinio: r.turnosComRaciocinio,
       turnos_sem_raciocinio: r.turnosSemRaciocinio,
+      truncamentos: r.truncamentos,
+      // A4: distribuicao de counter do ATACANTE, contagens absolutas + total
+      counter_dist: { vant_mais1: r.ataquesCounter1, vant_0: r.vant0, vant_menos1: r.vantM1, total: r.ataques },
+      // denominador correto (A3 nota): conquistas / COMBATES como atacante, NUNCA /envios
+      taxa_ataque_viavel: r.ataques ? Math.round((r.conquistas / r.ataques) * 100) / 100 : null,
+      // A2 guarda: qualquer metrica derivada de raciocinio so vale com cobertura 100%
+      raciocinio_cobertura: (r.turnosComRaciocinio + "/" + (r.turnosComRaciocinio + r.turnosSemRaciocinio)),
+      raciocinio_metricas: r.turnosSemRaciocinio > 0
+        ? ("indisponivel: cobertura " + r.turnosComRaciocinio + "/" + (r.turnosComRaciocinio + r.turnosSemRaciocinio))
+        : "disponivel (cobertura 100%)",
     };
   };
 
@@ -268,7 +372,10 @@ function analisarLog(caminho) {
 
   return {
     meta,
-    reis: { A: derivarRei(reis.A), B: derivarRei(reis.B) },
+    reis: {
+      A: Object.assign(derivarRei(reis.A), { reforco_vs_ataque: a3.A }),
+      B: Object.assign(derivarRei(reis.B), { reforco_vs_ataque: a3.B }),
+    },
     partida: {
       turnos_registados: placarSerie.length,
       exercitos_em_transito_medio: exercitosTransitoMedio,
@@ -290,10 +397,14 @@ function main() {
     process.exit(2);
   }
   const arquivo = args[0];
-  let jsonOut = null;
-  for (let i = 1; i < args.length; i++) if (args[i] === "--json") jsonOut = args[++i];
+  let jsonOut = null, replay = null;
+  for (let i = 1; i < args.length; i++) {
+    if (args[i] === "--json") jsonOut = args[++i];
+    else if (args[i] === "--replay") replay = args[++i];
+    else if (/\.json$/i.test(args[i]) && !replay) replay = args[i]; // 2o positional .json = replay
+  }
 
-  const r = analisarLog(arquivo);
+  const r = analisarLog(arquivo, replay);
   if (jsonOut) {
     fs.writeFileSync(jsonOut, JSON.stringify(r, null, 2));
     console.log("gravado: " + jsonOut);
@@ -324,6 +435,24 @@ function main() {
     B.alvo_mais_repetido ? `[${B.alvo_mais_repetido.destinoId}]x${B.alvo_mais_repetido.envios}` : "-");
   linha("turno ultima conquista", A.turno_ultima_conquista, B.turno_ultima_conquista);
   linha("infra erros (fora)", A.infra_erros, B.infra_erros);
+  linha("counter vant +1/0/-1",
+    `${A.counter_dist.vant_mais1}/${A.counter_dist.vant_0}/${A.counter_dist.vant_menos1}`,
+    `${B.counter_dist.vant_mais1}/${B.counter_dist.vant_0}/${B.counter_dist.vant_menos1}`);
+  linha("conquistas/combates (viavel)", `${A.conquistas}/${A.ataques} (${A.taxa_ataque_viavel})`, `${B.conquistas}/${B.ataques} (${B.taxa_ataque_viavel})`);
+  linha("raciocinio cobertura", A.raciocinio_cobertura, B.raciocinio_cobertura);
+  const RA = A.reforco_vs_ataque, RB = B.reforco_vs_ataque;
+  if (RA && typeof RA === "object") {
+    console.log("   --- A3 reforco vs ataque (replay, dono no inicio do turno) ---");
+    linha("reforco ped/exec (m.trp)", `${RA.envios_reforco_pedidos}/${RA.envios_reforco_executados} (${RA.tropas_por_reforco})`, `${RB.envios_reforco_pedidos}/${RB.envios_reforco_executados} (${RB.tropas_por_reforco})`);
+    linha("ataque ped/exec (med/medi)", `${RA.envios_ataque_pedidos}/${RA.envios_ataque_executados} (${RA.tropas_por_ataque_media}/${RA.tropas_por_ataque_mediana})`, `${RB.envios_ataque_pedidos}/${RB.envios_ataque_executados} (${RB.tropas_por_ataque_media}/${RB.tropas_por_ataque_mediana})`);
+    linha("share ataques de 1 tropa", RA.share_ataques_de_1_tropa, RB.share_ataques_de_1_tropa);
+    linha("alvos distintos atacados (A3)", RA.alvos_distintos_atacados, RB.alvos_distintos_atacados);
+    linha("reincidencia", RA.reincidencia, RB.reincidencia);
+    linha("concentracao logistica", RA.concentracao_logistica, RB.concentracao_logistica);
+    console.log("   tropas/ataque por faixa 10t (A): " + RA.tropas_por_ataque_por_faixa_de_10t.map((x) => x.turnos + ":" + x.media).join("  "));
+  } else {
+    console.log("   A3 reforco vs ataque: " + RA);
+  }
   console.log("   exercitos em transito (media/turno, GLOBAL): " + r.partida.exercitos_em_transito_medio);
   console.log("   ultima conquista (global): T" + r.partida.turno_ultima_conquista_global);
   console.log("   REJEICOES POR CATEGORIA:");
