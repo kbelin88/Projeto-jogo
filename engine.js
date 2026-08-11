@@ -1381,21 +1381,29 @@
     // Nos dois casos o numero mostrado e o que o motor pratica: mesma funcao
     // de peso, mesma rota. Se isto divergir, a lacuna L3 reabre.
     const porCusto = temRede && !!visao.estradasCusto;
-    const marcha = (alvo) => {
-      let best = Infinity;
+    // ISOLACAO (LOTE B, passo 3): o tempo de marcha sai de turnosDeCaminho — a
+    // MESMA funcao que o motor usa em enviarExercito. O relatorio NAO reimplementa
+    // a conta (invariante i: uma regra, uma implementacao). marchaVel(alvo, tropaRep)
+    // devolve os turnos para uma tropa de referencia (velExercito deriva a velocidade
+    // da composicao). No mapa autoral (porCusto) rota pelo turnosDeCaminho; sem P3 a
+    // tropaRep e a MEDIA (arqueiro) -> fator passoRef/passoRef=1 -> identico ao P2.
+    const marchaVel = (alvo, tropaRep) => {
+      let best = Infinity, bestCaminho = null;
       for (const m of visao.minhas) {
-        let d;
+        let d, cam = null;
         if (temRede) {
-          const caminho = caminhoEntre(shim, m.id, alvo.id);
-          d = caminho ? pesoRota(shim, caminho) : Math.hypot(m.x - alvo.x, m.y - alvo.y);
+          cam = caminhoEntre(shim, m.id, alvo.id);
+          d = cam ? pesoRota(shim, cam) : Math.hypot(m.x - alvo.x, m.y - alvo.y);
         } else {
           d = Math.hypot(m.x - alvo.x, m.y - alvo.y);
         }
-        if (d < best) best = d;
+        if (d < best) { best = d; bestCaminho = cam; }
       }
       if (best === Infinity) return "?";
+      if (porCusto && bestCaminho) return turnosDeCaminho(shim, bestCaminho, tropaRep);
       return Math.max(1, Math.ceil(porCusto ? best : best / passoRef));
     };
+    const marcha = (alvo) => marchaVel(alvo, { arqueiro: 1 }); // media = comportamento P2
     const classifica = (dono) => (dono === me ? "SUA" : dono === null ? "NEUTRA" : "INIMIGA");
 
     // VARIANTE P2: sufixo " | para tomar: N lanc ou N arq ou N cav" — so quando
