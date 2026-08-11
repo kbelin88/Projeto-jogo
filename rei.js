@@ -213,6 +213,7 @@ function clienteOpenRouter(opcoes) {
   return {
     nome: `openrouter:${modelo}`,
     ultimosTokens: null, // E3/1b — mesmo canal lateral dos outros clientes
+    ultimoFinish: null,  // A1: finish_reason ("length" = truncou no teto de tokens)
     async gerar(prompt) {
       for (let tentativa = 1; ; tentativa++) {
         await respeitarPiso();
@@ -231,7 +232,9 @@ function clienteOpenRouter(opcoes) {
           const data = await resp.json();
           const u = data.usage;
           this.ultimosTokens = u ? { prompt: u.prompt_tokens || 0, resposta: u.completion_tokens || 0 } : null;
-          const msg = (data.choices && data.choices[0] && data.choices[0].message) || {};
+          const ch = (data.choices && data.choices[0]) || {};
+          this.ultimoFinish = ch.finish_reason || null; // A1
+          const msg = ch.message || {};
           // raciocinio em message.reasoning (texto) e/ou reasoning_details
           // (estruturado); content = resposta final (SO o JSON de ordens).
           let raciocinio = msg.reasoning || null;

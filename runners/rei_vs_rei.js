@@ -173,6 +173,8 @@ async function main() {
         serieTokens[dono].push({ turno, prompt: tk.prompt || 0, resposta: tk.resposta || 0 });
         out(`tokens.contexto: prompt ${tk.prompt} | resposta ${tk.resposta}`);
       }
+      if (!registro.erroRede && cliente[dono] && cliente[dono].ultimoFinish === "length")
+        out("TRUNCADO: resposta atingiu o teto de tokens do provedor (finish_reason=length) — turno conta como passado, sem retry"); // A1
       out("resposta crua: " + JSON.stringify(registro.cru));
       out(registro.raciocinio ? "raciocinio: " + registro.raciocinio : "raciocinio: (nao capturado)");
       out("ordem.construir: " + JSON.stringify(registro.ordemParseada.construir || []));
