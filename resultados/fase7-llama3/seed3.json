@@ -1,0 +1,132 @@
+{
+  "meta": {
+    "arquivo": "seed3.txt",
+    "modelos": {
+      "A": "ollama:llama3:latest",
+      "B": "ollama:llama3:latest"
+    },
+    "seed": 3,
+    "maxTurnos": 40,
+    "condicoes": "ambiente=iberia | temp=0 | prompt=relatorio v3 (disponivel-para-enviar) + combate v3 (atq/def, counter 1.25) + clamp | thinking=on"
+  },
+  "reis": {
+    "A": {
+      "envios_aceites": 21,
+      "tropas_movidas": 49,
+      "tamanho_medio_envio": 2.33,
+      "envios_ajustados": 2,
+      "taxa_de_clamp": 0.1,
+      "envios_de_1": 12,
+      "histograma_envio": {
+        "1": 12,
+        "2": 4,
+        "3": 2,
+        "6": 1,
+        "7": 1,
+        "10": 1
+      },
+      "construcoes_aceites": {
+        "lanceiro": 15,
+        "arqueiro": 2,
+        "cavaleiro": 2
+      },
+      "construcoes_total": 19,
+      "rejeicoes_total": 28,
+      "rejeicoes_por_categoria": {
+        "construir: recurso insuficiente": 8,
+        "envio: zero tropas (vazio/apos ajuste)": 20
+      },
+      "rejeicoes_detalhe_normalizado": {
+        "construir [N]: recurso insuficiente p/ lanceiro (tem #m/#f, custa #m/#f)": 4,
+        "construir [N]: recurso insuficiente p/ arqueiro (tem #m/#f, custa #m/#f)": 2,
+        "envio [N]->[N]: zero tropas apos ajuste": 18,
+        "envio [N]->[N]: zero tropas": 2,
+        "construir [N]: recurso insuficiente p/ cavaleiro (tem #m/#f, custa #m/#f)": 2
+      },
+      "ataques": 16,
+      "ataques_counter1": 4,
+      "taxa_counter_correto": 0.25,
+      "alvos_distintos_atacados": 6,
+      "taxa_counter_correto_primeiro": 0.5,
+      "conquistas": 4,
+      "turno_ultima_conquista": 23,
+      "indice_monomania": 0.38,
+      "alvo_mais_repetido": {
+        "destinoId": 2,
+        "envios": 8
+      },
+      "infra_erros": 11,
+      "turnos_com_raciocinio": 0,
+      "turnos_sem_raciocinio": 40
+    },
+    "B": {
+      "envios_aceites": 21,
+      "tropas_movidas": 34,
+      "tamanho_medio_envio": 1.62,
+      "envios_ajustados": 2,
+      "taxa_de_clamp": 0.1,
+      "envios_de_1": 15,
+      "histograma_envio": {
+        "1": 15,
+        "2": 3,
+        "3": 2,
+        "7": 1
+      },
+      "construcoes_aceites": {
+        "lanceiro": 16,
+        "arqueiro": 6,
+        "cavaleiro": 0
+      },
+      "construcoes_total": 22,
+      "rejeicoes_total": 26,
+      "rejeicoes_por_categoria": {
+        "construir: recurso insuficiente": 6,
+        "envio: zero tropas (vazio/apos ajuste)": 20
+      },
+      "rejeicoes_detalhe_normalizado": {
+        "construir [N]: recurso insuficiente p/ lanceiro (tem #m/#f, custa #m/#f)": 4,
+        "envio [N]->[N]: zero tropas apos ajuste": 15,
+        "envio [N]->[N]: zero tropas": 5,
+        "construir [N]: recurso insuficiente p/ arqueiro (tem #m/#f, custa #m/#f)": 2
+      },
+      "ataques": 16,
+      "ataques_counter1": 3,
+      "taxa_counter_correto": 0.19,
+      "alvos_distintos_atacados": 5,
+      "taxa_counter_correto_primeiro": 0.2,
+      "conquistas": 4,
+      "turno_ultima_conquista": 24,
+      "indice_monomania": 0.52,
+      "alvo_mais_repetido": {
+        "destinoId": 14,
+        "envios": 11
+      },
+      "infra_erros": 12,
+      "turnos_com_raciocinio": 0,
+      "turnos_sem_raciocinio": 40
+    }
+  },
+  "partida": {
+    "turnos_registados": 40,
+    "exercitos_em_transito_medio": 4,
+    "exercitos_em_transito_medio_A": 2.15,
+    "exercitos_em_transito_medio_B": 1.85,
+    "turno_ultima_conquista_global": 24,
+    "placar_final": {
+      "turno": 40,
+      "aldeiasA": 5,
+      "forcaA": 4,
+      "aldeiasB": 5,
+      "forcaB": 18,
+      "neutras": 14,
+      "transito": 0,
+      "transitoA": 0,
+      "transitoB": 0
+    },
+    "resultado_final": {
+      "turno": 40,
+      "resultado": "limite | A 5 ald | B 5 ald | neutras 14"
+    }
+  },
+  "_nota_estrada": "'transito' conta EXERCITOS em marcha (movimentos.length), nao tropas. Por isso reporta-se exercitos_em_transito_medio, NAO 'indice de estrada' (o 0.41 antigo era unidade trocada e esta retirado). O indice por tropas (tropas_em_marcha) so existe no harness da Fase 6, de estado.movimentos. Os logs de 03/08 nao tem transito por Rei (medio_A/B = null)."
+}

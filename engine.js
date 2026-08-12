@@ -43,34 +43,43 @@
     partida_alvo_turnos: 30,
 
     // PRODUCAO por aldeia, por turno.
+    // Fase 7.2 (04/08): REVERTIDA a Fase 4 (madeira 15 -> 10). A Fase 4 falhou o
+    // proprio teste (5A): o ferro seguiu morto (~240) e a madeira abundante so
+    // criou monocultura de lanceiro. Manter uma alteracao reprovada poluia o
+    // experimento do combate v3. Volta ao original.
     producao: { madeira: 10, ferro: 6 },
 
-    // TETO DE FORCA POR ALDEIA: SO A PRODUCAO respeita. Aldeia cuja forca
-    // (em casa + ja na fila de construcao) atinge este valor PARA de construir
-    // tropas — mas segue juntando recurso. Reforco e conquista PODEM passar do
+    // TETO DE TROPAS POR ALDEIA: SO A PRODUCAO respeita. Aldeia cuja CONTAGEM de
+    // tropas (em casa + ja na fila de construcao) atinge este valor PARA de
+    // construir — mas segue juntando recurso. Reforco e conquista PODEM passar do
     // teto: o limite morde so a fabricacao, p/ punir empilhar massa num lugar
     // so sem travar quem reforca/conquista. null = sem teto. PROVISORIO.
-    limite_forca_aldeia: 300,
+    // 7.4 (04/08): renomeado de limite_forca_aldeia — conta UNIDADES, nao poder
+    // de combate, entao nao pode passar a somar atq/def (armadilha 7.4-A).
+    limite_tropas_aldeia: 300,
 
     // TROPAS: custo / forca / velocidade / turnos para construir.
     // A forca e quase proporcional ao custo de proposito: o
     // cavaleiro paga a mais por velocidade, nao por forca bruta.
     tropas: {
-      // FORCA ACHATADA (experimento 19/07, hipotese do Lucas): forca 1 por
-      // unidade -> "forca total" = NUMERO DE TROPAS. Remove a indireção (contagem
-      // 5/4/3 vs forca 200) que confundia os modelos fracos. Trade-off: cavaleiro
-      // perde a vantagem de PODER; diferencia so por triangulo+velocidade+custo.
-      // Reversivel/calibravel: p/ manter o cavaleiro forte, use 1/2/3 aqui.
-      lanceiro:  { custo: { madeira: 15, ferro: 0  }, forca: 1, vel: "lenta",  turnos: 1 },
-      arqueiro:  { custo: { madeira: 20, ferro: 10 }, forca: 1, vel: "media",  turnos: 1 },
-      cavaleiro: { custo: { madeira: 30, ferro: 30 }, forca: 1, vel: "rapida", turnos: 2 },
+      // COMBATE v3 (Fase 7.3, 04/08): ATAQUE e DEFESA SEPARADOS. A forca achatada
+      // (forca 1 p/ todos) matou dois tercos do roster — com o tipo a entrar so
+      // pelo counter, arqueiro e cavaleiro eram economicamente dominados (5A).
+      // Agora: o lanceiro e o defensor barato, o cavaleiro e o ariete que nao
+      // guarnece nada, o arqueiro e o meio-termo flexivel.
+      //   atacante usa `atq`, defensor usa `def`. NUNCA se trocam (armadilha 7.4).
+      lanceiro:  { custo: { madeira: 15, ferro: 0  }, atq: 1, def: 2, vel: "lenta",  turnos: 1 },
+      arqueiro:  { custo: { madeira: 20, ferro: 10 }, atq: 2, def: 2, vel: "media",  turnos: 1 },
+      cavaleiro: { custo: { madeira: 30, ferro: 30 }, atq: 4, def: 1, vel: "rapida", turnos: 2 },
     },
 
     // TRIANGULO pedra-papel-tesoura: cada tropa VENCE a indicada.
     //   lanceiro > cavaleiro > arqueiro > lanceiro
-    // TRIANGULO v2: o counter multiplica a FORCA EFETIVA no combate
-    // (decide o vencedor), nao mais so as baixas. Knob varrivel no eval.
-    bonus_forca_triangulo: 1.5,
+    // COMBATE v3 (7.3.2): o counter MODULA, nao decide. Baixado 1.5 -> 1.25: com
+    // 1.5 um cavaleiro (atq 4) ainda perdia p/ um lanceiro no castelo (2x1.5x1.5=
+    // 4.5); com 1.25 ganha a justa (4 vs 3.75). O requisito do Lucas so se cumpre
+    // baixando o counter.
+    bonus_forca_triangulo: 1.25,
     triangulo: { lanceiro: "cavaleiro", cavaleiro: "arqueiro", arqueiro: "lanceiro" },
 
     // COMBATE: atrito_base = fracao da forca do PERDEDOR que o vencedor
@@ -115,7 +124,7 @@
     neutra: {
       tipos_sorteaveis: ["lanceiro", "arqueiro", "cavaleiro"],
       forca_min: 1, forca_max: 1,
-      endurecimento: 1, endurecimento_intervalo: 5, teto_forca: 300,
+      endurecimento: 1, endurecimento_intervalo: 5, teto_tropas: 300,
       // GRADIENTE DE GUARNICAO POR DISTANCIA (proposta 23/07): trava a corrida
       // por aldeias barbaras no inicio. Neutra perto de um rei nasce fraca (1);
       // no miolo nasce forte (3). Medida: distancia ao rei MAIS PROXIMO,
@@ -185,6 +194,21 @@
     // marcha" no relatorio (o modelo nao faz geometria). "media" = referencia
     // neutra entre lento (lanceiro) e rapido (cavaleiro).
     relatorio: { velocidade_referencia: "media" },
+
+    // ORDENACAO DAS ALDEIAS no relatorio (7.5.3). 'id' = como sempre (por id);
+    // 'custo' = por custo de marcha desde a capital (simetrico, tira o vies de
+    // posicao Oeste/Este). FLAG DESLIGADA de proposito: fica 'id' para o proximo
+    // lote de llama3 servir de CONTROLO do teste de ordenacao (3 partidas, nao 6).
+    ordemAldeias: "id",
+
+    // CLAMP DE ENVIOS (Fase 3, 04/08): quando o modelo pede mais tropas do que
+    // tem numa aldeia, o motor ENVIA O QUE HA (clampeado ao estoque, por tipo)
+    // em vez de recusar o turno inteiro. O corte vai como AVISO no relatorio
+    // seguinte (canal avisosAnteriores), nunca como rejeicao silenciosa.
+    // Envio que zera apos o ajuste continua RECUSADO ("zero tropas apos ajuste").
+    // Construcao NAO e clampada. false = comportamento antigo (rejeita). O flag
+    // fica para se poder correr o braco de controlo (clamp desligado).
+    clamp_envios: true,
 
     // Guarda de seguranca do loop (NAO e regra do jogo): teto de turnos
     // para a simulacao nunca rodar para sempre. Partida real deve acabar antes.
@@ -716,10 +740,10 @@
     if (!a || a.dono === null) return false;
     const def = estado.config.tropas[tipo];
     if (!def) return false;
-    // TETO DE PRODUCAO: aldeia que ja atingiu o limite de forca para de
+    // TETO DE PRODUCAO: aldeia que ja atingiu o limite de TROPAS para de
     // fabricar (segue com recurso, e pode receber reforco/conquista acima dele).
-    const limite = estado.config.limite_forca_aldeia;
-    if (limite != null && forcaComprometida(estado, a) >= limite) return false;
+    const limite = estado.config.limite_tropas_aldeia;
+    if (limite != null && tropasComprometidas(estado, a) >= limite) return false;
     if (a.recursos.madeira < def.custo.madeira || a.recursos.ferro < def.custo.ferro) return false;
     a.recursos.madeira -= def.custo.madeira;
     a.recursos.ferro -= def.custo.ferro;
@@ -744,16 +768,16 @@
 
   // (5) ENDURECIMENTO: cada neutra ganha +inc unidades do SEU tipo, mas SO a
   //     cada `endurecimento_intervalo` turnos (crescimento lento) e SO enquanto
-  //     sua forca esta abaixo de `teto_forca` (limite, como o dos reis).
+  //     sua CONTAGEM de tropas esta abaixo de `teto_tropas`.
   function endurecer(estado) {
     const n = estado.config.neutra;
     const intervalo = n.endurecimento_intervalo || 1;
     if (estado.turno % intervalo !== 0) return;     // ainda nao e turno de endurecer
     const inc = n.endurecimento;
-    const teto = n.teto_forca;
+    const teto = n.teto_tropas;
     for (const a of estado.aldeias) {
       if (a.dono !== null || !a.tipo) continue;
-      if (teto != null && forcaTropas(estado, a.tropas) >= teto) continue; // no teto: para
+      if (teto != null && contarTropas(a.tropas) >= teto) continue; // no teto: para
       a.tropas[a.tipo] += inc;
     }
   }
@@ -777,30 +801,47 @@
     return t; // fora do escopo: devolve o cru
   }
 
-  // ---- Forca ----
-  function forcaTropas(estado, tropas) {
+  // ---- Ataque, Defesa, Contagem (COMBATE v3, 7.4) ----
+  // TRES funcoes explicitas, nunca intercambiaveis (armadilha 7.4-A):
+  //   ataqueDe  -> soma dos `atq` (so o EXERCITO ATACANTE usa)
+  //   defesaDe  -> soma dos `def` (so o DEFENSOR usa)
+  //   contarTropas -> soma das UNIDADES (tetos, placar, desfecho: TAMANHO, nao poder)
+  function ataqueDe(tropas, config) {
     let f = 0;
-    for (const t of TIPOS) f += (tropas[t] || 0) * estado.config.tropas[t].forca;
+    for (const t of TIPOS) f += (tropas[t] || 0) * config.tropas[t].atq;
     return f;
   }
-  // Forca defensiva da aldeia: todas (reis E neutras) usam tropas tipadas.
+  function defesaDe(tropas, config) {
+    let f = 0;
+    for (const t of TIPOS) f += (tropas[t] || 0) * config.tropas[t].def;
+    return f;
+  }
+  function contarTropas(tropas) {
+    let n = 0;
+    for (const t of TIPOS) n += (tropas[t] || 0);
+    return n;
+  }
+  // Forca DEFENSIVA da aldeia (reis E neutras usam tropas tipadas). So `def`.
   function forcaDefesa(estado, aldeia) {
-    return forcaTropas(estado, aldeia.tropas);
+    return defesaDe(aldeia.tropas, estado.config);
   }
-  // Forca COMPROMETIDA da aldeia = em casa + a que ja esta na fila de
-  // construcao. E isto que o teto de producao (limite_forca_aldeia) mede:
-  // contar a fila impede furar o teto enfileirando varias tropas num turno so.
-  function forcaComprometida(estado, aldeia) {
-    let f = forcaTropas(estado, aldeia.tropas);
-    for (const c of aldeia.construindo) f += estado.config.tropas[c.tipo].forca;
-    return f;
+  // Tropas COMPROMETIDAS da aldeia = em casa + a fila de construcao. E o que o
+  // teto de producao (limite_tropas_aldeia) mede: CONTAGEM, nao poder. Contar a
+  // fila impede furar o teto enfileirando varias tropas num turno so.
+  function tropasComprometidas(estado, aldeia) {
+    let n = contarTropas(aldeia.tropas);
+    n += aldeia.construindo.length;
+    return n;
   }
-  // Tipo que mais contribui em forca (matchup do triangulo). null se sem tipo.
+  // Tipo DOMINANTE (matchup do triangulo) = O MAIS NUMEROSO (7.4-B), com
+  // desempate fixo na ordem lanceiro, arqueiro, cavaleiro. NAO por poder: com
+  // atq/def distintos, um cavaleiro (atq 4) definiria o matchup de 3 lanceiros.
+  // Vale para atacante E defensor. null se sem tropas.
   function tipoDominante(estado, tropas) {
-    let best = null, bf = 0;
-    for (const t of TIPOS) {
-      const f = (tropas[t] || 0) * estado.config.tropas[t].forca;
-      if (f > bf) { bf = f; best = t; }
+    let best = null, bn = 0;
+    for (const t of TIPOS) { // TIPOS ja esta na ordem de desempate
+      const n = tropas[t] || 0;
+      if (n > bn) { bn = n; best = t; }
     }
     return best;
   }
@@ -828,7 +869,7 @@
   // Previsao a partir de tropas cruas (p/ a UI: exercito em marcha vs alvo).
   function preverCombate(estado, tropasAtk, alvo) {
     const cfg = estado.config;
-    const Fatk = forcaDe(tropasAtk, cfg), Fdef = forcaDe(alvo.tropas, cfg);
+    const Fatk = ataqueDe(tropasAtk, cfg), Fdef = defesaDe(alvo.tropas, cfg);
     const atkType = tipoDominante(estado, tropasAtk);
     const defType = alvo.dono === null ? alvo.tipo : tipoDominante(estado, alvo.tropas);
     return Object.assign({ Fatk, Fdef, atkType, defType },
@@ -842,8 +883,9 @@
     const Fdef = forcaDefesa(estado, alvo);
     const defType = alvo.dono === null ? alvo.tipo : tipoDominante(estado, alvo.tropas);
     const dB = bonusDefesa(estado, alvo);
+    const atq = estado.config.tropas[atkType].atq; // v3: n tropas -> ataque = n*atq
     for (let n = 1; n <= 99; n++) {
-      const r = preverCombateTipos(estado, n, atkType, Fdef, defType, dB);
+      const r = preverCombateTipos(estado, n * atq, atkType, Fdef, defType, dB);
       if (r.atacanteVence) return n;
     }
     return null;
@@ -876,8 +918,8 @@
   // ----------------------------------------------------------
   function resolverCombate(estado, exercito, alvo) {
     const cfg = estado.config;
-    const Fatk = forcaTropas(estado, exercito.tropas);
-    const Fdef = forcaDefesa(estado, alvo);
+    const Fatk = ataqueDe(exercito.tropas, cfg); // ATACANTE usa atq
+    const Fdef = forcaDefesa(estado, alvo);      // DEFENSOR usa def
     const atkType = tipoDominante(estado, exercito.tropas);
     const defType = tipoDominante(estado, alvo.tropas); // neutra agora e tipada
 
@@ -917,11 +959,11 @@
       alvo.tropas = { lanceiro: sobrevivente.lanceiro || 0, arqueiro: sobrevivente.arqueiro || 0, cavaleiro: sobrevivente.cavaleiro || 0 };
       alvo.construindo = [];
       rep.conquista = true;
-      rep.sobreviventesForca = forcaTropas(estado, alvo.tropas);
+      rep.sobreviventesForca = contarTropas(alvo.tropas); // contagem de sobreviventes (nao poder)
     } else {
       // defensor segura (rei ou neutra); atacante eliminado; defensor sofre baixas
       aplicarBaixas(estado, alvo.tropas, fracao);
-      rep.sobreviventesForca = forcaDefesa(estado, alvo);
+      rep.sobreviventesForca = contarTropas(alvo.tropas);
     }
     return rep;
   }
@@ -1138,7 +1180,9 @@
     const cfg = estado.config;
     const atk = m1.dono < m2.dono ? m1 : m2;
     const def = atk === m1 ? m2 : m1;
-    const Fa = forcaTropas(estado, atk.tropas), Fd = forcaTropas(estado, def.tropas);
+    // Choque de dois EXERCITOS em marcha (campo aberto): ninguem guarnece
+    // terreno, entao os DOIS lados usam ATAQUE (nao def). Decisao 7.4.
+    const Fa = ataqueDe(atk.tropas, cfg), Fd = ataqueDe(def.tropas, cfg);
     const ta = tipoDominante(estado, atk.tropas), td = tipoDominante(estado, def.tropas);
     const { v, FatkEf, FdefEf, atacanteVence } = preverCombateTipos(estado, Fa, ta, Fd, td, 1); // campo aberto
     const vencedor = atacanteVence ? atk : def, perdedor = atacanteVence ? def : atk;
@@ -1206,12 +1250,12 @@
   //  Na V1, um dos `decisor` vira o Rei (IA); o resto do motor nao muda.
   // ==========================================================
 
-  // forca de um objeto de tropas, usando so a config (sem estado)
-  function forcaDe(tropas, config) {
-    let f = 0;
-    for (const t of TIPOS) f += (tropas[t] || 0) * config.tropas[t].forca;
-    return f;
-  }
+  // COMPAT (7.4): forcaDe/forcaTropas eram "soma da forca", e forca era 1 p/
+  // todos -> sempre foram CONTAGEM DE TROPAS na pratica. Viram aliases de
+  // contarTropas para nao partir placar/desfecho/UI/runners que os chamavam com
+  // esse sentido. O COMBATE nao os usa: usa ataqueDe/defesaDe explicitos.
+  function forcaDe(tropas /*, config */) { return contarTropas(tropas); }
+  function forcaTropas(estado, tropas) { return contarTropas(tropas); }
 
   // VISAO: relatorio (somente leitura) do que aquele jogador conhece.
   // SEM fog of war: tropas reais dos alvos e transito de todos sao visiveis.
@@ -1226,19 +1270,18 @@
       turno: estado.turno,
       config: estado.config,
       minhas: aldeiasDe(estado, dono).map((a) => ({
-        id: a.id, x: a.x, y: a.y,
+        id: a.id, x: a.x, y: a.y, nome: a.nome, capital: !!a.capital,
         recursos: { madeira: a.recursos.madeira, ferro: a.recursos.ferro },
         tropas: copiaTropas(a.tropas),
         construindo: a.construindo.map((c) => ({ tipo: c.tipo, turnosRestantes: c.turnosRestantes })),
       })),
       alvos: estado.aldeias.filter((a) => a.dono !== dono).map((a) => {
         const alvo = {
-          id: a.id, x: a.x, y: a.y, dono: a.dono, tipo: a.tipo,
+          id: a.id, x: a.x, y: a.y, dono: a.dono, tipo: a.tipo, capital: !!a.capital,
           tropas: copiaTropas(a.tropas),
           forcaDefesa: forcaDefesa(estado, a), // usado pelo jogador burro
         };
         if (comMinimos) {
-          alvo.capital = !!a.capital;
           alvo.minimos = {
             lanceiro:  minimoParaTomar(estado, "lanceiro",  a),
             arqueiro:  minimoParaTomar(estado, "arqueiro",  a),
@@ -1370,6 +1413,9 @@
 
     // cabecalho
     L.push(`TURNO ${visao.turno} - Voce e o Rei ${me}.`);
+    // Ataca a CAUSA 1 (ancora na guarnicao inicial): reafirma que os numeros
+    // abaixo sao DESTE turno. Custo zero, risco zero.
+    L.push(`Estes numeros sao do TURNO ${visao.turno}. Ignore quantidades de turnos anteriores.`);
     L.push("");
 
     // FEEDBACK DE REJEICAO (memoria anti-loop): ecoa as ordens que o motor
@@ -1384,26 +1430,71 @@
     // Canal SEPARADO das rejeicoes: aviso de clamp NAO e recusa — a ordem
     // FOI executada, ajustada. Meter isto sob "NAO foram executadas" seria
     // mentir pro modelo (pecado do H3). Fora do modo clamp, nunca renderiza.
-    if (!semRejeicoes && visao.avisosAnteriores && visao.avisosAnteriores.length) {
+    // 7.5.4 (04/08): DESACOPLADO de semRejeicoes. avisos != rejeicoes — ligar
+    // rejeicaoNoFim (que passa semRejeicoes) NAO pode suprimir o aviso de clamp,
+    // senao o modelo perde o sinal de que a contabilidade dele foi ajustada.
+    if (visao.avisosAnteriores && visao.avisosAnteriores.length) {
       L.push("=== SUAS ORDENS AJUSTADAS NO TURNO ANTERIOR ===");
       L.push("As ordens abaixo FORAM executadas, mas com a quantidade reduzida ao estoque real. Nesta jogada, peca apenas o que voce TEM:");
       for (const a of visao.avisosAnteriores) L.push(`- ${a}`);
       L.push("");
     }
 
-    // SUAS ALDEIAS
+    // SUAS ALDEIAS (relatorio v3, Fase 2 04/08): separa em TRES estados o que
+    // o modelo confundia — o que da p/ enviar AGORA, o que ja saiu (em marcha) e
+    // o que ainda vai ficar pronto. Ataca as CAUSAS 1 (ancora) e 2 (transito
+    // contado como casa). Producao vem da CONFIG, nunca hard-coded.
+    const prod = cfg.producao;
+    // COMBATE v3 (7.5.2): o relatorio mostra os TOTAIS ja somados — o modelo
+    // nunca deve ter de multiplicar atq/def. terreno = bonus de defesa do lugar.
+    const terreno = (x) => x.capital ? cfg.combate.bonus_defesa_castelo : cfg.combate.bonus_defesa_aldeia;
+    const defefetiva = (x) => Math.round(defesaDe(x.tropas, cfg) * terreno(x));
+    // ORDENACAO (7.5.3): 'id' (padrao) mantem a ordem por id; 'custo' ordena por
+    // custo de marcha desde a MINHA capital (simetrico). Flag desligada por ora.
+    let minhasOrd = visao.minhas.slice();
+    if (cfg.ordemAldeias === "custo" && temRede) {
+      const cap = visao.minhas.find((m) => m.capital) || visao.minhas[0];
+      const custoAte = (m) => {
+        if (!cap || m.id === cap.id) return 0;
+        const cam = caminhoEntre(shim, cap.id, m.id);
+        return cam ? pesoRota(shim, cam) : Infinity;
+      };
+      minhasOrd.sort((p, q) => custoAte(p) - custoAte(q) || p.id - q.id);
+    } else {
+      minhasOrd.sort((p, q) => p.id - q.id);
+    }
     L.push(`=== SUAS ALDEIAS (${visao.minhas.length}) ===`);
-    for (const a of visao.minhas) {
-      L.push(`[${a.id}] | recursos: ${a.recursos.madeira} madeira, ${a.recursos.ferro} ferro`);
-      L.push(`       tropas em casa: ${a.tropas.lanceiro} lanceiros, ${a.tropas.arqueiro} arqueiros, ${a.tropas.cavaleiro} cavaleiros`);
+    for (const a of minhasOrd) {
+      const nome = a.nome ? ` ${a.nome}` : ""; // mapa autoral traz nome; procedural pode nao ter
+      L.push(`[${a.id}]${nome} | madeira ${a.recursos.madeira} (+${prod.madeira}/turno) | ferro ${a.recursos.ferro} (+${prod.ferro}/turno) | defesa: ${defefetiva(a)}`);
+      // DISPONIVEL PARA ENVIAR AGORA: instrucao (maiusculas), nao descricao.
+      // ataque: poder de ATAQUE se enviar TODA a guarnicao de casa (7.5.2).
+      L.push(`    DISPONIVEL PARA ENVIAR AGORA: ${a.tropas.lanceiro} lanceiros, ${a.tropas.arqueiro} arqueiros, ${a.tropas.cavaleiro} cavaleiros (ataque se enviar tudo: ${ataqueDe(a.tropas, cfg)})`);
+      // saiu daqui, ja em marcha (NAO disponivel): do transito, origem=esta
+      // aldeia, dono=me. Se nao houver, OMITE a linha inteira (linha ausente e
+      // mais barata que linha vazia).
+      const emMarcha = { lanceiro: 0, arqueiro: 0, cavaleiro: 0 };
+      let temMarcha = false;
+      if (visao.transito) {
+        for (const mv of visao.transito) {
+          if (mv.origemId === a.id && mv.dono === me) {
+            for (const t of TIPOS) emMarcha[t] += (mv.tropas[t] || 0);
+            temMarcha = true;
+          }
+        }
+      }
+      if (temMarcha && (emMarcha.lanceiro + emMarcha.arqueiro + emMarcha.cavaleiro) > 0) {
+        L.push(`    saiu daqui, ja em marcha (NAO disponivel): ${compTexto(emMarcha)}`);
+      }
+      // fica pronto: substitui "construindo". Sufixo obrigatorio. Sem construcao,
+      // OMITE (nada de "construindo: nada").
       if (a.construindo.length) {
         const cont = {};
         let maxT = 0;
         for (const c of a.construindo) { cont[c.tipo] = (cont[c.tipo] || 0) + 1; maxT = Math.max(maxT, c.turnosRestantes); }
         const desc = TIPOS.filter((t) => cont[t]).map((t) => `${cont[t]} ${t}`).join(", ");
-        L.push(`       construindo: ${desc} (pronto em ${maxT} turno(s))`);
-      } else {
-        L.push(`       construindo: nada`);
+        const quando = maxT > 1 ? `fica pronto em ${maxT} turnos` : `fica pronto no proximo turno`;
+        L.push(`    ${quando}: ${desc} (nao pode ser enviado neste turno)`);
       }
     }
     L.push("");
@@ -1418,7 +1509,7 @@
       .sort((p, q) => p.t - q.t || p.a.id - q.a.id);
     L.push(`=== ALDEIAS NEUTRAS (${neutras.length}) - ordenadas por distancia da sua mais proxima ===`);
     for (const { a, t } of neutras) {
-      L.push(`[${a.id}] ${compTexto(a.tropas)} | ${t} turnos de marcha${minTexto(a)}`);
+      L.push(`[${a.id}] ${compTexto(a.tropas)} | defesa: ${defefetiva(a)} | ${t} turnos de marcha${minTexto(a)}`);
     }
     L.push("");
 
@@ -1429,7 +1520,7 @@
     L.push(`=== INIMIGO (Rei ${inimigo}) - ${inimigas.length} aldeia(s) ===`);
     if (!inimigas.length) L.push("(nenhuma aldeia inimiga)");
     for (const { a, t } of inimigas) {
-      L.push(`[${a.id}] ${compTexto(a.tropas)} | ${t} turnos de marcha${minTexto(a)}`);
+      L.push(`[${a.id}] ${compTexto(a.tropas)} | defesa: ${defefetiva(a)} | ${t} turnos de marcha${minTexto(a)}`);
     }
     L.push("");
 
@@ -1454,7 +1545,7 @@
     const meus = visao.transito.filter((m) => m.dono === me);
     const dele = visao.transito.filter((m) => m.dono !== me);
     const linhaMov = (m) => {
-      let s = `- ${compTexto(m.tropas)}: aldeia [${m.origemId}] -> aldeia [${m.destinoId}] (${classifica(m.destinoDono)}), chega em ${m.turnosRestantes} turnos`;
+      let s = `- ${compTexto(m.tropas)} (ataque: ${ataqueDe(m.tropas, cfg)}): aldeia [${m.origemId}] -> aldeia [${m.destinoId}] (${classifica(m.destinoDono)}), chega em ${m.turnosRestantes} turnos`;
       // L2: envio redirecionado pela interceptacao. NAO e rejeicao — foi executado.
       if (m.destinoPedido != null && m.destinoPedido !== m.destinoId)
         s += ` [REDIRECIONADO: voce pediu [${m.destinoPedido}], parou na primeira aldeia nao-sua do caminho]`;
@@ -1545,23 +1636,19 @@
   // regra no motor e o pior bug possivel num benchmark.
   function regrasCombateTexto(cfg) {
     const B = cfg.bonus_forca_triangulo;
+    const bA = cfg.combate.bonus_defesa_aldeia, bC = cfg.combate.bonus_defesa_castelo;
     const L = [];
     L.push("=== REGRAS DE COMBATE ===");
-    L.push("Cada tropa vale 1: o que conta e o NUMERO de tropas de cada lado.");
-    L.push(`Triangulo de counters (BONUS, nao vitoria automatica): ${TIPOS.map((t) => `${t} tem bonus contra ${cfg.triangulo[t]}`).join("; ")}.`);
-    L.push(`Ter o counter multiplica suas tropas por ${cfg.bonus_forca_triangulo} — mas o NUMERO de tropas continua a decidir.`);
-    L.push(`O tipo com MAIS tropas em cada exercito define o matchup. O lado com o counter certo conta suas tropas x ${B}. Vence o maior numero efetivo de tropas; empate favorece o defensor.`);
-    if (B > 1) {
-      const def = 5;
-      const atk = Math.ceil((def + 1) / B); // atk*B > def
-      if (atk < def) {
-        const atkEf = Math.round(atk * B);
-        L.push(`Exemplo: ${atk} arqueiros atacando ${def} lanceiros: com o counter certo, ${atk} x ${B} = ${atkEf} contra ${def} -> o atacante vence mesmo com MENOS tropas. Com o counter errado, seria o inverso.`);
-      }
+    L.push("Cada tropa tem ATAQUE e DEFESA proprios (nao valem todas igual):");
+    for (const t of TIPOS) {
+      const d = cfg.tropas[t];
+      L.push(`  ${t}: ataque ${d.atq}, defesa ${d.def}, velocidade ${d.vel} (custa ${d.custo.madeira} madeira + ${d.custo.ferro} ferro).`);
     }
-    const bA = cfg.combate && cfg.combate.bonus_defesa_aldeia, bC = cfg.combate && cfg.combate.bonus_defesa_castelo;
-    if (bA || bC)
-      L.push(`Defender e mais facil: tropas paradas numa aldeia contam x ${bA}; num castelo (capital), x ${bC}. Em campo aberto (na estrada) nao ha bonus.`);
+    L.push("Quando voce ATACA, conta o ATAQUE das suas tropas; quem DEFENDE conta a DEFESA das dele.");
+    L.push(`Triangulo (BONUS, nao vitoria automatica): ${TIPOS.map((t) => `${t} contra ${cfg.triangulo[t]}`).join("; ")}. Ter o counter multiplica sua forca por ${B}.`);
+    L.push("O tipo MAIS NUMEROSO de cada exercito define o matchup do counter (empate no numero desempata na ordem lanceiro, arqueiro, cavaleiro).");
+    L.push(`Defender e mais facil: a defesa conta x ${bA} numa aldeia e x ${bC} num castelo (capital). Em campo aberto (na estrada) nao ha bonus.`);
+    L.push("Vence o lado com MAIOR forca efetiva. Empate favorece o DEFENSOR.");
     return L.join("\n");
   }
 
@@ -1573,26 +1660,23 @@
     const B = cfg.bonus_forca_triangulo;
     const bA = cfg.combate.bonus_defesa_aldeia;
     const bC = cfg.combate.bonus_defesa_castelo;
+    const T = cfg.tropas;
     const L = [];
     L.push("=== REGRAS DE COMBATE ===");
-    L.push("Cada tropa vale 1. A batalha compara a FORCA EFETIVA dos dois lados.");
-    L.push(`Triangulo de counters (BONUS, nao vitoria automatica): ${TIPOS.map((t) => `${t} tem bonus contra ${cfg.triangulo[t]}`).join("; ")}.`);
-    L.push(`Ter o counter multiplica suas tropas por ${cfg.bonus_forca_triangulo} — mas o NUMERO de tropas continua a decidir.`);
-    L.push("O tipo com MAIS tropas em cada exercito define o matchup.");
+    L.push("Cada tropa tem ATAQUE e DEFESA proprios:");
+    for (const t of TIPOS) L.push(`  ${t}: ataque ${T[t].atq}, defesa ${T[t].def} (${T[t].vel}).`);
+    L.push(`Triangulo (bonus x${B}): ${TIPOS.map((t) => `${t}>${cfg.triangulo[t]}`).join("; ")}. O tipo MAIS NUMEROSO define o matchup (desempate: lanceiro, arqueiro, cavaleiro).`);
     L.push("");
     L.push("CONTA DA BATALHA:");
-    L.push(`  ATACANTE = numero de tropas x ${B} se voce tem o counter; senao x 1`);
-    L.push(`  DEFENSOR = numero de tropas x ${B} se ele tem o counter; senao x 1`);
-    L.push(`             ... e ainda x ${bA} se esta numa aldeia, x ${bC} se e capital`);
-    L.push("  Voce vence se ATACANTE for MAIOR que DEFENSOR. Empate: o defensor segura.");
+    L.push(`  ATACANTE = soma do ATAQUE das suas tropas, x ${B} se voce tem o counter`);
+    L.push(`  DEFENSOR = soma da DEFESA das tropas dele, x ${B} se ele tem o counter, x ${bA} se em aldeia (x ${bC} se e capital)`);
+    L.push("  Vence quem tiver MAIOR forca efetiva. Empate: o DEFENSOR segura.");
     L.push("");
-    L.push("EXEMPLOS COM OS NUMEROS DESTE JOGO (cada aldeia neutra tem 1 tropa):");
-    L.push(`  1 arqueiro ataca aldeia de 1 lanceiro: voce ${1 * B} contra ${1 * bA} -> VENCE com 1 tropa (tem o bonus).`);
-    L.push(`  1 lanceiro ataca aldeia de 1 cavaleiro: voce ${1 * B} contra ${1 * bA} -> VENCE com 1 tropa (tem o bonus).`);
-    L.push(`  1 cavaleiro ataca aldeia de 1 lanceiro: voce 1 contra ${(1 * B * bA).toFixed(2)} -> PERDE (ele tem o bonus). Leve 2.`);
-    L.push(`  10 lanceiros atacam 20 cavaleiros em campo aberto: ${10 * B} contra 20 -> PERDE. O bonus nao salva de estar em menor numero.`);
-    L.push("Com o counter certo, 1 tropa basta contra uma aldeia de 1 tropa. Sem o counter, leve 2.");
-    L.push("Antes de enviar, faca a conta com os numeros do relatorio.");
+    L.push("EXEMPLOS COM OS NUMEROS DESTE JOGO:");
+    L.push(`  1 cavaleiro ataca aldeia de 1 lanceiro: ${T.cavaleiro.atq} contra ${(T.lanceiro.def * B * bA).toFixed(3)} -> VENCE (o ariete quebra a defesa parada).`);
+    L.push(`  1 lanceiro ataca aldeia de 1 cavaleiro: ${(T.lanceiro.atq * B).toFixed(2)} contra ${(T.cavaleiro.def * bA).toFixed(2)} -> empate, o DEFENSOR segura. Leve 2.`);
+    L.push(`  1 arqueiro ataca aldeia de 1 lanceiro: ${(T.arqueiro.atq * B).toFixed(2)} contra ${(T.lanceiro.def * bA).toFixed(2)} -> empate, o DEFENSOR segura. Leve 2.`);
+    L.push("Antes de enviar, faca a conta — o relatorio ja mostra ATAQUE e DEFESA somados p/ voce nao ter de multiplicar.");
     return L.join("\n");
   }
 
@@ -1609,8 +1693,8 @@
         `fica pronto em ${d.turnos} turno${d.turnos > 1 ? "s" : ""}, velocidade ${d.vel}.`);
     }
     L.push(`Cada aldeia sua produz ${cfg.producao.madeira} madeira e ${cfg.producao.ferro} ferro por turno.`);
-    if (cfg.limite_forca_aldeia)
-      L.push(`Teto por aldeia: quando a forca das tropas em casa atinge ${cfg.limite_forca_aldeia}, ` +
+    if (cfg.limite_tropas_aldeia)
+      L.push(`Teto por aldeia: quando o NUMERO de tropas em casa atinge ${cfg.limite_tropas_aldeia}, ` +
         `a aldeia PARA de construir (mas segue produzindo recursos e pode receber reforcos).`);
     L.push("So ordene construir se a aldeia tem recursos para pagar o custo AGORA.");
     return L.join("\n");
@@ -1761,13 +1845,26 @@
   //     faltar QUALQUER tipo); total > 0.
   function diagnosticarOrdem(estado, dono, ordem) {
     const rejeicoes = [];
+    const avisos = [];
     const aceitoConstruir = [], aceitoEnvios = [];
     const construir = (ordem && Array.isArray(ordem.construir)) ? ordem.construir : [];
     const envios = (ordem && Array.isArray(ordem.envios)) ? ordem.envios : [];
 
+    // CLAMP (Fase 3): quando ligado, o estoque e simulado por origem e REDUZIDO
+    // a cada envio aceite, para que dois envios da mesma aldeia no mesmo turno se
+    // resolvam por ordem de chegada — igual ao que executarOrdem vai praticar.
+    // Desligado: le o.tropas cru e nao reduz (comportamento antigo, byte a byte).
+    const clamp = !!estado.config.clamp_envios;
+    const stockSim = {};
+    const estoque = (o) => {
+      if (!clamp) return o.tropas;
+      if (!(o.id in stockSim)) stockSim[o.id] = { lanceiro: o.tropas.lanceiro, arqueiro: o.tropas.arqueiro, cavaleiro: o.tropas.cavaleiro };
+      return stockSim[o.id];
+    };
+
     const recSim = {};   // recursos restantes por aldeia (simula o gasto do turno)
     const forcaSim = {}; // forca comprometida por aldeia (simula o teto de producao)
-    const limite = estado.config.limite_forca_aldeia;
+    const limite = estado.config.limite_tropas_aldeia;
     for (const c of construir) {
       if (!c || typeof c !== "object") { rejeicoes.push("construir: item nao e objeto"); continue; }
       const a = aldeiaPorId(estado, c.aldeiaId);
@@ -1781,9 +1878,9 @@
         rejeicoes.push(`construir [${c.aldeiaId}]: ${motivo}`);
         continue;
       }
-      if (!(c.aldeiaId in forcaSim)) forcaSim[c.aldeiaId] = forcaComprometida(estado, a);
+      if (!(c.aldeiaId in forcaSim)) forcaSim[c.aldeiaId] = tropasComprometidas(estado, a);
       if (limite != null && forcaSim[c.aldeiaId] >= limite) {
-        rejeicoes.push(`construir [${c.aldeiaId}]: no teto de forca (${forcaSim[c.aldeiaId]}/${limite}) - producao parada`);
+        rejeicoes.push(`construir [${c.aldeiaId}]: no teto de tropas (${forcaSim[c.aldeiaId]}/${limite}) - producao parada`);
         continue;
       }
       if (!(c.aldeiaId in recSim)) recSim[c.aldeiaId] = { madeira: a.recursos.madeira, ferro: a.recursos.ferro };
@@ -1793,7 +1890,7 @@
         continue;
       }
       r.madeira -= def.custo.madeira; r.ferro -= def.custo.ferro;
-      forcaSim[c.aldeiaId] += def.forca;
+      forcaSim[c.aldeiaId] += 1; // v3: o teto conta UNIDADES, +1 por construcao
       aceitoConstruir.push({ aldeiaId: c.aldeiaId, tipo: c.tipo });
     }
 
@@ -1813,8 +1910,25 @@
       const desconhecidas = (e.tropas && typeof e.tropas === "object")
         ? Object.keys(e.tropas).filter((k) => TIPOS.indexOf(k) < 0 && Number(e.tropas[k]) > 0)
         : [];
-      const faltam = TIPOS.filter((t) => pedido[t] > o.tropas[t]);
+      const est = estoque(o);
+      const faltam = TIPOS.filter((t) => pedido[t] > est[t]);
       if (faltam.length) {
+        if (clamp) {
+          // CLAMP por tipo ao estoque restante. Zera apos ajuste -> RECUSA (nao
+          // e envio fantasma). Senao, envia o que ha e AVISA (nunca silencioso).
+          const ajust = { lanceiro: 0, arqueiro: 0, cavaleiro: 0 };
+          let total = 0;
+          for (const t of TIPOS) { ajust[t] = Math.min(pedido[t], est[t]); total += ajust[t]; }
+          if (total === 0) {
+            rejeicoes.push(`envio [${e.origemId}]->[${e.destinoId}]: zero tropas apos ajuste`);
+            continue;
+          }
+          for (const t of TIPOS) est[t] -= ajust[t];
+          const cortes = TIPOS.filter((t) => pedido[t] > ajust[t]).map((t) => `pediu ${pedido[t]} ${t}, enviado ${ajust[t]}`);
+          avisos.push(`envio [${e.origemId}]->[${e.destinoId}]: FOI executado, com a quantidade reduzida ao estoque real (${cortes.join("; ")})`);
+          aceitoEnvios.push({ origemId: e.origemId, destinoId: e.destinoId, tropas: ajust, alvo: d, ajustado: true, pedido });
+          continue;
+        }
         rejeicoes.push(`envio [${e.origemId}]->[${e.destinoId}]: tropa que nao tem (${faltam.map((t) => `pediu ${pedido[t]} ${t}, tem ${o.tropas[t]}`).join("; ")})`);
         continue;
       }
@@ -1827,10 +1941,11 @@
       if (desconhecidas.length) { // misto: a parte valida VAI (espelha o motor), mas o descarte e avisado
         rejeicoes.push(`envio [${e.origemId}]->[${e.destinoId}]: tipo desconhecido ignorado (${desconhecidas.map((k) => `"${k}"`).join(", ")}) - enviado so o que e valido`);
       }
+      if (clamp) for (const t of TIPOS) est[t] -= pedido[t]; // reduz p/ o proximo envio da mesma origem
       aceitoEnvios.push({ origemId: e.origemId, destinoId: e.destinoId, tropas: pedido, alvo: d });
     }
 
-    return { aceitoConstruir, aceitoEnvios, rejeicoes };
+    return { aceitoConstruir, aceitoEnvios, rejeicoes, avisos };
   }
 
   // ==========================================================
@@ -1885,15 +2000,31 @@
     return melhor;
   }
 
-  // melhor alvo: entre os que podemos vencer (defesa*margem < forca),
-  // o mais proximo (desempate: mais fraco, depois id).
-  function melhorAlvo(origem, alvos, forca, config) {
+  // Chave pseudo-aleatoria SEMEADA da partida para desempatar alvos (L4/#2,
+  // 04/08). Funcao pura de (seed, turno, origem, alvo): deterministica (mesma
+  // seed -> mesmo jogo) e SEM LADO — ao contrario do id, que favorecia o Oeste
+  // (ids baixos) nos empates, e cujos empates ainda AUMENTAM com custo inteiro.
+  function chaveRngAlvo(seed, turno, origemId, alvoId) {
+    let h = (seed >>> 0) || 1;
+    h = Math.imul(h ^ (turno | 0), 0x9E3779B1);
+    h = Math.imul(h ^ (origemId | 0), 0x85EBCA77);
+    h = Math.imul(h ^ (alvoId | 0), 0xC2B2AE3D);
+    return criarRng(h >>> 0)();
+  }
+
+  // melhor alvo: entre os que podemos vencer (defesa*margem < forca), o de MENOR
+  // CUSTO DE ROTA (a mesma fonte que o motor marcha, nao pixel — conserta o L4).
+  // Desempate: [custoRota, defesa, rng]. O rng semeado substitui o id (o id nao
+  // tem lado nenhum a defender; ver chaveRngAlvo). ctx.custoRota(alvoId) vem do
+  // caller (rede da visao); sem ctx (estados sinteticos) cai na distancia reta.
+  function melhorAlvo(origem, alvos, forca, config, ctx) {
     const margem = config.jogador.margem_ataque;
     let melhor = null, melhorChave = null;
     for (const t of alvos) {
       if (t.forcaDefesa * margem >= forca) continue;
-      const d = Math.hypot(origem.x - t.x, origem.y - t.y);
-      const chave = [d, t.forcaDefesa, t.id];
+      const d = (ctx && ctx.custoRota) ? ctx.custoRota(t.id) : Math.hypot(origem.x - t.x, origem.y - t.y);
+      const r = (ctx && ctx.rngDe) ? ctx.rngDe(t.id) : t.id; // fallback so p/ estados sem rede/seed
+      const chave = [d, t.forcaDefesa, r];
       if (!melhor ||
           chave[0] < melhorChave[0] ||
           (chave[0] === melhorChave[0] && chave[1] < melhorChave[1]) ||
@@ -1910,6 +2041,13 @@
   function jogadorBurro(visao) {
     const cfg = visao.config;
     const construir = [], envios = [];
+    // Rede da visao -> custo de rota (mesma que o motor marcha). Sem rede
+    // (estados sinteticos) o melhorAlvo cai na distancia reta. L4: NUNCA decidir
+    // por pixel quando ha rede.
+    const shim = visao.estradas
+      ? { config: cfg, estradas: { adj: visao.estradas, custo: visao.estradasCusto || null },
+          aldeias: visao.minhas.concat(visao.alvos) }
+      : null;
     for (const a of visao.minhas) {
       // 1) construir
       const rec = { madeira: a.recursos.madeira, ferro: a.recursos.ferro };
@@ -1924,10 +2062,14 @@
         counts[t]++;
         construir.push({ aldeiaId: a.id, tipo: t });
       }
-      // 2) enviar (unificado: aqui o burro so ataca o mais proximo vencivel)
-      const forca = forcaDe(a.tropas, cfg);
+      // 2) enviar (unificado: aqui o burro so ataca o alvo de menor custo de rota vencivel)
+      const forca = ataqueDe(a.tropas, cfg); // v3: poder de ATAQUE da guarnicao
       if (forca > 0) {
-        const alvo = melhorAlvo(a, visao.alvos, forca, cfg);
+        const ctx = {
+          custoRota: shim ? (alvoId) => { const cam = caminhoEntre(shim, a.id, alvoId); return cam ? pesoRota(shim, cam) : Infinity; } : null,
+          rngDe: (alvoId) => chaveRngAlvo(cfg.seed, visao.turno, a.id, alvoId),
+        };
+        const alvo = melhorAlvo(a, visao.alvos, forca, cfg, ctx);
         if (alvo) envios.push({ origemId: a.id, destinoId: alvo.id, tropas: Object.assign({}, a.tropas) });
       }
     }
@@ -1956,20 +2098,36 @@
     // p/ o relatorio do PROXIMO turno (montarVisao le isto). Ordem invalida
     // continua sendo "passa o turno" — aqui so registramos o porque.
     if (!estado.rejeicoesAnteriores) estado.rejeicoesAnteriores = {};
-    if (!ordem || typeof ordem !== "object") { estado.rejeicoesAnteriores[dono] = []; return; }
-    estado.rejeicoesAnteriores[dono] = diagnosticarOrdem(estado, dono, ordem).rejeicoes;
+    if (!estado.avisosAnteriores) estado.avisosAnteriores = {};
+    if (!ordem || typeof ordem !== "object") {
+      estado.rejeicoesAnteriores[dono] = []; estado.avisosAnteriores[dono] = []; return;
+    }
+    // Um so diagnostico e a fonte da verdade: dele saem as rejeicoes e os avisos
+    // (para o proximo relatorio) e, no modo clamp, os proprios envios a executar
+    // (ja clampados ao estoque). Assim o que se loga e o que se executa nao podem
+    // divergir.
+    const diag = diagnosticarOrdem(estado, dono, ordem);
+    estado.rejeicoesAnteriores[dono] = diag.rejeicoes;
+    estado.avisosAnteriores[dono] = diag.avisos || [];
     const construir = Array.isArray(ordem.construir) ? ordem.construir : [];
-    const envios = Array.isArray(ordem.envios) ? ordem.envios
-      : Array.isArray(ordem.ataques) ? ordem.ataques : []; // aceita nome antigo
     for (const c of construir) {
       if (!c || typeof c !== "object") continue;
       const a = aldeiaPorId(estado, c.aldeiaId);
       if (a && a.dono === dono) enfileirarConstrucao(estado, c.aldeiaId, c.tipo);
     }
-    for (const e of envios) {
-      if (!e || typeof e !== "object") continue;
-      const o = aldeiaPorId(estado, e.origemId);
-      if (o && o.dono === dono) enviarExercito(estado, e.origemId, e.destinoId, sanitizarTropas(e.tropas));
+    if (estado.config.clamp_envios) {
+      // CLAMP PADRAO: executa exatamente os envios que o diagnostico resolveu
+      // (clampados ao estoque, na ordem, sem os que zeraram).
+      for (const e of diag.aceitoEnvios) enviarExercito(estado, e.origemId, e.destinoId, e.tropas);
+    } else {
+      // Comportamento antigo (rejeita quem pede mais do que tem): INALTERADO.
+      const envios = Array.isArray(ordem.envios) ? ordem.envios
+        : Array.isArray(ordem.ataques) ? ordem.ataques : []; // aceita nome antigo
+      for (const e of envios) {
+        if (!e || typeof e !== "object") continue;
+        const o = aldeiaPorId(estado, e.origemId);
+        if (o && o.dono === dono) enviarExercito(estado, e.origemId, e.destinoId, sanitizarTropas(e.tropas));
+      }
     }
   }
 
@@ -2083,7 +2241,7 @@
     L.push("");
 
     // 3) FORCA FINAL + DISTRIBUICAO (o teto de producao deve aparecer aqui)
-    const teto = cfg.limite_forca_aldeia;
+    const teto = cfg.limite_tropas_aldeia;
     L.push("FORCA FINAL:");
     const resumoLado = (lista, nome) => {
       const forcas = lista.map((a) => forcaDe(a.tropas, cfg));
@@ -2155,9 +2313,13 @@
     // Peca 3
     forcaTropas,
     forcaDefesa,
-    forcaComprometida,
+    tropasComprometidas,
+    ataqueDe,
+    defesaDe,
+    contarTropas,
     tipoDominante,
     regrasCombateTexto,
+    preverCombateTipos,
     regrasEconomiaTexto,
     regrasMovimentoTexto,
     preverCombate,

@@ -1,0 +1,112 @@
+{
+  "meta": {
+    "arquivo": "gemini_vs_nemotron.txt",
+    "modelos": {
+      "A": "gemini:gemini-2.5-flash",
+      "B": "openrouter:nvidia/nemotron-3-super-120b-a12b:free"
+    },
+    "seed": 1,
+    "maxTurnos": 20,
+    "condicoes": "ambiente=iberia | temp=0 | prompt=relatorio v3 (disponivel-para-enviar) + combate v3 (atq/def, counter 1.25) + clamp | thinking=on"
+  },
+  "reis": {
+    "A": {
+      "envios_aceites": 26,
+      "tropas_movidas": 52,
+      "tamanho_medio_envio": 2,
+      "envios_ajustados": 0,
+      "taxa_de_clamp": 0,
+      "envios_de_1": 12,
+      "histograma_envio": {
+        "1": 12,
+        "2": 9,
+        "3": 3,
+        "6": 1,
+        "7": 1
+      },
+      "construcoes_aceites": {
+        "lanceiro": 0,
+        "arqueiro": 23,
+        "cavaleiro": 0
+      },
+      "construcoes_total": 23,
+      "rejeicoes_total": 0,
+      "rejeicoes_por_categoria": {},
+      "rejeicoes_detalhe_normalizado": {},
+      "ataques": 7,
+      "ataques_counter1": 2,
+      "taxa_counter_correto": 0.29,
+      "alvos_distintos_atacados": 6,
+      "taxa_counter_correto_primeiro": 0.17,
+      "conquistas": 5,
+      "turno_ultima_conquista": 7,
+      "indice_monomania": 0.54,
+      "alvo_mais_repetido": {
+        "destinoId": 3,
+        "envios": 14
+      },
+      "infra_erros": 0,
+      "turnos_com_raciocinio": 12,
+      "turnos_sem_raciocinio": 0
+    },
+    "B": {
+      "envios_aceites": 10,
+      "tropas_movidas": 27,
+      "tamanho_medio_envio": 2.7,
+      "envios_ajustados": 0,
+      "taxa_de_clamp": 0,
+      "envios_de_1": 4,
+      "histograma_envio": {
+        "1": 4,
+        "2": 2,
+        "4": 2,
+        "5": 1,
+        "6": 1
+      },
+      "construcoes_aceites": {
+        "lanceiro": 6,
+        "arqueiro": 15,
+        "cavaleiro": 0
+      },
+      "construcoes_total": 21,
+      "rejeicoes_total": 0,
+      "rejeicoes_por_categoria": {},
+      "rejeicoes_detalhe_normalizado": {},
+      "ataques": 6,
+      "ataques_counter1": 3,
+      "taxa_counter_correto": 0.5,
+      "alvos_distintos_atacados": 6,
+      "taxa_counter_correto_primeiro": 0.5,
+      "conquistas": 5,
+      "turno_ultima_conquista": 10,
+      "indice_monomania": 0.2,
+      "alvo_mais_repetido": {
+        "destinoId": 12,
+        "envios": 2
+      },
+      "infra_erros": 0,
+      "turnos_com_raciocinio": 11,
+      "turnos_sem_raciocinio": 0
+    }
+  },
+  "partida": {
+    "turnos_registados": 11,
+    "exercitos_em_transito_medio": 6,
+    "exercitos_em_transito_medio_A": 4.09,
+    "exercitos_em_transito_medio_B": 1.91,
+    "turno_ultima_conquista_global": 10,
+    "placar_final": {
+      "turno": 11,
+      "aldeiasA": 6,
+      "forcaA": 0,
+      "aldeiasB": 6,
+      "forcaB": 17,
+      "neutras": 12,
+      "transito": 10,
+      "transitoA": 9,
+      "transitoB": 1
+    },
+    "resultado_final": null
+  },
+  "_nota_estrada": "'transito' conta EXERCITOS em marcha (movimentos.length), nao tropas. Por isso reporta-se exercitos_em_transito_medio, NAO 'indice de estrada' (o 0.41 antigo era unidade trocada e esta retirado). O indice por tropas (tropas_em_marcha) so existe no harness da Fase 6, de estado.movimentos. Os logs de 03/08 nao tem transito por Rei (medio_A/B = null)."
+}

@@ -78,11 +78,14 @@ const baseL = a.tropas.lanceiro, baseC = a.tropas.cavaleiro;
 a.recursos.madeira = 100;
 a.recursos.ferro = 100;
 
-const okL = Engine.enfileirarConstrucao(e2, a.id, "lanceiro");   // 15 mad / 0 fer, 1 turno
-const okC = Engine.enfileirarConstrucao(e2, a.id, "cavaleiro");  // 30 mad / 30 fer, 2 turnos
+const okL = Engine.enfileirarConstrucao(e2, a.id, "lanceiro");   // custo da CONFIG, 1 turno
+const okC = Engine.enfileirarConstrucao(e2, a.id, "cavaleiro");  // custo da CONFIG, 2 turnos
 checa("enfileirou lanceiro e cavaleiro", okL && okC);
-checa("custo debitado ao enfileirar (madeira 100-15-30=55)", a.recursos.madeira === 55, `mad ${a.recursos.madeira}`);
-checa("custo debitado ao enfileirar (ferro 100-0-30=70)", a.recursos.ferro === 70, `fer ${a.recursos.ferro}`);
+// custos derivados da CONFIG (economia-agnostico): sobrevive a Fase 4.
+const cL = CONFIG.tropas.lanceiro.custo, cC = CONFIG.tropas.cavaleiro.custo;
+const madEsper = 100 - cL.madeira - cC.madeira, ferEsper = 100 - cL.ferro - cC.ferro;
+checa(`custo debitado ao enfileirar (madeira 100-${cL.madeira}-${cC.madeira}=${madEsper})`, a.recursos.madeira === madEsper, `mad ${a.recursos.madeira}`);
+checa(`custo debitado ao enfileirar (ferro 100-${cL.ferro}-${cC.ferro}=${ferEsper})`, a.recursos.ferro === ferEsper, `fer ${a.recursos.ferro}`);
 checa("2 itens na fila", a.construindo.length === 2);
 
 // tick 1: lanceiro (1 turno) completa; cavaleiro (2 turnos) ainda nao

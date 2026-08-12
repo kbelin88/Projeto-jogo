@@ -435,6 +435,9 @@
       <option value="openrouter:google/gemma-4-31b-it:free">Gemma-4 31B ·OR</option>
       <option value="openrouter:nvidia/nemotron-nano-9b-v2:free">Nemotron-nano 9B ·OR</option>
       <option value="openrouter:nvidia/nemotron-3-super-120b-a12b:free">Nemotron 120B ·OR</option>
+      <option value="openrouter:deepseek/deepseek-r1">DeepSeek R1 ·OR</option>
+      <option value="openrouter:google/gemini-3.1-flash-lite">Gemini 3.1 Flash-lite ·OR</option>
+      <option value="openrouter:openai/gpt-5.1">GPT-5.1 ·OR</option>
     </select>
   </label>
   <label title="Quem decide pelo Rei B">Rei B
@@ -450,9 +453,13 @@
       <option value="openrouter:google/gemma-4-31b-it:free">Gemma-4 31B ·OR</option>
       <option value="openrouter:nvidia/nemotron-nano-9b-v2:free">Nemotron-nano 9B ·OR</option>
       <option value="openrouter:nvidia/nemotron-3-super-120b-a12b:free">Nemotron 120B ·OR</option>
+      <option value="openrouter:deepseek/deepseek-r1">DeepSeek R1 ·OR</option>
+      <option value="openrouter:google/gemini-3.1-flash-lite">Gemini 3.1 Flash-lite ·OR</option>
+      <option value="openrouter:openai/gpt-5.1">GPT-5.1 ·OR</option>
     </select>
   </label>
-  <label>turnos <input id="gmax" type="number" min="1" max="80" value="6" style="width:48px"></label>
+  <label>turnos <input id="gmax" type="number" min="1" max="9999" value="40" style="width:56px"></label>
+  <label title="Ignora o limite de turnos: a partida corre ate a vitoria ou o empate por estagnacao (30t sem mudanca). Acompanhe o gasto no titulo da aba.">&#8734; sem limite <input type="checkbox" id="gilim"></label>
   <button id="glog" title="Baixar o .txt da ultima partida do modelo">Baixar log</button>
   <button id="greplaysave" title="Baixar o replay .json da partida gravada">&#127909; Salvar replay</button>
   <label class="botao-arquivo" title="Reproduzir um replay .json gravado"><button id="greplayload_visual" onclick="document.getElementById('greplayload').click()">&#9654; Ver replay</button><input type="file" id="greplayload" accept=".json" style="display:none"></label>
@@ -1467,7 +1474,7 @@
     L.push("};");
     const texto = L.join("\n") + "\n";
     // Servido por http (servir.py): grava direto no disco, sem download.
-    if (location.protocol === "http:" || location.protocol === "https:") {
+    if (typeof location !== "undefined" && (location.protocol === "http:" || location.protocol === "https:")) {
       fetch("/salvar-mapa", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1521,8 +1528,10 @@
   // Sem mapa autoral nao ha o que editar (o v1/v2 e procedural, gerado por
   // seed) — a barra some inteira em vez de oferecer botao que quebraria.
   if (!IB) document.getElementById("editorbar").style.display = "none";
-  // servido por http o botao grava mesmo; em file:// so mostra para copiar
-  if (location.protocol === "http:" || location.protocol === "https:") {
+  // servido por http o botao grava mesmo; em file:// so mostra para copiar.
+  // typeof-guard: os smokes headless (testes_arena) fazem eval deste script sem
+  // `location` — sem o guard, quebra no load com "location is not defined".
+  if (typeof location !== "undefined" && (location.protocol === "http:" || location.protocol === "https:")) {
     const b = document.getElementById("edExportar");
     if (b) { b.textContent = "gravar no disco"; b.title = "Grava mapa-ajustes.js na pasta do jogo"; }
   }
@@ -1669,6 +1678,17 @@
   let diagTurno = { A: null, B: null };
   let sigsRejAcum = { A: new Set(), B: new Set() };
   let tokensUltimaChamada = null; // canal lateral dos geradores do browser
+  let finishUltimaChamada = null; // A1: finish_reason da API ("length" = truncou no teto de tokens)
+  let modoRacUltimaChamada = null; // A2: modo de captura do raciocinio (completo|resumo|ausente)
+  let custoTotal = 0;             // $ acumulado da partida (medidor ao vivo no titulo da aba)
+  let estagCont = 0, estagPrev = ""; // detector de empate por estagnacao (modo sem-limite)
+  // precos OpenRouter por 1M de tokens (in/out) p/ o medidor de custo ao vivo.
+  const PRECOS_OR = {
+    "deepseek/deepseek-r1": { in: 0.70, out: 2.50 },
+    "google/gemini-3.1-flash-lite": { in: 0.25, out: 1.50 },
+    "openai/gpt-5.1": { in: 1.25, out: 10.00 },
+  };
+  function precoDe(rotulo) { return PRECOS_OR[(rotulo || "").replace(/^openrouter:/, "")] || null; }
   let emReplay = false;          // reproduzindo um replay carregado
 
   function gravarFrame() {
@@ -2166,6 +2186,7 @@
     contadores = { A: cont0(), B: cont0() }; // metricas por partida
     motivoInterrupcao = null;
     geminiLog = []; // log zera AQUI (ponto unico, junto dos contadores) — nunca no Play/resume
+    custoTotal = 0; estagCont = 0; estagPrev = ""; // medidor de custo + detector de empate zeram por partida
     game = Engine.criarEstadoInicial(Engine.CONFIG);
     // indice celula -> aldeia (posicoes fixas): filtro rapido no render
     game.byCell = new Map(game.aldeias.map((a) => [a.x + "," + a.y, a]));
@@ -2199,7 +2220,7 @@
   // por rei, zera em novaPartida, vira bloco RESUMO no fim do .txt.
   // errosRede fica FORA de turnos/valido: turno que o modelo nao chegou a
   // responder nao e amostra do modelo (ver decidirLado, bug de 23/07).
-  const cont0 = () => ({ turnos: 0, valido: 0, enviosAceitos: 0, constrAceitas: 0, rejeicoes: 0, normalizacoes: 0, errosRede: 0 });
+  const cont0 = () => ({ turnos: 0, valido: 0, enviosAceitos: 0, ajustados: 0, constrAceitas: 0, rejeicoes: 0, normalizacoes: 0, errosRede: 0, tokPrompt: 0, tokResp: 0, custo: 0, truncamentos: 0, racCapturado: 0, modoRac: null });
   let contadores = { A: cont0(), B: cont0() };
   let motivoInterrupcao = null; // preenchido quando a partida para por erro de rede
   let etiquetaB = "gemini"; // rotulo do decisor do Rei B no log (gemini | ollama:<modelo>)
@@ -2326,12 +2347,18 @@
         const data = await resp.json();
         const u = data.usage;
         tokensUltimaChamada = u ? { prompt: u.prompt_tokens || 0, resposta: u.completion_tokens || 0 } : null;
-        const msg = (data.choices && data.choices[0] && data.choices[0].message) || {};
+        const ch = (data.choices && data.choices[0]) || {};
+        finishUltimaChamada = ch.finish_reason || null; // A1: "length" = truncou no teto
+        const msg = ch.message || {};
         // OpenRouter devolve o raciocinio em message.reasoning (texto) e/ou
         // reasoning_details (estruturado); message.content e a resposta final.
         let raciocinio = msg.reasoning || null;
         if (!raciocinio && Array.isArray(msg.reasoning_details))
           raciocinio = msg.reasoning_details.map((d) => (d && (d.text || d.summary)) || "").join("\n").trim() || null;
+        // A2: resumo (OpenAI: reasoning_details type *.summary) vs completo (cadeia crua) vs ausente
+        modoRacUltimaChamada = !raciocinio ? "ausente"
+          : (Array.isArray(msg.reasoning_details) && msg.reasoning_details.some((d) => d && /summary/.test(d.type || ""))) ? "resumo"
+          : "completo";
         return { texto: msg.content || "", raciocinio };
       }
       const corpo = await resp.text().catch(() => "");
@@ -2360,14 +2387,28 @@
       ct.turnos++;
       if (r.ok) ct.valido++;
       ct.normalizacoes += (r.normalizacoes || []).length;
+      if (r.raciocinio) { ct.racCapturado++; const md = diagTurno[lado] && diagTurno[lado].modoRac; if (md) ct.modoRac = md; } // A2
       if (r.diag) {
         ct.enviosAceitos += r.diag.aceitoEnvios.length;
+        ct.ajustados += r.diag.aceitoEnvios.filter((e) => e.ajustado).length;
         ct.constrAceitas += r.diag.aceitoConstruir.length;
         ct.rejeicoes += r.diag.rejeicoes.length;
       }
     }
     const L = [];
     L.push("########## TURNO " + game.turno + " \u2014 Rei " + lado + " (" + rotulo + ") ##########");
+    const tk = diagTurno[lado] && diagTurno[lado].tokens;
+    if (tk) {
+      L.push("tokens: prompt " + tk.prompt + " | resposta " + tk.resposta);
+      ct.tokPrompt += tk.prompt; ct.tokResp += tk.resposta;
+      const pr = precoDe(rotulo);
+      if (pr) {
+        const cst = tk.prompt / 1e6 * pr.in + tk.resposta / 1e6 * pr.out;
+        ct.custo += cst; custoTotal += cst;
+        L.push("custo turno: $" + cst.toFixed(5) + " | Rei " + lado + " acum $" + ct.custo.toFixed(4) + " | partida $" + custoTotal.toFixed(4));
+      }
+    }
+    if (diagTurno[lado] && diagTurno[lado].truncado) { L.push("TRUNCADO: resposta atingiu o teto de tokens do provedor (finish_reason=length) \u2014 turno conta como passado, sem retry"); ct.truncamentos++; } // A1
     if (r.erroRede) L.push(">>> ERRO DE REDE \u2014 turno NAO contabilizado (sem resposta do modelo)");
     L.push("resposta crua: " + JSON.stringify(r.cru));
     L.push(r.raciocinio ? "raciocinio: " + r.raciocinio : "raciocinio: (nao capturado)");
@@ -2383,6 +2424,10 @@
       diag.aceitoConstruir.forEach((c) => L.push("ACEITO construir " + c.tipo + " em [" + c.aldeiaId + "]"));
       diag.aceitoEnvios.forEach((e) => L.push("ACEITO envio [" + e.origemId + "]->[" + e.destinoId + "]: " + compStrG(e.tropas) +
         (e.alvo && e.alvo.dono === null ? " (alvo neutra " + e.alvo.tipo + ")" : "")));
+      // CLAMP (Fase 3): o envio saiu, mas reduzido ao estoque. Linha propria,
+      // parseavel (taxa de clamp) e narrativa (pediu X, enviou Y).
+      diag.aceitoEnvios.filter((e) => e.ajustado).forEach((e) =>
+        L.push("AJUSTADO envio [" + e.origemId + "]->[" + e.destinoId + "]: pediu " + compStrG(e.pedido) + ", enviado " + compStrG(e.tropas) + " (estoque real)"));
       diag.rejeicoes.forEach((m) => L.push("REJEITADO: " + m));
     }
     geminiLog.push(L.join("\n"));
@@ -2400,9 +2445,13 @@
         L.push("REFORCO [" + e.alvoId + "] " + e.alvoNome + " dono " + e.dono + ": " + compStrG(e.tropas));
     });
     const f = (d) => Engine.aldeiasDe(game, d).reduce((s2, a) => s2 + Engine.forcaDe(a.tropas, game.config), 0);
-    L.push("placar: A " + Engine.aldeiasDe(game, "A").length + " ald/forca " + f("A") +
-      " | B " + Engine.aldeiasDe(game, "B").length + " ald/forca " + f("B") +
-      " | neutras " + Engine.aldeiasDe(game, null).length + " | transito " + game.movimentos.length);
+    // transito por Rei vem do ESTADO do motor (movimentos por dono), nao de parsing.
+    const tr = (d) => game.movimentos.filter((m) => m.dono === d).length;
+    L.push("placar: A " + Engine.aldeiasDe(game, "A").length + " ald/tropas " + f("A") +
+      " | B " + Engine.aldeiasDe(game, "B").length + " ald/tropas " + f("B") +
+      " | neutras " + Engine.aldeiasDe(game, null).length +
+      " | transito " + game.movimentos.length +
+      " (A " + tr("A") + " | B " + tr("B") + ")");
     L.push("");
     geminiLog.push(L.join("\n"));
   }
@@ -2416,12 +2465,19 @@
       const c = contadores[lado], rot = lado === "A" ? etiquetaA : etiquetaB;
       if (!c.turnos && !c.errosRede) continue;
       const ag = c.turnos ? (c.enviosAceitos / c.turnos).toFixed(2) : "n/a";
+      const taxaClamp = c.enviosAceitos ? (c.ajustados / c.enviosAceitos).toFixed(2) : "n/a";
       resumo.push("Rei " + lado + " (" + rot + "): " + c.turnos + " turnos respondidos | " +
         "AGENCIA " + ag + " envios/turno (" + c.enviosAceitos + " envios, " + c.constrAceitas + " constr) | " +
         "validade " + c.valido + "/" + c.turnos + " | rejeicoes " + c.rejeicoes +
+        " | clamp " + c.ajustados + "/" + c.enviosAceitos + " (taxa " + taxaClamp + ")" +
         " | normalizacoes " + c.normalizacoes +
+        " | truncamentos " + (c.truncamentos || 0) +
+        " | raciocinio " + (c.racCapturado || 0) + "/" + c.turnos + (c.modoRac ? " (" + c.modoRac + ")" : "") +
+        (c.tokPrompt || c.tokResp ? " | tokens " + c.tokPrompt + " prompt / " + c.tokResp + " resposta | CUSTO $" + (c.custo || 0).toFixed(4) : "") +
         (c.errosRede ? " | ERROS DE REDE " + c.errosRede + " (fora das metricas)" : ""));
     }
+    resumo.push("CUSTO TOTAL DA PARTIDA: $" + custoTotal.toFixed(4) +
+      " (Rei A $" + (contadores.A.custo || 0).toFixed(4) + " + Rei B $" + (contadores.B.custo || 0).toFixed(4) + ")");
     if (contadores.A.errosRede || contadores.B.errosRede) {
       resumo.push("*** ATENCAO: houve turno sem resposta do modelo (erro de rede). Os");
       resumo.push("*** turnos afetados estao FORA dos contadores acima, mas o mapa correu");
@@ -2505,12 +2561,15 @@
       reincidente,
       ataquesIniciados: atq,
       tokens: tokens || null,
+      truncado: finishUltimaChamada === "length", // A1
+      modoRac: modoRacUltimaChamada,               // A2
     };
   }
 
   // Decide e executa a ordem de UM lado. Retorna "abort" se o run mudou.
   async function decidirLado(lado, gerador, rotulo, meuRun) {
     if (!Engine.aldeiasDe(game, lado).length) return null;
+    finishUltimaChamada = null; modoRacUltimaChamada = null; // A1/A2: nao herdam do turno/lado anterior
     if (!gerador) {
       const ordemB = Engine.jogadorBurro(Engine.montarVisao(game, lado));
       const dgB = Engine.diagnosticarOrdem(game, lado, ordemB); // burro entra no registro: e a ancora do benchmark
@@ -2581,6 +2640,8 @@
     gravarFrame();
     updateGameHUD();
     draw();
+    document.title = "$" + custoTotal.toFixed(4) + " | T" + game.turno + " — Reino (A " +
+      Engine.aldeiasDe(game, "A").length + " x " + Engine.aldeiasDe(game, "B").length + " B)";
   }
 
   async function runDuelo(meuRun) {
@@ -2610,7 +2671,11 @@
         return;
       }
     }
-    const maxT = Math.max(1, parseInt(document.getElementById("gmax").value, 10) || 6);
+    const maxT = Math.max(1, parseInt(document.getElementById("gmax").value, 10) || 40);
+    const semLimite = !!(document.getElementById("gilim") && document.getElementById("gilim").checked);
+    let fimEstagnacao = false;
+    let fimCusto = false;
+    const TETO_CUSTO = 7.0; // freio de gasto: encerra a partida LIMPA (salva .txt + replay) antes do credito acabar
     // BUG de 04/07: zerar o log AQUI apagava os turnos anteriores a cada
     // resume (Play depois de pausa), dessincronizando log e contadores.
     // Agora o reset vive em novaPartida; o Play so abre o cabecalho se a
@@ -2621,21 +2686,31 @@
       // PROVENIENCIA (13/07): registrar as condicoes do experimento no proprio
       // log. Descoberto na analise da partida de 13/07: sem isso, so lendo o
       // codigo da pra saber se a rodada foi baseline ou rejfim.
-      geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=baseline v2 (rejeicoes no meio, sem rejfim) | normalizacao H3 ativa | thinking=on\n");
+      geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=P2 (minimo por alvo) + relatorio v3 + combate v3 | normalizacao H3 ativa | thinking=on | max_tokens_resposta=default_provedor | " + (semLimite ? "SEM LIMITE de turnos (empate por estagnacao em 30t)" : "maxTurnos " + maxT) + "\n");
     }
     motivoInterrupcao = null; // Play/resume limpa: so vale a interrupcao deste run
-    while (playing && runId === meuRun && game && !Engine.checarVitoria(game) && game.turno < maxT) {
+    while (playing && runId === meuRun && game && !Engine.checarVitoria(game) && (semLimite || game.turno < maxT)) {
       await passoTurnoDuelo(meuRun);
+      const chaveTerr = Engine.aldeiasDe(game, "A").length + "-" + Engine.aldeiasDe(game, "B").length;
+      if (chaveTerr === estagPrev) estagCont++; else { estagCont = 0; estagPrev = chaveTerr; }
+      if (semLimite && estagCont >= 30) { fimEstagnacao = true; break; }
+      if (custoTotal >= TETO_CUSTO) { fimCusto = true; break; }
     }
     if (runId !== meuRun) return; // run antigo: nao fecha nem baixa o log do run novo
     pause();
     updateGameHUD();
     const venc = Engine.checarVitoria(game);
-    geminiLog.push("=== FIM === turno " + game.turno + " | resultado: " +
-      (motivoInterrupcao ? "INTERROMPIDA (" + motivoInterrupcao + ")" : venc ? "vitoria " + venc : "limite de turnos") +
+    const resultadoTxt = motivoInterrupcao ? "INTERROMPIDA (" + motivoInterrupcao + ")"
+      : fimCusto ? "ENCERRADA POR TETO DE CUSTO ($" + TETO_CUSTO.toFixed(2) + ") — partida salva antes do credito acabar"
+      : fimEstagnacao ? "EMPATE POR ESTAGNACAO (30 turnos sem mudanca de territorio)"
+      : venc ? "vitoria " + venc : "limite de turnos";
+    geminiLog.push("=== FIM === turno " + game.turno + " | resultado: " + resultadoTxt +
       " | A " + Engine.aldeiasDe(game, "A").length + " ald | B " + Engine.aldeiasDe(game, "B").length +
-      " ald | neutras " + Engine.aldeiasDe(game, null).length);
-    baixarLogGemini(); // baixa o .txt automaticamente no fim da partida
+      " ald | neutras " + Engine.aldeiasDe(game, null).length +
+      " | CUSTO TOTAL $" + custoTotal.toFixed(4));
+    baixarLogGemini();                          // baixa o .txt automaticamente no fim da partida
+    if (replay.frames.length) baixarReplay();   // auto-baixa o replay .json junto do .txt
+    document.title = "FIM $" + custoTotal.toFixed(4) + " — Reino";
     mostrarCartao(replay.frames, etiquetaA, etiquetaB, replay.versaoDiag); // E3/2: o raio-X entra em cena
   }
 
@@ -3293,8 +3368,8 @@
     const pre = emReplay ? "REPLAY \u00b7 " : "";
     document.getElementById("sbA-modelo").textContent = pre + etiquetaA;
     document.getElementById("sb-modelo").textContent = pre + etiquetaB;
-    document.getElementById("sbA-stats").textContent = "forca " + fA + " \u00b7 " + A.length + " ald";
-    document.getElementById("sbB-stats").textContent = "forca " + fB + " \u00b7 " + B.length + " ald";
+    document.getElementById("sbA-stats").textContent = "tropas " + fA + " \u00b7 " + A.length + " ald";
+    document.getElementById("sbB-stats").textContent = "tropas " + fB + " \u00b7 " + B.length + " ald";
 
     // placar de transmissao (topo, sempre visivel)
     document.getElementById("pt-turno").textContent = venc

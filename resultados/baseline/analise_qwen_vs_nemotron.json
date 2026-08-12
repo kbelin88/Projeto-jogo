@@ -1,0 +1,139 @@
+{
+  "meta": {
+    "arquivo": "partida_ollama-qwen2.5-3b_vs_openrouter-nvidia-nemotron-nano-9b-v2-free_2026-08-03-21-21.txt",
+    "modelos": {
+      "A": "ollama:qwen2.5:3b",
+      "B": "openrouter:nvidia/nemotron-nano-9b-v2:free"
+    },
+    "seed": 1,
+    "maxTurnos": 63,
+    "condicoes": "ambiente=iberia | temp=0 | prompt=baseline v2 (rejeicoes no meio, sem rejfim) | normalizacao H3 ativa | thinking=on"
+  },
+  "reis": {
+    "A": {
+      "envios_aceites": 28,
+      "tropas_movidas": 87,
+      "tamanho_medio_envio": 3.11,
+      "envios_ajustados": 0,
+      "taxa_de_clamp": 0,
+      "envios_de_1": 14,
+      "histograma_envio": {
+        "1": 14,
+        "2": 4,
+        "3": 4,
+        "4": 1,
+        "7": 1,
+        "10": 2,
+        "11": 2
+      },
+      "construcoes_aceites": {
+        "lanceiro": 24,
+        "arqueiro": 0,
+        "cavaleiro": 0
+      },
+      "construcoes_total": 24,
+      "rejeicoes_total": 39,
+      "rejeicoes_por_categoria": {
+        "construir: recurso insuficiente": 3,
+        "construir: formato (faltou/invalido tipo)": 5,
+        "envio: tropa que nao tem (estado)": 26,
+        "envio: zero tropas (vazio/apos ajuste)": 5
+      },
+      "rejeicoes_detalhe_normalizado": {
+        "construir [N]: recurso insuficiente p/ lanceiro (tem #m/#f, custa #m/#f)": 3,
+        "construir [N]: faltou o campo \"tipo\" (escreva \"lanceiro\", \"arqueiro\" ou \"cavaleiro\")": 5,
+        "envio [N]->[N]: tropa que nao tem (pediu # lanceiro, tem #)": 17,
+        "envio [N]->[N]: zero tropas": 5,
+        "envio [N]->[N]: tropa que nao tem (pediu # lanceiro, tem #; pediu # arqueiro, tem #; pediu # cavaleiro, tem #)": 3,
+        "envio [N]->[N]: tropa que nao tem (pediu # arqueiro, tem #)": 4,
+        "envio [N]->[N]: tropa que nao tem (pediu # lanceiro, tem #; pediu # arqueiro, tem #)": 2
+      },
+      "ataques": 15,
+      "ataques_counter1": 5,
+      "taxa_counter_correto": 0.33,
+      "alvos_distintos_atacados": 6,
+      "taxa_counter_correto_primeiro": 0.33,
+      "conquistas": 4,
+      "turno_ultima_conquista": 19,
+      "indice_monomania": 0.29,
+      "alvo_mais_repetido": {
+        "destinoId": 3,
+        "envios": 8
+      },
+      "infra_erros": 0,
+      "turnos_com_raciocinio": 0,
+      "turnos_sem_raciocinio": 52
+    },
+    "B": {
+      "envios_aceites": 54,
+      "tropas_movidas": 127,
+      "tamanho_medio_envio": 2.35,
+      "envios_ajustados": 0,
+      "taxa_de_clamp": 0,
+      "envios_de_1": 28,
+      "histograma_envio": {
+        "1": 28,
+        "2": 10,
+        "3": 7,
+        "4": 2,
+        "5": 4,
+        "9": 2,
+        "12": 1
+      },
+      "construcoes_aceites": {
+        "lanceiro": 39,
+        "arqueiro": 47,
+        "cavaleiro": 1
+      },
+      "construcoes_total": 87,
+      "rejeicoes_total": 18,
+      "rejeicoes_por_categoria": {
+        "envio: tropa que nao tem (estado)": 18
+      },
+      "rejeicoes_detalhe_normalizado": {
+        "envio [N]->[N]: tropa que nao tem (pediu # lanceiro, tem #; pediu # arqueiro, tem #; pediu # cavaleiro, tem #)": 1,
+        "envio [N]->[N]: tropa que nao tem (pediu # arqueiro, tem #)": 10,
+        "envio [N]->[N]: tropa que nao tem (pediu # lanceiro, tem #)": 6,
+        "envio [N]->[N]: tropa que nao tem (pediu # cavaleiro, tem #)": 1
+      },
+      "ataques": 43,
+      "ataques_counter1": 2,
+      "taxa_counter_correto": 0.05,
+      "alvos_distintos_atacados": 6,
+      "taxa_counter_correto_primeiro": 0.17,
+      "conquistas": 5,
+      "turno_ultima_conquista": 43,
+      "indice_monomania": 0.57,
+      "alvo_mais_repetido": {
+        "destinoId": 14,
+        "envios": 31
+      },
+      "infra_erros": 1,
+      "turnos_com_raciocinio": 51,
+      "turnos_sem_raciocinio": 1
+    }
+  },
+  "partida": {
+    "turnos_registados": 52,
+    "exercitos_em_transito_medio": 6.33,
+    "exercitos_em_transito_medio_A": null,
+    "exercitos_em_transito_medio_B": null,
+    "turno_ultima_conquista_global": 43,
+    "placar_final": {
+      "turno": 52,
+      "aldeiasA": 5,
+      "forcaA": 3,
+      "aldeiasB": 6,
+      "forcaB": 16,
+      "neutras": 13,
+      "transito": 11,
+      "transitoA": null,
+      "transitoB": null
+    },
+    "resultado_final": {
+      "turno": 52,
+      "resultado": "INTERROMPIDA (erro de rede no Rei B (openrouter:nvidia/nemotron-nano-9b-v2:free) no turno 52: OpenRouter HTTP 429: {\"error\":{\"message\":\"Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day\",\"code\":429,\"metadata\":{\"headers\":{\"X-RateLimit-Limit\":\"50\",\"X-RateLimit-Remaining\":\"0\",\"X-RateLimit-Reset\":\"1785801600000\"},\"limit_source\":\"openrouter_free_tier_daily\",\"remedy_hint\":\"Wait for the daily reset (see X-RateLimit-Reset), or purchase credits to raise your free-model daily limit.\",\"provider_name\":null}},\"user_id\":\"user_3Gv2CGmCT6QpCrhe17k10bLDJyj\"}) | A 5 ald | B 6 ald | neutras 13"
+    }
+  },
+  "_nota_estrada": "'transito' conta EXERCITOS em marcha (movimentos.length), nao tropas. Por isso reporta-se exercitos_em_transito_medio, NAO 'indice de estrada' (o 0.41 antigo era unidade trocada e esta retirado). O indice por tropas (tropas_em_marcha) so existe no harness da Fase 6, de estado.movimentos. Os logs de 03/08 nao tem transito por Rei (medio_A/B = null)."
+}
