@@ -1758,7 +1758,7 @@
   // Anexa o .txt da partida no disco a cada turno (POST /checkpoint). await curto
   // (localhost) preserva a ORDEM das linhas. Sem servidor (file:// ou fora) -> ignora.
   async function checkpointPost(texto, modo) {
-    if (!/^https?:$/.test(location.protocol) || !checkpointArquivo) return;
+    if (typeof location === "undefined" || !/^https?:$/.test(location.protocol) || !checkpointArquivo) return;
     try {
       await fetch("/checkpoint", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ arquivo: checkpointArquivo, texto, modo }) });
