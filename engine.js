@@ -194,6 +194,9 @@
     // marcha" no relatorio (o modelo nao faz geometria). "media" = referencia
     // neutra entre lento (lanceiro) e rapido (cavaleiro).
     relatorio: { velocidade_referencia: "media" },
+    // LOTE B: flag UNICA do prompt P3 (default LIGADO apos merge). false reproduz o
+    // P2 byte-a-byte (o lote de logs de controlo). Liga/desliga B1+B2+B3 JUNTOS.
+    promptP3: true,
 
     // ORDENACAO DAS ALDEIAS no relatorio (7.5.3). 'id' = como sempre (por id);
     // 'custo' = por custo de marcha desde a capital (simetrico, tira o vies de
@@ -1404,6 +1407,13 @@
       return Math.max(1, Math.ceil(porCusto ? best : best / passoRef));
     };
     const marcha = (alvo) => marchaVel(alvo, { arqueiro: 1 }); // media = comportamento P2
+    // LOTE B (prompt P3): rotula defesa efetiva (B1) e mostra marcha por velocidade (B3).
+    // A ordenacao das aldeias segue por 'marcha' media (t), estavel; so o TEXTO muda.
+    const p3 = (opcoes && opcoes.promptP3 != null) ? !!opcoes.promptP3 : (cfg.promptP3 !== false);
+    const defLabel = (a) => p3 ? `defesa efetiva (inclui bonus do local): ${defefetiva(a)}` : `defesa: ${defefetiva(a)}`;
+    const marchaTexto = (a) => p3
+      ? `marcha: ${marchaVel(a, { lanceiro: 1 })} lenta / ${marchaVel(a, { arqueiro: 1 })} media / ${marchaVel(a, { cavaleiro: 1 })} rapida`
+      : `${marcha(a)} turnos de marcha`;
     const classifica = (dono) => (dono === me ? "SUA" : dono === null ? "NEUTRA" : "INIMIGA");
 
     // VARIANTE P2: sufixo " | para tomar: N lanc ou N arq ou N cav" — so quando
@@ -1474,7 +1484,7 @@
     L.push(`=== SUAS ALDEIAS (${visao.minhas.length}) ===`);
     for (const a of minhasOrd) {
       const nome = a.nome ? ` ${a.nome}` : ""; // mapa autoral traz nome; procedural pode nao ter
-      L.push(`[${a.id}]${nome} | madeira ${a.recursos.madeira} (+${prod.madeira}/turno) | ferro ${a.recursos.ferro} (+${prod.ferro}/turno) | defesa: ${defefetiva(a)}`);
+      L.push(`[${a.id}]${nome} | madeira ${a.recursos.madeira} (+${prod.madeira}/turno) | ferro ${a.recursos.ferro} (+${prod.ferro}/turno) | ${defLabel(a)}${p3 ? ` | tropas em casa: ${contarTropas(a.tropas)} / ${cfg.limite_tropas_aldeia}` : ""}`);
       // DISPONIVEL PARA ENVIAR AGORA: instrucao (maiusculas), nao descricao.
       // ataque: poder de ATAQUE se enviar TODA a guarnicao de casa (7.5.2).
       L.push(`    DISPONIVEL PARA ENVIAR AGORA: ${a.tropas.lanceiro} lanceiros, ${a.tropas.arqueiro} arqueiros, ${a.tropas.cavaleiro} cavaleiros (ataque se enviar tudo: ${ataqueDe(a.tropas, cfg)})`);
@@ -1517,7 +1527,7 @@
       .sort((p, q) => p.t - q.t || p.a.id - q.a.id);
     L.push(`=== ALDEIAS NEUTRAS (${neutras.length}) - ordenadas por distancia da sua mais proxima ===`);
     for (const { a, t } of neutras) {
-      L.push(`[${a.id}] ${compTexto(a.tropas)} | defesa: ${defefetiva(a)} | ${t} turnos de marcha${minTexto(a)}`);
+      L.push(`[${a.id}] ${compTexto(a.tropas)} | ${defLabel(a)} | ${marchaTexto(a)}${minTexto(a)}`);
     }
     L.push("");
 
@@ -1528,7 +1538,7 @@
     L.push(`=== INIMIGO (Rei ${inimigo}) - ${inimigas.length} aldeia(s) ===`);
     if (!inimigas.length) L.push("(nenhuma aldeia inimiga)");
     for (const { a, t } of inimigas) {
-      L.push(`[${a.id}] ${compTexto(a.tropas)} | defesa: ${defefetiva(a)} | ${t} turnos de marcha${minTexto(a)}`);
+      L.push(`[${a.id}] ${compTexto(a.tropas)} | ${defLabel(a)} | ${marchaTexto(a)}${minTexto(a)}`);
     }
     L.push("");
 
@@ -1733,6 +1743,8 @@
     const variante = (opcoes && opcoes.variante) || "P0";
     const rejNoFim = !!(opcoes && opcoes.rejeicaoNoFim) &&
       !!(visao.rejeicoesAnteriores && visao.rejeicoesAnteriores.length);
+    // LOTE B: mesma resolucao da flag promptP3 que o relatorioTexto usa.
+    const p3 = (opcoes && opcoes.promptP3 != null) ? !!opcoes.promptP3 : (visao.config.promptP3 !== false);
     const L = [];
     // TOPO: identidade + tarefa (curto)
     L.push('Voce e o Rei. As aldeias listadas em "SUAS ALDEIAS" pertencem a voce.');
@@ -1741,13 +1753,17 @@
     L.push("");
     // P1 troca SO o bloco de combate pela conta explicita; P0/P2 usam o padrao.
     L.push(variante === "P1" ? regrasCombateTextoP1(visao.config) : regrasCombateTexto(visao.config));
+    if (p3) L.push("O valor de defesa no relatorio (\"defesa efetiva\") JA INCLUI o bonus do local (aldeia x1.25, castelo x1.5). Use-o diretamente; nao aplique o bonus de novo.");
     L.push("");
     L.push(regrasEconomiaTexto(visao.config));
     L.push("");
     L.push(regrasMovimentoTexto(visao.config));
+    if (p3) L.push("Cada tropa tem uma velocidade: lanceiro (lenta), arqueiro (media), cavaleiro (rapida). Um exercito MISTO marcha a velocidade da tropa MAIS LENTA. O relatorio ja mostra o tempo por velocidade (ex.: \"marcha: 5 lenta / 3 media / 2 rapida\").");
     L.push("");
     // MEIO: dados do turno (relatorio integral)
-    L.push(relatorioTexto(visao, rejNoFim ? { semRejeicoes: true } : undefined));
+    // LOTE B: a flag promptP3 tem de ATRAVESSAR ate o relatorioTexto (senao nao
+    // desliga o P3). semRejeicoes:false le igual a undefined no relatorioTexto.
+    L.push(relatorioTexto(visao, { semRejeicoes: rejNoFim, promptP3: opcoes && opcoes.promptP3 }));
     L.push("");
     // FIM: instrucao de formato -> processo -> exemplo (ultimo).
     // A "permissao de vazio" ("Listas vazias sao uma resposta valida... E melhor

@@ -145,7 +145,9 @@ t("a marcha mostrada no relatorio e a que o motor pratica", () => {
   // para cada alvo listado, refaz a conta pelo motor e compara com o texto
   let conferidos = 0;
   for (const alvo of visao.alvos) {
-    const m = texto.match(new RegExp("\\[" + alvo.id + "\\][^\\n]*?(\\d+) turnos de marcha"));
+    // P3: relatorio mostra "marcha: L lenta / M media / R rapida" — compara a MEDIA
+    // (mesma velocidade de referencia que o motor usa aqui).
+    const m = texto.match(new RegExp("\\[" + alvo.id + "\\][^\\n]*?marcha: \\d+ lenta / (\\d+) media / \\d+ rapida"));
     if (!m) continue;
     let melhor = Infinity;
     for (const minha of visao.minhas) {
