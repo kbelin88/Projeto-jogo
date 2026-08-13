@@ -117,6 +117,15 @@
   #placarTop { min-width: 0; padding-bottom: 0; }
   #sb-status { text-align: center; font: 11px Consolas, monospace; color: #d9a441; padding: 0 8px 5px; background: rgba(0,0,0,.18); }
   #sb-status:empty { display: none; }
+  /* HOVER: banner com as tropas ao passar o mouse (aldeia / exercito na estrada) */
+  #hoverTip {
+    position: fixed; display: none; z-index: 60; pointer-events: none;
+    background: rgba(28,24,18,.95); color: #f0e6d2; border: 1px solid #6b5836;
+    border-radius: 7px; padding: 7px 10px; max-width: 250px;
+    font: 12px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    box-shadow: 0 4px 16px rgba(0,0,0,.45);
+  }
+  #hoverTip .ht-d { color: #b6a888; font-size: 11px; }
   body.replay #banner, body.cinema #banner { top: 104px; }
 
   #edTexto {
@@ -395,6 +404,7 @@
 </div>
 <div id="cartaoFinal"><button id="cartaoFechar" title="Fechar o cartao">&#10005;</button><div id="cartaoCaixa"></div></div>
 <div id="banner"></div>
+<div id="hoverTip"></div>
 <div id="editorbar">
   <button id="edToggle" title="Ligar/desligar o modo de ajuste do mapa">&#9998; editar mapa</button>
   <span id="edDica">arraste as cidades &middot; clique numa estrada p/ curvar &middot; botao direito apaga a curva</span>
@@ -1638,6 +1648,55 @@
     draw();
   });
 
+  // ===== HOVER: banner com as tropas ao passar o mouse numa aldeia ou num
+  // exercito em marcha na estrada. So LEITURA — nao interfere no jogo. =====
+  const hoverTip = document.getElementById("hoverTip");
+  const compHover = (t) => {
+    const p = [];
+    if (t.lanceiro) p.push(t.lanceiro + " lanceiro" + (t.lanceiro > 1 ? "s" : ""));
+    if (t.arqueiro) p.push(t.arqueiro + " arqueiro" + (t.arqueiro > 1 ? "s" : ""));
+    if (t.cavaleiro) p.push(t.cavaleiro + " cavaleiro" + (t.cavaleiro > 1 ? "s" : ""));
+    return p.join(", ") || "sem tropas";
+  };
+  const donoLbl = (d) => (d === "A" ? "Rei A" : d === "B" ? "Rei B" : "neutra");
+  const corDono = (d) => (typeof COR !== "undefined" && COR[d]) || "#d8c9a3";
+  function atualizarHover(e) {
+    if (!hoverTip) return;
+    if (!game || dragging || (typeof ED !== "undefined" && ED && ED.pegou)) { hoverTip.style.display = "none"; return; }
+    const mx = e.clientX, my = e.clientY, cs = TILE * scale;
+    let alvo = null, melhor = Infinity;
+    for (const a of game.aldeias) {
+      const dx = SX(a.x) - mx, dy = SY(a.y) - my, d2 = dx * dx + dy * dy, raio = Math.max(16, cs * 0.55);
+      if (d2 < raio * raio && d2 < melhor) { melhor = d2; alvo = { tipo: "aldeia", a }; }
+    }
+    for (const m of game.movimentos) {
+      const o = game.aldeias.find((a) => a.id === m.origemId), d = game.aldeias.find((a) => a.id === m.destinoId);
+      if (!o || !d) continue;
+      const prog = m.turnosTotal ? (m.turnosTotal - m.turnosRestantes) / m.turnosTotal : 1;
+      const pts = pontosCaminho(m);
+      const p = pts ? pontoNaRota(pts, prog) : { x: o.x + (d.x - o.x) * prog, y: o.y + (d.y - o.y) * prog };
+      const dx = SX(p.x) - mx, dy = SY(p.y) - my, d2 = dx * dx + dy * dy, raio = Math.max(13, cs * 0.38);
+      if (d2 < raio * raio && d2 < melhor) { melhor = d2; alvo = { tipo: "mov", m, d }; }
+    }
+    if (!alvo) { hoverTip.style.display = "none"; return; }
+    let html;
+    if (alvo.tipo === "aldeia") {
+      const a = alvo.a, nome = a.nome || (a.dono === null ? "aldeia neutra" : "aldeia");
+      html = '<b style="color:' + corDono(a.dono) + '">' + nome + '</b> <span class="ht-d">(' +
+        donoLbl(a.dono) + (a.capital ? ", CAPITAL" : "") + ')</span><br>' + compHover(a.tropas);
+    } else {
+      const m = alvo.m, d = alvo.d;
+      html = '<b style="color:' + corDono(m.dono) + '">em marcha (' + donoLbl(m.dono) + ')</b><br>' +
+        compHover(m.tropas) + '<br><span class="ht-d">&rarr; [' + d.id + ']' + (d.nome ? " " + d.nome : "") +
+        ', chega em ' + m.turnosRestantes + ' turno' + (m.turnosRestantes > 1 ? "s" : "") + '</span>';
+    }
+    hoverTip.innerHTML = html;
+    hoverTip.style.display = "block";
+    hoverTip.style.left = Math.min(mx + 14, window.innerWidth - hoverTip.offsetWidth - 8) + "px";
+    hoverTip.style.top = Math.min(my + 16, window.innerHeight - hoverTip.offsetHeight - 8) + "px";
+  }
+  window.addEventListener("mousemove", atualizarHover);
+
   function zoomAt(sx, sy, factor) {
     const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale * factor));
     // mantém o ponto sob o cursor fixo
@@ -1683,6 +1742,22 @@
   let finishUltimaChamada = null; // A1: finish_reason da API ("length" = truncou no teto de tokens)
   let modoRacUltimaChamada = null; // A2: modo de captura do raciocinio (completo|resumo|ausente)
   let custoTotal = 0;             // $ acumulado da partida (medidor ao vivo no titulo da aba)
+  let checkpointArquivo = null, checkpointIdx = 0; // AUTO-SAVE por turno no disco (via servir.py)
+  // Anexa o .txt da partida no disco a cada turno (POST /checkpoint). await curto
+  // (localhost) preserva a ORDEM das linhas. Sem servidor (file:// ou fora) -> ignora.
+  async function checkpointPost(texto, modo) {
+    if (!/^https?:$/.test(location.protocol) || !checkpointArquivo) return;
+    try {
+      await fetch("/checkpoint", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ arquivo: checkpointArquivo, texto, modo }) });
+    } catch (_) { /* sem servidor: a partida segue, so nao ha checkpoint */ }
+  }
+  async function checkpointFlush() {
+    if (!checkpointArquivo || checkpointIdx >= geminiLog.length) return;
+    const delta = geminiLog.slice(checkpointIdx);
+    checkpointIdx = geminiLog.length;
+    await checkpointPost(delta.join("\n") + "\n", "anexar");
+  }
   let estagCont = 0, estagPrev = ""; // detector de empate por estagnacao (modo sem-limite)
   // precos OpenRouter por 1M de tokens (in/out) p/ o medidor de custo ao vivo.
   const PRECOS_OR = {
@@ -2189,7 +2264,7 @@
     contadores = { A: cont0(), B: cont0() }; // metricas por partida
     motivoInterrupcao = null;
     geminiLog = []; // log zera AQUI (ponto unico, junto dos contadores) — nunca no Play/resume
-    custoTotal = 0; estagCont = 0; estagPrev = ""; // medidor de custo + detector de empate zeram por partida
+    custoTotal = 0; estagCont = 0; estagPrev = ""; checkpointArquivo = null; checkpointIdx = 0; // medidor, empate e checkpoint zeram por partida
     game = Engine.criarEstadoInicial(Engine.CONFIG);
     // indice celula -> aldeia (posicoes fixas): filtro rapido no render
     game.byCell = new Map(game.aldeias.map((a) => [a.x + "," + a.y, a]));
@@ -2645,6 +2720,7 @@
     draw();
     document.title = "$" + custoTotal.toFixed(4) + " | T" + game.turno + " — Reino (A " +
       Engine.aldeiasDe(game, "A").length + " x " + Engine.aldeiasDe(game, "B").length + " B)";
+    await checkpointFlush(); // AUTO-SAVE: anexa as linhas deste turno no disco
   }
 
   async function runDuelo(meuRun) {
@@ -2690,6 +2766,11 @@
       // log. Descoberto na analise da partida de 13/07: sem isso, so lendo o
       // codigo da pra saber se a rodada foi baseline ou rejfim.
       geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=P2 (minimo por alvo) + relatorio v3 + combate v3 | normalizacao H3 ativa | thinking=on | max_tokens_resposta=default_provedor | " + (semLimite ? "SEM LIMITE de turnos (empate por estagnacao em 30t)" : "maxTurnos " + maxT) + "\n");
+      // AUTO-SAVE: cria o checkpoint .txt no disco com o cabecalho (via servir.py).
+      const tsCp = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 16);
+      checkpointArquivo = ("partida_" + vA + "_vs_" + vB + "_" + tsCp).replace(/[^a-z0-9._-]/gi, "-") + ".txt";
+      await checkpointPost(geminiLog.join("\n") + "\n", "novo");
+      checkpointIdx = geminiLog.length;
     }
     motivoInterrupcao = null; // Play/resume limpa: so vale a interrupcao deste run
     while (playing && runId === meuRun && game && !Engine.checarVitoria(game) && (semLimite || game.turno < maxT)) {

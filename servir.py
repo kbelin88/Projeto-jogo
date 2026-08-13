@@ -29,6 +29,7 @@ Nao instala nada: usa so a biblioteca padrao.
 import http.server
 import json
 import os
+import re
 import socketserver
 import webbrowser
 
@@ -48,26 +49,51 @@ class Manipulador(http.server.SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
+    def _ok_json(self, obj):
+        corpo = json.dumps(obj).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(corpo)))
+        self.end_headers()
+        self.wfile.write(corpo)
+
     def do_POST(self):
-        if self.path != "/salvar-mapa":
-            self.send_error(404, "rota desconhecida")
-            return
         try:
             n = int(self.headers.get("Content-Length", 0))
-            dados = json.loads(self.rfile.read(n).decode("utf-8"))
-            nome = dados.get("arquivo", "")
-            if nome not in GRAVAVEIS:
-                self.send_error(403, "arquivo nao permitido")
+            dados = json.loads(self.rfile.read(n).decode("utf-8")) if n else {}
+        except Exception:                           # noqa: BLE001
+            self.send_error(400, "corpo invalido")
+            return
+        try:
+            if self.path == "/salvar-mapa":
+                nome = dados.get("arquivo", "")
+                if nome not in GRAVAVEIS:
+                    self.send_error(403, "arquivo nao permitido")
+                    return
+                with open(os.path.join(RAIZ, nome), "w", encoding="utf-8", newline="\n") as f:
+                    f.write(dados.get("texto", ""))
+                self._ok_json({"ok": True, "arquivo": nome})
+                print("  gravado: " + nome)
                 return
-            with open(os.path.join(RAIZ, nome), "w", encoding="utf-8", newline="\n") as f:
-                f.write(dados.get("texto", ""))
-            corpo = json.dumps({"ok": True, "arquivo": nome}).encode("utf-8")
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(corpo)))
-            self.end_headers()
-            self.wfile.write(corpo)
-            print("  gravado: " + nome)
+            if self.path == "/checkpoint":
+                # AUTO-SAVE por turno: anexa o .txt da partida no disco (pasta
+                # checkpoints/), sobrevive a crash. Nome fechado a partida_*.txt, sem
+                # barras nem '..' -> impossivel escapar da pasta. modo 'novo' cria/zera,
+                # qualquer outro ANEXA.
+                nome = dados.get("arquivo", "")
+                if not re.match(r"^partida_[A-Za-z0-9._-]+\.txt$", nome):
+                    self.send_error(403, "nome de checkpoint invalido")
+                    return
+                pasta = os.path.join(RAIZ, "checkpoints")
+                os.makedirs(pasta, exist_ok=True)
+                modo = "w" if dados.get("modo") == "novo" else "a"
+                with open(os.path.join(pasta, nome), modo, encoding="utf-8", newline="\n") as f:
+                    f.write(dados.get("texto", ""))
+                self._ok_json({"ok": True})
+                if modo == "w":
+                    print("  checkpoint iniciado: checkpoints/" + nome)
+                return
+            self.send_error(404, "rota desconhecida")
         except Exception as e:                      # noqa: BLE001
             self.send_error(500, str(e))
 
