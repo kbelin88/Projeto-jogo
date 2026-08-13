@@ -1666,8 +1666,20 @@
     const mx = e.clientX, my = e.clientY, cs = TILE * scale;
     let alvo = null, melhor = Infinity;
     for (const a of game.aldeias) {
-      const dx = SX(a.x) - mx, dy = SY(a.y) - my, d2 = dx * dx + dy * dy, raio = Math.max(16, cs * 0.55);
-      if (d2 < raio * raio && d2 < melhor) { melhor = d2; alvo = { tipo: "aldeia", a }; }
+      // a aldeia e desenhada LEVANTADA: base em baseVisualIB(a) e o sprite (largo)
+      // sobe dali. Hit-test = caixa que cobre o sprite, nao a ancora crua SY(a.y).
+      const cap = !!a.capital;
+      const larg = cs * (cap ? 3.2 : 2.4);
+      const spr = cap ? (typeof SPR !== "undefined" && SPR.castelo && SPR.castelo.pronto ? SPR.castelo : null)
+                      : (typeof SPR !== "undefined" && SPR.aldeia_neutra && SPR.aldeia_neutra.pronto ? SPR.aldeia_neutra : null);
+      const alt = alturaSprite(spr, larg, Math.max(20, cs * 0.59));
+      const cx = SX(a.x);
+      const baseY = (typeof baseVisualIB === "function" && IB) ? baseVisualIB(a) : SY(a.y);
+      const meia = larg * 0.46, topo = baseY - alt * 0.92, fundo = baseY + alt * 0.22;
+      if (mx >= cx - meia && mx <= cx + meia && my >= topo && my <= fundo) {
+        const cyc = (topo + fundo) / 2, dd = (cx - mx) * (cx - mx) + (cyc - my) * (cyc - my);
+        if (dd < melhor) { melhor = dd; alvo = { tipo: "aldeia", a }; }
+      }
     }
     for (const m of game.movimentos) {
       const o = game.aldeias.find((a) => a.id === m.origemId), d = game.aldeias.find((a) => a.id === m.destinoId);
