@@ -1423,6 +1423,7 @@
     // A ordenacao das aldeias segue por 'marcha' media (t), estavel; so o TEXTO muda.
     const p3 = (opcoes && opcoes.promptP3 != null) ? !!opcoes.promptP3 : (cfg.promptP3 !== false);
     const marchaComOrigem = (opcoes && opcoes.marchaComOrigem != null) ? !!opcoes.marchaComOrigem : (cfg.marchaComOrigem !== false); // LOTE C, E5
+    const rotulosExpectativa = (opcoes && opcoes.rotulosExpectativa != null) ? !!opcoes.rotulosExpectativa : (cfg.rotulosExpectativa !== false); // LOTE C, E11
     const defLabel = (a) => p3 ? `defesa efetiva (inclui bonus do local): ${defefetiva(a)}` : `defesa: ${defefetiva(a)}`;
     const marchaTexto = (a) => {
       if (!p3) return `${marcha(a)} turnos de marcha`;
@@ -1443,7 +1444,7 @@
       if (m.lanceiro)  p.push(`${m.lanceiro} lanc`);
       if (m.arqueiro)  p.push(`${m.arqueiro} arq`);
       if (m.cavaleiro) p.push(`${m.cavaleiro} cav`);
-      return p.length ? ` | para tomar: ${p.join(" ou ")}` : "";
+      return p.length ? ` | para tomar${rotulosExpectativa ? " AGORA" : ""}: ${p.join(" ou ")}` : ""; // LOTE C, E11
     };
 
     // cabecalho
@@ -1499,9 +1500,36 @@
       minhasOrd.sort((p, q) => p.id - q.id);
     }
     L.push(`=== SUAS ALDEIAS (${visao.minhas.length}) ===`);
+    // LOTE C, E10: contagem agregada. NAO e "forca" (abstracao removida em 19/07) —
+    // e a soma de numeros que ja estao no prompt. Sem media/percentagem/recomendacao.
+    const contagemAgregada = (opcoes && opcoes.contagemAgregada != null) ? !!opcoes.contagemAgregada : (cfg.contagemAgregada !== false);
+    if (contagemAgregada) {
+      const casa = { lanceiro: 0, arqueiro: 0, cavaleiro: 0 };
+      for (const m of visao.minhas) for (const t of TIPOS) casa[t] += (m.tropas[t] || 0);
+      let marchando = 0;
+      if (visao.transito) for (const mv of visao.transito) if (mv.dono === me) marchando += contarTropas(mv.tropas);
+      const totCasa = casa.lanceiro + casa.arqueiro + casa.cavaleiro;
+      L.push(`TOTAL: ${totCasa} soldados em casa (${casa.lanceiro} lanceiros, ${casa.arqueiro} arqueiros, ${casa.cavaleiro} cavaleiros) + ${marchando} em marcha`);
+    }
+    // LOTE C, E9: FRONTEIRA (tem vizinho direto inimigo na rede) vs INTERIOR. Marcar
+    // o interior importa tanto quanto a fronteira: torna acionavel esvaziar uma aldeia
+    // segura. Sem rede (estados sinteticos) -> sem tag.
+    const marcarFronteira = (opcoes && opcoes.marcarFronteira != null) ? !!opcoes.marcarFronteira : (cfg.marcarFronteira !== false);
+    const donoPorId = {};
+    if (marcarFronteira && visao.estradas) {
+      for (const m of visao.minhas) donoPorId[m.id] = me;
+      for (const al of visao.alvos) donoPorId[al.id] = al.dono;
+    }
+    const fronteiraTag = (a) => {
+      if (!marcarFronteira || !visao.estradas) return "";
+      const inimigos = (visao.estradas[a.id] || []).filter((v) => donoPorId[v] === inimigo);
+      if (!inimigos.length) return " | INTERIOR (sem divisa inimiga)";
+      const lista = inimigos.slice(0, 2).map((v) => `[${v}] INIMIGA`).join(", ");
+      return ` | FRONTEIRA com ${lista}${inimigos.length > 2 ? ` +${inimigos.length - 2}` : ""}`;
+    };
     for (const a of minhasOrd) {
       const nome = a.nome ? ` ${a.nome}` : ""; // mapa autoral traz nome; procedural pode nao ter
-      L.push(`[${a.id}]${nome} | madeira ${a.recursos.madeira} (+${prod.madeira}/turno) | ferro ${a.recursos.ferro} (+${prod.ferro}/turno) | ${defLabel(a)}${p3 ? ` | tropas em casa: ${contarTropas(a.tropas)} / ${cfg.limite_tropas_aldeia}` : ""}`);
+      L.push(`[${a.id}]${nome}${fronteiraTag(a)} | madeira ${a.recursos.madeira} (+${prod.madeira}/turno) | ferro ${a.recursos.ferro} (+${prod.ferro}/turno) | ${defLabel(a)}${p3 ? ` | tropas em casa: ${contarTropas(a.tropas)} / ${cfg.limite_tropas_aldeia}` : ""}`);
       // DISPONIVEL PARA ENVIAR AGORA: instrucao (maiusculas), nao descricao.
       // ataque: poder de ATAQUE se enviar TODA a guarnicao de casa (7.5.2).
       L.push(`    DISPONIVEL PARA ENVIAR AGORA: ${a.tropas.lanceiro} lanceiros, ${a.tropas.arqueiro} arqueiros, ${a.tropas.cavaleiro} cavaleiros (ataque se enviar tudo: ${ataqueDe(a.tropas, cfg)})`);
@@ -1566,11 +1594,26 @@
     // sinteticos sem rede.
     const semRede = !!(opcoes && opcoes.semRede); // validador nao precisa da topologia
     if (visao.estradas && !semRede) {
+      // LOTE C, E8: anota o dono de cada aldeia na rede (usa classifica, a MESMA
+      // funcao do resto do relatorio). Nao acrescenta info (o dono ja esta noutra
+      // seccao); so poupa um join manual de ~41 ligacoes por turno. Flag redeComDono.
+      const redeComDono = (opcoes && opcoes.redeComDono != null) ? !!opcoes.redeComDono : (cfg.redeComDono !== false);
+      const infoAld = {};
+      if (redeComDono) {
+        for (const m of visao.minhas) infoAld[m.id] = { dono: me, nome: m.nome };
+        for (const a of visao.alvos) infoAld[a.id] = { dono: a.dono, nome: a.nome };
+      }
       L.push(`=== REDE DE ESTRADAS (por onde os exercitos marcham) ===`);
       const idsRede = Object.keys(visao.estradas).map(Number).sort((a, b) => a - b);
       for (const id of idsRede) {
         const viz = (visao.estradas[id] || []).slice().sort((a, b) => a - b);
-        L.push(`Aldeia [${id}] liga-se a: ${viz.map((v) => `[${v}]`).join(", ")}`);
+        if (redeComDono) {
+          const i = infoAld[id];
+          const cab = `Aldeia [${id}]${i && i.nome ? " " + i.nome : ""}${i ? " (" + classifica(i.dono) + ")" : ""}`;
+          L.push(`${cab} liga-se a: ${viz.map((v) => `[${v}]${infoAld[v] ? " " + classifica(infoAld[v].dono) : ""}`).join(", ")}`);
+        } else {
+          L.push(`Aldeia [${id}] liga-se a: ${viz.map((v) => `[${v}]`).join(", ")}`);
+        }
       }
       L.push("");
     }
@@ -1776,6 +1819,10 @@
     L.push("");
     L.push(regrasMovimentoTexto(visao.config));
     if (p3) L.push("Cada tropa tem uma velocidade: lanceiro (lenta), arqueiro (media), cavaleiro (rapida). Um exercito MISTO marcha a velocidade da tropa MAIS LENTA. O relatorio ja mostra o tempo por velocidade (ex.: \"marcha: 5 lenta / 3 media / 2 rapida\").");
+    // LOTE C, E11: a promessa implicita do "para tomar" estava errada — a defesa vista
+    // e a de AGORA, nao a da chegada (2-4 turnos depois). Nao muda o calculo, so o rotulo.
+    if ((opcoes && opcoes.rotulosExpectativa != null) ? opcoes.rotulosExpectativa : (visao.config.rotulosExpectativa !== false))
+      L.push("A marcha demora turnos, e nesses turnos o inimigo continua a construir e a mover tropas. A defesa que voce ve e a de AGORA, nao a da chegada.");
     L.push("");
     // MEIO: dados do turno (relatorio integral)
     // LOTE B: a flag promptP3 tem de ATRAVESSAR ate o relatorioTexto (senao nao
