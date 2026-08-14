@@ -2433,7 +2433,7 @@
       const resp = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + openrouterKey },
-        body: JSON.stringify({ model: modelo, messages: [{ role: "user", content: prompt }], temperature: tempLLM, stream: false, reasoning: { enabled: true } }),
+        body: JSON.stringify({ model: modelo, messages: [{ role: "user", content: prompt }], temperature: tempLLM, stream: false, reasoning: { enabled: true }, max_tokens: (typeof maxTokensLLM === "number" ? maxTokensLLM : 32000) }), // LOTE D, D2
       });
       if (resp.ok) {
         const data = await resp.json();
@@ -2600,6 +2600,10 @@
   // Default 0 (benchmark de sempre). Sem UI nova de proposito: cirurgia de
   // HTML foi onde a sessao de 03/07 sangrou. Vale p/ Ollama E Gemini.
   let tempLLM = 0;
+  // LOTE D, D2: teto de resposta no browser como CONTROLO (nao cura). Acima do max
+  // observado (27764) de proposito: raramente dispara; quando disparar, o D1 mostra
+  // "finish length". Os 23 vazios da partida NAO eram truncamento (truncamentos 0).
+  let maxTokensLLM = 32000;
   try {
     const q = new URLSearchParams((window.location && window.location.search) || "");
     if (q.has("temp")) { const v = parseFloat(q.get("temp")); if (isFinite(v) && v >= 0) tempLLM = v; }
@@ -2792,7 +2796,7 @@
       // PROVENIENCIA (13/07): registrar as condicoes do experimento no proprio
       // log. Descoberto na analise da partida de 13/07: sem isso, so lendo o
       // codigo da pra saber se a rodada foi baseline ou rejfim.
-      geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=P2 (minimo por alvo) + relatorio v3 + combate v3 | normalizacao H3 ativa | thinking=on | max_tokens_resposta=default_provedor | " + (semLimite ? "SEM LIMITE de turnos (empate por estagnacao em 30t)" : "maxTurnos " + maxT) + "\n");
+      geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=P2 (minimo por alvo) + relatorio v3 + combate v3 | normalizacao H3 ativa | thinking=on | max_tokens_resposta=" + maxTokensLLM + " | " + (semLimite ? "SEM LIMITE de turnos (empate por estagnacao em 30t)" : "maxTurnos " + maxT) + "\n");
       // AUTO-SAVE: cria o checkpoint .txt no disco com o cabecalho (via servir.py).
       const tsCp = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 16);
       checkpointArquivo = ("partida_" + vA + "_vs_" + vB + "_" + tsCp).replace(/[^a-z0-9._-]/gi, "-") + ".txt";
