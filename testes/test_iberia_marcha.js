@@ -147,7 +147,8 @@ t("a marcha mostrada no relatorio e a que o motor pratica", () => {
   for (const alvo of visao.alvos) {
     // P3: relatorio mostra "marcha: L lenta / M media / R rapida" — compara a MEDIA
     // (mesma velocidade de referencia que o motor usa aqui).
-    const m = texto.match(new RegExp("\\[" + alvo.id + "\\][^\\n]*?marcha: \\d+ lenta / (\\d+) media / \\d+ rapida"));
+    // P3/LOTE-C: "marcha [desde [id]]: L lenta / M media / R rapida" — compara a MEDIA.
+    const m = texto.match(new RegExp("\\[" + alvo.id + "\\][^\\n]*?\\d+ lenta / (\\d+) media / \\d+ rapida"));
     if (!m) continue;
     let melhor = Infinity;
     for (const minha of visao.minhas) {

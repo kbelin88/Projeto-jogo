@@ -143,7 +143,7 @@ function clienteGemini(opcoes) {
             contents: [{ parts: [{ text: prompt }] }],
             // thinking sempre-ligado: pede os thought parts de volta (senao o
             // texto do raciocinio nunca chega — so o thoughtsTokenCount).
-            generationConfig: { temperature: temperatura, thinkingConfig: { includeThoughts: true } },
+            generationConfig: { temperature: temperatura, thinkingConfig: { includeThoughts: true }, maxOutputTokens: (opcoes.maxTokens != null ? opcoes.maxTokens : 32000) }, // LOTE C, E1
           }),
         });
         if (resp.ok) {
@@ -226,12 +226,16 @@ function clienteOpenRouter(opcoes) {
             temperature: temperatura,
             stream: false,
             reasoning: { enabled: true }, // thinking sempre-ligado
+            // LOTE C, E1: teto explicito e IGUAL p/ os dois lados. Nao e p/ cortar o
+            // raciocinio (32000 > max observado 27764), e p/ tornar o corte visivel.
+            max_tokens: (opcoes.maxTokens != null ? opcoes.maxTokens : 32000),
           }),
         });
         if (resp.ok) {
           const data = await resp.json();
           const u = data.usage;
-          this.ultimosTokens = u ? { prompt: u.prompt_tokens || 0, resposta: u.completion_tokens || 0 } : null;
+          const det = (u && u.completion_tokens_details) || {}; // LOTE C, E2
+          this.ultimosTokens = u ? { prompt: u.prompt_tokens || 0, resposta: u.completion_tokens || 0, raciocinio: det.reasoning_tokens || 0 } : null;
           const ch = (data.choices && data.choices[0]) || {};
           this.ultimoFinish = ch.finish_reason || null; // A1
           const msg = ch.message || {};
