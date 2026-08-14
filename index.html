@@ -2312,7 +2312,7 @@
   // por rei, zera em novaPartida, vira bloco RESUMO no fim do .txt.
   // errosRede fica FORA de turnos/valido: turno que o modelo nao chegou a
   // responder nao e amostra do modelo (ver decidirLado, bug de 23/07).
-  const cont0 = () => ({ turnos: 0, valido: 0, enviosAceitos: 0, ajustados: 0, constrAceitas: 0, rejeicoes: 0, normalizacoes: 0, errosRede: 0, tokPrompt: 0, tokResp: 0, custo: 0, truncamentos: 0, racCapturado: 0, modoRac: null });
+  const cont0 = () => ({ turnos: 0, valido: 0, enviosAceitos: 0, ajustados: 0, constrAceitas: 0, rejeicoes: 0, normalizacoes: 0, errosRede: 0, tokPrompt: 0, tokResp: 0, custo: 0, truncamentos: 0, racCapturado: 0, modoRac: null, vazio: 0, invalido: 0 }); // vazio/invalido: LOTE D, D3
   let contadores = { A: cont0(), B: cont0() };
   let motivoInterrupcao = null; // preenchido quando a partida para por erro de rede
   let etiquetaB = "gemini"; // rotulo do decisor do Rei B no log (gemini | ollama:<modelo>)
@@ -2481,7 +2481,12 @@
     if (r.erroRede) ct.errosRede++;
     else {
       ct.turnos++;
-      if (r.ok) ct.valido++;
+      // LOTE D, D3: turno VAZIO (nao respondeu) e turno INVALIDO (respondeu lixo) sao
+      // falhas diferentes; misturar em "validade" escondia os 23 vazios. valido = ok (igual).
+      const cruTrim = (r.cru == null ? "" : String(r.cru)).trim();
+      if (!cruTrim || cruTrim === '""') ct.vazio++;
+      else if (!r.ok) ct.invalido++;
+      else ct.valido++;
       ct.normalizacoes += (r.normalizacoes || []).length;
       if (r.raciocinio) { ct.racCapturado++; const md = diagTurno[lado] && diagTurno[lado].modoRac; if (md) ct.modoRac = md; } // A2
       if (r.diag) {
@@ -2566,11 +2571,12 @@
     for (const lado of ["A", "B"]) {
       const c = contadores[lado], rot = lado === "A" ? etiquetaA : etiquetaB;
       if (!c.turnos && !c.errosRede) continue;
-      const ag = c.turnos ? (c.enviosAceitos / c.turnos).toFixed(2) : "n/a";
+      const comResp = c.turnos - (c.vazio || 0); // LOTE D, D3: turnos em que o modelo respondeu
+      const ag = comResp > 0 ? (c.enviosAceitos / comResp).toFixed(2) : "n/a";
       const taxaClamp = c.enviosAceitos ? (c.ajustados / c.enviosAceitos).toFixed(2) : "n/a";
-      resumo.push("Rei " + lado + " (" + rot + "): " + c.turnos + " turnos respondidos | " +
-        "AGENCIA " + ag + " envios/turno (" + c.enviosAceitos + " envios, " + c.constrAceitas + " constr) | " +
-        "validade " + c.valido + "/" + c.turnos + " | rejeicoes " + c.rejeicoes +
+      resumo.push("Rei " + lado + " (" + rot + "): " + c.turnos + " turnos | " +
+        "AGENCIA " + ag + " envios/turno (" + c.enviosAceitos + " envios em " + comResp + " turnos com resposta, " + c.constrAceitas + " constr) | " +
+        "VALIDO " + c.valido + " | INVALIDO " + (c.invalido || 0) + " | VAZIO " + (c.vazio || 0) + " | rejeicoes " + c.rejeicoes +
         " | clamp " + c.ajustados + "/" + c.enviosAceitos + " (taxa " + taxaClamp + ")" +
         " | normalizacoes " + c.normalizacoes +
         " | truncamentos " + (c.truncamentos || 0) +
