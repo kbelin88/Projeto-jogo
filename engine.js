@@ -1407,13 +1407,30 @@
       return Math.max(1, Math.ceil(porCusto ? best : best / passoRef));
     };
     const marcha = (alvo) => marchaVel(alvo, { arqueiro: 1 }); // media = comportamento P2
+    // LOTE C, E5: a aldeia de origem do menor caminho (a mesma p/ as 3 velocidades,
+    // porque a rota mais curta nao depende da composicao). marchaVel descartava qual era.
+    const origemMaisProxima = (alvo) => {
+      let best = Infinity, bestM = null;
+      for (const m of visao.minhas) {
+        let d;
+        if (temRede) { const cam = caminhoEntre(shim, m.id, alvo.id); d = cam ? pesoRota(shim, cam) : Math.hypot(m.x - alvo.x, m.y - alvo.y); }
+        else d = Math.hypot(m.x - alvo.x, m.y - alvo.y);
+        if (d < best) { best = d; bestM = m; }
+      }
+      return bestM;
+    };
     // LOTE B (prompt P3): rotula defesa efetiva (B1) e mostra marcha por velocidade (B3).
     // A ordenacao das aldeias segue por 'marcha' media (t), estavel; so o TEXTO muda.
     const p3 = (opcoes && opcoes.promptP3 != null) ? !!opcoes.promptP3 : (cfg.promptP3 !== false);
+    const marchaComOrigem = (opcoes && opcoes.marchaComOrigem != null) ? !!opcoes.marchaComOrigem : (cfg.marchaComOrigem !== false); // LOTE C, E5
     const defLabel = (a) => p3 ? `defesa efetiva (inclui bonus do local): ${defefetiva(a)}` : `defesa: ${defefetiva(a)}`;
-    const marchaTexto = (a) => p3
-      ? `marcha: ${marchaVel(a, { lanceiro: 1 })} lenta / ${marchaVel(a, { arqueiro: 1 })} media / ${marchaVel(a, { cavaleiro: 1 })} rapida`
-      : `${marcha(a)} turnos de marcha`;
+    const marchaTexto = (a) => {
+      if (!p3) return `${marcha(a)} turnos de marcha`;
+      const vs = `${marchaVel(a, { lanceiro: 1 })} lenta / ${marchaVel(a, { arqueiro: 1 })} media / ${marchaVel(a, { cavaleiro: 1 })} rapida`;
+      if (!marchaComOrigem) return `marcha: ${vs}`; // E5 off = texto P3 identico ao atual
+      const o = origemMaisProxima(a); // E5: nomeia de onde sai a marcha mais curta
+      return `marcha desde ${o ? "[" + o.id + "]" + (o.nome ? " " + o.nome : "") : "?"}: ${vs}`;
+    };
     const classifica = (dono) => (dono === me ? "SUA" : dono === null ? "NEUTRA" : "INIMIGA");
 
     // VARIANTE P2: sufixo " | para tomar: N lanc ou N arq ou N cav" — so quando
