@@ -1752,6 +1752,8 @@
   let sigsRejAcum = { A: new Set(), B: new Set() };
   let tokensUltimaChamada = null; // canal lateral dos geradores do browser
   let finishUltimaChamada = null; // A1: finish_reason da API ("length" = truncou no teto de tokens)
+  let finishNativoUltimaChamada = null; // LOTE D, D1: finish do provedor (OpenRouter expoe native_finish_reason)
+  let erroUltimaChamada = null; // LOTE D, D1: data.error cru, p/ diagnosticar resposta vazia (causa dos 23 vazios era desconhecida)
   let modoRacUltimaChamada = null; // A2: modo de captura do raciocinio (completo|resumo|ausente)
   let custoTotal = 0;             // $ acumulado da partida (medidor ao vivo no titulo da aba)
   let checkpointArquivo = null, checkpointIdx = 0; // AUTO-SAVE por turno no disco (via servir.py)
@@ -2436,9 +2438,13 @@
       if (resp.ok) {
         const data = await resp.json();
         const u = data.usage;
-        tokensUltimaChamada = u ? { prompt: u.prompt_tokens || 0, resposta: u.completion_tokens || 0 } : null;
+        // LOTE D, D1: o booleano `truncado` escondia a causa real. Guardar o cru.
+        const det = (u && u.completion_tokens_details) || {};
+        tokensUltimaChamada = u ? { prompt: u.prompt_tokens || 0, resposta: u.completion_tokens || 0, raciocinio: det.reasoning_tokens || 0 } : null;
         const ch = (data.choices && data.choices[0]) || {};
         finishUltimaChamada = ch.finish_reason || null; // A1: "length" = truncou no teto
+        finishNativoUltimaChamada = ch.native_finish_reason || null; // D1: finish do provedor
+        erroUltimaChamada = (data.error && (data.error.message || JSON.stringify(data.error))) || null; // D1
         const msg = ch.message || {};
         // OpenRouter devolve o raciocinio em message.reasoning (texto) e/ou
         // reasoning_details (estruturado); message.content e a resposta final.
@@ -2487,9 +2493,12 @@
     }
     const L = [];
     L.push("########## TURNO " + game.turno + " \u2014 Rei " + lado + " (" + rotulo + ") ##########");
-    const tk = diagTurno[lado] && diagTurno[lado].tokens;
+    const dt = diagTurno[lado] || {};
+    const tk = dt.tokens;
+    // LOTE D, D1: finish/nativo sempre no log (mesmo sem usage) p/ diagnosticar vazio.
+    const finishTxt = dt.finish || "?", nativoTxt = dt.finishNativo || "?";
     if (tk) {
-      L.push("tokens: prompt " + tk.prompt + " | resposta " + tk.resposta);
+      L.push("tokens: prompt " + tk.prompt + " | resposta " + tk.resposta + " | raciocinio " + (tk.raciocinio || 0) + " | finish " + finishTxt + " | nativo " + nativoTxt);
       ct.tokPrompt += tk.prompt; ct.tokResp += tk.resposta;
       const pr = precoDe(rotulo);
       if (pr) {
@@ -2497,8 +2506,11 @@
         ct.custo += cst; custoTotal += cst;
         L.push("custo turno: $" + cst.toFixed(5) + " | Rei " + lado + " acum $" + ct.custo.toFixed(4) + " | partida $" + custoTotal.toFixed(4));
       }
+    } else if (dt.finish || dt.finishNativo) {
+      L.push("tokens: (sem usage) | finish " + finishTxt + " | nativo " + nativoTxt);
     }
-    if (diagTurno[lado] && diagTurno[lado].truncado) { L.push("TRUNCADO: resposta atingiu o teto de tokens do provedor (finish_reason=length) \u2014 turno conta como passado, sem retry"); ct.truncamentos++; } // A1
+    if (dt.erroApi) L.push("ERRO API: " + dt.erroApi); // LOTE D, D1
+    if (dt.truncado) { L.push("TRUNCADO: resposta atingiu o teto de tokens do provedor (finish_reason=length) \u2014 turno conta como passado, sem retry"); ct.truncamentos++; } // A1
     if (r.erroRede) L.push(">>> ERRO DE REDE \u2014 turno NAO contabilizado (sem resposta do modelo)");
     L.push("resposta crua: " + JSON.stringify(r.cru));
     L.push(r.raciocinio ? "raciocinio: " + r.raciocinio : "raciocinio: (nao capturado)");
@@ -2653,13 +2665,16 @@
       tokens: tokens || null,
       truncado: finishUltimaChamada === "length", // A1
       modoRac: modoRacUltimaChamada,               // A2
+      finish: finishUltimaChamada,                 // LOTE D, D1
+      finishNativo: finishNativoUltimaChamada,     // D1
+      erroApi: erroUltimaChamada,                  // D1
     };
   }
 
   // Decide e executa a ordem de UM lado. Retorna "abort" se o run mudou.
   async function decidirLado(lado, gerador, rotulo, meuRun) {
     if (!Engine.aldeiasDe(game, lado).length) return null;
-    finishUltimaChamada = null; modoRacUltimaChamada = null; // A1/A2: nao herdam do turno/lado anterior
+    finishUltimaChamada = null; modoRacUltimaChamada = null; finishNativoUltimaChamada = null; erroUltimaChamada = null; // A1/A2/D1: nao herdam do turno/lado anterior
     if (!gerador) {
       const ordemB = Engine.jogadorBurro(Engine.montarVisao(game, lado));
       const dgB = Engine.diagnosticarOrdem(game, lado, ordemB); // burro entra no registro: e a ancora do benchmark
