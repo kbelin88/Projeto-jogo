@@ -1836,7 +1836,7 @@
         if (!d) continue;
         const s = S[L];
         s.temDiag = true; s.turnosDiag++;
-        s.prop += d.propostas; s.exec += d.executadas;
+        s.prop += d.propostas; s.exec += d.executadas; if (d.vazio) s.vazio = (s.vazio || 0) + 1; // LOTE D, D3.5
         s.rej += d.rejeicoes.length; if (d.reincidente) s.reinc++;
         if (d.tokens) { s.temTok = true; s.tok += (d.tokens.prompt || 0) + (d.tokens.resposta || 0); }
         for (const k in d.recursos || {}) s.rec[k] = (s.rec[k] || 0) + d.recursos[k];
@@ -1895,6 +1895,9 @@
         S.A.exec + "/" + S.A.prop + " \u00b7 " + pct(S.A.exec, S.A.prop),
         S.B.exec + "/" + S.B.prop + " \u00b7 " + pct(S.B.exec, S.B.prop),
         S.A.prop ? S.A.exec / S.A.prop : 0, S.B.prop ? S.B.exec / S.B.prop : 0);
+      // LOTE D, D3.5: turno vazio nao entra em exec/prop; sem esta linha o painel dizia
+      // 100% de agencia p/ um rei que nao respondeu em 23 turnos, contradizendo o log.
+      h += linhaCartao("turnos sem resposta", (S.A.vazio || 0) + "/" + S.A.turnosDiag, (S.B.vazio || 0) + "/" + S.B.turnosDiag, null, null);
       h += linhaCartao("rejei\u00e7\u00f5es", S.A.rej, S.B.rej, null, null);
       h += linhaCartao("turnos reincidentes", S.A.reinc + "/" + S.A.turnosDiag, S.B.reinc + "/" + S.B.turnosDiag, null, null);
       h += linhaCartao("tokens consumidos", S.A.temTok ? S.A.tok.toLocaleString("pt-BR") : "n/d",
@@ -2484,9 +2487,11 @@
       // LOTE D, D3: turno VAZIO (nao respondeu) e turno INVALIDO (respondeu lixo) sao
       // falhas diferentes; misturar em "validade" escondia os 23 vazios. valido = ok (igual).
       const cruTrim = (r.cru == null ? "" : String(r.cru)).trim();
-      if (!cruTrim || cruTrim === '""') ct.vazio++;
+      const ehVazio = !cruTrim || cruTrim === '""';
+      if (ehVazio) ct.vazio++;
       else if (!r.ok) ct.invalido++;
       else ct.valido++;
+      if (diagTurno[lado]) diagTurno[lado].vazio = ehVazio; // LOTE D, D3.5: propaga p/ o painel do espectador
       ct.normalizacoes += (r.normalizacoes || []).length;
       if (r.raciocinio) { ct.racCapturado++; const md = diagTurno[lado] && diagTurno[lado].modoRac; if (md) ct.modoRac = md; } // A2
       if (r.diag) {
