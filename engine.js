@@ -1188,13 +1188,28 @@
   // "atacante" (a conta em si nao depende da ordem dos argumentos).
   function resolverCombateEstrada(estado, m1, m2) {
     const cfg = estado.config;
-    const atk = m1.dono < m2.dono ? m1 : m2;
-    const def = atk === m1 ? m2 : m1;
+    let atk = m1.dono < m2.dono ? m1 : m2;
+    let def = atk === m1 ? m2 : m1;
     // Choque de dois EXERCITOS em marcha (campo aberto): ninguem guarnece
     // terreno, entao os DOIS lados usam ATAQUE (nao def). Decisao 7.4.
-    const Fa = ataqueDe(atk.tropas, cfg), Fd = ataqueDe(def.tropas, cfg);
-    const ta = tipoDominante(estado, atk.tropas), td = tipoDominante(estado, def.tropas);
-    const { v, FatkEf, FdefEf, atacanteVence } = preverCombateTipos(estado, Fa, ta, Fd, td, 1); // campo aberto
+    const prever = (a, d) => {
+      const Fa = ataqueDe(a.tropas, cfg), Fd = ataqueDe(d.tropas, cfg);
+      const ta = tipoDominante(estado, a.tropas), td = tipoDominante(estado, d.tropas);
+      return Object.assign({ Fa, Fd }, preverCombateTipos(estado, Fa, ta, Fd, td, 1)); // campo aberto
+    };
+    let prev = prever(atk, def);
+    // LOTE E, E4 (achado A4): no EMPATE de forca efetiva o lado no papel de
+    // "atacante" PERDE (empate favorece o defensor). Fixar atk = dono "A" matava o
+    // exercito de A em TODO empate de estrada — vies de assento, a mesma classe do
+    // vies de id que o chaveRngAlvo ja resolveu para os alvos. Sorteia o papel por
+    // hash puro e determinista (sem lado). O empate e simetrico a troca (a forca
+    // efetiva do vencedor e a mesma dos dois jeitos), entao so muda QUEM sobrevive;
+    // fora do empate, o desfecho nao depende da ordem dos argumentos.
+    if (cfg.desempateEstradaRng !== false && prev.FatkEf === prev.FdefEf) {
+      const lo = Math.min(m1.origemId, m2.origemId), hi = Math.max(m1.origemId, m2.origemId);
+      if (chaveRngAlvo(cfg.seed, estado.turno, lo, hi) < 0.5) { const t = atk; atk = def; def = t; prev = prever(atk, def); }
+    }
+    const { v, FatkEf, FdefEf, atacanteVence, Fa, Fd } = prev;
     const vencedor = atacanteVence ? atk : def, perdedor = atacanteVence ? def : atk;
     const Fwin = atacanteVence ? FatkEf : FdefEf, Flose = atacanteVence ? FdefEf : FatkEf;
     const baixasEf = Math.min(Flose * cfg.combate.atrito_base, Fwin);
