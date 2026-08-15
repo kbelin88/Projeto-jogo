@@ -1228,13 +1228,29 @@
   // (3+4) MOVIMENTO + COMBATE: avanca transitos; cruzamentos na estrada
   // resolvem no meio do caminho; os que chegam resolvem no destino.
   function avancarMovimentos(estado) {
-    const chegaram = [], viajando = [];
-    for (const m of estado.movimentos) {
-      m.turnosRestantes -= 1;
-      (m.turnosRestantes <= 0 ? chegaram : viajando).push(m);
+    if (estado.config.interceptaChegada === false) {
+      // caminho antigo (separa primeiro, so `viajando` intercepta), byte a byte.
+      const chegaram = [], viajando = [];
+      for (const m of estado.movimentos) {
+        m.turnosRestantes -= 1;
+        (m.turnosRestantes <= 0 ? chegaram : viajando).push(m);
+      }
+      // #2: quem segue viajando pode se cruzar com inimigo no mesmo trecho
+      estado.movimentos = detectarCombatesEstrada(estado, viajando);
+      for (const m of chegaram) resolverChegada(estado, m);
+      return;
     }
-    // #2: quem segue viajando pode se cruzar com inimigo no mesmo trecho
-    estado.movimentos = detectarCombatesEstrada(estado, viajando);
+    // LOTE E, E3 (achado A3): um exercito no ULTIMO passo de marcha tambem cruza
+    // inimigos no mesmo trecho. No caminho antigo ele ia direto para `chegaram`
+    // (que nao passa pelo detectarCombatesEstrada) e atravessava o inimigo sem
+    // lutar. Aqui detecta os cruzamentos sobre a lista INTEIRA (posicaoRota clampa
+    // o progresso ao fim da rota, mesmo com turnosRestantes negativo) e so entao
+    // separa quem chegou de quem segue.
+    for (const m of estado.movimentos) m.turnosRestantes -= 1;
+    const sobreviventes = detectarCombatesEstrada(estado, estado.movimentos);
+    const chegaram = [], viajando = [];
+    for (const m of sobreviventes) (m.turnosRestantes <= 0 ? chegaram : viajando).push(m);
+    estado.movimentos = viajando;
     for (const m of chegaram) resolverChegada(estado, m);
   }
 
