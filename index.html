@@ -2662,7 +2662,15 @@
 
   // E3/1c — fotografa o pensamento do turno de UM rei (spec SPEC_E3).
   // recursos NAO entram aqui: sao medidos AO FIM do turno, no gravarFrame.
-  function coletarDiag(lado, ordem, dg, formatoOk, tokens) {
+  function coletarDiag(lado, ordem, dg, formatoOk, tokens, d1) {
+    // LOTE E, E2: no turno simultaneo os globals do D1 ja podem ter sido
+    // sobrescritos pela deliberacao do outro lado, entao aplicarLado passa uma
+    // FOTO (d1) tirada logo apos o await. Sem d1 (caminho antigo/burro sequencial)
+    // le os globals como antes -> byte-identico.
+    const _finish = d1 ? d1.finish : finishUltimaChamada;
+    const _finishNativo = d1 ? d1.finishNativo : finishNativoUltimaChamada;
+    const _erroApi = d1 ? d1.erroApi : erroUltimaChamada;
+    const _modoRac = d1 ? d1.modoRac : modoRacUltimaChamada;
     const envios = (ordem && ordem.envios) || [], constr = (ordem && ordem.construir) || [];
     const sigs = Engine.assinaturasRejeitadas(dg.rejeicoes);
     let reincidente = false;
@@ -2678,11 +2686,11 @@
       reincidente,
       ataquesIniciados: atq,
       tokens: tokens || null,
-      truncado: finishUltimaChamada === "length", // A1
-      modoRac: modoRacUltimaChamada,               // A2
-      finish: finishUltimaChamada,                 // LOTE D, D1
-      finishNativo: finishNativoUltimaChamada,     // D1
-      erroApi: erroUltimaChamada,                  // D1
+      truncado: _finish === "length",              // A1
+      modoRac: _modoRac,                           // A2
+      finish: _finish,                             // LOTE D, D1
+      finishNativo: _finishNativo,                 // D1
+      erroApi: _erroApi,                           // D1
     };
   }
 
@@ -2729,16 +2737,84 @@
     return { cru, raciocinio, ordem, diag, ok: p.ok, normalizacoes: p.normalizacoes || [] }; // H3: p/ o txt
   }
 
+  // LOTE E, E2 — metade 1 do turno SIMULTANEO (achado A1): monta visao+prompt,
+  // chama o gerador e parseia. NAO diagnostica nem executa (isso e o aplicarLado).
+  // Fotografa os globals do D1 e os tokens em LOCAIS logo apos o await: como as
+  // duas deliberacoes correm ANTES de qualquer aplicacao, deixar esses campos nos
+  // globals ate o aplicarLado faria o lado A herdar o diagnostico do lado B.
+  // ATENCAO: as chamadas de API seguem SEQUENCIAIS (deliberar A await, deliberar B
+  // await) — a simultaneidade e de INFORMACAO (mesma fotografia), nao de rede.
+  // Retorna "abort" se o run mudou, ou null se o lado esta morto.
+  async function deliberarLado(lado, gerador, rotulo, meuRun) {
+    if (!Engine.aldeiasDe(game, lado).length) return null;
+    finishUltimaChamada = null; modoRacUltimaChamada = null; finishNativoUltimaChamada = null; erroUltimaChamada = null; // A1/A2/D1
+    const snapD1 = () => ({ finish: finishUltimaChamada, finishNativo: finishNativoUltimaChamada, erroApi: erroUltimaChamada, modoRac: modoRacUltimaChamada });
+    if (!gerador) { // burro: decide sem rede (D1 fica nulo)
+      return { kind: "burro", ordem: Engine.jogadorBurro(Engine.montarVisao(game, lado)), tokens: null, d1: snapD1() };
+    }
+    const prompt = Engine.montarPrompt(Engine.montarVisao(game, lado, { minimos: true }), { variante: "P2" });
+    setStatus("Rei " + lado + " pensando... (" + rotulo + ")");
+    let cru = "", raciocinio = null, erroRede = null;
+    tokensUltimaChamada = null; // zera ANTES: erro de rede nao herda tokens do turno anterior
+    try { const g = await gerador(prompt); cru = g.texto; raciocinio = g.raciocinio; }
+    catch (e) { cru = "[ERRO DE REDE] " + e.message; erroRede = e.message; }
+    const tokensDoLado = tokensUltimaChamada, d1 = snapD1(); // CAPTURA imediata (antes de outra chamada)
+    setStatus("");
+    if (runId !== meuRun) return "abort"; // resposta atrasada de run antigo
+    if (erroRede) return { kind: "erroRede", cru, erroRede, tokens: null, d1 };
+    const p = Engine.parsearOrdem(cru); // sem retry (benchmark)
+    return { kind: "llm", cru, raciocinio, ordem: p.ordem, ok: p.ok, normalizacoes: p.normalizacoes || [], tokens: tokensDoLado, d1 };
+  }
+
+  // LOTE E, E2 — metade 2 do turno SIMULTANEO: diagnostica, executa e coleta o
+  // diag do lado a partir da deliberacao ja feita. Espelha exatamente o que o
+  // decidirLado fazia depois do parse. O retorno bate byte a byte com o do
+  // decidirLado (null p/ morto/burro; registro p/ registrarTurnoLado nos demais).
+  function aplicarLado(lado, delib) {
+    if (!delib || delib === "abort") return null;
+    if (delib.kind === "burro") {
+      const dgB = Engine.diagnosticarOrdem(game, lado, delib.ordem); // burro entra no registro: e a ancora do benchmark
+      Engine.executarOrdem(game, lado, delib.ordem);
+      coletarDiag(lado, delib.ordem, dgB, true, null, delib.d1);
+      return null;
+    }
+    if (delib.kind === "erroRede") { // curto-circuito: erro de rede nao passa pelo parser (bug 23/07)
+      const vazia = { construir: [], envios: [] };
+      const dgErro = Engine.diagnosticarOrdem(game, lado, vazia);
+      Engine.executarOrdem(game, lado, vazia); // limpa rejeicoesAnteriores do lado
+      coletarDiag(lado, vazia, dgErro, false, null, delib.d1);
+      return { cru: delib.cru, raciocinio: null, ordem: vazia, diag: dgErro, ok: false, normalizacoes: [], erroRede: delib.erroRede };
+    }
+    const diag = Engine.diagnosticarOrdem(game, lado, delib.ordem); // ANTES de executar
+    Engine.executarOrdem(game, lado, delib.ordem);
+    coletarDiag(lado, delib.ordem, diag, delib.ok, delib.tokens, delib.d1);
+    return { cru: delib.cru, raciocinio: delib.raciocinio, ordem: delib.ordem, diag, ok: delib.ok, normalizacoes: delib.normalizacoes };
+  }
+
   async function passoTurnoDuelo(meuRun) {
     if (meuRun === undefined) meuRun = ++runId;
     const vA = document.getElementById("gmodA").value, vB = document.getElementById("gmodB").value;
     etiquetaA = vA; etiquetaB = vB;
     Engine.tick(game);
     diagTurno = { A: null, B: null }; // frame novo, pensamento novo
-    const rA = await decidirLado("A", fabricarGerador(vA), vA, meuRun);
-    if (rA === "abort") return;
-    const rB = await decidirLado("B", fabricarGerador(vB), vB, meuRun);
-    if (rB === "abort") return;
+    let rA, rB;
+    if (Engine.CONFIG.ordensSimultaneas === false) {
+      // LOTE E, E2 — caminho antigo (decide-e-executa em sequencia), INALTERADO.
+      rA = await decidirLado("A", fabricarGerador(vA), vA, meuRun);
+      if (rA === "abort") return;
+      rB = await decidirLado("B", fabricarGerador(vB), vB, meuRun);
+      if (rB === "abort") return;
+    } else {
+      // LOTE E, E2 — ordens simultaneas (achado A1): delibera os DOIS lados sobre
+      // a MESMA fotografia (nenhum executou), depois aplica A->B. Tira do Rei B a
+      // visao dos envios que A ordenou NESTE turno. Chamadas de API sequenciais.
+      const dA = await deliberarLado("A", fabricarGerador(vA), vA, meuRun);
+      if (dA === "abort") return;
+      const dB = await deliberarLado("B", fabricarGerador(vB), vB, meuRun);
+      if (dB === "abort") return;
+      rA = aplicarLado("A", dA);
+      rB = aplicarLado("B", dB);
+    }
     if (rA) registrarTurnoLado("A", vA, rA);
     if (rB) registrarTurnoLado("B", vB, rB);
     if (rA || rB) registrarEventosTurno();
