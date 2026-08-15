@@ -471,6 +471,7 @@
     </select>
   </label>
   <label>turnos <input id="gmax" type="number" min="1" max="9999" value="40" style="width:56px"></label>
+  <label title="Teto de gasto (US$): a partida encerra LIMPA (salva .txt + replay) ao atingir o valor. 0 ou vazio desliga o freio.">teto $ <input id="gteto" type="number" min="0" step="0.5" value="7" style="width:56px"></label>
   <label title="Ignora o limite de turnos: a partida corre ate a vitoria ou o empate por estagnacao (30t sem mudanca). Acompanhe o gasto no titulo da aba.">&#8734; sem limite <input type="checkbox" id="gilim"></label>
   <button id="glog" title="Baixar o .txt da ultima partida do modelo">Baixar log</button>
   <button id="greplaysave" title="Baixar o replay .json da partida gravada">&#127909; Salvar replay</button>
@@ -2884,7 +2885,11 @@
     const semLimite = !!(document.getElementById("gilim") && document.getElementById("gilim").checked);
     let fimEstagnacao = false;
     let fimCusto = false;
-    const TETO_CUSTO = 7.0; // freio de gasto: encerra a partida LIMPA (salva .txt + replay) antes do credito acabar
+    // LOTE E, E6 (achado A6): teto de gasto configuravel no painel (gteto). O 7.0
+    // fixo era MAIOR que o saldo (~$4.18) — o freio nunca freava. <= 0 (ou vazio)
+    // desliga o freio. Encerra a partida LIMPA (salva .txt + replay) ao atingir.
+    const tetoEl = document.getElementById("gteto");
+    const TETO_CUSTO = tetoEl ? (parseFloat(tetoEl.value) || 0) : 7.0;
     // BUG de 04/07: zerar o log AQUI apagava os turnos anteriores a cada
     // resume (Play depois de pausa), dessincronizando log e contadores.
     // Agora o reset vive em novaPartida; o Play so abre o cabecalho se a
@@ -2895,7 +2900,7 @@
       // PROVENIENCIA (13/07): registrar as condicoes do experimento no proprio
       // log. Descoberto na analise da partida de 13/07: sem isso, so lendo o
       // codigo da pra saber se a rodada foi baseline ou rejfim.
-      geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=P2 (minimo por alvo) + relatorio v3 + combate v3 | normalizacao H3 ativa | thinking=on | max_tokens_resposta=" + maxTokensLLM + " | " + (semLimite ? "SEM LIMITE de turnos (empate por estagnacao em 30t)" : "maxTurnos " + maxT) + "\n");
+      geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=P2 (minimo por alvo) + relatorio v3 + combate v3 | normalizacao H3 ativa | thinking=on | max_tokens_resposta=" + maxTokensLLM + " | " + (semLimite ? "SEM LIMITE de turnos (empate por estagnacao em 30t)" : "maxTurnos " + maxT) + " | teto=" + (TETO_CUSTO > 0 ? "$" + TETO_CUSTO.toFixed(2) : "desligado") + "\n"); // LOTE E, E6
       // AUTO-SAVE: cria o checkpoint .txt no disco com o cabecalho (via servir.py).
       const tsCp = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 16);
       checkpointArquivo = ("partida_" + vA + "_vs_" + vB + "_" + tsCp).replace(/[^a-z0-9._-]/gi, "-") + ".txt";
@@ -2908,7 +2913,7 @@
       const chaveTerr = Engine.aldeiasDe(game, "A").length + "-" + Engine.aldeiasDe(game, "B").length;
       if (chaveTerr === estagPrev) estagCont++; else { estagCont = 0; estagPrev = chaveTerr; }
       if (semLimite && estagCont >= 30) { fimEstagnacao = true; break; }
-      if (custoTotal >= TETO_CUSTO) { fimCusto = true; break; }
+      if (TETO_CUSTO > 0 && custoTotal >= TETO_CUSTO) { fimCusto = true; break; } // LOTE E, E6: teto<=0 desliga o freio
     }
     if (runId !== meuRun) return; // run antigo: nao fecha nem baixa o log do run novo
     pause();
