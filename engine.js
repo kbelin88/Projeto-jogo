@@ -828,6 +828,13 @@
   function forcaDefesa(estado, aldeia) {
     return defesaDe(aldeia.tropas, estado.config);
   }
+  // LOTE D, D4: defesa EFETIVA = defesa crua x bonus do terreno. MESMA conta que o
+  // `defefetiva` do relatorio (defesaDe x terreno) — extraida p/ o historico D4 usar a
+  // mesma implementacao (invariante i: uma regra, uma conta).
+  function defesaEfetivaDe(tropas, capital, cfg) {
+    const bonus = capital ? cfg.combate.bonus_defesa_castelo : cfg.combate.bonus_defesa_aldeia;
+    return Math.round(defesaDe(tropas, cfg) * bonus);
+  }
   // Tropas COMPROMETIDAS da aldeia = em casa + a fila de construcao. E o que o
   // teto de producao (limite_tropas_aldeia) mede: CONTAGEM, nao poder. Contar a
   // fila impede furar o teto enfileirando varias tropas num turno so.
@@ -1238,6 +1245,18 @@
     avancarConstrucao(estado);   // 2
     avancarMovimentos(estado);   // 3 MOVIMENTO + 4 COMBATE
     endurecer(estado);           // 5
+    // LOTE D, D4: no FIM do tick (producao + combates ja resolvidos), grava a defesa
+    // efetiva de TODAS as aldeias (sem nevoa de guerra). Janela curta de 6 -> o relatorio
+    // mostra a DERIVADA observada, nao uma projecao (projecao = mais um numero em que o
+    // modelo confia cego, o erro que o 'para tomar' ja causou).
+    if (estado.config.deltaDefesa !== false) {
+      estado.histDefesa = estado.histDefesa || {};
+      for (const a of estado.aldeias) {
+        const h = (estado.histDefesa[a.id] = estado.histDefesa[a.id] || []);
+        h.push({ turno: estado.turno, defEf: defesaEfetivaDe(a.tropas, !!a.capital, estado.config) });
+        if (h.length > 6) h.shift();
+      }
+    }
     // 6) DECISAO e 7) VITORIA sao orquestrados por rodarTurno (PECA 4),
     //    para manter o TICK puramente mecanico e a decisao isolada.
     return estado;
@@ -1290,6 +1309,17 @@
             arqueiro:  minimoParaTomar(estado, "arqueiro",  a),
             cavaleiro: minimoParaTomar(estado, "cavaleiro", a),
           };
+        }
+        // LOTE D, D4: entrada de defesa mais ANTIGA na janela com turno <= atual-2.
+        if (estado.config.deltaDefesa !== false && estado.histDefesa && estado.histDefesa[a.id]) {
+          const janela = estado.histDefesa[a.id].filter((e) => e.turno <= estado.turno - 2);
+          if (janela.length) alvo.defAntes = { defEf: janela[0].defEf, turno: janela[0].turno };
+        }
+        // LOTE D, D5: minhas tentativas de ataque a este alvo nos ultimos 8 turnos.
+        // Nao cria estrutura nova — le estado.log (eventos de combate ja tem tudo).
+        if (estado.config.memoriaAlvo !== false && estado.log) {
+          const ats = estado.log.filter((ev) => ev.tipo === "combate" && ev.alvoId === a.id && ev.atacante === dono && ev.turno > estado.turno - 8);
+          if (ats.length) alvo.tentativas = { n: ats.length, conquistas: ats.filter((ev) => ev.conquista).length, janela: 8 };
         }
         return alvo;
       }),
@@ -1485,6 +1515,16 @@
     // nunca deve ter de multiplicar atq/def. terreno = bonus de defesa do lugar.
     const terreno = (x) => x.capital ? cfg.combate.bonus_defesa_castelo : cfg.combate.bonus_defesa_aldeia;
     const defefetiva = (x) => Math.round(defesaDe(x.tropas, cfg) * terreno(x));
+    // LOTE D, D4/D5: sufixos por alvo (delta de defesa observada + memoria de ataque).
+    const deltaDefesa = (opcoes && opcoes.deltaDefesa != null) ? !!opcoes.deltaDefesa : (cfg.deltaDefesa !== false);
+    const memoriaAlvo = (opcoes && opcoes.memoriaAlvo != null) ? !!opcoes.memoriaAlvo : (cfg.memoriaAlvo !== false);
+    const deltaTexto = (a) => { // D4: "era X ha N" / "estavel ha N" (estabilidade tambem e info: nao sobredimensionar alvo parado).
+      if (!deltaDefesa || !a.defAntes) return "";
+      const dt = visao.turno - a.defAntes.turno;
+      return defefetiva(a) === a.defAntes.defEf ? ` (estavel ha ${dt} turnos)` : ` (era ${a.defAntes.defEf} ha ${dt} turnos)`;
+    };
+    const memoriaTexto = (a) => // D5: so quando houve tentativa; linha ausente e mais barata que vazia.
+      (memoriaAlvo && a.tentativas) ? ` | voce atacou aqui ${a.tentativas.n}x nos ultimos ${a.tentativas.janela} turnos (${a.tentativas.conquistas} conquistas)` : "";
     // ORDENACAO (7.5.3): 'id' (padrao) mantem a ordem por id; 'custo' ordena por
     // custo de marcha desde a MINHA capital (simetrico). Flag desligada por ora.
     let minhasOrd = visao.minhas.slice();
@@ -1572,7 +1612,7 @@
       .sort((p, q) => p.t - q.t || p.a.id - q.a.id);
     L.push(`=== ALDEIAS NEUTRAS (${neutras.length}) - ordenadas por distancia da sua mais proxima ===`);
     for (const { a, t } of neutras) {
-      L.push(`[${a.id}] ${compTexto(a.tropas)} | ${defLabel(a)} | ${marchaTexto(a)}${minTexto(a)}`);
+      L.push(`[${a.id}] ${compTexto(a.tropas)} | ${defLabel(a)}${deltaTexto(a)} | ${marchaTexto(a)}${minTexto(a)}${memoriaTexto(a)}`);
     }
     L.push("");
 
@@ -1583,7 +1623,7 @@
     L.push(`=== INIMIGO (Rei ${inimigo}) - ${inimigas.length} aldeia(s) ===`);
     if (!inimigas.length) L.push("(nenhuma aldeia inimiga)");
     for (const { a, t } of inimigas) {
-      L.push(`[${a.id}] ${compTexto(a.tropas)} | ${defLabel(a)} | ${marchaTexto(a)}${minTexto(a)}`);
+      L.push(`[${a.id}] ${compTexto(a.tropas)} | ${defLabel(a)}${deltaTexto(a)} | ${marchaTexto(a)}${minTexto(a)}${memoriaTexto(a)}`);
     }
     L.push("");
 
