@@ -2261,11 +2261,32 @@
 
   // (6) DECISAO: cada jogador vivo monta visao, decide e executa.
   function decidirEExecutar(estado, decisores) {
+    // LOTE E, E1 — ordens simultaneas (achado A1). Com a flag ligada, as DUAS
+    // ordens saem da MESMA fotografia do estado (ninguem executou ainda) e so
+    // depois se executam em sequencia A->B. Isso tira do Rei B a visao dos envios
+    // que A ordenou NESTE turno (no caminho antigo, executarOrdem(A) empurrava os
+    // movimentos de A antes de montarVisao(B), e montarVisao inclui `transito`).
+    // Seguranca: a execucao segue sequencial e determinista — executarOrdem(A) so
+    // muta aldeias/movimentos de A e rejeicoesAnteriores[A]; diagnosticarOrdem(B)
+    // le apenas aldeias/estoque/teto de B (verificado). Conquista acontece no tick,
+    // nao aqui, entao A nunca remove um destino que B referencie.
+    if (estado.config.ordensSimultaneas === false) {
+      // caminho antigo (decide-e-executa em sequencia), INALTERADO / byte a byte.
+      for (const dono of ["A", "B"]) {
+        if (!aldeiasDe(estado, dono).length) continue; // morto nao decide
+        const decisor = (decisores && decisores[dono]) || jogadorBurro;
+        executarOrdem(estado, dono, decisor(montarVisao(estado, dono)));
+      }
+      return;
+    }
+    const vivos = [], ordens = {};
     for (const dono of ["A", "B"]) {
       if (!aldeiasDe(estado, dono).length) continue; // morto nao decide
       const decisor = (decisores && decisores[dono]) || jogadorBurro;
-      executarOrdem(estado, dono, decisor(montarVisao(estado, dono)));
+      ordens[dono] = decisor(montarVisao(estado, dono)); // ninguem executou ainda
+      vivos.push(dono);
     }
+    for (const dono of vivos) executarOrdem(estado, dono, ordens[dono]);
   }
 
   // jogador vivo = possui >=1 aldeia. Regra literal da spec: perdeu a ULTIMA

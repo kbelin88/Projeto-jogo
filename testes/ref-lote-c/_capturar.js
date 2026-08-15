@@ -9,6 +9,9 @@ const DIR = __dirname;
 function estadoNoTurno(n) {
   const cfg = JSON.parse(JSON.stringify(E.CONFIG));
   cfg.layout = "iberia"; cfg.seed = 1;
+  // LOTE E: gera o ESTADO com as flags de comportamento do motor off, para a
+  // baseline de texto (capturada no motor pre-E) continuar valendo (regra 2).
+  cfg.ordensSimultaneas = false; cfg.interceptaChegada = false; cfg.desempateEstradaRng = false;
   const e = E.criarEstadoInicial(cfg);
   const dec = { A: (v) => E.jogadorBurro(v), B: (v) => E.jogadorBurro(v) };
   for (let i = 0; i < n; i++) E.rodarTurno(e, dec);

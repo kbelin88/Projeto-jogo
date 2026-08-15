@@ -6,7 +6,11 @@ const fs = require("fs");
 const path = require("path");
 const E = require("../engine.js");
 
-const cfgIberia = () => { const c = JSON.parse(JSON.stringify(E.CONFIG)); c.layout = "iberia"; c.seed = 1; return c; };
+// LOTE E: a baseline de TEXTO (ref-lote-c) foi capturada no motor pre-E (sequencial).
+// As flags de COMPORTAMENTO do motor do lote E ficam off aqui para o ESTADO gerado por
+// estadoNoTurno continuar sendo o mesmo que alimentou aquela baseline (regra 2).
+const cfgIberia = () => { const c = JSON.parse(JSON.stringify(E.CONFIG)); c.layout = "iberia"; c.seed = 1;
+  c.ordensSimultaneas = false; c.interceptaChegada = false; c.desempateEstradaRng = false; return c; };
 function estadoNoTurno(n) {
   const e = E.criarEstadoInicial(cfgIberia());
   const d = { A: (v) => E.jogadorBurro(v), B: (v) => E.jogadorBurro(v) };
