@@ -69,4 +69,37 @@ t("E8 rede de estradas anota dono (classifica)", () => {
   assert.ok(/Aldeia \[\d+\][^\n]*\(SUA\) liga-se a: \[\d+\] (SUA|NEUTRA|INIMIGA)/.test(texto), "rede sem dono anotado");
 });
 
+// D6.2 (D4) — delta de defesa: subiu / estavel / sem historico na janela
+t("D4 delta de defesa (era X / estavel / sem historico)", () => {
+  const e = E.criarEstadoInicial(cfgIberia());
+  e.turno = 5;
+  const alvo = e.aldeias.find((a) => a.dono === null);
+  const D = Number((rel(e).match(new RegExp("\\[" + alvo.id + "\\][^\\n]*defesa efetiva[^:]*: (\\d+)")) || [])[1]);
+  assert.ok(D > 0, "nao achou defesa efetiva do alvo");
+  e.histDefesa = { [alvo.id]: [{ turno: 2, defEf: D - 2 }] }; // subiu
+  assert.ok(new RegExp("\\[" + alvo.id + "\\][^\\n]*\\(era " + (D - 2) + " ha 3 turnos\\)").test(rel(e)), "sem 'era X'");
+  e.histDefesa = { [alvo.id]: [{ turno: 2, defEf: D }] }; // estavel
+  assert.ok(new RegExp("\\[" + alvo.id + "\\][^\\n]*\\(estavel ha 3 turnos\\)").test(rel(e)), "sem 'estavel'");
+  e.histDefesa = { [alvo.id]: [{ turno: 4, defEf: D - 5 }] }; // recente demais (turno 4 > 5-2): fora da janela
+  assert.ok(!new RegExp("\\[" + alvo.id + "\\][^\\n]*\\((era|estavel) ").test(rel(e)), "sufixo sem entrada na janela");
+});
+
+// D6.3 (D5) — memoria: conta so as minhas, so na janela de 8
+t("D5 memoria de ataque (so minhas, so na janela, sem linha se nunca atacou)", () => {
+  const e = E.criarEstadoInicial(cfgIberia());
+  e.turno = 10;
+  const alvo = e.aldeias.find((a) => a.dono === null);
+  const outro = e.aldeias.find((a) => a.dono === null && a.id !== alvo.id);
+  e.log = [
+    { tipo: "combate", turno: 5, alvoId: alvo.id, atacante: "A", conquista: false },
+    { tipo: "combate", turno: 7, alvoId: alvo.id, atacante: "A", conquista: false },
+    { tipo: "combate", turno: 9, alvoId: alvo.id, atacante: "A", conquista: false },
+    { tipo: "combate", turno: 8, alvoId: alvo.id, atacante: "B", conquista: false }, // inimigo: nao conta
+    { tipo: "combate", turno: 1, alvoId: alvo.id, atacante: "A", conquista: true },  // fora da janela (1 nao > 2)
+  ];
+  const texto = rel(e);
+  assert.ok(new RegExp("\\[" + alvo.id + "\\][^\\n]*voce atacou aqui 3x nos ultimos 8 turnos \\(0 conquistas\\)").test(texto), "contagem errada");
+  assert.ok(!new RegExp("\\[" + outro.id + "\\][^\\n]*voce atacou aqui").test(texto), "alvo nunca atacado rendeu memoria");
+});
+
 console.log("\ntest_lote_c: " + ok + " testes ok");
