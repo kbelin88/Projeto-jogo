@@ -20,13 +20,26 @@ invariantes). Não repita de volta o que já está lá; assuma que eu conheço m
 
 ## 2. O que ler, e em que ordem
 
+**Núcleo (revise a fundo):**
 1. **`CLAUDE.md`** — contexto, arquitetura, mecânica, convenções e invariantes. Base.
 2. **`engine.js`** — o motor puro/determinístico. O coração testável.
 3. **`index.html`** — o jogo no browser (~2900 linhas de JS inline num `<script>`):
    render, loop de partida, clientes de API, log/resumo, replay, painel do espectador.
-4. **`HANDOFF_2026-08-15.md`** — estado atual e threads abertas.
-5. **`RELATORIO_LOTE_C.md`** e **`RELATORIO_LOTE_D.md`** — as últimas mudanças e porquês.
+   **É o caminho por onde as partidas reais rodam.**
+4. **`rei.js`** — cliente + decisor do runner headless. Necessário para a pergunta 3
+   (tem um cliente OpenRouter DUPLICADO do que está no `index.html`).
+5. **`world-iberia.js`** — o mapa autoral da Ibéria (cidades, estradas, custos de rota,
+   `verificarEquilibrio()`). É o mapa das partidas reais.
+6. **`ferramentas/analisar-log.js`** — o analisador pós-jogo (as métricas do benchmark).
+   Necessário para a pergunta 5 (as métricas medem o que dizem medir?).
 
+**Apoio (leia se precisar de contexto; não precisa de revisão linha a linha):**
+7. **`runners/rei_vs_rei.js`** — invólucro de linha de comando fino sobre o `rei.js`.
+8. **`servir.py`** — servidor HTTP local (rotas `/salvar-mapa` e `/checkpoint`).
+9. **`HANDOFF_2026-08-15.md`** — estado atual e threads abertas.
+10. **`RELATORIO_LOTE_C.md`** e **`RELATORIO_LOTE_D.md`** — as últimas mudanças e porquês.
+
+> Ignore `world.js` (mapa procedural ANTIGO, fallback — as partidas reais não o usam).
 > A branch viva é `spec-lote-d-memoria` (a `main` está velha, ~49 commits atrás — ignore
 > a `main`). Os testes estão verdes: 23 do motor + 5 smokes + `test_lote_c.js` 7/7.
 
