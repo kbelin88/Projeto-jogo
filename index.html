@@ -1755,6 +1755,7 @@
   let finishNativoUltimaChamada = null; // LOTE D, D1: finish do provedor (OpenRouter expoe native_finish_reason)
   let erroUltimaChamada = null; // LOTE D, D1: data.error cru, p/ diagnosticar resposta vazia (causa dos 23 vazios era desconhecida)
   let modoRacUltimaChamada = null; // A2: modo de captura do raciocinio (completo|resumo|ausente)
+  let msUltimaChamada = null; // LOTE E, E5: duracao (ms) da chamada que resolveu, p/ testar corte por tempo nos vazios
   let custoTotal = 0;             // $ acumulado da partida (medidor ao vivo no titulo da aba)
   let checkpointArquivo = null, checkpointIdx = 0; // AUTO-SAVE por turno no disco (via servir.py)
   // Anexa o .txt da partida no disco a cada turno (POST /checkpoint). await curto
@@ -2353,6 +2354,7 @@
     if (faltam > 0) await espera(faltam); // pacing p/ caber no free tier
     ultimoEnvioG = Date.now();
     for (let tentativa = 1; ; tentativa++) {
+      const t0 = Date.now(); // LOTE E, E5
       const resp = await fetch(GEMINI_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey },
@@ -2360,6 +2362,7 @@
       });
       if (resp.ok) {
         const data = await resp.json();
+        msUltimaChamada = Date.now() - t0; // LOTE E, E5: duracao da chamada que resolveu
         const um = data.usageMetadata;
         tokensUltimaChamada = um
           ? { prompt: um.promptTokenCount || 0, resposta: (um.candidatesTokenCount || 0) + (um.thoughtsTokenCount || 0) }
@@ -2396,6 +2399,7 @@
     if (faltam > 0) await espera(faltam);
     ultimoEnvioGrok = Date.now();
     for (let tentativa = 1; ; tentativa++) {
+      const t0 = Date.now(); // LOTE E, E5
       const resp = await fetch(GROK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + grokKey },
@@ -2403,6 +2407,7 @@
       });
       if (resp.ok) {
         const data = await resp.json();
+        msUltimaChamada = Date.now() - t0; // LOTE E, E5: duracao da chamada que resolveu
         const u = data.usage;
         tokensUltimaChamada = u ? { prompt: u.prompt_tokens || 0, resposta: u.completion_tokens || 0 } : null;
         const msg = (data.choices && data.choices[0] && data.choices[0].message) || {};
@@ -2433,6 +2438,7 @@
     if (faltam > 0) await espera(faltam);
     ultimoEnvioOR = Date.now();
     for (let tentativa = 1; ; tentativa++) {
+      const t0 = Date.now(); // LOTE E, E5
       const resp = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + openrouterKey },
@@ -2440,6 +2446,7 @@
       });
       if (resp.ok) {
         const data = await resp.json();
+        msUltimaChamada = Date.now() - t0; // LOTE E, E5: duracao da chamada que resolveu
         const u = data.usage;
         // LOTE D, D1: o booleano `truncado` escondia a causa real. Guardar o cru.
         const det = (u && u.completion_tokens_details) || {};
@@ -2507,8 +2514,9 @@
     const tk = dt.tokens;
     // LOTE D, D1: finish/nativo sempre no log (mesmo sem usage) p/ diagnosticar vazio.
     const finishTxt = dt.finish || "?", nativoTxt = dt.finishNativo || "?";
+    const msTxt = (dt.ms != null) ? " | ms " + dt.ms : ""; // LOTE E, E5: apendice no FIM (o analisador antigo nao ancora aqui)
     if (tk) {
-      L.push("tokens: prompt " + tk.prompt + " | resposta " + tk.resposta + " | raciocinio " + (tk.raciocinio || 0) + " | finish " + finishTxt + " | nativo " + nativoTxt);
+      L.push("tokens: prompt " + tk.prompt + " | resposta " + tk.resposta + " | raciocinio " + (tk.raciocinio || 0) + " | finish " + finishTxt + " | nativo " + nativoTxt + msTxt);
       ct.tokPrompt += tk.prompt; ct.tokResp += tk.resposta;
       const pr = precoDe(rotulo);
       if (pr) {
@@ -2517,7 +2525,7 @@
         L.push("custo turno: $" + cst.toFixed(5) + " | Rei " + lado + " acum $" + ct.custo.toFixed(4) + " | partida $" + custoTotal.toFixed(4));
       }
     } else if (dt.finish || dt.finishNativo) {
-      L.push("tokens: (sem usage) | finish " + finishTxt + " | nativo " + nativoTxt);
+      L.push("tokens: (sem usage) | finish " + finishTxt + " | nativo " + nativoTxt + msTxt);
     }
     if (dt.erroApi) L.push("ERRO API: " + dt.erroApi); // LOTE D, D1
     if (dt.truncado) { L.push("TRUNCADO: resposta atingiu o teto de tokens do provedor (finish_reason=length) \u2014 turno conta como passado, sem retry"); ct.truncamentos++; } // A1
@@ -2635,6 +2643,7 @@
   // nos 3B (segue 100% na GPU). 16384 derrama p/ CPU na 3050 Ti — nao subir.
   const OLLAMA_NUM_CTX = 8192;
   async function gerarOllama(prompt, modelo) {
+    const t0 = Date.now(); // LOTE E, E5
     const resp = await fetch(OLLAMA_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2642,6 +2651,7 @@
     });
     if (!resp.ok) throw new Error("Ollama HTTP " + resp.status);
     const data = await resp.json();
+    msUltimaChamada = Date.now() - t0; // LOTE E, E5: duracao da chamada que resolveu
     tokensUltimaChamada = (data.prompt_eval_count != null || data.eval_count != null)
       ? { prompt: data.prompt_eval_count || 0, resposta: data.eval_count || 0 }
       : null; // backend nao reportou: null, nunca estimar
@@ -2671,6 +2681,7 @@
     const _finishNativo = d1 ? d1.finishNativo : finishNativoUltimaChamada;
     const _erroApi = d1 ? d1.erroApi : erroUltimaChamada;
     const _modoRac = d1 ? d1.modoRac : modoRacUltimaChamada;
+    const _ms = d1 ? d1.ms : msUltimaChamada; // LOTE E, E5
     const envios = (ordem && ordem.envios) || [], constr = (ordem && ordem.construir) || [];
     const sigs = Engine.assinaturasRejeitadas(dg.rejeicoes);
     let reincidente = false;
@@ -2691,13 +2702,14 @@
       finish: _finish,                             // LOTE D, D1
       finishNativo: _finishNativo,                 // D1
       erroApi: _erroApi,                           // D1
+      ms: _ms,                                     // LOTE E, E5
     };
   }
 
   // Decide e executa a ordem de UM lado. Retorna "abort" se o run mudou.
   async function decidirLado(lado, gerador, rotulo, meuRun) {
     if (!Engine.aldeiasDe(game, lado).length) return null;
-    finishUltimaChamada = null; modoRacUltimaChamada = null; finishNativoUltimaChamada = null; erroUltimaChamada = null; // A1/A2/D1: nao herdam do turno/lado anterior
+    finishUltimaChamada = null; modoRacUltimaChamada = null; finishNativoUltimaChamada = null; erroUltimaChamada = null; msUltimaChamada = null; // A1/A2/D1/E5: nao herdam do turno/lado anterior
     if (!gerador) {
       const ordemB = Engine.jogadorBurro(Engine.montarVisao(game, lado));
       const dgB = Engine.diagnosticarOrdem(game, lado, ordemB); // burro entra no registro: e a ancora do benchmark
@@ -2747,8 +2759,8 @@
   // Retorna "abort" se o run mudou, ou null se o lado esta morto.
   async function deliberarLado(lado, gerador, rotulo, meuRun) {
     if (!Engine.aldeiasDe(game, lado).length) return null;
-    finishUltimaChamada = null; modoRacUltimaChamada = null; finishNativoUltimaChamada = null; erroUltimaChamada = null; // A1/A2/D1
-    const snapD1 = () => ({ finish: finishUltimaChamada, finishNativo: finishNativoUltimaChamada, erroApi: erroUltimaChamada, modoRac: modoRacUltimaChamada });
+    finishUltimaChamada = null; modoRacUltimaChamada = null; finishNativoUltimaChamada = null; erroUltimaChamada = null; msUltimaChamada = null; // A1/A2/D1/E5
+    const snapD1 = () => ({ finish: finishUltimaChamada, finishNativo: finishNativoUltimaChamada, erroApi: erroUltimaChamada, modoRac: modoRacUltimaChamada, ms: msUltimaChamada });
     if (!gerador) { // burro: decide sem rede (D1 fica nulo)
       return { kind: "burro", ordem: Engine.jogadorBurro(Engine.montarVisao(game, lado)), tokens: null, d1: snapD1() };
     }

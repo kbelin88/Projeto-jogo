@@ -82,6 +82,7 @@ function clienteOllama(opcoes) {
     // apos a chamada. null = backend nao reportou (nunca estimar em silencio).
     ultimosTokens: null,
     async gerar(prompt) {
+      const t0 = Date.now(); // LOTE E, E5
       const resp = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -90,7 +91,7 @@ function clienteOllama(opcoes) {
       if (!resp.ok) throw new Error(`Ollama HTTP ${resp.status}`);
       const data = await resp.json();
       this.ultimosTokens = (data.prompt_eval_count != null || data.eval_count != null)
-        ? { prompt: data.prompt_eval_count || 0, resposta: data.eval_count || 0 }
+        ? { prompt: data.prompt_eval_count || 0, resposta: data.eval_count || 0, ms: Date.now() - t0 } // LOTE E, E5
         : null;
       return separarThink(data.response || ""); // { texto, raciocinio }
     },
@@ -136,6 +137,7 @@ function clienteGemini(opcoes) {
     async gerar(prompt) {
       for (let tentativa = 1; ; tentativa++) {
         await respeitarPiso();
+        const t0 = Date.now(); // LOTE E, E5
         const resp = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
@@ -150,7 +152,7 @@ function clienteGemini(opcoes) {
           const data = await resp.json();
           const um = data.usageMetadata;
           this.ultimosTokens = um
-            ? { prompt: um.promptTokenCount || 0, resposta: (um.candidatesTokenCount || 0) + (um.thoughtsTokenCount || 0) }
+            ? { prompt: um.promptTokenCount || 0, resposta: (um.candidatesTokenCount || 0) + (um.thoughtsTokenCount || 0), ms: Date.now() - t0 } // LOTE E, E5
             : null;
           const cand = data.candidates && data.candidates[0];
           const parts = (cand && cand.content && cand.content.parts) || [];
@@ -217,6 +219,7 @@ function clienteOpenRouter(opcoes) {
     async gerar(prompt) {
       for (let tentativa = 1; ; tentativa++) {
         await respeitarPiso();
+        const t0 = Date.now(); // LOTE E, E5
         const resp = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": "Bearer " + apiKey },
@@ -235,7 +238,7 @@ function clienteOpenRouter(opcoes) {
           const data = await resp.json();
           const u = data.usage;
           const det = (u && u.completion_tokens_details) || {}; // LOTE C, E2
-          this.ultimosTokens = u ? { prompt: u.prompt_tokens || 0, resposta: u.completion_tokens || 0, raciocinio: det.reasoning_tokens || 0 } : null;
+          this.ultimosTokens = u ? { prompt: u.prompt_tokens || 0, resposta: u.completion_tokens || 0, raciocinio: det.reasoning_tokens || 0, ms: Date.now() - t0 } : null; // LOTE E, E5
           const ch = (data.choices && data.choices[0]) || {};
           this.ultimoFinish = ch.finish_reason || null; // A1
           const msg = ch.message || {};

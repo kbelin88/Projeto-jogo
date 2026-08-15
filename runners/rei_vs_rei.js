@@ -172,7 +172,7 @@ async function main() {
       if (tk) {
         serieTokens[dono].push({ turno, prompt: tk.prompt || 0, resposta: tk.resposta || 0 });
         // LOTE C, E2: raciocinio e finish sempre presentes (colunas fixas p/ parser).
-        out(`tokens.contexto: prompt ${tk.prompt} | resposta ${tk.resposta} | raciocinio ${tk.raciocinio || 0} | finish ${(cliente[dono] && cliente[dono].ultimoFinish) || "?"}`);
+        out(`tokens.contexto: prompt ${tk.prompt} | resposta ${tk.resposta} | raciocinio ${tk.raciocinio || 0} | finish ${(cliente[dono] && cliente[dono].ultimoFinish) || "?"}${tk.ms != null ? " | ms " + tk.ms : ""}`); // LOTE E, E5
       }
       if (!registro.erroRede && cliente[dono] && cliente[dono].ultimoFinish === "length")
         out("TRUNCADO: resposta atingiu o teto de tokens do provedor (finish_reason=length) — turno conta como passado, sem retry"); // A1
