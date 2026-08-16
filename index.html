@@ -265,6 +265,125 @@
   .pt-brasao.a { background: linear-gradient(180deg, #6d9af6, #4a76d6); }
   .pt-brasao.b { background: linear-gradient(180deg, #f66d6d, #d64a4a); }
 
+  /* ===== TRANSMISSAO v5 (16/08/2026) — BARRA DE TOPO + RODAPE DOS REIS ===
+     Decisao do Lucas: a lista de aldeias dos paineis laterais rendia pouco
+     depois que o hover passou a dar as tropas, e comia largura de tela. O
+     AGREGADO (aldeias / tropas / composicao / recursos) sobe para uma barra
+     longa no topo, partida pelo turno; o DEPOIMENTO do modelo e o benchmark
+     ao vivo descem para dois quadros no rodape.
+     Paineis laterais: escondidos por CSS, NAO removidos do DOM (o render
+     antigo continua definido e os smokes seguem encontrando os nos). */
+  :root { --bt-h: 74px; --rr-h: 186px; --rr-w: 33%; }
+  #espA, #espB { display: none !important; }
+  /* o placar antigo so mostrava turno + status; o turno mudou-se para a barra
+     nova, sobra a linha de status, sem moldura, logo abaixo dela. */
+  #placarTop { top: calc(var(--bt-h) + 4px); background: none; border: none;
+    box-shadow: none; padding: 0; border-radius: 0; }
+  #placarTop #pt-turno { display: none; }
+
+  #barraTopo {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 7; display: flex;
+    align-items: stretch; height: var(--bt-h);
+    background: linear-gradient(180deg, rgba(24,21,17,.97), rgba(16,14,11,.97));
+    border-bottom: 1px solid rgba(232,223,200,.18);
+    color: #e8dfc8; font-family: "Trebuchet MS", Verdana, sans-serif;
+    box-shadow: 0 3px 18px rgba(0,0,0,.5);
+  }
+  .bt-lado { flex: 1; display: flex; align-items: center; gap: 14px;
+    padding: 9px 16px 7px; min-width: 0; }
+  .bt-lado.b { flex-direction: row-reverse; text-align: right; }
+  .bt-lado.a { border-top: 3px solid #5b93c9; }
+  .bt-lado.b { border-top: 3px solid #c85a5a; }
+  .bt-bras { width: 38px; height: 45px; flex: none; }
+  /* NOME DO MODELO: unica identidade do rei. Os rotulos "Rei do Norte/Sul"
+     sairam — os reis estao na horizontal, o nome nao descrevia nada. */
+  .bt-modelo { flex: none; min-width: 196px; max-width: 240px;
+    font-family: Georgia, serif; font-size: 17px; font-weight: 700;
+    letter-spacing: .03em; line-height: 1.14;
+    overflow: hidden; text-overflow: ellipsis; }
+  .bt-nums { display: flex; align-items: flex-end; gap: 20px; flex: 1; min-width: 0; }
+  .bt-lado.b .bt-nums { flex-direction: row-reverse; }
+  .bt-cel { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+  .bt-rot { font-size: 8.5px; letter-spacing: .14em; color: #8d8571;
+    text-transform: uppercase; white-space: nowrap; }
+  .bt-val { font-family: Verdana, sans-serif; font-weight: 700; line-height: 1;
+    font-variant-numeric: tabular-nums; }
+  .bt-val.g { font-size: 30px; }
+  .bt-val.m { font-size: 19px; }
+  .bt-val.p { font-size: 15px; color: #c8bfa6; }
+  .bt-delta { font-size: 10px; font-weight: 700; line-height: 1; margin-top: 2px; }
+  .bt-delta.up { color: #7fb069; } .bt-delta.down { color: #c8695f; } .bt-delta.zero { color: #5a5346; }
+  /* composicao L/A/C: FORMA, nao digito — monocultura le-se em meio segundo */
+  .bt-comp { display: flex; flex-direction: column; gap: 3px; min-width: 132px; }
+  .bt-compbar { display: flex; height: 11px; width: 132px;
+    border: 1px solid rgba(232,223,200,.2); overflow: hidden; }
+  .bt-lado.b .bt-compbar { flex-direction: row-reverse; }
+  .bt-compbar i { display: block; height: 100%; transition: width .5s; }
+  .bt-leg { display: flex; gap: 9px; font-size: 9px; color: #8d8571; font-variant-numeric: tabular-nums; }
+  .bt-lado.b .bt-leg { flex-direction: row-reverse; }
+  .bt-leg b { font-weight: 700; }
+  .bt-leg em { display: inline-block; width: 6px; height: 6px; margin-right: 3px;
+    vertical-align: middle; font-style: normal; }
+  .bt-turno { flex: none; width: 118px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 2px; padding: 6px 0;
+    background: rgba(0,0,0,.4);
+    border-left: 1px solid rgba(232,223,200,.14);
+    border-right: 1px solid rgba(232,223,200,.14); }
+  .bt-turno .n { font-family: Georgia, serif; font-size: 33px; font-weight: 700; line-height: .96; }
+
+  /* ---------- RODAPE: depoimento do turno + benchmark ao vivo ---------- */
+  /* Os dois quadros sao SEPARADOS, um em cada canto — nao uma faixa unica
+     atravessando a tela. O vao do meio deixa o mapa respirar. */
+  #rodapeReis {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 7; display: flex;
+    justify-content: space-between; align-items: flex-end;
+    height: var(--rr-h); padding: 0 10px 10px; pointer-events: none;
+    background: none; border: none;
+    color: #e8dfc8; font-family: "Trebuchet MS", Verdana, sans-serif;
+  }
+  .rr-q { flex: 0 0 var(--rr-w); max-width: var(--rr-w); min-width: 0;
+    height: calc(var(--rr-h) - 10px); pointer-events: auto;
+    padding: 10px 15px 11px; display: flex; flex-direction: column; gap: 8px;
+    background: linear-gradient(180deg, rgba(22,19,16,.95), rgba(12,10,9,.96));
+    border: 1px solid rgba(232,223,200,.22); border-radius: 2px;
+    box-shadow: 0 6px 26px rgba(0,0,0,.65); }
+  .rr-q.a { border-top: 2px solid #5b93c9; }
+  .rr-q.b { border-top: 2px solid #c85a5a; }
+  .rr-tit { display: flex; align-items: center; gap: 8px; font-size: 9px;
+    letter-spacing: .16em; color: #8d8571; text-transform: uppercase; }
+  .rr-tit i { flex: 1; height: 1px; background: rgba(232,223,200,.16); }
+  /* DEPOIMENTO: a voz do rei sobre a jogada DESTE turno. E o texto do roteiro
+     de narracao; NAO volta ao contexto do modelo (o que volta e o plano). */
+  .rr-dep { font-family: Georgia, serif; font-size: 13.5px; line-height: 1.45;
+    color: #d7cdb4; border-left: 2px solid rgba(232,223,200,.22);
+    padding-left: 10px; min-height: 56px; overflow: hidden; }
+  .rr-q.b .rr-dep { border-left: none; border-right: 2px solid rgba(232,223,200,.22);
+    padding-left: 0; padding-right: 10px; text-align: right; }
+  .rr-dep.vazio { color: #5a5346; font-style: italic; }
+  .rr-grade { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px 6px; margin-top: auto; }
+  .rr-met { display: flex; flex-direction: column; gap: 1px; }
+  .rr-q.b .rr-met { text-align: right; }
+  .rr-met .r { font-size: 7.5px; letter-spacing: .09em; color: #8d8571; text-transform: uppercase; }
+  .rr-met .v { font-family: Verdana, sans-serif; font-size: 14px; font-weight: 700;
+    font-variant-numeric: tabular-nums; line-height: 1.05; }
+  .rr-met .v small { font-size: 9px; font-weight: 400; color: #8d8571; }
+  .rr-met .v.alerta { color: #d9a441; }
+  .rr-met .v.custo { color: #d9a441; }
+
+  /* --- CONVIVENCIA com o chrome que ja existia -----------------------
+     A barra e o rodape sao `fixed` e ocupam as duas faixas onde varios
+     controlos moravam. Em vez de os mover no HTML (e arriscar os smokes),
+     empurram-se por CSS para fora das faixas novas. */
+  #gamebar { bottom: calc(var(--rr-h) + 12px); }      /* cockpit acima do rodape */
+  #editorbar { bottom: calc(var(--rr-h) + 102px); }    /* acima do cockpit, nao por cima do Play */
+  #replaybar { bottom: calc(var(--rr-h) + 12px); }
+  #banner { top: calc(var(--bt-h) + 16px); }           /* banner abaixo da barra */
+  body.replay #banner, body.cinema #banner { top: calc(var(--bt-h) + 16px); }
+  #sb-toggle { top: calc(var(--bt-h) + 8px); }
+  #zoombar { bottom: calc(var(--rr-h) + 12px); }
+  /* MODO CINEMA: a barra e o rodape SAO a transmissao — ficam. O resto some. */
+  body.cinema #editorbar, body.cinema #banner { }
+
   /* ===== PAINEIS LATERAIS DE ESPECTADOR (fatia 1) =====================
      Adaptado do mockup painel-v2.html. Cantos superiores, um por rei.
      Cor da unidade constante entre a barra do exercito e a lista.
@@ -382,6 +501,63 @@
      renderPaineisEspectador() em updateGameHUD(). -->
 <div id="espA" class="esp-painel"></div>
 <div id="espB" class="esp-painel dir"></div>
+
+<!-- ===== TRANSMISSAO v5: BARRA DE TOPO =====
+     Agregado dos dois reis, partido pelo turno. Preenchida por
+     renderBarraTopo(), chamada de updateGameHUD() no mesmo ponto em que os
+     paineis laterais eram preenchidos. So le o estado do jogo. -->
+<div id="barraTopo">
+  <div class="bt-lado a">
+    <svg class="bt-bras" id="bt-bras-a" viewBox="0 0 44 51"></svg>
+    <div class="bt-modelo" id="bt-mod-a">-</div>
+    <div class="bt-nums">
+      <div class="bt-cel"><span class="bt-rot">Aldeias</span><span class="bt-val g" id="bt-ald-a">0</span><span class="bt-delta zero" id="bt-dald-a"></span></div>
+      <div class="bt-cel"><span class="bt-rot">Tropas</span><span class="bt-val m" id="bt-tro-a">0</span><span class="bt-delta zero" id="bt-dtro-a"></span></div>
+      <div class="bt-comp">
+        <div class="bt-compbar"><i id="bt-cl-a"></i><i id="bt-ca-a"></i><i id="bt-cc-a"></i></div>
+        <div class="bt-leg" id="bt-leg-a"></div>
+      </div>
+      <div class="bt-cel"><span class="bt-rot">Madeira</span><span class="bt-val p" id="bt-mad-a">0</span></div>
+      <div class="bt-cel"><span class="bt-rot">Ferro</span><span class="bt-val p" id="bt-fer-a">0</span></div>
+    </div>
+  </div>
+  <div class="bt-turno">
+    <span class="bt-rot">Turno</span>
+    <span class="n" id="bt-turno">0</span>
+  </div>
+  <div class="bt-lado b">
+    <svg class="bt-bras" id="bt-bras-b" viewBox="0 0 44 51"></svg>
+    <div class="bt-modelo" id="bt-mod-b">-</div>
+    <div class="bt-nums">
+      <div class="bt-cel"><span class="bt-rot">Aldeias</span><span class="bt-val g" id="bt-ald-b">0</span><span class="bt-delta zero" id="bt-dald-b"></span></div>
+      <div class="bt-cel"><span class="bt-rot">Tropas</span><span class="bt-val m" id="bt-tro-b">0</span><span class="bt-delta zero" id="bt-dtro-b"></span></div>
+      <div class="bt-comp">
+        <div class="bt-compbar"><i id="bt-cl-b"></i><i id="bt-ca-b"></i><i id="bt-cc-b"></i></div>
+        <div class="bt-leg" id="bt-leg-b"></div>
+      </div>
+      <div class="bt-cel"><span class="bt-rot">Madeira</span><span class="bt-val p" id="bt-mad-b">0</span></div>
+      <div class="bt-cel"><span class="bt-rot">Ferro</span><span class="bt-val p" id="bt-fer-b">0</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TRANSMISSAO v5: RODAPE DOS REIS =====
+     Depoimento do turno (voz do modelo, roteiro de narracao) + benchmark ao
+     vivo (le os contadores da partida, incluindo o custo em US$). -->
+<div id="rodapeReis">
+  <div class="rr-q a">
+    <div class="rr-tit"><span id="rr-tit-a">Depoimento do turno</span><i></i></div>
+    <div class="rr-dep vazio" id="rr-dep-a">— sem depoimento neste turno</div>
+    <div class="rr-tit"><span>Benchmark ao vivo</span><i></i></div>
+    <div class="rr-grade" id="rr-grade-a"></div>
+  </div>
+  <div class="rr-q b">
+    <div class="rr-tit"><i></i><span id="rr-tit-b">Depoimento do turno</span></div>
+    <div class="rr-dep vazio" id="rr-dep-b">— sem depoimento neste turno</div>
+    <div class="rr-tit"><i></i><span>Benchmark ao vivo</span></div>
+    <div class="rr-grade" id="rr-grade-b"></div>
+  </div>
+</div>
 
 <div id="placarTop">
   <div id="pt-cabo"><div id="pt-cabo-a"></div><div id="pt-cabo-b"></div></div>
@@ -2285,6 +2461,7 @@
     motivoInterrupcao = null;
     geminiLog = []; // log zera AQUI (ponto unico, junto dos contadores) — nunca no Play/resume
     custoTotal = 0; estagCont = 0; estagPrev = ""; checkpointArquivo = null; checkpointIdx = 0; // medidor, empate e checkpoint zeram por partida
+    if (typeof depoimentos !== "undefined") { depoimentos.A = null; depoimentos.B = null; } // v5: o depoimento nao atravessa partidas
     game = Engine.criarEstadoInicial(cfgAtual());
     // indice celula -> aldeia (posicoes fixas): filtro rapido no render
     game.byCell = new Map(game.aldeias.map((a) => [a.x + "," + a.y, a]));
@@ -2325,7 +2502,7 @@
   // por rei, zera em novaPartida, vira bloco RESUMO no fim do .txt.
   // errosRede fica FORA de turnos/valido: turno que o modelo nao chegou a
   // responder nao e amostra do modelo (ver decidirLado, bug de 23/07).
-  const cont0 = () => ({ turnos: 0, valido: 0, enviosAceitos: 0, ajustados: 0, constrAceitas: 0, rejeicoes: 0, normalizacoes: 0, errosRede: 0, tokPrompt: 0, tokResp: 0, custo: 0, truncamentos: 0, racCapturado: 0, modoRac: null, vazio: 0, invalido: 0 }); // vazio/invalido: LOTE D, D3
+  const cont0 = () => ({ turnos: 0, valido: 0, enviosAceitos: 0, ajustados: 0, constrAceitas: 0, rejeicoes: 0, normalizacoes: 0, errosRede: 0, tokPrompt: 0, tokResp: 0, custo: 0, truncamentos: 0, racCapturado: 0, modoRac: null, vazio: 0, invalido: 0, msTotal: 0, msN: 0 }); // vazio/invalido: LOTE D, D3 | msTotal/msN: v5, tempo medio de decisao no rodape
   let contadores = { A: cont0(), B: cont0() };
   let motivoInterrupcao = null; // preenchido quando a partida para por erro de rede
   let etiquetaB = "gemini"; // rotulo do decisor do Rei B no log (gemini | ollama:<modelo>)
@@ -2509,6 +2686,12 @@
       else ct.valido++;
       if (diagTurno[lado]) diagTurno[lado].vazio = ehVazio; // LOTE D, D3.5: propaga p/ o painel do espectador
       ct.normalizacoes += (r.normalizacoes || []).length;
+      if (r.plano) ct.comPlano = (ct.comPlano || 0) + 1;
+      if (r.depoimento) ct.comDepoimento = (ct.comDepoimento || 0) + 1;
+      // v5: tempo de decisao medio p/ o rodape. Le o mesmo ms do LOTE E/E5 que
+      // ja vai para o log; nao mede nada novo, so acumula.
+      const _msT = diagTurno[lado] && diagTurno[lado].ms;
+      if (typeof _msT === "number" && _msT > 0) { ct.msTotal += _msT; ct.msN++; }
       if (r.raciocinio) { ct.racCapturado++; const md = diagTurno[lado] && diagTurno[lado].modoRac; if (md) ct.modoRac = md; } // A2
       if (r.diag) {
         ct.enviosAceitos += r.diag.aceitoEnvios.length;
@@ -2543,6 +2726,11 @@
     L.push(r.raciocinio ? "raciocinio: " + r.raciocinio : "raciocinio: (nao capturado)");
     L.push("ordem.construir: " + JSON.stringify(r.ordem.construir || []));
     L.push("ordem.envios   : " + JSON.stringify(r.ordem.envios || []));
+    // v5: os dois resumos ficam no .txt. O `plano` porque e o que o Rei vai LER
+    // no turno seguinte (sem ele o log nao explica a jogada seguinte); o
+    // `depoimento` porque e o roteiro de narracao do video, ja pronto.
+    if (r.plano) L.push("plano (volta no proximo prompt): " + r.plano);
+    if (r.depoimento) L.push("depoimento (so tela/narracao): " + r.depoimento);
     // H3: a normalizacao NAO esconde o desvio — cada correcao vira linha no
     // txt, p/ o eval contar "quantas vezes o modelo errou a grafia" separado
     // de "quantas ordens valeram".
@@ -2754,8 +2942,13 @@
     const ordem = p.ordem;
     const diag = Engine.diagnosticarOrdem(game, lado, ordem); // ANTES de executar
     Engine.executarOrdem(game, lado, ordem);
+    // v5: a nota vai para o estado (volta no prompt do proximo turno) e o
+    // depoimento vai so para a tela. Depois de executar: o plano e para o
+    // turno SEGUINTE, nunca para o que acabou de ser decidido.
+    Engine.guardarPlano(game, lado, p.plano);
+    definirDepoimento(lado, p.depoimento, game.turno);
     coletarDiag(lado, ordem, diag, p.ok, tokensDoLado);
-    return { cru, raciocinio, ordem, diag, ok: p.ok, normalizacoes: p.normalizacoes || [] }; // H3: p/ o txt
+    return { cru, raciocinio, ordem, diag, ok: p.ok, normalizacoes: p.normalizacoes || [], plano: p.plano, depoimento: p.depoimento }; // H3: p/ o txt
   }
 
   // LOTE E, E2 — metade 1 do turno SIMULTANEO (achado A1): monta visao+prompt,
@@ -2784,7 +2977,7 @@
     if (runId !== meuRun) return "abort"; // resposta atrasada de run antigo
     if (erroRede) return { kind: "erroRede", cru, erroRede, tokens: null, d1 };
     const p = Engine.parsearOrdem(cru); // sem retry (benchmark)
-    return { kind: "llm", cru, raciocinio, ordem: p.ordem, ok: p.ok, normalizacoes: p.normalizacoes || [], tokens: tokensDoLado, d1 };
+    return { kind: "llm", cru, raciocinio, ordem: p.ordem, ok: p.ok, normalizacoes: p.normalizacoes || [], tokens: tokensDoLado, d1, plano: p.plano, depoimento: p.depoimento };
   }
 
   // LOTE E, E2 — metade 2 do turno SIMULTANEO: diagnostica, executa e coleta o
@@ -2808,8 +3001,11 @@
     }
     const diag = Engine.diagnosticarOrdem(game, lado, delib.ordem); // ANTES de executar
     Engine.executarOrdem(game, lado, delib.ordem);
+    // v5: idem ao decidirLado — nota para o proximo turno, depoimento para a tela.
+    Engine.guardarPlano(game, lado, delib.plano);
+    definirDepoimento(lado, delib.depoimento, game.turno);
     coletarDiag(lado, delib.ordem, diag, delib.ok, delib.tokens, delib.d1);
-    return { cru: delib.cru, raciocinio: delib.raciocinio, ordem: delib.ordem, diag, ok: delib.ok, normalizacoes: delib.normalizacoes };
+    return { cru: delib.cru, raciocinio: delib.raciocinio, ordem: delib.ordem, diag, ok: delib.ok, normalizacoes: delib.normalizacoes, plano: delib.plano, depoimento: delib.depoimento };
   }
 
   async function passoTurnoDuelo(meuRun) {
@@ -3544,11 +3740,132 @@
       "</div>" +
       '<div class="esp-rec"><span>madeira <b>' + mad + "</b></span><span>ferro <b>" + fer + "</b></span></div>";
   }
+  // ===== TRANSMISSAO v5: BARRA DE TOPO + RODAPE DOS REIS ================
+  //  Mesma fonte de dados dos paineis laterais (espTotais/espDelta) — muda a
+  //  APRESENTACAO, nao a medicao. renderPainelEspectador() segue definido
+  //  acima (nao chamado): os paineis sao escondidos por CSS, e os smokes que
+  //  procuram #espA/#espB continuam achando os nos.
+  //
+  //  DEPOIMENTO: texto que o modelo escreve sobre a jogada DESTE turno, para
+  //  ir a tela e servir de roteiro de narracao. NAO volta ao contexto (o que
+  //  volta e o `plano`, campo separado). Enquanto o campo nao existir na
+  //  resposta do modelo, o quadro mostra o marcador de vazio.
+  const depoimentos = { A: null, B: null };
+  function definirDepoimento(lado, texto, turno) {
+    depoimentos[lado] = (texto && String(texto).trim())
+      ? { texto: String(texto).trim(), turno: turno }
+      : null;
+  }
+
+  function elTxt(id, txt) { const e = document.getElementById(id); if (e) e.textContent = txt; }
+  function elLarg(id, pct) { const e = document.getElementById(id); if (e) e.style.width = pct + "%"; }
+
+  function renderBarraTopo() {
+    const el = document.getElementById("bt-turno");
+    if (el) el.textContent = game.turno;
+    for (const lado of ["A", "B"]) {
+      const s = lado.toLowerCase();
+      const lista = Engine.aldeiasDe(game, lado);
+      let L = 0, Aq = 0, C = 0, mad = 0, fer = 0;
+      for (const a of lista) {
+        L += a.tropas.lanceiro; Aq += a.tropas.arqueiro; C += a.tropas.cavaleiro;
+        mad += a.recursos.madeira; fer += a.recursos.ferro;
+      }
+      // tropas em marcha saem da guarnicao ao partir: contam no exercito
+      for (const m of game.movimentos) {
+        if (m.dono !== lado) continue;
+        L += m.tropas.lanceiro; Aq += m.tropas.arqueiro; C += m.tropas.cavaleiro;
+      }
+      const tot = L + Aq + C;
+      const dl = espDelta[lado] || { ald: 0, tropas: 0 };
+
+      const bras = document.getElementById("bt-bras-" + s);
+      if (bras && !bras.innerHTML.trim() && ESP_BRASAO[lado]) {
+        const m = ESP_BRASAO[lado].match(/<svg[^>]*>([\s\S]*)<\/svg>/);
+        if (m) bras.innerHTML = m[1];
+      }
+      elTxt("bt-mod-" + s, lado === "A" ? etiquetaA : etiquetaB);
+      elTxt("bt-ald-" + s, lista.length);
+      elTxt("bt-tro-" + s, tot);
+      elTxt("bt-mad-" + s, mad);
+      elTxt("bt-fer-" + s, fer);
+      for (const [id, v] of [["bt-dald-" + s, dl.ald], ["bt-dtro-" + s, dl.tropas]]) {
+        const e = document.getElementById(id);
+        if (!e) continue;
+        e.textContent = v > 0 ? "+" + v : (v < 0 ? String(v) : "");
+        e.className = "bt-delta " + (v > 0 ? "up" : v < 0 ? "down" : "zero");
+      }
+      const p = (n) => (tot > 0 ? (100 * n / tot) : 0);
+      elLarg("bt-cl-" + s, p(L)); elLarg("bt-ca-" + s, p(Aq)); elLarg("bt-cc-" + s, p(C));
+      const cl = document.getElementById("bt-cl-" + s), ca = document.getElementById("bt-ca-" + s), cc = document.getElementById("bt-cc-" + s);
+      if (cl) cl.style.background = ESP_COR.lanceiro;
+      if (ca) ca.style.background = ESP_COR.arqueiro;
+      if (cc) cc.style.background = ESP_COR.cavaleiro;
+      const leg = document.getElementById("bt-leg-" + s);
+      if (leg) {
+        leg.innerHTML =
+          '<span><em style="background:' + ESP_COR.lanceiro + '"></em><b>' + L + "</b> L</span>" +
+          '<span><em style="background:' + ESP_COR.arqueiro + '"></em><b>' + Aq + "</b> A</span>" +
+          '<span><em style="background:' + ESP_COR.cavaleiro + '"></em><b>' + C + "</b> C</span>";
+      }
+    }
+  }
+
+  // metricas do rodape: TODAS saem de `contadores[lado]`, que ja alimenta o
+  // RESUMO do .txt. Nada aqui e recalculado nem estimado.
+  function renderRodapeReis() {
+    for (const lado of ["A", "B"]) {
+      const s = lado.toLowerCase();
+      const c = (contadores && contadores[lado]) || null;
+
+      const dep = depoimentos[lado];
+      const elD = document.getElementById("rr-dep-" + s);
+      if (elD) {
+        if (dep) { elD.textContent = dep.texto; elD.className = "rr-dep"; }
+        else { elD.textContent = "— sem depoimento neste turno"; elD.className = "rr-dep vazio"; }
+      }
+      elTxt("rr-tit-" + s, "Depoimento do turno " + (dep ? dep.turno : game.turno));
+
+      const g = document.getElementById("rr-grade-" + s);
+      if (!g) continue;
+      // sem turnos contados = jogador local (burro) ou partida ainda por
+      // comecar: uma grade de zeros mentiria sobre um modelo que nao existe.
+      if (!c || c.turnos === 0) {
+        g.innerHTML = '<div class="rr-met" style="grid-column:1/-1"><span class="v" style="font-size:11px;font-weight:400;color:#5a5346;font-style:italic">'
+          + (c && c.errosRede ? "sem turnos validos ainda" : "jogador local — sem metricas de modelo")
+          + "</span></div>";
+        continue;
+      }
+      const n1 = (x) => (Math.round(x * 10) / 10).toString().replace(".", ",");
+      const agencia = c.turnos > 0 ? n1(c.enviosAceitos / c.turnos) : "0";
+      const msMed = c.msN > 0 ? Math.round(c.msTotal / c.msN) : 0;
+      const tempo = msMed >= 60000
+        ? Math.floor(msMed / 60000) + "m" + String(Math.round((msMed % 60000) / 1000)).padStart(2, "0")
+        : (msMed > 0 ? (msMed / 1000).toFixed(1).replace(".", ",") + "s" : "—");
+      const falhas = c.vazio + c.invalido;
+      const met = [
+        ["Agência", agencia, "env/t", false],
+        ["Construções", c.constrAceitas, "", false],
+        ["Rejeitadas", c.rejeicoes, "", c.rejeicoes > 0],
+        ["Normalizadas", c.normalizacoes, "", false],
+        ["Vazias/inváld.", falhas, "/ " + c.turnos + " t", falhas > 0],
+        ["Truncadas", c.truncamentos, "", c.truncamentos > 0],
+        ["Decisão", tempo, "/ t", false],
+        ["Custo", "$" + (c.custo || 0).toFixed(2).replace(".", ","), "", "custo"],
+      ];
+      g.innerHTML = met.map(([rot, val, suf, flag]) =>
+        '<div class="rr-met"><span class="r">' + esc(rot) + "</span>" +
+        '<span class="v' + (flag === "custo" ? " custo" : (flag ? " alerta" : "")) + '">' +
+        esc(String(val)) + (suf ? ' <small>' + esc(suf) + "</small>" : "") + "</span></div>"
+      ).join("");
+    }
+  }
+
   function renderPaineisEspectador() {
     if (!game) return;
     espAtualizarSnap();
-    renderPainelEspectador("A");
-    renderPainelEspectador("B");
+    renderBarraTopo();
+    renderRodapeReis();
   }
 
   function updateGameHUD() {

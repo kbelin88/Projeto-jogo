@@ -229,8 +229,13 @@
   //   3. counter 1.25->1.5 (revive o triangulo; pune QUALQUER monocultura).
   //      CUSTO CONHECIDO: 1 cavaleiro deixa de tomar 1 lanceiro NO CASTELO
   //      (2*1.5castelo*1.5counter=4.5 > atq 4). Coerente e reversivel.
-  //   4. escalaMarcha 2/3 (centro do mapa 9->6 turnos, corte UNIFORME; nao toca
-  //      world-iberia.js nem verificarEquilibrio())
+  //   4. escalaMarcha 0.3 (centro do mapa 9->3 turnos, corte UNIFORME; nao toca
+  //      world-iberia.js nem verificarEquilibrio()). Comecou em 2/3 (16/08) e
+  //      desceu para 0.3 no mesmo dia: com 2/3 o primeiro combate REI-x-REI so
+  //      chegava no turno ~36 (mediana, burro x burro, 12 seeds) e a partida
+  //      arrastava-se ate 68; a 0.3 o duelo cai para ~22 e a cauda de 127 para
+  //      81 turnos. O que encarece o benchmark e a QUANTIDADE de turnos, e o
+  //      dado que falta e o duelo entre modelos — nao a expansao contra neutras.
   //   5-6. VITORIA por dominancia: >=75% das aldeias por 2 turnos consecutivos
   //      (alem da eliminacao). Faz a partida TERMINAR com vencedor.
   const CONFIG_V4 = (function () {
@@ -239,7 +244,7 @@
     c.tropas.cavaleiro.def = 2;
     c.tropas.cavaleiro.turnos = 1;
     c.bonus_forca_triangulo = 1.5;
-    c.escalaMarcha = 2 / 3;
+    c.escalaMarcha = 0.3;
     c.regrasV4 = true;
     c.vitoriaFracao = 0.75;
     c.vitoriaTurnos = 2;
@@ -697,6 +702,11 @@
       // FEEDBACK (memoria): ordens RECUSADAS no ultimo turno, por dono. O
       // relatorio do turno seguinte ecoa isto p/ o Rei nao repetir o erro.
       rejeicoesAnteriores: { A: [], B: [] },
+      // RESUMOS DO REI (v5): `plano` e a nota que o Rei escreve para o seu
+      // PROXIMO turno — a unica memoria deliberada que ele tem entre turnos.
+      // O `depoimento` NAO mora aqui: e so para a tela/log, nunca volta ao
+      // contexto, e por isso nao e estado de jogo.
+      planosAnteriores: { A: null, B: null },
     };
   }
 
@@ -1419,6 +1429,8 @@
       rejeicoesAnteriores: (estado.rejeicoesAnteriores && estado.rejeicoesAnteriores[dono]) || [],
       // ordens EXECUTADAS COM AJUSTE no turno anterior (modo clamp; vazio fora dele)
       avisosAnteriores: (estado.avisosAnteriores && estado.avisosAnteriores[dono]) || [],
+      // v5: a nota que ESTE Rei escreveu para si no turno passado (null no turno 1)
+      planoAnterior: (estado.planosAnteriores && estado.planosAnteriores[dono]) || null,
     };
   }
 
@@ -1777,7 +1789,7 @@
   //     presente na visao).
   // NAO ensina a DECISAO: alvo e tropas sao genericos/arbitrarios (1a aldeia,
   // 1o alvo, numero redondo qualquer), NAO a jogada otima.
-  function exemploAncorado(visao) {
+  function exemploAncorado(visao, comResumos) {
     const minhas = (visao && visao.minhas) || [];
     const alvos = (visao && visao.alvos) || [];
     const a0 = minhas.length ? minhas[0] : null;
@@ -1808,7 +1820,7 @@
     if (segundoDestino != null && hl + ha + hc > 0) {
       envios.push(`    {"origemId": ${origem}, "destinoId": ${segundoDestino}, "tropas": ${tropas(hl, ha, hc)}}`);
     }
-    return [
+    const linhas = [
       "{",
       '  "construir": [',
       `    {"aldeiaId": ${origem}, "tipo": "lanceiro"}`,
@@ -1816,8 +1828,16 @@
       '  "envios": [',
       envios.join(",\n"),
       "  ]",
-      "}",
-    ].join("\n");
+    ];
+    // v5: os dois textos entram no MOLDE, senao o modelo nao sabe onde os por.
+    // Vao por ultimo e com reticencias, para nao servirem de conteudo a copiar.
+    if (comResumos) {
+      linhas[linhas.length - 1] = "  ],";
+      linhas.push('  "plano": "...",');
+      linhas.push('  "depoimento": "..."');
+    }
+    linhas.push("}");
+    return linhas.join("\n");
   }
 
   // montarPrompt(visao) -> string. FUNCAO PURA: sem rede, sem efeito
@@ -1920,6 +1940,8 @@
       !!(visao.rejeicoesAnteriores && visao.rejeicoesAnteriores.length);
     // LOTE B: mesma resolucao da flag promptP3 que o relatorioTexto usa.
     const p3 = (opcoes && opcoes.promptP3 != null) ? !!opcoes.promptP3 : (visao.config.promptP3 !== false);
+    // v5: mesma resolucao das outras flags — default LIGADA, byte-identica se off.
+    const resumos = (opcoes && opcoes.resumosDoRei != null) ? !!opcoes.resumosDoRei : (visao.config.resumosDoRei !== false);
     const L = [];
     // TOPO: identidade + tarefa (curto)
     L.push('Voce e o Rei. As aldeias listadas em "SUAS ALDEIAS" pertencem a voce.');
@@ -1952,13 +1974,31 @@
     // copiava a linha construir do exemplo e esvaziava os envios. Remove-la
     // destrava (0->1.71 envios/turno, 1->5.2 aldeias) e ajuda tambem os 3B, sem
     // o efeito colateral do nudge factual (que fazia MAL ao llama3.2:3b).
+    // ===== RESUMOS DO REI (v5, flag `resumosDoRei`) ======================
+    //  DOIS textos com funcoes diferentes, e a diferenca e deliberada:
+    //   - `plano`      -> VOLTA no prompt do turno seguinte. E memoria: da ao
+    //                     modelo um bloco de notas entre turnos que ele nunca
+    //                     teve. Pedido como "nota para o seu proximo turno" e
+    //                     nao como "resumo da sua tatica" de proposito — a 1a
+    //                     formulacao produz planeamento, a 2a produz retorica.
+    //   - `depoimento` -> NAO volta. Vai so para a tela e para o log, e e o
+    //                     roteiro de narracao do video.
+    //  Os dois sao OPCIONAIS por construcao: parsearOrdem le `construir` e
+    //  `envios` e ignora o resto, entao um modelo que os omita nao perde o
+    //  turno. Campo cosmetico nunca pode custar uma jogada.
+    if (resumos) {
+      L.push("Alem das ordens, escreva dois textos curtos, em portugues:");
+      L.push('- "plano": a sua NOTA PARA O PROXIMO TURNO, 2 a 4 linhas. Voce vai ler isto no turno seguinte. Escreva o que esta a tentar fazer, o que nao pode esquecer, e o que decidiu NAO fazer. E uma nota para si mesmo: seja util a voce, nao eloquente.');
+      L.push('- "depoimento": 2 a 4 linhas contando a jogada DESTE turno a quem esta a assistir. Pode ter emocao. Este texto NAO volta para voce.');
+      L.push("");
+    }
     L.push("Responda APENAS com um JSON valido no formato abaixo. Nenhum texto antes ou depois do JSON.");
     L.push("");
     // INSTRUCAO DE PROCESSO (curta, logo antes do exemplo): forca o modelo a
     // ancorar nos ids REAIS da visao em vez de copiar numeros do exemplo.
     L.push("Antes de responder: em 'origemId' e em 'aldeiaId' use SOMENTE ids que aparecem na secao SUAS ALDEIAS. Escolha o 'destinoId' entre os ids das secoes ALDEIAS NEUTRAS e INIMIGO. Nao envie tropas que voce nao tem: se uma aldeia esta sem tropas, nao a use em 'envios'. O exemplo abaixo so mostra o FORMATO com ids reais deste turno; nao copie os numeros dele como se fossem sua jogada.");
     L.push("");
-    L.push(exemploAncorado(visao));
+    L.push(exemploAncorado(visao, resumos));
     if (rejNoFim) {
       // FIM ABSOLUTO (H2): modelos pequenos pesam mais o rabo do prompt.
       L.push("");
@@ -1966,6 +2006,14 @@
       L.push("As ordens abaixo foram RECUSADAS pelo motor:");
       for (const r of visao.rejeicoesAnteriores) L.push(`- ${r}`);
       L.push("NAO repita a mesma ordem. Os numeros de tropas e recursos DISPONIVEIS estao no relatorio acima: use-os.");
+    }
+    // A NOTA vem no fim, depois das rejeicoes: e o ultimo contexto antes de
+    // decidir. Nao e ordem nem regra — e o Rei a falar consigo mesmo.
+    if (resumos && visao.planoAnterior) {
+      L.push("");
+      L.push("=== A SUA NOTA DO TURNO ANTERIOR (escrita por voce) ===");
+      L.push(String(visao.planoAnterior));
+      L.push("Reveja-a: o mapa mudou desde entao. Siga-a se ainda faz sentido, e mude-a se nao faz.");
     }
     return L.join("\n");
   }
@@ -2035,7 +2083,28 @@
         delete e.tropas[k];
       }
     }
-    return { ok: true, ordem: { construir, envios }, erro: null, bloco, normalizacoes };
+    // v5: os dois resumos saem do MESMO objeto, mas NAO entram na `ordem` —
+    // o motor nao os executa. Texto solto e limitado a 600 chars para um modelo
+    // verborragico nao inchar o prompt do turno seguinte sem limite.
+    const txt = (v) => {
+      if (typeof v !== "string") return null;
+      const t = v.trim();
+      return t ? t.slice(0, 600) : null;
+    };
+    return {
+      ok: true, ordem: { construir, envios }, erro: null, bloco, normalizacoes,
+      plano: txt(obj.plano), depoimento: txt(obj.depoimento),
+    };
+  }
+
+  // Guarda a nota do Rei para o proximo turno. Chamada pelo caller (browser ou
+  // runner) depois de parsear a resposta — o motor nao fala com a API, entao
+  // nao pode buscar isto sozinho. `null`/vazio limpa (o Rei nao deixou nota).
+  function guardarPlano(estado, dono, plano) {
+    if (!estado) return;
+    if (!estado.planosAnteriores) estado.planosAnteriores = { A: null, B: null };
+    const t = (typeof plano === "string") ? plano.trim() : "";
+    estado.planosAnteriores[dono] = t ? t.slice(0, 600) : null;
   }
 
   // diagnosticarOrdem(estado, dono, ordem) -> { aceitoConstruir, aceitoEnvios,
@@ -2603,6 +2672,7 @@
     exemploAncorado,
     extrairBlocoJSON,
     parsearOrdem,
+    guardarPlano,
     diagnosticarOrdem,
     assinaturasRejeitadas,
     clampearEnvios,

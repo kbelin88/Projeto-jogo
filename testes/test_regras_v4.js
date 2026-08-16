@@ -27,19 +27,37 @@ t("1b CONFIG_V4 com os valores exatos decididos", () => {
   assert.strictEqual(E.CONFIG_V4.bonus_forca_triangulo, 1.5);
   assert.strictEqual(E.CONFIG_V4.tropas.cavaleiro.def, 2);
   assert.strictEqual(E.CONFIG_V4.tropas.cavaleiro.turnos, 1);
-  assert.strictEqual(E.CONFIG_V4.escalaMarcha, 2 / 3);
+  assert.strictEqual(E.CONFIG_V4.escalaMarcha, 0.3);
   assert.strictEqual(E.CONFIG_V4.regrasV4, true);
   assert.strictEqual(E.CONFIG_V4.vitoriaFracao, 0.75);
   assert.strictEqual(E.CONFIG_V4.vitoriaTurnos, 2);
 });
 
 // --- 2. Distancia: centro 9 -> 6, corte uniforme --------------------------
-t("2 escalaMarcha corta o centro de 9 para 6 turnos (simetrico)", () => {
+t("2 escalaMarcha corta o centro de 9 para 3 turnos (simetrico)", () => {
   const o = stOld(), v = stV4();
   assert.strictEqual(marcha(o, "lisboa", "toledo"), 9, "old Lisboa->Toledo");
   assert.strictEqual(marcha(o, "barcelona", "madrid"), 9, "old espelho");
-  assert.strictEqual(marcha(v, "lisboa", "toledo"), 6, "v4 Lisboa->Toledo");
-  assert.strictEqual(marcha(v, "barcelona", "madrid"), 6, "v4 espelho");
+  assert.strictEqual(marcha(v, "lisboa", "toledo"), 3, "v4 Lisboa->Toledo");
+  assert.strictEqual(marcha(v, "barcelona", "madrid"), 3, "v4 espelho");
+});
+// O ESPELHO e o que nao pode quebrar quando a escala muda: o corte e aplicado
+// ao peso ANTES do ceil, entao os dois lados encolhem igual. Este teste varre
+// as 22 aldeias e exige que cada uma tenha o mesmo tempo desde a sua capital
+// que a gemea tem desde a outra — se um dia a escala partir a simetria por
+// arredondamento, quebra aqui e nao numa partida paga.
+t("2b escala 0.3 mantem o espelho Oeste/Este em TODAS as aldeias", () => {
+  const v = stV4();
+  const I = require("../world-iberia.js");
+  let checadas = 0;
+  for (const c of I.CIDADES) {
+    if (!c.par || c.papel === "capital") continue;
+    const meu = marcha(v, c.lado === "O" ? "lisboa" : "barcelona", c.id);
+    const dela = marcha(v, c.lado === "O" ? "barcelona" : "lisboa", c.par);
+    assert.strictEqual(meu, dela, c.id + " (" + meu + ") != " + c.par + " (" + dela + ")");
+    checadas++;
+  }
+  assert.ok(checadas >= 20, "esperava >=20 aldeias checadas, deu " + checadas);
 });
 
 // --- 3. Counter 1.5: o custo conhecido + a punicao da monocultura ---------
