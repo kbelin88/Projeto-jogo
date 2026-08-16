@@ -3104,8 +3104,21 @@
       // PROVENIENCIA (13/07): registrar as condicoes do experimento no proprio
       // log. Descoberto na analise da partida de 13/07: sem isso, so lendo o
       // codigo da pra saber se a rodada foi baseline ou rejfim.
-      const regrasTxt = cfgAtual().regrasV4 ? "regras=v4 (counter 1.5, cav def2/1t, madeira 15, dist x2/3, vitoria 75%/2t)" : "regras=congeladas v3";
-      geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=P2 (minimo por alvo) + relatorio v3 + combate v3 | " + regrasTxt + " | normalizacao H3 ativa | thinking=on | max_tokens_resposta=" + maxTokensLLM + " | " + (semLimite ? "SEM LIMITE de turnos (empate por estagnacao em 30t)" : "maxTurnos " + maxT) + " | teto=" + (TETO_CUSTO > 0 ? "$" + TETO_CUSTO.toFixed(2) : "desligado") + "\n"); // LOTE E, E6
+      // 16/08 (v5): esta linha era um TEXTO FIXO e mentiu. Quando a escala de
+      // marcha desceu de 2/3 para 0.3, o cabecalho continuou a escrever
+      // "dist x2/3" — e a partida das 18:30, que correu de facto a 0.3, foi
+      // lida como se nao tivesse mudado nada. Mesma classe de bug que ja mordeu
+      // 3x no motor: o que se LE tem de ser o que se EXECUTA. Agora le do cfg.
+      const _c = cfgAtual();
+      const regrasTxt = _c.regrasV4
+        ? "regras=v4 (counter " + _c.bonus_forca_triangulo +
+          ", cav def" + _c.tropas.cavaleiro.def + "/" + _c.tropas.cavaleiro.turnos + "t" +
+          ", madeira " + _c.producao.madeira +
+          ", dist x" + (_c.escalaMarcha != null ? _c.escalaMarcha : 1) +
+          ", vitoria " + Math.round((_c.vitoriaFracao || 0) * 100) + "%/" + _c.vitoriaTurnos + "t)"
+        : "regras=congeladas v3";
+      const resumosTxt = (_c.resumosDoRei !== false) ? " | resumos do Rei: plano+depoimento" : "";
+      geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=P2 (minimo por alvo) + relatorio v3 + combate v3 | " + regrasTxt + resumosTxt + " | normalizacao H3 ativa | thinking=on | max_tokens_resposta=" + maxTokensLLM + " | " + (semLimite ? "SEM LIMITE de turnos (empate por estagnacao em 30t)" : "maxTurnos " + maxT) + " | teto=" + (TETO_CUSTO > 0 ? "$" + TETO_CUSTO.toFixed(2) : "desligado") + "\n"); // LOTE E, E6
       // AUTO-SAVE: cria o checkpoint .txt no disco com o cabecalho (via servir.py).
       const tsCp = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 16);
       checkpointArquivo = ("partida_" + vA + "_vs_" + vB + "_" + tsCp).replace(/[^a-z0-9._-]/gi, "-") + ".txt";
