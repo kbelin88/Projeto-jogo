@@ -240,11 +240,20 @@
   //      (alem da eliminacao). Faz a partida TERMINAR com vencedor.
   const CONFIG_V4 = (function () {
     const c = JSON.parse(JSON.stringify(CONFIG)); // CONFIG nao tem funcoes: seguro
-    c.producao.madeira = 15;
+    c.producao.madeira = 30;
+    // FERRO 6 -> 20 (16/08, v5). A madeira sozinha nao resolvia: com ferro 6 o
+    // arqueiro fica preso em 0.60 e o cavaleiro em 0.20 unidade por aldeia por
+    // turno (5 turnos por cavaleiro!) por mais madeira que se ponha. Subir so a
+    // madeira dobrava APENAS o lanceiro (1.00 -> 2.00) e empurrava direto para
+    // a lanceiro-mono — o modo de falha que o Gemini ja mostrou no smoke.
+    // Com ferro 20: arqueiro 1.50, cavaleiro 0.67. E a primeira vez que o
+    // cavaleiro do v4 (def 2, 1 turno, counter 1.5) e comprável de facto.
+    c.producao.ferro = 20;
     c.tropas.cavaleiro.def = 2;
     c.tropas.cavaleiro.turnos = 1;
     c.bonus_forca_triangulo = 1.5;
-    c.escalaMarcha = 0.3;
+    c.escalaMarcha = 0.2;
+    c.dicaNeutras = false;
     c.regrasV4 = true;
     c.vitoriaFracao = 0.75;
     c.vitoriaTurnos = 2;
@@ -1946,7 +1955,19 @@
     // TOPO: identidade + tarefa (curto)
     L.push('Voce e o Rei. As aldeias listadas em "SUAS ALDEIAS" pertencem a voce.');
     L.push("Seu objetivo e conquistar a CAPITAL inimiga. A capital tem o maior bonus de defesa do jogo: e o alvo mais caro do mapa, e so cai com um exercito grande.");
-    L.push("Conquiste aldeias neutras primeiro: cada aldeia produz recursos por turno, e sao os recursos que constroem esse exercito.");
+    // DICA DAS NEUTRAS (flag `dicaNeutras`): a frase tinha duas metades, uma
+    // FACTUAL ("cada aldeia produz recursos") e uma PRESCRITIVA ("conquiste
+    // neutras primeiro"). A segunda enviesava o benchmark: com 22 neutras
+    // contra 2 capitais, o Rei que obedece gasta ~27 turnos a expandir e nunca
+    // encontra o inimigo — foi o que aconteceu em 3 partidas seguidas, 20
+    // turnos sem um unico combate rei-contra-rei. Desligar a flag remove a
+    // PRESCRICAO e mantem o FACTO: o modelo continua a saber que aldeia rende
+    // recurso, mas escolhe sozinho a ordem. Default ligada (v3 byte-identico).
+    if (visao.config.dicaNeutras !== false) {
+      L.push("Conquiste aldeias neutras primeiro: cada aldeia produz recursos por turno, e sao os recursos que constroem esse exercito.");
+    } else {
+      L.push("Cada aldeia produz recursos por turno, e sao os recursos que constroem esse exercito.");
+    }
     L.push("");
     // P1 troca SO o bloco de combate pela conta explicita; P0/P2 usam o padrao.
     L.push(variante === "P1" ? regrasCombateTextoP1(visao.config) : regrasCombateTexto(visao.config));

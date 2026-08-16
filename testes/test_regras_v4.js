@@ -16,6 +16,8 @@ const marcha = (st, o, d) => E.turnosDeCaminho(st, E.caminhoEntre(st, idDe(st, o
 // --- 1. Integridade dos configs -------------------------------------------
 t("1a CONFIG antigo intacto (byte-identico preservado)", () => {
   assert.strictEqual(E.CONFIG.producao.madeira, 10);
+  assert.strictEqual(E.CONFIG.producao.ferro, 6);
+  assert.strictEqual(E.CONFIG.dicaNeutras, undefined);
   assert.strictEqual(E.CONFIG.bonus_forca_triangulo, 1.25);
   assert.strictEqual(E.CONFIG.tropas.cavaleiro.def, 1);
   assert.strictEqual(E.CONFIG.tropas.cavaleiro.turnos, 2);
@@ -23,30 +25,32 @@ t("1a CONFIG antigo intacto (byte-identico preservado)", () => {
   assert.strictEqual(E.CONFIG.regrasV4, undefined);
 });
 t("1b CONFIG_V4 com os valores exatos decididos", () => {
-  assert.strictEqual(E.CONFIG_V4.producao.madeira, 15);
+  assert.strictEqual(E.CONFIG_V4.producao.madeira, 30);
+  assert.strictEqual(E.CONFIG_V4.producao.ferro, 20);
+  assert.strictEqual(E.CONFIG_V4.dicaNeutras, false);
   assert.strictEqual(E.CONFIG_V4.bonus_forca_triangulo, 1.5);
   assert.strictEqual(E.CONFIG_V4.tropas.cavaleiro.def, 2);
   assert.strictEqual(E.CONFIG_V4.tropas.cavaleiro.turnos, 1);
-  assert.strictEqual(E.CONFIG_V4.escalaMarcha, 0.3);
+  assert.strictEqual(E.CONFIG_V4.escalaMarcha, 0.2);
   assert.strictEqual(E.CONFIG_V4.regrasV4, true);
   assert.strictEqual(E.CONFIG_V4.vitoriaFracao, 0.75);
   assert.strictEqual(E.CONFIG_V4.vitoriaTurnos, 2);
 });
 
 // --- 2. Distancia: centro 9 -> 6, corte uniforme --------------------------
-t("2 escalaMarcha corta o centro de 9 para 3 turnos (simetrico)", () => {
+t("2 escalaMarcha corta o centro de 9 para 2 turnos (simetrico)", () => {
   const o = stOld(), v = stV4();
   assert.strictEqual(marcha(o, "lisboa", "toledo"), 9, "old Lisboa->Toledo");
   assert.strictEqual(marcha(o, "barcelona", "madrid"), 9, "old espelho");
-  assert.strictEqual(marcha(v, "lisboa", "toledo"), 3, "v4 Lisboa->Toledo");
-  assert.strictEqual(marcha(v, "barcelona", "madrid"), 3, "v4 espelho");
+  assert.strictEqual(marcha(v, "lisboa", "toledo"), 2, "v4 Lisboa->Toledo");
+  assert.strictEqual(marcha(v, "barcelona", "madrid"), 2, "v4 espelho");
 });
 // O ESPELHO e o que nao pode quebrar quando a escala muda: o corte e aplicado
 // ao peso ANTES do ceil, entao os dois lados encolhem igual. Este teste varre
 // as 22 aldeias e exige que cada uma tenha o mesmo tempo desde a sua capital
 // que a gemea tem desde a outra — se um dia a escala partir a simetria por
 // arredondamento, quebra aqui e nao numa partida paga.
-t("2b escala 0.3 mantem o espelho Oeste/Este em TODAS as aldeias", () => {
+t("2b a escala mantem o espelho Oeste/Este em TODAS as aldeias", () => {
   const v = stV4();
   const I = require("../world-iberia.js");
   let checadas = 0;
@@ -83,14 +87,48 @@ t("3c v4 pune lanceiro-mono: arqueiro fura lanceiro na aldeia", () => {
   assert.strictEqual(prev(stOld(), "arqueiro", "lanceiro", aldeia).atacanteVence, false); // 2*1.25=2.5 == 2.5
 });
 
-// --- 4. Producao de madeira -----------------------------------------------
-t("4 madeira/turno: +15 no v4, +10 no old (aldeia propria)", () => {
-  for (const [st, esperado] of [[stOld(), 10], [stV4(), 15]]) {
+// --- 4. Producao: madeira E ferro ------------------------------------------
+t("4a madeira/turno: +30 no v4, +10 no old (aldeia propria)", () => {
+  for (const [st, esperado] of [[stOld(), 10], [stV4(), 30]]) {
     const a = st.aldeias.find((x) => x.dono === "A");
     const antes = a.recursos.madeira;
     E.tick(st);
     assert.strictEqual(a.recursos.madeira - antes, esperado);
   }
+});
+t("4b ferro/turno: +20 no v4, +6 no old", () => {
+  for (const [st, esperado] of [[stOld(), 6], [stV4(), 20]]) {
+    const a = st.aldeias.find((x) => x.dono === "A");
+    const antes = a.recursos.ferro;
+    E.tick(st);
+    assert.strictEqual(a.recursos.ferro - antes, esperado);
+  }
+});
+// A razao de SER do ferro 20. Com ferro 6 o cavaleiro levava 5 turnos por
+// unidade por aldeia e ninguem o comprava (3 partidas, zero cavaleiros
+// construidos) — por mais madeira que se pusesse, o gargalo era o ferro.
+t("4c o FERRO deixa de ser o gargalo do cavaleiro no v4", () => {
+  const lim = (cfg, tipo) => {
+    const u = cfg.tropas[tipo];
+    return Math.min(cfg.producao.madeira / u.custo.madeira,
+                    u.custo.ferro ? cfg.producao.ferro / u.custo.ferro : Infinity);
+  };
+  const old = lim(E.CONFIG, "cavaleiro"), v4 = lim(E.CONFIG_V4, "cavaleiro");
+  assert.ok(old <= 0.2 + 1e-9, "old: cavaleiro a <=0.2/turno (5 turnos por unidade)");
+  assert.ok(v4 > 0.6, "v4: cavaleiro tem de passar de 0.6/turno, deu " + v4);
+  // e o arqueiro nao pode ficar preso no ferro tambem
+  assert.ok(lim(E.CONFIG_V4, "arqueiro") >= 1.5 - 1e-9, "arqueiro >= 1.5/turno no v4");
+});
+// --- 4d. A dica que enviesava o benchmark ---------------------------------
+t("4d v4 NAO manda conquistar neutras primeiro; v3 continua a mandar", () => {
+  const P = (cfg) => E.montarPrompt(E.montarVisao(E.criarEstadoInicial(
+    Object.assign({}, cfg, { seed: 1 })), "A", {}), {});
+  const pv4 = P(E.CONFIG_V4), pv3 = P(E.CONFIG);
+  assert.ok(!/Conquiste aldeias neutras primeiro/.test(pv4), "v4 nao pode prescrever a ordem");
+  assert.ok(/Conquiste aldeias neutras primeiro/.test(pv3), "v3 congelado mantem a frase");
+  // o FACTO fica nos dois: tirar o vies nao pode tirar a informacao
+  assert.ok(/cada aldeia produz recursos por turno/i.test(pv4), "v4 tem de manter o facto");
+  assert.ok(/cada aldeia produz recursos por turno/i.test(pv3));
 });
 
 // --- 5. Cavaleiro em 1 turno ----------------------------------------------
