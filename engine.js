@@ -218,6 +218,34 @@
     max_turnos: 500,
   };
 
+  // RULESET V4 (16/08/2026): reboot deliberado de balanceamento a partir da
+  // analise da partida qwen3-235b x deepseek-r1 (15/08). NAO e byte-identico ao
+  // CONFIG — de proposito (o Lucas aprovou fechar a comparabilidade). O CONFIG
+  // (regras congeladas) continua o default; o v4 e opt-in (runner: passe-o como
+  // config; browser: toggle "regras v4"). Muda 6 coisas, todas lidas do config:
+  //   1. madeira 10->15  (afrouxa o gargalo; risco Fase 4 coberto pelo counter)
+  //   2. cavaleiro def 1->2 e turnos 2->1 (deixa de ser vidro; sai em 1 turno;
+  //      vira o SUMIDOURO de ferro que faltava)
+  //   3. counter 1.25->1.5 (revive o triangulo; pune QUALQUER monocultura).
+  //      CUSTO CONHECIDO: 1 cavaleiro deixa de tomar 1 lanceiro NO CASTELO
+  //      (2*1.5castelo*1.5counter=4.5 > atq 4). Coerente e reversivel.
+  //   4. escalaMarcha 2/3 (centro do mapa 9->6 turnos, corte UNIFORME; nao toca
+  //      world-iberia.js nem verificarEquilibrio())
+  //   5-6. VITORIA por dominancia: >=75% das aldeias por 2 turnos consecutivos
+  //      (alem da eliminacao). Faz a partida TERMINAR com vencedor.
+  const CONFIG_V4 = (function () {
+    const c = JSON.parse(JSON.stringify(CONFIG)); // CONFIG nao tem funcoes: seguro
+    c.producao.madeira = 15;
+    c.tropas.cavaleiro.def = 2;
+    c.tropas.cavaleiro.turnos = 1;
+    c.bonus_forca_triangulo = 1.5;
+    c.escalaMarcha = 2 / 3;
+    c.regrasV4 = true;
+    c.vitoriaFracao = 0.75;
+    c.vitoriaTurnos = 2;
+    return c;
+  })();
+
   // ==========================================================
   //  PRNG semeado da partida (mulberry32)
   // ----------------------------------------------------------
@@ -1040,7 +1068,12 @@
     const ref = (cfg.relatorio && cfg.relatorio.velocidade_referencia) || "media";
     const passoRef = cfg.velocidade_passo[ref];
     const passoTropa = cfg.velocidade_passo[velExercito(estado, tropas)];
-    return Math.max(1, Math.ceil(pesoRota(estado, caminho) * (passoRef / passoTropa)));
+    // escalaMarcha (v4): encurta TODAS as rotas pelo mesmo fator. Ausente/1 =
+    // comportamento antigo byte-identico. Aplicado ao peso, ANTES do ceil, para
+    // o corte ser uniforme e o espelho do mapa sobreviver (os dois lados escalam
+    // igual). NAO toca world-iberia.js.
+    const escala = cfg.escalaMarcha || 1;
+    return Math.max(1, Math.ceil(pesoRota(estado, caminho) * escala * (passoRef / passoTropa)));
   }
   // LINHA RETA entre dois pontos, ignorando a rede. NAO e o tempo de marcha
   // real — quem manda na marcha e turnosDeCaminho(), pela rota. Fica como
@@ -1286,6 +1319,17 @@
         const h = (estado.histDefesa[a.id] = estado.histDefesa[a.id] || []);
         h.push({ turno: estado.turno, defEf: defesaEfetivaDe(a.tropas, !!a.capital, estado.config) });
         if (h.length > 6) h.shift();
+      }
+    }
+    // VITORIA POR DOMINANCIA (v4): conta turnos CONSECUTIVOS com >=fracao das
+    // aldeias. Fica no TICK (roda 1x/turno) e NAO na checarVitoria — esta e
+    // pura e o browser a chama varias vezes por turno; contar la contaria
+    // dobrado. checarVitoria so LE estado.dominancia.
+    if (estado.config.regrasV4) {
+      const alvo = Math.ceil(estado.aldeias.length * (estado.config.vitoriaFracao || 0.75));
+      estado.dominancia = estado.dominancia || { A: 0, B: 0 };
+      for (const d of ["A", "B"]) {
+        estado.dominancia[d] = aldeiasDe(estado, d).length >= alvo ? estado.dominancia[d] + 1 : 0;
       }
     }
     // 6) DECISAO e 7) VITORIA sao orquestrados por rodarTurno (PECA 4),
@@ -2326,8 +2370,16 @@
     return aldeiasDe(estado, dono).length > 0;
   }
 
-  // (7) VITORIA por eliminacao. null = partida continua.
+  // (7) VITORIA por dominancia (v4) OU eliminacao. null = partida continua.
   function checarVitoria(estado) {
+    // v4: >=vitoriaFracao das aldeias por vitoriaTurnos consecutivos. Leitura
+    // pura de estado.dominancia (o contador vive no tick). Ambos nunca passam
+    // o limiar juntos (2x75% > 100%), entao no maximo um vence aqui.
+    if (estado.config.regrasV4 && estado.dominancia) {
+      const need = estado.config.vitoriaTurnos || 2;
+      if (estado.dominancia.A >= need) return "A";
+      if (estado.dominancia.B >= need) return "B";
+    }
     const aVivo = jogadorVivo(estado, "A"), bVivo = jogadorVivo(estado, "B");
     if (aVivo && bVivo) return null;
     if (aVivo) return "A";
@@ -2378,9 +2430,22 @@
       }
       if (vencedor) break;
     }
+    // Motivo do fim, ANTES de qualquer desempate de teto.
+    const needVit = ((config || CONFIG).vitoriaTurnos) || 2;
+    let motivo;
+    if (vencedor === "empate") motivo = "empate";
+    else if (vencedor) motivo = (estado.dominancia && estado.dominancia[vencedor] >= needVit) ? "dominancia" : "eliminacao";
+    else motivo = "limite";
+    // v4: bateu o teto sem vitoria -> desempata por numero de aldeias, para a
+    // partida SEMPRE sair com um vencedor. Regras antigas: mantem "limite".
+    if (!vencedor && (config || CONFIG).regrasV4) {
+      const na = aldeiasDe(estado, "A").length, nb = aldeiasDe(estado, "B").length;
+      vencedor = na > nb ? "A" : nb > na ? "B" : "empate";
+      motivo = vencedor === "empate" ? "empate" : "limite_aldeias";
+    }
     return {
       vencedor: vencedor || "limite",
-      motivo: vencedor ? (vencedor === "empate" ? "empate" : "eliminacao") : "limite",
+      motivo,
       turnos: estado.turno,
       aldeiasA: aldeiasDe(estado, "A").length,
       aldeiasB: aldeiasDe(estado, "B").length,
@@ -2476,6 +2541,7 @@
 
   return {
     CONFIG,
+    CONFIG_V4,
     relatorioDesfecho,
     criarRng, rngInt,
     criarAldeia,

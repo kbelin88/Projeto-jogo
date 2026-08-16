@@ -120,9 +120,10 @@ AGORA`, `(era X ha N turnos)` de defesa, `voce atacou aqui Nx nos ultimos 8 turn
 - **Commits: SEM rodapé de sessão.** Nada de `Co-Authored-By: Claude` nem link de
   conversa — o repo é PÚBLICO e o link expõe a conversa. Travado no settings.
 - **Uma flag por vez / um commit por etapa** ao seguir uma spec de lote.
-- **Não tocar** em: valores de combate/triângulo/custos de unidade (mantém partidas
-  comparáveis); topologia/custos do `world-iberia.js`; encaixe da imagem (escala
-  1.17613, xMidYMin slice).
+- **Não tocar** em: valores de combate/triângulo/custos de unidade no `CONFIG` (mantém
+  partidas comparáveis); topologia/custos do `world-iberia.js`; encaixe da imagem (escala
+  1.17613, xMidYMin slice). **Exceção sancionada:** o rebalanceamento vive em
+  `CONFIG_V4` (fork opt-in — ver §7); o `CONFIG` segue congelado e byte-idêntico.
 - **Marcha nunca por pixel** — sempre custo de rota (`turnosDeCaminho`). Regressão dessa
   regra já mordeu 3x (L3/L4/B3): "o número que o DECISOR LÊ tem de ser o que o MOTOR
   EXECUTA" — uma regra, uma implementação.
@@ -135,33 +136,37 @@ AGORA`, `(era X ha N turnos)` de defesa, `voce atacou aqui Nx nos ultimos 8 turn
 
 ---
 
-## 7. Estado atual (15/08/2026)
+## 7. Estado atual (16/08/2026)
 
 ⚠️ **`main` local está DESATUALIZADA** (`1ee5cc2`, 03-04/08). Todo o trabalho recente
-está na branch **`spec-lote-d-memoria`** (~49 commits à frente), na linhagem:
-`econ-relatorio-0408 → spec-lote-a-instrumentacao → spec-lote-b-prompt-p3 →
-spec-lote-c-visao → spec-lote-d-memoria`. Cada branch tem um `RELATORIO_LOTE_*.md` na
-raiz. **Branches locais, ainda não pushadas** (exceto `spec-lote-a`, mergeada no remoto
-via PR #2).
+está na branch **`spec-lote-e-fairness`**, na linhagem: `... → spec-lote-c-visao →
+spec-lote-d-memoria → spec-lote-e-fairness`. **Branches locais, ainda não pushadas.** O
+ponto salvo mais recente é **`HANDOFF_2026-08-16.md`** — leia-o para retomar.
 
-- **LOTE A** — instrumentação: truncamento (`finish_reason=length`), modo de captura de
-  raciocínio (completo/resumo/ausente), custo/tokens por turno.
-- **LOTE B** — prompt P3: coerência relatório↔motor (defesa efetiva rotulada, tropas em
-  casa, marcha por velocidade), tudo atrás da flag `promptP3`.
-- **LOTE C** — visão de mapa: origem na marcha, donos na rede, fronteira/interior,
-  contagem agregada, rótulos de expectativa. (E6/E7 ficaram p/ o LOTE D.)
-- **LOTE D** — diagnóstico + memória: `finish`/`nativo`/`erroApi` no browser (D1),
-  max_tokens explícito (D2), categorias VAZIO/INVALIDO/VALIDO + agência honesta (D3),
-  delta de defesa (D4), memória de ataque por alvo (D5).
+- **LOTES A→D** — instrumentação, prompt P3, visão de mapa, diagnóstico+memória (cada um
+  atrás de flags; ver `RELATORIO_LOTE_C.md`/`_D.md`).
+- **LOTE E** — fairness do turno (Fable 5): ordens simultâneas (A1), interceptação na
+  chegada (A3), desempate de estrada sem viés (A4), `| ms N` no log (A2), teto configurável
+  (A6), 4 métricas no analisador (E7). Ver `RELATORIO_LOTE_E.md`.
+- **RULESET V4 (reboot de balanceamento, 16/08)** — a partir da análise da partida
+  qwen×deepseek de 15/08 (monocultura de arqueiro = equilíbrio racional; triângulo morto;
+  impasse por vitória-só-eliminação). 6 mudanças opt-in em `Engine.CONFIG_V4` (o `CONFIG`
+  congelado segue default e byte-idêntico): counter 1.25→1.5, cavaleiro def1→2 e turnos
+  2→1, madeira 10→15, `escalaMarcha=2/3` (centro 9→6 turnos), e **vitória por ≥75% das
+  aldeias por 2 turnos** (além da eliminação). Toggle no browser (**⚔️ regras v4**,
+  `#gv4`), 7º arg `v4` no runner. Testes em `testes/test_regras_v4.js` (12/12). Smoke
+  free-tier confirmou: Nemotron 120b diversificou (72L/39A/5C); Gemini caiu em lanceiro-mono
+  e PERDEU. Ver memória `ruleset-v4-reboot`.
 
-**Torneio (14/08):** qwen3-235b-thinking venceu nemotron-3-super-120b por eliminação em
-101 turnos. DeepSeek R1 é o melhor jogador do benchmark até agora.
+**Próximo passo:** partida ao vivo **DeepSeek R1 × Qwen3-235B com regras v4** no browser
+(Lucas vai assistir). A pergunta: dois reasoners fortes montam exército MISTO?
 
-**Abertos:** (a) 23 respostas vazias na partida de 14/08 — causa DESCONHECIDA, o D1 vai
-diagnosticar na próxima partida real; (b) monocultura de arqueiro (99.7%) — LOTE C não
-resolveu, fica p/ lote de economia; (c) cliente OpenRouter duplicado browser/runner —
-refactor adiado; (d) 2 chaves de API expostas em 03/08 a revogar; (e) `main` a
-atualizar (a árvore de branches precisa de consolidação).
+**Abertos:** (a) 23 respostas vazias (13/08) — instrumento pronto (D1/E5/E7), confirmação
+na próxima partida real; (b) **monocultura ENDEREÇADA pelo v4** — falta confirmar em dois
+reasoners fortes; (c) madeira 15 tenta lanceiro-spam (Fase 4) — Lucas manteve 15, v4 pune;
+(d) cliente OpenRouter duplicado browser/runner — adiado; (e) 2 chaves expostas 03/08 a
+revogar; (f) `main` a consolidar.
 
-**Orçamento OpenRouter:** conta paga, ~$4.18 restantes de $10. `:free` = 50/dia
-compartilhado. Custos medidos: raciocinadores pesados ~$0.03/turno (out $2.5-10/M).
+**Orçamento OpenRouter:** conta paga, **~$2.32 restantes** de $10 (16/08). Dá pra ~1
+partida de 2 reasoners (~$1.7). `:free` = 50/dia compartilhado. Raciocinadores pesados
+~$0.03/turno (out $2.3-10/M).

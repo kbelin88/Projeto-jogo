@@ -21,7 +21,10 @@ const seed = parseInt(process.argv[4], 10) || 1;
 const maxTurnos = parseInt(process.argv[5], 10) || 40;
 const outfile = process.argv[6] || path.join(__dirname, "..", "resultados", "fase7-llama3", `seed${seed}.txt`);
 
-const cfg = JSON.parse(JSON.stringify(Engine.CONFIG));
+// 7o arg opcional: "v4" usa o CONFIG_V4 (reboot de balanceamento); default = regras
+// congeladas (CONFIG). Ver ruleset v4 no engine.js.
+const regras = (process.argv[7] || "v3").toLowerCase();
+const cfg = JSON.parse(JSON.stringify(regras === "v4" ? Engine.CONFIG_V4 : Engine.CONFIG));
 cfg.layout = "iberia"; cfg.seed = seed;
 const ehBurro = (spec) => spec.toLowerCase() === "burro";
 const cliente = {
@@ -58,7 +61,7 @@ const out = (s) => L.push(s);
 const gravar = () => fs.writeFileSync(outfile, L.join("\n"));
 
 out(`=== PARTIDA Rei A (${etiquetaDe.A}) vs Rei B (${etiquetaDe.B}) | seed ${seed} | maxTurnos ${maxTurnos} | ${new Date().toLocaleString()} ===`);
-out("condicoes: ambiente=iberia | temp=0 | prompt=relatorio v3 (disponivel-para-enviar) + combate v3 (atq/def, counter 1.25) + clamp | thinking=on");
+out("condicoes: ambiente=iberia | temp=0 | prompt=relatorio v3 (disponivel-para-enviar) + combate v3 (atq/def, counter " + cfg.bonus_forca_triangulo + ") + clamp | thinking=on" + (cfg.regrasV4 ? " | regras=v4 (cav def2/1t, madeira 15, dist x2/3, vitoria 75%/2t)" : ""));
 out("");
 
 function logEventos(estado, turno) {

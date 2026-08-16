@@ -473,6 +473,7 @@
   <label>turnos <input id="gmax" type="number" min="1" max="9999" value="40" style="width:56px"></label>
   <label title="Teto de gasto (US$): a partida encerra LIMPA (salva .txt + replay) ao atingir o valor. 0 ou vazio desliga o freio.">teto $ <input id="gteto" type="number" min="0" step="0.5" value="7" style="width:56px"></label>
   <label title="Ignora o limite de turnos: a partida corre ate a vitoria ou o empate por estagnacao (30t sem mudanca). Acompanhe o gasto no titulo da aba.">&#8734; sem limite <input type="checkbox" id="gilim"></label>
+  <label title="Regras v4 (reboot de balanceamento): counter 1.5, cavaleiro def2 e 1 turno, madeira 15/turno, distancias x2/3 (centro 9->6t), e VITORIA por segurar 75% do mapa por 2 turnos. Desligado = regras congeladas (v3), comparaveis com o historico.">&#9876;&#65039; regras v4 <input type="checkbox" id="gv4"></label>
   <button id="glog" title="Baixar o .txt da ultima partida do modelo">Baixar log</button>
   <button id="greplaysave" title="Baixar o replay .json da partida gravada">&#127909; Salvar replay</button>
   <label class="botao-arquivo" title="Reproduzir um replay .json gravado"><button id="greplayload_visual" onclick="document.getElementById('greplayload').click()">&#9654; Ver replay</button><input type="file" id="greplayload" accept=".json" style="display:none"></label>
@@ -2284,13 +2285,20 @@
     motivoInterrupcao = null;
     geminiLog = []; // log zera AQUI (ponto unico, junto dos contadores) — nunca no Play/resume
     custoTotal = 0; estagCont = 0; estagPrev = ""; checkpointArquivo = null; checkpointIdx = 0; // medidor, empate e checkpoint zeram por partida
-    game = Engine.criarEstadoInicial(Engine.CONFIG);
+    game = Engine.criarEstadoInicial(cfgAtual());
     // indice celula -> aldeia (posicoes fixas): filtro rapido no render
     game.byCell = new Map(game.aldeias.map((a) => [a.x + "," + a.y, a]));
     capitalIds = new Set(game.aldeias.filter((a) => a.dono !== null).map((a) => a.id));
     enquadrarTeatro();
     updateGameHUD();
     draw();
+  }
+
+  // Config da partida ao vivo: v4 (reboot) se o toggle estiver ligado, senao as
+  // regras congeladas (CONFIG). Hoisted -> usada tanto no reset quanto no log.
+  function cfgAtual() {
+    const el = document.getElementById("gv4");
+    return (el && el.checked) ? Engine.CONFIG_V4 : Engine.CONFIG;
   }
 
   function passoTurno() {
@@ -2900,7 +2908,8 @@
       // PROVENIENCIA (13/07): registrar as condicoes do experimento no proprio
       // log. Descoberto na analise da partida de 13/07: sem isso, so lendo o
       // codigo da pra saber se a rodada foi baseline ou rejfim.
-      geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=P2 (minimo por alvo) + relatorio v3 + combate v3 | normalizacao H3 ativa | thinking=on | max_tokens_resposta=" + maxTokensLLM + " | " + (semLimite ? "SEM LIMITE de turnos (empate por estagnacao em 30t)" : "maxTurnos " + maxT) + " | teto=" + (TETO_CUSTO > 0 ? "$" + TETO_CUSTO.toFixed(2) : "desligado") + "\n"); // LOTE E, E6
+      const regrasTxt = cfgAtual().regrasV4 ? "regras=v4 (counter 1.5, cav def2/1t, madeira 15, dist x2/3, vitoria 75%/2t)" : "regras=congeladas v3";
+      geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=P2 (minimo por alvo) + relatorio v3 + combate v3 | " + regrasTxt + " | normalizacao H3 ativa | thinking=on | max_tokens_resposta=" + maxTokensLLM + " | " + (semLimite ? "SEM LIMITE de turnos (empate por estagnacao em 30t)" : "maxTurnos " + maxT) + " | teto=" + (TETO_CUSTO > 0 ? "$" + TETO_CUSTO.toFixed(2) : "desligado") + "\n"); // LOTE E, E6
       // AUTO-SAVE: cria o checkpoint .txt no disco com o cabecalho (via servir.py).
       const tsCp = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 16);
       checkpointArquivo = ("partida_" + vA + "_vs_" + vB + "_" + tsCp).replace(/[^a-z0-9._-]/gi, "-") + ".txt";
