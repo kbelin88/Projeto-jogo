@@ -649,7 +649,7 @@
   <label>turnos <input id="gmax" type="number" min="1" max="9999" value="40" style="width:56px"></label>
   <label title="Teto de gasto (US$): a partida encerra LIMPA (salva .txt + replay) ao atingir o valor. 0 ou vazio desliga o freio.">teto $ <input id="gteto" type="number" min="0" step="0.5" value="7" style="width:56px"></label>
   <label title="Ignora o limite de turnos: a partida corre ate a vitoria ou o empate por estagnacao (30t sem mudanca). Acompanhe o gasto no titulo da aba.">&#8734; sem limite <input type="checkbox" id="gilim"></label>
-  <label title="Regras v4 (reboot de balanceamento): counter 1.5, cavaleiro def2 e 1 turno, madeira 15/turno, distancias x2/3 (centro 9->6t), e VITORIA por segurar 75% do mapa por 2 turnos. Desligado = regras congeladas (v3), comparaveis com o historico.">&#9876;&#65039; regras v4 <input type="checkbox" id="gv4"></label>
+  <label title="Regras v4 (reboot de balanceamento): counter 1.5, cavaleiro def2 e 1 turno, madeira 30 e ferro 20 por turno, distancias x0.2, sem a dica de conquistar neutras primeiro, e VITORIA por segurar 75% do mapa por 2 turnos. MARCAR/DESMARCAR REINICIA A PARTIDA. Desligado = regras congeladas (v3), comparaveis com o historico.">&#9876;&#65039; regras v4 <input type="checkbox" id="gv4"></label>
   <button id="glog" title="Baixar o .txt da ultima partida do modelo">Baixar log</button>
   <button id="greplaysave" title="Baixar o replay .json da partida gravada">&#127909; Salvar replay</button>
   <label class="botao-arquivo" title="Reproduzir um replay .json gravado"><button id="greplayload_visual" onclick="document.getElementById('greplayload').click()">&#9654; Ver replay</button><input type="file" id="greplayload" accept=".json" style="display:none"></label>
@@ -3109,7 +3109,11 @@
       // "dist x2/3" — e a partida das 18:30, que correu de facto a 0.3, foi
       // lida como se nao tivesse mudado nada. Mesma classe de bug que ja mordeu
       // 3x no motor: o que se LE tem de ser o que se EXECUTA. Agora le do cfg.
-      const _c = cfgAtual();
+      // 17/08: LE DO ESTADO, nao do checkbox. O cabecalho descreve a partida
+      // que esta a correr — se ler o toggle, descreve uma intencao que pode
+      // nunca ter sido aplicada (foi o que aconteceu: 3 partidas logadas como
+      // v4 correram em v3 porque o `game` fora criado antes de marcar a caixa).
+      const _c = (game && game.config) ? game.config : cfgAtual();
       const regrasTxt = _c.regrasV4
         ? "regras=v4 (counter " + _c.bonus_forca_triangulo +
           ", cav def" + _c.tropas.cavaleiro.def + "/" + _c.tropas.cavaleiro.turnos + "t" +
@@ -4004,6 +4008,25 @@
   // ---------- Início ----------
   resize();
   novaPartida();
+
+  // O TOGGLE DAS REGRAS TEM DE MORDER. Antes so era lido por cfgAtual() na
+  // criacao do estado: marcar a caixa depois da pagina carregar e carregar em
+  // Play deixava o jogo em v3 com o log a dizer v4. Agora mudar o ruleset
+  // refaz a partida — trocar de regras a meio nao significa nada de qualquer
+  // forma, e um mapa em v3 com regras v4 por cima nao e nem uma coisa nem outra.
+  (function ligarToggleRegras() {
+    const el = document.getElementById("gv4");
+    if (!el) return;
+    el.addEventListener("change", () => {
+      if (game && game.turno > 0 &&
+          !confirm("Mudar o conjunto de regras reinicia a partida (turno " + game.turno + ").\n\nContinuar?")) {
+        el.checked = !el.checked;   // desfaz: o utilizador recusou
+        return;
+      }
+      novaPartida();
+      setStatus("regras: " + (el.checked ? "v4" : "congeladas v3") + " — partida reiniciada");
+    });
+  })();
 })();
 </script>
 </body>
