@@ -63,8 +63,9 @@ gabarito escrito antes de experimento, artefato publicado antes da próxima fase
   counter, taxa de ataque viável (conquistas/COMBATES, nunca /envios), cobertura de
   raciocínio, etc.
 - **`testes/`** — 29 ficheiros de teste do motor (`test_*.js`). **`testes/test_prompt_p4.js`**
-  (39 casos) cobre o P4, o fog e o parser tolerante. **`testes_arena/`** — 6 smokes que fazem
-  `eval` do `index.html` num stub Node; o **`Smoke5fog.js`** guarda a camara do Rei. **`testes/test_lote_c.js`** cobre
+  (39 casos) cobre o P4, o fog e o parser tolerante. **`testes_arena/`** — 7 smokes; o
+  **`Smoke5fog.js`** guarda a câmara do Rei e o **`Smoke6rede.js`** a resiliência a throttle
+  de free-tier (com `fetch` falso: não toca a rede, não gasta cota). **`testes/test_lote_c.js`** cobre
   LOTE C/D (regressão byte-idêntica + features). **`testes/ref-lote-c/`** = os 3 outputs
   de referência da regressão. **`testes_arena/`** — 5 smokes que fazem `eval` do
   `index.html` num stub Node.
@@ -163,6 +164,25 @@ longe. (O `testes_arena/Smoke5fog.js` apanhou esta afirmação exagerada num han
 O fog é **do relatório**: `montarVisao` continua a carregar todos os alvos (com `visivel` e
 `visto` anotados), então motor, `jogadorBurro` e espectador seguem omniscientes.
 
+### 5.3 Free-tier: o throttle é a maior causa de morte de partida
+
+Medido em 17/08: as duas primeiras partidas em P4 morreram com **HTTP 429 do
+`glm-5.2:free`** — provedor único (Decart), `limit_source: upstream_provider_shared_pool`,
+`retry_after_seconds: 5`. O Nemotron 3 Ultra fez 5 chamadas sem um erro.
+
+O cliente (`gerarOpenRouter`) **honra o `Retry-After`** (header ou `retry_after_seconds` do
+corpo), com teto de 45s por espera e `MAX_TENT_OR = 9` tentativas. Acima dele,
+`deliberarComRetentativa` repete a **deliberação** até 2 vezes em erro de rede — seguro
+porque no caminho de ordens simultâneas nada foi aplicado ainda, e repete a **chamada**,
+nunca o **parse** (JSON quebrado continua sem segunda chance: é o degrau 0 do benchmark).
+
+O log passou a registar o throttle que a partida **sobreviveu** (`THROTTLE: N x 429/503
+recuperado(s)`, `RETENTATIVA DE TURNO: N`, e um campo no RESUMO) — sem isso um modelo que
+precisa de 5 tentativas por turno parecia igual a um que responde de primeira.
+
+**Latência importa mais que custo em free-tier:** Nemotron 3 Ultra 550B tem mediana de
+**167 s/turno** (máx. 264 s) contra 5.9 s do GLM 5.2. Quatro turnos = 11 min; 20 turnos ≈ 1h45.
+
 **A câmara do Rei (UI):** o seletor `olhos de` (`#gvisao`) no painel escurece o que o Rei
 escolhido não vê, marca as lembradas com `T<turno do último avistamento>` em pontilhado, põe
 `?` nas nunca exploradas, e mostra uma etiqueta `ve N · lembra N · nunca viu N`. É só câmara
@@ -222,7 +242,7 @@ recente é **`HANDOFF_2026-08-17.md`** — leia-o para retomar, sobretudo o §2 
   deliberada entre turnos); `depoimento` **não volta nunca**, vai só para a tela e o `.txt`
   (roteiro de narração). Funcionaram em 100% das respostas de DeepSeek R1 e Qwen3-235B.
 
-**Testes:** 29 ficheiros no motor + 6 smokes + `verificarEquilibrio()` = 0. Destaque para
+**Testes:** 29 ficheiros no motor + 7 smokes + `verificarEquilibrio()` = 0. Destaque para
 **`testes/test_ruleset_vivo.js`**: prova que há um ruleset só, que é o que pensamos, e que os
 invariantes valem sob ele (produção observada = declarada, marcha executada = marcha prometida
 no relatório, escala mesmo aplicada, `minimoParaTomar` == `preverCombate`).

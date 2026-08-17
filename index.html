@@ -1951,6 +1951,10 @@
   let erroUltimaChamada = null; // LOTE D, D1: data.error cru, p/ diagnosticar resposta vazia (causa dos 23 vazios era desconhecida)
   let modoRacUltimaChamada = null; // A2: modo de captura do raciocinio (completo|resumo|ausente)
   let msUltimaChamada = null; // LOTE E, E5: duracao (ms) da chamada que resolveu, p/ testar corte por tempo nos vazios
+  // FREE-TIER (17/08): quantos 429/503 foram RECUPERADOS nesta chamada. Sem isto o
+  // log so mostra o throttle que MATOU a partida e esconde o que ela sobreviveu —
+  // e é justamente a contagem que diz se um modelo free e usavel sem vigilancia.
+  let throttlesUltimaChamada = 0;
   let custoTotal = 0;             // $ acumulado da partida (medidor ao vivo no titulo da aba)
   let checkpointArquivo = null, checkpointIdx = 0; // AUTO-SAVE por turno no disco (via servir.py)
   // Anexa o .txt da partida no disco a cada turno (POST /checkpoint). await curto
@@ -2659,10 +2663,17 @@
     }
     return openrouterKey;
   }
+  // MAX_TENT_OR: quantas vezes insistir num 429/503 antes de desistir. Subiu de 6
+  // para 9 em 17/08 depois de tres partidas em free-tier morrerem no mesmo ponto:
+  // o endpoint :free do glm-5.2 e servido por UM provedor com pool compartilhado,
+  // e o proprio erro pede "retry shortly" com Retry-After 5s. Insistir e correto —
+  // um 429 nao e resposta do modelo, e infra: nao contamina metrica nenhuma.
+  const MAX_TENT_OR = 9;
   async function gerarOpenRouter(prompt, modelo) {
     const faltam = 300 - (Date.now() - ultimoEnvioOR); // pacing leve p/ rate limit
     if (faltam > 0) await espera(faltam);
     ultimoEnvioOR = Date.now();
+    throttlesUltimaChamada = 0;
     for (let tentativa = 1; ; tentativa++) {
       const t0 = Date.now(); // LOTE E, E5
       const resp = await fetch(OPENROUTER_URL, {
@@ -2694,8 +2705,19 @@
         return { texto: msg.content || "", raciocinio };
       }
       const corpo = await resp.text().catch(() => "");
-      if ((resp.status !== 429 && resp.status !== 503) || tentativa >= 6) throw new Error("OpenRouter HTTP " + resp.status + ": " + corpo);
-      await espera(Math.min(1000 * 2 ** tentativa, 40000) + 500); // backoff p/ throttle (429 = cota free)
+      if ((resp.status !== 429 && resp.status !== 503) || tentativa >= MAX_TENT_OR) throw new Error("OpenRouter HTTP " + resp.status + ": " + corpo);
+      throttlesUltimaChamada++;
+      // HONRAR O Retry-After (17/08): o provedor DIZ quanto esperar, no header e no
+      // corpo (retry_after_seconds). Adivinhar por backoff exponencial gastava as
+      // tentativas mais rapido do que o pool levava a liberar. Usa-se o MAIOR entre
+      // o pedido do provedor e o backoff, com teto de 45s por espera.
+      let pedido = Number(resp.headers.get("retry-after")) * 1000;
+      if (!isFinite(pedido) || pedido <= 0) {
+        const m = /"retry_after_seconds"\s*:\s*(\d+)/.exec(corpo);
+        pedido = m ? Number(m[1]) * 1000 : 0;
+      }
+      const backoff = Math.min(1000 * 2 ** tentativa, 40000) + 500;
+      await espera(Math.min(Math.max(pedido, backoff), 45000)); // backoff p/ throttle (429 = cota free)
     }
   }
 
@@ -2762,6 +2784,11 @@
     if (dt.erroApi) L.push("ERRO API: " + dt.erroApi); // LOTE D, D1
     if (dt.truncado) { L.push("TRUNCADO: resposta atingiu o teto de tokens do provedor (finish_reason=length) \u2014 turno conta como passado, sem retry"); ct.truncamentos++; } // A1
     if (r.erroRede) L.push(">>> ERRO DE REDE \u2014 turno NAO contabilizado (sem resposta do modelo)");
+    // FREE-TIER (17/08): o throttle que a partida SOBREVIVEU tambem tem de aparecer.
+    // Antes o log so mostrava o 429 que a matou; um modelo free que precisa de 5
+    // tentativas por turno parece igual a um que responde de primeira, e nao e.
+    if (dt.throttles) { L.push("THROTTLE: " + dt.throttles + " x 429/503 recuperado(s) nesta chamada (infra, fora das metricas)"); ct.throttles = (ct.throttles || 0) + dt.throttles; }
+    if (r.retentativas) { L.push("RETENTATIVA DE TURNO: " + r.retentativas + " (erro de rede; a deliberacao foi repetida sobre a MESMA fotografia)"); ct.retentativas = (ct.retentativas || 0) + r.retentativas; }
     L.push("resposta crua: " + JSON.stringify(r.cru));
     L.push(r.raciocinio ? "raciocinio: " + r.raciocinio : "raciocinio: (nao capturado)");
     L.push("ordem.construir: " + JSON.stringify(r.ordem.construir || []));
@@ -2831,6 +2858,7 @@
       resumo.push("Rei " + lado + " (" + rot + "): " + c.turnos + " turnos | " +
         "AGENCIA " + ag + " envios/turno (" + c.enviosAceitos + " envios em " + comResp + " turnos com resposta, " + c.constrAceitas + " constr) | " +
         "VALIDO " + c.valido + " | INVALIDO " + (c.invalido || 0) + " | VAZIO " + (c.vazio || 0) + " | rejeicoes " + c.rejeicoes +
+        ((c.throttles || c.retentativas) ? " | THROTTLE " + (c.throttles || 0) + " (retentativas de turno " + (c.retentativas || 0) + ")" : "") +
         " | clamp " + c.ajustados + "/" + c.enviosAceitos + " (taxa " + taxaClamp + ")" +
         " | normalizacoes " + c.normalizacoes +
         " | truncamentos " + (c.truncamentos || 0) +
@@ -3008,7 +3036,7 @@
   async function deliberarLado(lado, gerador, rotulo, meuRun) {
     if (!Engine.aldeiasDe(game, lado).length) return null;
     finishUltimaChamada = null; modoRacUltimaChamada = null; finishNativoUltimaChamada = null; erroUltimaChamada = null; msUltimaChamada = null; // A1/A2/D1/E5
-    const snapD1 = () => ({ finish: finishUltimaChamada, finishNativo: finishNativoUltimaChamada, erroApi: erroUltimaChamada, modoRac: modoRacUltimaChamada, ms: msUltimaChamada });
+    const snapD1 = () => ({ finish: finishUltimaChamada, finishNativo: finishNativoUltimaChamada, erroApi: erroUltimaChamada, modoRac: modoRacUltimaChamada, ms: msUltimaChamada, throttles: throttlesUltimaChamada });
     if (!gerador) { // burro: decide sem rede (D1 fica nulo)
       return { kind: "burro", ordem: Engine.jogadorBurro(Engine.montarVisao(game, lado)), tokens: null, d1: snapD1() };
     }
@@ -3030,6 +3058,39 @@
     return { kind: "llm", cru, raciocinio, ordem: p.ordem, ok: p.ok, erroParse: p.erro, normalizacoes: p.normalizacoes || [], tokens: tokensDoLado, d1, plano: p.plano, depoimento: p.depoimento };
   }
 
+  // FREE-TIER (17/08) — RETENTATIVA DE TURNO em erro de rede.
+  //
+  //  Porque isto e legitimo e nao "dar segunda chance ao modelo": um 429 nao e
+  //  resposta do modelo, e ausencia de resposta. O projeto ja o trata fora das
+  //  metricas ("ERROS DE REDE ... fora das metricas"). O que se repete aqui e a
+  //  CHAMADA, nunca o parse — um JSON quebrado continua sem retry, porque ESSE
+  //  e o degrau 0 que o benchmark mede.
+  //
+  //  Porque e seguro para a fairness: no caminho de ordens simultaneas nada foi
+  //  aplicado quando isto corre. Os dois Reis deliberam sobre a MESMA fotografia
+  //  e so depois se aplica A e B. Repetir a deliberacao de um lado devolve-lhe
+  //  exatamente o mesmo prompt, sobre exatamente o mesmo estado. Nada vaza.
+  //
+  //  Porque existe: tres partidas de 17/08 morreram no turno 1 e no turno 4 com
+  //  429 do pool compartilhado do glm-5.2:free — sem isto, testar em free-tier
+  //  sem alguem a vigiar o ecra e impossivel.
+  const RETENT_TURNO = 2;        // deliberacoes extras por lado, alem da primeira
+  const ESPERA_RETENT_MS = 20000; // o pool leva dezenas de segundos a liberar
+  async function deliberarComRetentativa(lado, gerador, rotulo, meuRun) {
+    let d = await deliberarLado(lado, gerador, rotulo, meuRun);
+    for (let n = 1; n <= RETENT_TURNO; n++) {
+      if (d === "abort" || !d || d.kind !== "erroRede") return d;
+      if (runId !== meuRun) return "abort";
+      setStatus("Rei " + lado + ": erro de rede — nova tentativa " + n + "/" + RETENT_TURNO + " em " + (ESPERA_RETENT_MS / 1000) + "s");
+      await espera(ESPERA_RETENT_MS);
+      if (runId !== meuRun) return "abort";
+      const nova = await deliberarLado(lado, gerador, rotulo, meuRun);
+      if (nova && nova !== "abort") nova.retentativas = n;   // p/ o log dizer que houve
+      d = nova;
+    }
+    return d;
+  }
+
   // LOTE E, E2 — metade 2 do turno SIMULTANEO: diagnostica, executa e coleta o
   // diag do lado a partir da deliberacao ja feita. Espelha exatamente o que o
   // decidirLado fazia depois do parse. O retorno bate byte a byte com o do
@@ -3043,11 +3104,12 @@
       return null;
     }
     if (delib.kind === "erroRede") { // curto-circuito: erro de rede nao passa pelo parser (bug 23/07)
+      // (as retentativas de turno ja foram gastas em deliberarComRetentativa)
       const vazia = { construir: [], envios: [] };
       const dgErro = Engine.diagnosticarOrdem(game, lado, vazia);
       Engine.executarOrdem(game, lado, vazia); // limpa rejeicoesAnteriores do lado
       coletarDiag(lado, vazia, dgErro, false, null, delib.d1);
-      return { cru: delib.cru, raciocinio: null, ordem: vazia, diag: dgErro, ok: false, normalizacoes: [], erroRede: delib.erroRede };
+      return { cru: delib.cru, raciocinio: null, ordem: vazia, diag: dgErro, ok: false, normalizacoes: [], erroRede: delib.erroRede, retentativas: delib.retentativas || 0 };
     }
     const diag = Engine.diagnosticarOrdem(game, lado, delib.ordem); // ANTES de executar
     Engine.executarOrdem(game, lado, delib.ordem);
@@ -3055,7 +3117,7 @@
     Engine.guardarPlano(game, lado, delib.plano);
     definirDepoimento(lado, delib.depoimento, game.turno);
     coletarDiag(lado, delib.ordem, diag, delib.ok, delib.tokens, delib.d1);
-    return { cru: delib.cru, raciocinio: delib.raciocinio, ordem: delib.ordem, diag, ok: delib.ok, erroParse: delib.erroParse, normalizacoes: delib.normalizacoes, plano: delib.plano, depoimento: delib.depoimento };
+    return { cru: delib.cru, raciocinio: delib.raciocinio, ordem: delib.ordem, diag, ok: delib.ok, erroParse: delib.erroParse, normalizacoes: delib.normalizacoes, plano: delib.plano, depoimento: delib.depoimento, retentativas: delib.retentativas || 0 };
   }
 
   async function passoTurnoDuelo(meuRun) {
@@ -3075,9 +3137,9 @@
       // LOTE E, E2 — ordens simultaneas (achado A1): delibera os DOIS lados sobre
       // a MESMA fotografia (nenhum executou), depois aplica A->B. Tira do Rei B a
       // visao dos envios que A ordenou NESTE turno. Chamadas de API sequenciais.
-      const dA = await deliberarLado("A", fabricarGerador(vA), vA, meuRun);
+      const dA = await deliberarComRetentativa("A", fabricarGerador(vA), vA, meuRun);
       if (dA === "abort") return;
-      const dB = await deliberarLado("B", fabricarGerador(vB), vB, meuRun);
+      const dB = await deliberarComRetentativa("B", fabricarGerador(vB), vB, meuRun);
       if (dB === "abort") return;
       rA = aplicarLado("A", dA);
       rB = aplicarLado("B", dB);
