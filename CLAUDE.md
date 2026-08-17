@@ -1,7 +1,7 @@
 # CLAUDE.md — Arena dos Reis (Projeto Jogo)
 
 Guia de contexto para qualquer modelo/agente que for trabalhar neste repositório.
-Atualizado: 15/08/2026. Repo público: https://github.com/kbelin88/Projeto-jogo
+Atualizado: 17/08/2026. Repo público: https://github.com/kbelin88/Projeto-jogo
 
 ---
 
@@ -120,15 +120,23 @@ AGORA`, `(era X ha N turnos)` de defesa, `voce atacou aqui Nx nos ultimos 8 turn
 - **Commits: SEM rodapé de sessão.** Nada de `Co-Authored-By: Claude` nem link de
   conversa — o repo é PÚBLICO e o link expõe a conversa. Travado no settings.
 - **Uma flag por vez / um commit por etapa** ao seguir uma spec de lote.
-- **Não tocar** em: valores de combate/triângulo/custos de unidade no `CONFIG` (mantém
-  partidas comparáveis); topologia/custos do `world-iberia.js`; encaixe da imagem (escala
-  1.17613, xMidYMin slice). **Exceção sancionada:** o rebalanceamento vive em
-  `CONFIG_V4` (fork opt-in — ver §7); o `CONFIG` segue congelado e byte-idêntico.
+- **UM RULESET SÓ, sem opt-in (17/08).** O `CONFIG` **é** o jogo e pode ser mexido — ainda
+  estamos a afinar, e comparabilidade com o histórico não é prioridade até haver YouTube e
+  ranking. O `CONFIG_V3_ARQUIVO` é o ruleset antigo, congelado e **não jogável**: existe só
+  porque `testes/test_lote_c.js` congela o texto do relatório contra estados gerados com ele.
+  **Nunca crie um segundo ruleset selecionável em tempo de execução** — houve um, ligado por
+  checkbox, e três partidas pagas (~$2.25) correram com as regras erradas enquanto o log dizia
+  o contrário. Ver `HANDOFF_2026-08-17.md` §2.
+- **Não tocar** em: topologia/custos do `world-iberia.js`; encaixe da imagem (escala 1.17613,
+  xMidYMin slice).
 - **Marcha nunca por pixel** — sempre custo de rota (`turnosDeCaminho`). Regressão dessa
   regra já mordeu 3x (L3/L4/B3): "o número que o DECISOR LÊ tem de ser o que o MOTOR
   EXECUTA" — uma regra, uma implementação.
 - **Métricas vêm do estado do motor** (replay `.json`), não de reparsear o `.txt`. "O
   `.txt` narra, o JSON mede."
+- **O log tem de descrever a partida que CORREU**, não a intenção do painel. O cabeçalho de
+  condições lê de `game.config`. Já mentiu uma vez (texto fixo "dist x2/3" depois da escala
+  mudar) e escondeu o bug do ruleset por um dia inteiro.
 - **Suíte tem de ficar verde** (23 testes + 5 smokes + `verificarEquilibrio()=0`) antes
   de commitar.
 - Sprite de aldeia é desenhado LEVANTADO (base em `baseVisualIB`, não na âncora crua) —
@@ -136,37 +144,40 @@ AGORA`, `(era X ha N turnos)` de defesa, `voce atacou aqui Nx nos ultimos 8 turn
 
 ---
 
-## 7. Estado atual (16/08/2026)
+## 7. Estado atual (17/08/2026)
 
-⚠️ **`main` local está DESATUALIZADA** (`1ee5cc2`, 03-04/08). Todo o trabalho recente
-está na branch **`spec-lote-e-fairness`**, na linhagem: `... → spec-lote-c-visao →
-spec-lote-d-memoria → spec-lote-e-fairness`. **Branches locais, ainda não pushadas.** O
-ponto salvo mais recente é **`HANDOFF_2026-08-16.md`** — leia-o para retomar.
+⚠️ **`main` local está DESATUALIZADA** (`1ee5cc2`, 03-04/08). Todo o trabalho recente está na
+branch **`spec-lote-e-fairness`**. **Branches locais, ainda não pushadas.** O ponto salvo mais
+recente é **`HANDOFF_2026-08-17.md`** — leia-o para retomar, sobretudo o §2 (o erro do dia).
 
-- **LOTES A→D** — instrumentação, prompt P3, visão de mapa, diagnóstico+memória (cada um
-  atrás de flags; ver `RELATORIO_LOTE_C.md`/`_D.md`).
-- **LOTE E** — fairness do turno (Fable 5): ordens simultâneas (A1), interceptação na
-  chegada (A3), desempate de estrada sem viés (A4), `| ms N` no log (A2), teto configurável
-  (A6), 4 métricas no analisador (E7). Ver `RELATORIO_LOTE_E.md`.
-- **RULESET V4 (reboot de balanceamento, 16/08)** — a partir da análise da partida
-  qwen×deepseek de 15/08 (monocultura de arqueiro = equilíbrio racional; triângulo morto;
-  impasse por vitória-só-eliminação). 6 mudanças opt-in em `Engine.CONFIG_V4` (o `CONFIG`
-  congelado segue default e byte-idêntico): counter 1.25→1.5, cavaleiro def1→2 e turnos
-  2→1, madeira 10→15, `escalaMarcha=2/3` (centro 9→6 turnos), e **vitória por ≥75% das
-  aldeias por 2 turnos** (além da eliminação). Toggle no browser (**⚔️ regras v4**,
-  `#gv4`), 7º arg `v4` no runner. Testes em `testes/test_regras_v4.js` (12/12). Smoke
-  free-tier confirmou: Nemotron 120b diversificou (72L/39A/5C); Gemini caiu em lanceiro-mono
-  e PERDEU. Ver memória `ruleset-v4-reboot`.
+- **LOTES A→D** — instrumentação, prompt P3, visão de mapa, diagnóstico+memória.
+- **LOTE E** — fairness do turno: ordens simultâneas (A1), interceptação na chegada (A3),
+  desempate de estrada sem viés (A4), `| ms N` no log (A2), teto configurável (A6), 4 métricas
+  no analisador (E7). Ver `RELATORIO_LOTE_E.md`.
+- **RULESET (17/08)** — o que era o "reboot v4" **é agora o jogo**, sem toggle:
+  produção madeira 30 / ferro 20, counter 1.5, cavaleiro def 2 em 1 turno, `escalaMarcha` 0.2
+  (Lisboa→Barcelona 6 turnos, era 27), `dicaNeutras` false (saiu "conquiste neutras primeiro"),
+  vitória por ≥75% das aldeias por 2 turnos. O `CONFIG_V3_ARQUIVO` guarda o antigo, não jogável.
+- **TRANSMISSÃO v5** — barra longa no topo (modelo, aldeias, tropas, composição L/A/C
+  empilhada, madeira, ferro, deltas, turno ao centro) e dois quadros separados no rodapé
+  (depoimento do turno + benchmark ao vivo com custo em US$). Painéis laterais fora por CSS.
+- **RESUMOS DO REI** (flag `resumosDoRei`) — `plano` volta no prompt do turno seguinte (memória
+  deliberada entre turnos); `depoimento` **não volta nunca**, vai só para a tela e o `.txt`
+  (roteiro de narração). Funcionaram em 100% das respostas de DeepSeek R1 e Qwen3-235B.
 
-**Próximo passo:** partida ao vivo **DeepSeek R1 × Qwen3-235B com regras v4** no browser
-(Lucas vai assistir). A pergunta: dois reasoners fortes montam exército MISTO?
+**Testes:** 28 no motor + 5 smokes + `verificarEquilibrio()` = 0. Destaque para
+**`testes/test_ruleset_vivo.js`**: prova que há um ruleset só, que é o que pensamos, e que os
+invariantes valem sob ele (produção observada = declarada, marcha executada = marcha prometida
+no relatório, escala mesmo aplicada, `minimoParaTomar` == `preverCombate`).
 
-**Abertos:** (a) 23 respostas vazias (13/08) — instrumento pronto (D1/E5/E7), confirmação
-na próxima partida real; (b) **monocultura ENDEREÇADA pelo v4** — falta confirmar em dois
-reasoners fortes; (c) madeira 15 tenta lanceiro-spam (Fase 4) — Lucas manteve 15, v4 pune;
-(d) cliente OpenRouter duplicado browser/runner — adiado; (e) 2 chaves expostas 03/08 a
-revogar; (f) `main` a consolidar.
+**Próximo passo:** validar o ruleset novo em **free-tier** (sem crédito até ~fim de agosto). As
+perguntas: o duelo rei-contra-rei chega por volta do turno 10? As neutras esgotam-se? **Alguém
+compra cavaleiro** agora que ele custa 1.5 turnos de produção em vez de 5?
 
-**Orçamento OpenRouter:** conta paga, **~$2.32 restantes** de $10 (16/08). Dá pra ~1
-partida de 2 reasoners (~$1.7). `:free` = 50/dia compartilhado. Raciocinadores pesados
-~$0.03/turno (out $2.3-10/M).
+**Abertos:** (a) monocultura endereçada no papel, **nunca testada** sob o ruleset novo com dois
+reasoners; (b) zero cavaleiros em 4 partidas; (c) **entesouramento** — 62 de 90 envios com uma
+única tropa, achado comportamental novo; (d) 23 respostas vazias (13/08) não reapareceram;
+(e) cliente OpenRouter duplicado; (f) 2 chaves expostas 03/08 a revogar; (g) `main` a consolidar.
+
+**Orçamento OpenRouter: ESGOTADO** (HTTP 403 no turno 25 de 17/08). Recarrega ~fim de agosto.
+Custo observado ~$0.041/turno com dois raciocinadores.
