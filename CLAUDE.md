@@ -63,7 +63,8 @@ gabarito escrito antes de experimento, artefato publicado antes da próxima fase
   counter, taxa de ataque viável (conquistas/COMBATES, nunca /envios), cobertura de
   raciocínio, etc.
 - **`testes/`** — 29 ficheiros de teste do motor (`test_*.js`). **`testes/test_prompt_p4.js`**
-  (38 casos) cobre o P4, o fog e o parser tolerante. **`testes/test_lote_c.js`** cobre
+  (39 casos) cobre o P4, o fog e o parser tolerante. **`testes_arena/`** — 6 smokes que fazem
+  `eval` do `index.html` num stub Node; o **`Smoke5fog.js`** guarda a camara do Rei. **`testes/test_lote_c.js`** cobre
   LOTE C/D (regressão byte-idêntica + features). **`testes/ref-lote-c/`** = os 3 outputs
   de referência da regressão. **`testes_arena/`** — 5 smokes que fazem `eval` do
   `index.html` num stub Node.
@@ -150,12 +151,24 @@ como as flags de lote) para que os estados congelados do `test_lote_c`, gerados 
 a memória é **do motor**, porque o modelo é stateless.
 
 Visibilidade (`visiveisPara`): aldeias próprias + **vizinhas diretas na rede** + o destino
-de cada exército próprio em marcha (o cavaleiro ganhou papel de batedor). A **topologia é
-sempre pública** — o fog esconde estado (dono, guarnição, defesa), nunca geografia; a
-localização da capital inimiga também é pública.
+efetivo de cada exército próprio em marcha. A **topologia é sempre pública** — o fog esconde
+estado (dono, guarnição, defesa), nunca geografia; a localização da capital inimiga também
+é pública.
+
+**Explorar é conquistar.** Não há unidade de reconhecimento, e uma marcha para na 1ª aldeia
+não-sua do caminho — então o destino iluminado é quase sempre um vizinho já visível. Quem
+quer ver o mapa tem de tomar aldeias; o cavaleiro pesa nisto por ser rápido, não por ver
+longe. (O `testes_arena/Smoke5fog.js` apanhou esta afirmação exagerada num handoff.)
 
 O fog é **do relatório**: `montarVisao` continua a carregar todos os alvos (com `visivel` e
 `visto` anotados), então motor, `jogadorBurro` e espectador seguem omniscientes.
+
+**A câmara do Rei (UI):** o seletor `olhos de` (`#gvisao`) no painel escurece o que o Rei
+escolhido não vê, marca as lembradas com `T<turno do último avistamento>` em pontilhado, põe
+`?` nas nunca exploradas, e mostra uma etiqueta `ve N · lembra N · nunca viu N`. É só câmara
+— lê `Engine.visiveisPara` e `game.visto`, as mesmas fontes do prompt, e não toca no estado.
+Funciona com a partida pausada, a correr e dentro de um replay. Trancado por
+`testes_arena/Smoke5fog.js`.
 
 ---
 
@@ -209,7 +222,7 @@ recente é **`HANDOFF_2026-08-17.md`** — leia-o para retomar, sobretudo o §2 
   deliberada entre turnos); `depoimento` **não volta nunca**, vai só para a tela e o `.txt`
   (roteiro de narração). Funcionaram em 100% das respostas de DeepSeek R1 e Qwen3-235B.
 
-**Testes:** 29 ficheiros no motor + 5 smokes + `verificarEquilibrio()` = 0. Destaque para
+**Testes:** 29 ficheiros no motor + 6 smokes + `verificarEquilibrio()` = 0. Destaque para
 **`testes/test_ruleset_vivo.js`**: prova que há um ruleset só, que é o que pensamos, e que os
 invariantes valem sob ele (produção observada = declarada, marcha executada = marcha prometida
 no relatório, escala mesmo aplicada, `minimoParaTomar` == `preverCombate`).

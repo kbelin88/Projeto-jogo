@@ -298,6 +298,9 @@
     // stateless, a memoria tem de ser do motor (mesma familia do histDefesa).
     // A topologia (REDE DE ESTRADAS) continua publica: mapa e conhecimento de
     // qualquer rei; o fog esconde dono/guarnicao/defesa de quem esta longe.
+    // Explorar = CONQUISTAR: nao ha unidade de reconhecimento, e uma marcha
+    // para na 1a aldeia nao-sua, entao quem quer ver o mapa tem de tomar
+    // aldeias. O cavaleiro pesa nisto por ser rapido, nao por ver longe.
     // O fog e do RELATORIO (o que o Rei LE): o motor continua onisciente, o
     // espectador ve tudo, o jogadorBurro (ancora deterministica) ve tudo.
     c.fogOfWar = true;
@@ -772,8 +775,12 @@
   // Regra de visibilidade (deliberadamente simples e deterministica):
   //   1. aldeias do proprio Rei;
   //   2. vizinhas DIRETAS das suas na rede de estradas (posto de vigia);
-  //   3. o DESTINO efetivo de cada exercito seu em marcha (batedores do
-  //      exercito reportam o alvo desde que a coluna parte).
+  //   3. o DESTINO EFETIVO de cada exercito seu em marcha. Note o alcance real
+  //      disto: a marcha PARA na 1a aldeia nao-sua do caminho, entao o destino
+  //      efetivo e quase sempre um vizinho direto, que ja estava visivel. NAO
+  //      existe "espiar ao longe" — o que abre mapa e a CONQUISTA (cada aldeia
+  //      tomada revela a vizinhanca dela). Intencao nao da visao: o destino
+  //      apenas PEDIDO continua no escuro (test_prompt_p4 B6).
   // A topologia inteira e sempre publica — o fog esconde ESTADO (dono,
   // guarnicao), nunca GEOGRAFIA.
   function visiveisPara(estado, dono) {

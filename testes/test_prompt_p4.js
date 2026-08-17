@@ -160,17 +160,42 @@ t("B5 'last seen': aldeia perdida de vista mantem a foto ANTIGA, nao a atual", (
   assert.ok(/KNOWN FROM BEFORE/.test(p), "o prompt tem de ter a secao de memoria");
   assert.ok(/last seen on turn/.test(p));
 });
-t("B6 exercito em marcha ILUMINA o destino (o cavaleiro como batedor)", () => {
+t("B6 exercito em marcha ilumina o destino EFETIVO — e nao o pedido", () => {
+  // Honestidade sobre o alcance disto (o Smoke5fog revelou que a 1a versao deste
+  // teste passava por trivialidade): a marcha PARA na 1a aldeia nao-sua do
+  // caminho, entao o destino efetivo e quase sempre um vizinho direto, que ja
+  // era visivel por adjacencia. Nao ha "espiar longe": o exercito ilumina onde
+  // vai CHEGAR, nao onde voce gostaria que ele chegasse. Quem abre mapa e a
+  // CONQUISTA (cada aldeia tomada revela a vizinhanca dela) — o cavaleiro ajuda
+  // por ser rapido a conquistar, nao por ver ao longe.
   const e = stJogo(); E.tick(e);
   const minha = E.aldeiasDe(e, "B")[0];
-  // um alvo longe, fora da vizinhanca
   const longe = e.aldeias.find((a) => a.dono === null && !(e.estradas.adj[minha.id] || []).includes(a.id));
-  assert.ok(!E.visiveisPara(e, "B").has(longe.id), "pre-condicao: invisivel");
+  assert.ok(!E.visiveisPara(e, "B").has(longe.id), "pre-condicao: o alvo pedido e invisivel");
   minha.tropas.cavaleiro = Math.max(1, minha.tropas.cavaleiro);
   const mov = E.enviarExercito(e, minha.id, longe.id, { cavaleiro: 1 });
   assert.ok(mov, "o envio tem de ser aceite");
   const visDepois = E.visiveisPara(e, "B");
-  assert.ok(visDepois.has(mov.destinoId), "o destino do exercito em marcha tem de ficar visivel");
+  assert.ok(visDepois.has(mov.destinoId), "o destino EFETIVO tem de ficar visivel");
+  // o invariante que importa: intencao NAO da visao
+  if (mov.destinoId !== longe.id) {
+    assert.ok(!visDepois.has(longe.id),
+      "o alvo apenas PEDIDO nao pode virar visivel — intencao nao e avistamento");
+  }
+});
+t("B6b conquistar ABRE mapa: a vizinhanca da aldeia tomada entra na visao", () => {
+  // Este e o mecanismo real de exploracao, e nao estava coberto.
+  const e = stJogo(); E.tick(e);
+  const minha = E.aldeiasDe(e, "B")[0];
+  const viz = (e.estradas.adj[minha.id] || [])[0];
+  const vizinhosDoViz = (e.estradas.adj[viz] || []).filter((x) => x !== minha.id);
+  assert.ok(vizinhosDoViz.length, "o mapa tem de ter um segundo anel para este teste valer");
+  const antes = E.visiveisPara(e, "B");
+  const novos = vizinhosDoViz.filter((x) => !antes.has(x));
+  assert.ok(novos.length, "pre-condicao: ha aldeia a 2 passos ainda invisivel");
+  e.aldeias.find((a) => a.id === viz).dono = "B";      // conquistou
+  const depois = E.visiveisPara(e, "B");
+  for (const x of novos) assert.ok(depois.has(x), `[${x}] devia abrir ao tomar [${viz}]`);
 });
 t("B7 o fog e do RELATORIO: motor, burro e espectador continuam omniscientes", () => {
   const e = stJogo(); E.tick(e);
