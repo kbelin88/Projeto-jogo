@@ -1,5 +1,7 @@
-// test_regras_v4.js — RULESET V4 (reboot de balanceamento, 16/08/2026).
-// Cobre as 6 mudancas do CONFIG_V4 e prova que o CONFIG antigo NAO regride.
+// test_regras_v4.js — O RULESET DO JOGO (era o "reboot v4", 16/08/2026).
+// Desde 17/08 nao ha ruleset opcional: o CONFIG E este. O CONFIG_V3_ARQUIVO
+// so existe para a regressao de texto do test_lote_c, e este ficheiro prova
+// que ele nao regride e que o jogo tem os valores decididos.
 // Origem: analise da partida qwen3-235b x deepseek-r1 (15/08).
 "use strict";
 const assert = require("assert");
@@ -8,33 +10,36 @@ const E = require("../engine.js");
 let ok = 0;
 const t = (nome, fn) => { fn(); console.log("  ok  " + nome); ok++; };
 
-const stOld = () => E.criarEstadoInicial(E.CONFIG);
-const stV4 = () => E.criarEstadoInicial(E.CONFIG_V4);
+// stArq = ruleset ARQUIVADO (v3), so para provar que o arquivo nao regride.
+// stJogo = o ruleset DO JOGO. Desde 17/08 nao ha escolha entre os dois.
+const stArq = () => E.criarEstadoInicial(E.CONFIG_V3_ARQUIVO);
+const stJogo = () => E.criarEstadoInicial(E.CONFIG);
+const stOld = stArq, stV4 = stJogo;  // nomes antigos, para o resto do ficheiro
 const idDe = (st, slug) => st.aldeias.find((a) => a.slug === slug).id;
 const marcha = (st, o, d) => E.turnosDeCaminho(st, E.caminhoEntre(st, idDe(st, o), idDe(st, d)), { lanceiro: 0, arqueiro: 1, cavaleiro: 0 });
 
 // --- 1. Integridade dos configs -------------------------------------------
-t("1a CONFIG antigo intacto (byte-identico preservado)", () => {
-  assert.strictEqual(E.CONFIG.producao.madeira, 10);
-  assert.strictEqual(E.CONFIG.producao.ferro, 6);
-  assert.strictEqual(E.CONFIG.dicaNeutras, undefined);
-  assert.strictEqual(E.CONFIG.bonus_forca_triangulo, 1.25);
-  assert.strictEqual(E.CONFIG.tropas.cavaleiro.def, 1);
-  assert.strictEqual(E.CONFIG.tropas.cavaleiro.turnos, 2);
-  assert.strictEqual(E.CONFIG.escalaMarcha, undefined);
-  assert.strictEqual(E.CONFIG.regrasV4, undefined);
+t("1a ruleset ARQUIVADO intacto (byte-identico preservado)", () => {
+  assert.strictEqual(E.CONFIG_V3_ARQUIVO.producao.madeira, 10);
+  assert.strictEqual(E.CONFIG_V3_ARQUIVO.producao.ferro, 6);
+  assert.strictEqual(E.CONFIG_V3_ARQUIVO.dicaNeutras, undefined);
+  assert.strictEqual(E.CONFIG_V3_ARQUIVO.bonus_forca_triangulo, 1.25);
+  assert.strictEqual(E.CONFIG_V3_ARQUIVO.tropas.cavaleiro.def, 1);
+  assert.strictEqual(E.CONFIG_V3_ARQUIVO.tropas.cavaleiro.turnos, 2);
+  assert.strictEqual(E.CONFIG_V3_ARQUIVO.escalaMarcha, undefined);
+  assert.strictEqual(E.CONFIG_V3_ARQUIVO.vitoriaPorDominancia, undefined);
 });
-t("1b CONFIG_V4 com os valores exatos decididos", () => {
-  assert.strictEqual(E.CONFIG_V4.producao.madeira, 30);
-  assert.strictEqual(E.CONFIG_V4.producao.ferro, 20);
-  assert.strictEqual(E.CONFIG_V4.dicaNeutras, false);
-  assert.strictEqual(E.CONFIG_V4.bonus_forca_triangulo, 1.5);
-  assert.strictEqual(E.CONFIG_V4.tropas.cavaleiro.def, 2);
-  assert.strictEqual(E.CONFIG_V4.tropas.cavaleiro.turnos, 1);
-  assert.strictEqual(E.CONFIG_V4.escalaMarcha, 0.2);
-  assert.strictEqual(E.CONFIG_V4.regrasV4, true);
-  assert.strictEqual(E.CONFIG_V4.vitoriaFracao, 0.75);
-  assert.strictEqual(E.CONFIG_V4.vitoriaTurnos, 2);
+t("1b CONFIG do jogo com os valores exatos decididos", () => {
+  assert.strictEqual(E.CONFIG.producao.madeira, 30);
+  assert.strictEqual(E.CONFIG.producao.ferro, 20);
+  assert.strictEqual(E.CONFIG.dicaNeutras, false);
+  assert.strictEqual(E.CONFIG.bonus_forca_triangulo, 1.5);
+  assert.strictEqual(E.CONFIG.tropas.cavaleiro.def, 2);
+  assert.strictEqual(E.CONFIG.tropas.cavaleiro.turnos, 1);
+  assert.strictEqual(E.CONFIG.escalaMarcha, 0.2);
+  assert.strictEqual(E.CONFIG.vitoriaPorDominancia, true);
+  assert.strictEqual(E.CONFIG.vitoriaFracao, 0.75);
+  assert.strictEqual(E.CONFIG.vitoriaTurnos, 2);
 });
 
 // --- 2. Distancia: centro 9 -> 6, corte uniforme --------------------------
@@ -75,20 +80,20 @@ t("3a requisito antigo (1 cav toma 1 lanceiro no castelo) VALE no old, NAO no v4
   assert.strictEqual(prev(stV4(), "cavaleiro", "lanceiro", castelo).atacanteVence, false, "v4: cav perde (4 vs 4.5) — custo conhecido");
 });
 t("3b v4 pune arqueiro-mono: cavaleiro esmaga arqueiro na aldeia", () => {
-  const aldeia = E.CONFIG_V4.combate.bonus_defesa_aldeia; // 1.25
+  const aldeia = E.CONFIG.combate.bonus_defesa_aldeia; // 1.25
   const r = prev(stV4(), "cavaleiro", "arqueiro", aldeia);
   assert.strictEqual(r.atacanteVence, true);           // 4*1.5=6 vs 2*1.25=2.5
   assert.ok(r.FatkEf > r.FdefEf * 2, "vitoria folgada");
 });
 t("3c v4 pune lanceiro-mono: arqueiro fura lanceiro na aldeia", () => {
-  const aldeia = E.CONFIG_V4.combate.bonus_defesa_aldeia;
+  const aldeia = E.CONFIG.combate.bonus_defesa_aldeia;
   assert.strictEqual(prev(stV4(), "arqueiro", "lanceiro", aldeia).atacanteVence, true); // 2*1.5=3 > 2*1.25=2.5
   // no old (counter 1.25) o mesmo ataque EMPATA e o defensor segura:
   assert.strictEqual(prev(stOld(), "arqueiro", "lanceiro", aldeia).atacanteVence, false); // 2*1.25=2.5 == 2.5
 });
 
 // --- 4. Producao: madeira E ferro ------------------------------------------
-t("4a madeira/turno: +30 no v4, +10 no old (aldeia propria)", () => {
+t("4a madeira/turno: +30 no jogo, +10 no arquivo", () => {
   for (const [st, esperado] of [[stOld(), 10], [stV4(), 30]]) {
     const a = st.aldeias.find((x) => x.dono === "A");
     const antes = a.recursos.madeira;
@@ -96,7 +101,7 @@ t("4a madeira/turno: +30 no v4, +10 no old (aldeia propria)", () => {
     assert.strictEqual(a.recursos.madeira - antes, esperado);
   }
 });
-t("4b ferro/turno: +20 no v4, +6 no old", () => {
+t("4b ferro/turno: +20 no jogo, +6 no arquivo", () => {
   for (const [st, esperado] of [[stOld(), 6], [stV4(), 20]]) {
     const a = st.aldeias.find((x) => x.dono === "A");
     const antes = a.recursos.ferro;
@@ -107,23 +112,23 @@ t("4b ferro/turno: +20 no v4, +6 no old", () => {
 // A razao de SER do ferro 20. Com ferro 6 o cavaleiro levava 5 turnos por
 // unidade por aldeia e ninguem o comprava (3 partidas, zero cavaleiros
 // construidos) — por mais madeira que se pusesse, o gargalo era o ferro.
-t("4c o FERRO deixa de ser o gargalo do cavaleiro no v4", () => {
+t("4c o FERRO deixa de ser o gargalo do cavaleiro", () => {
   const lim = (cfg, tipo) => {
     const u = cfg.tropas[tipo];
     return Math.min(cfg.producao.madeira / u.custo.madeira,
                     u.custo.ferro ? cfg.producao.ferro / u.custo.ferro : Infinity);
   };
-  const old = lim(E.CONFIG, "cavaleiro"), v4 = lim(E.CONFIG_V4, "cavaleiro");
-  assert.ok(old <= 0.2 + 1e-9, "old: cavaleiro a <=0.2/turno (5 turnos por unidade)");
-  assert.ok(v4 > 0.6, "v4: cavaleiro tem de passar de 0.6/turno, deu " + v4);
+  const arq = lim(E.CONFIG_V3_ARQUIVO, "cavaleiro"), vivo = lim(E.CONFIG, "cavaleiro");
+  assert.ok(arq <= 0.2 + 1e-9, "arquivo: cavaleiro a <=0.2/turno (5 turnos por unidade)");
+  assert.ok(vivo > 0.6, "jogo: cavaleiro tem de passar de 0.6/turno, deu " + vivo);
   // e o arqueiro nao pode ficar preso no ferro tambem
-  assert.ok(lim(E.CONFIG_V4, "arqueiro") >= 1.5 - 1e-9, "arqueiro >= 1.5/turno no v4");
+  assert.ok(lim(E.CONFIG, "arqueiro") >= 1.5 - 1e-9, "arqueiro >= 1.5/turno no v4");
 });
 // --- 4d. A dica que enviesava o benchmark ---------------------------------
-t("4d v4 NAO manda conquistar neutras primeiro; v3 continua a mandar", () => {
+t("4d o jogo NAO manda conquistar neutras primeiro; o arquivo continua a mandar", () => {
   const P = (cfg) => E.montarPrompt(E.montarVisao(E.criarEstadoInicial(
     Object.assign({}, cfg, { seed: 1 })), "A", {}), {});
-  const pv4 = P(E.CONFIG_V4), pv3 = P(E.CONFIG);
+  const pv4 = P(E.CONFIG), pv3 = P(E.CONFIG_V3_ARQUIVO);
   assert.ok(!/Conquiste aldeias neutras primeiro/.test(pv4), "v4 nao pode prescrever a ordem");
   assert.ok(/Conquiste aldeias neutras primeiro/.test(pv3), "v3 congelado mantem a frase");
   // o FACTO fica nos dois: tirar o vies nao pode tirar a informacao
@@ -182,7 +187,7 @@ t("6c old NAO tem dominancia (regrasV4 off): sem contador, so eliminacao", () =>
 // --- 7. Invariante: partida v4 SEMPRE sai com vencedor (nunca 'limite') ----
 t("7 rodarPartida v4 nunca termina em 'limite' (3 seeds)", () => {
   for (const seed of [1, 2, 3]) {
-    const c = JSON.parse(JSON.stringify(E.CONFIG_V4)); c.seed = seed;
+    const c = JSON.parse(JSON.stringify(E.CONFIG)); c.seed = seed;
     const r = E.rodarPartida(c, null, { maxTurnos: 120 });
     assert.notStrictEqual(r.vencedor, "limite", "seed " + seed + " deveria sair com vencedor");
     assert.ok(["A", "B", "empate"].includes(r.vencedor), "seed " + seed + " vencedor valido");

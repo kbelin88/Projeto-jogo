@@ -9,7 +9,10 @@ const E = require("../engine.js");
 // LOTE E: a baseline de TEXTO (ref-lote-c) foi capturada no motor pre-E (sequencial).
 // As flags de COMPORTAMENTO do motor do lote E ficam off aqui para o ESTADO gerado por
 // estadoNoTurno continuar sendo o mesmo que alimentou aquela baseline (regra 2).
-const cfgIberia = () => { const c = JSON.parse(JSON.stringify(E.CONFIG)); c.layout = "iberia"; c.seed = 1;
+// 17/08: esta baseline nasceu com o ruleset que hoje se chama CONFIG_V3_ARQUIVO.
+// A regressao mede o TEXTO do relatorio, nao o balanceamento — entao continua
+// a correr contra o arquivo, que e imutavel por definicao.
+const cfgIberia = () => { const c = JSON.parse(JSON.stringify(E.CONFIG_V3_ARQUIVO)); c.layout = "iberia"; c.seed = 1;
   c.ordensSimultaneas = false; c.interceptaChegada = false; c.desempateEstradaRng = false; return c; };
 function estadoNoTurno(n) {
   const e = E.criarEstadoInicial(cfgIberia());

@@ -34,7 +34,23 @@
   //  nunca espalhado pelo codigo. TODOS sao PROVISORIOS (V1 do
   //  balanceamento): ponto de partida coerente, nao a verdade.
   // ==========================================================
-  const CONFIG = {
+  // ==========================================================
+  //  CONFIG_V3_ARQUIVO — o ruleset ANTIGO, congelado.
+  // ----------------------------------------------------------
+  //  NAO e jogavel. Existe por UM motivo: `testes/test_lote_c.js` congela o
+  //  texto do relatorio contra 3 estados de referencia gerados com estes
+  //  valores, e essa regressao e o que garante que mexer no PROMPT nao muda o
+  //  texto sem querer. Nenhum caminho da UI ou do runner chega aqui.
+  //
+  //  17/08 — porque deixou de ser selecionavel: enquanto havia DOIS rulesets
+  //  escolhiveis em tempo de execucao, existia a possibilidade de correr o
+  //  errado. E aconteceu: as 3 partidas pagas de 16/08 (~$2.25) correram com
+  //  este objeto enquanto o log dizia v4, porque o checkbox era lido depois do
+  //  estado ja estar criado. A licao nao foi "faltou um listener" — foi que uma
+  //  regra que PODE nao estar ligada mais cedo ou mais tarde nao esta. Agora o
+  //  jogo tem um ruleset so, o CONFIG abaixo, e nao ha como escolher outro.
+  // ==========================================================
+  const CONFIG_V3_ARQUIVO = {
     // Semente da partida: torna a geracao (guarnicoes, escolhas)
     // reproduzivel. Mude para gerar outra partida.
     seed: 1,
@@ -238,8 +254,15 @@
   //      dado que falta e o duelo entre modelos — nao a expansao contra neutras.
   //   5-6. VITORIA por dominancia: >=75% das aldeias por 2 turnos consecutivos
   //      (alem da eliminacao). Faz a partida TERMINAR com vencedor.
-  const CONFIG_V4 = (function () {
-    const c = JSON.parse(JSON.stringify(CONFIG)); // CONFIG nao tem funcoes: seguro
+  // ==========================================================
+  //  CONFIG — O RULESET DO JOGO. Unico. Sem toggle, sem opt-in.
+  // ----------------------------------------------------------
+  //  Foi o "reboot v4" enquanto era opcional; desde 17/08 e simplesmente o
+  //  jogo. Derivado do arquivo v3 acima para o diff continuar legivel: cada
+  //  linha abaixo e uma decisao de balanceamento, com o porque ao lado.
+  // ==========================================================
+  const CONFIG = (function () {
+    const c = JSON.parse(JSON.stringify(CONFIG_V3_ARQUIVO)); // sem funcoes: seguro
     c.producao.madeira = 30;
     // FERRO 6 -> 20 (16/08, v5). A madeira sozinha nao resolvia: com ferro 6 o
     // arqueiro fica preso em 0.60 e o cavaleiro em 0.20 unidade por aldeia por
@@ -254,7 +277,7 @@
     c.bonus_forca_triangulo = 1.5;
     c.escalaMarcha = 0.2;
     c.dicaNeutras = false;
-    c.regrasV4 = true;
+    c.vitoriaPorDominancia = true;
     c.vitoriaFracao = 0.75;
     c.vitoriaTurnos = 2;
     return c;
@@ -721,7 +744,16 @@
 
   // estado inicial completo da partida
   function criarEstadoInicial(config) {
-    return gerarTeatro(config || CONFIG);
+    // COPIA PROFUNDA (17/08). Antes o estado guardava a config POR REFERENCIA:
+    // `criarEstadoInicial(Engine.CONFIG)` devolvia uma partida cujo `config` ERA
+    // o objeto global. Bastava alguem escrever em `estado.config.producao.x`
+    // para o ruleset mudar para todas as partidas seguintes da mesma pagina —
+    // um estado de jogo a reescrever as regras do jogo.
+    // Nao mordeu ainda, mas e a mesma familia do bug do checkbox: uma via pela
+    // qual a partida pode acabar a correr com regras que ninguem escolheu.
+    // O CONFIG nao tem funcoes (ja assumido em varios sitios), entao o clone
+    // por JSON e seguro e custa uma vez por partida.
+    return gerarTeatro(JSON.parse(JSON.stringify(config || CONFIG)));
   }
 
   // ==========================================================
@@ -1344,7 +1376,7 @@
     // aldeias. Fica no TICK (roda 1x/turno) e NAO na checarVitoria — esta e
     // pura e o browser a chama varias vezes por turno; contar la contaria
     // dobrado. checarVitoria so LE estado.dominancia.
-    if (estado.config.regrasV4) {
+    if (estado.config.vitoriaPorDominancia) {
       const alvo = Math.ceil(estado.aldeias.length * (estado.config.vitoriaFracao || 0.75));
       estado.dominancia = estado.dominancia || { A: 0, B: 0 };
       for (const d of ["A", "B"]) {
@@ -2465,7 +2497,7 @@
     // v4: >=vitoriaFracao das aldeias por vitoriaTurnos consecutivos. Leitura
     // pura de estado.dominancia (o contador vive no tick). Ambos nunca passam
     // o limiar juntos (2x75% > 100%), entao no maximo um vence aqui.
-    if (estado.config.regrasV4 && estado.dominancia) {
+    if (estado.config.vitoriaPorDominancia && estado.dominancia) {
       const need = estado.config.vitoriaTurnos || 2;
       if (estado.dominancia.A >= need) return "A";
       if (estado.dominancia.B >= need) return "B";
@@ -2528,7 +2560,7 @@
     else motivo = "limite";
     // v4: bateu o teto sem vitoria -> desempata por numero de aldeias, para a
     // partida SEMPRE sair com um vencedor. Regras antigas: mantem "limite".
-    if (!vencedor && (config || CONFIG).regrasV4) {
+    if (!vencedor && (config || CONFIG).vitoriaPorDominancia) {
       const na = aldeiasDe(estado, "A").length, nb = aldeiasDe(estado, "B").length;
       vencedor = na > nb ? "A" : nb > na ? "B" : "empate";
       motivo = vencedor === "empate" ? "empate" : "limite_aldeias";
@@ -2631,7 +2663,7 @@
 
   return {
     CONFIG,
-    CONFIG_V4,
+    CONFIG_V3_ARQUIVO,
     relatorioDesfecho,
     criarRng, rngInt,
     criarAldeia,

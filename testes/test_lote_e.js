@@ -1,5 +1,10 @@
 // test_lote_e.js — LOTE E (fairness do turno + interceptacao + desempate).
 // E8.1 (regressao de COMPORTAMENTO do motor) entra no commit 1; E8.2-E8.5 depois.
+// 17/08: este ficheiro fixa numeros calculados A MAO sob o ruleset que hoje
+// se chama CONFIG_V3_ARQUIVO. O que ele testa e a FORMULA (combate, rota,
+// minimo), nao o balanceamento — entao continua a correr contra o arquivo,
+// que e imutavel. Os mesmos invariantes sob o ruleset VIVO estao em
+// testes/test_ruleset_vivo.js.
 "use strict";
 const assert = require("assert");
 const fs = require("fs");
@@ -12,7 +17,7 @@ let ok = 0;
 const t = (nome, fn) => { fn(); console.log("  ok  " + nome); ok++; };
 
 function partida(seed, flags) {
-  const cfg = Object.assign(JSON.parse(JSON.stringify(E.CONFIG)), flags || {});
+  const cfg = Object.assign(JSON.parse(JSON.stringify(E.CONFIG_V3_ARQUIVO)), flags || {});
   cfg.layout = "iberia";
   cfg.seed = seed;
   const dec = { A: (v) => E.jogadorBurro(v), B: (v) => E.jogadorBurro(v) };
@@ -31,7 +36,7 @@ t("E8.1 regressao de comportamento (3 seeds, flags E off)", () => {
 
 // helpers p/ estados sinteticos de estrada
 function estadoIberia(flags, seed) {
-  const cfg = Object.assign(JSON.parse(JSON.stringify(E.CONFIG)), flags || {});
+  const cfg = Object.assign(JSON.parse(JSON.stringify(E.CONFIG_V3_ARQUIVO)), flags || {});
   cfg.layout = "iberia"; cfg.seed = seed || 1;
   return E.criarEstadoInicial(cfg);
 }

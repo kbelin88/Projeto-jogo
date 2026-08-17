@@ -13,7 +13,7 @@ const E = require("../engine.js");
 let n = 0;
 function t(nome, fn) { fn(); n++; console.log("  ok  " + nome); }
 
-const st = (extra) => E.criarEstadoInicial(Object.assign({}, E.CONFIG_V4, { seed: 1 }, extra || {}));
+const st = (extra) => E.criarEstadoInicial(Object.assign({}, E.CONFIG, { seed: 1 }, extra || {}));
 const prompt = (estado, opcoes) => E.montarPrompt(E.montarVisao(estado, "A", {}), opcoes || {});
 
 // --- 1. A flag: ligada por default, byte-identica quando desligada ---------
@@ -118,9 +118,9 @@ t("4 depoimento NAO tem caminho de volta ao contexto do modelo", () => {
 });
 
 // --- 5. Nao mexeu no que ja existia ---------------------------------------
-t("5a o CONFIG antigo nao ganhou a flag (segue congelado)", () => {
-  assert.strictEqual(E.CONFIG.resumosDoRei, undefined);
-  assert.strictEqual(E.CONFIG_V4.resumosDoRei, undefined, "default vem da leitura !== false, nao de um valor gravado");
+t("5a o arquivo v3 nao ganhou a flag (segue congelado)", () => {
+  assert.strictEqual(E.CONFIG_V3_ARQUIVO.resumosDoRei, undefined);
+  assert.strictEqual(E.CONFIG.resumosDoRei, undefined, "default vem da leitura !== false, nao de um valor gravado");
 });
 t("5b a ordem executada e a MESMA com e sem os textos", () => {
   const comTexto = '{"construir":[{"aldeiaId":0,"tipo":"lanceiro"}],"envios":[{"origemId":0,"destinoId":1,"tropas":{"cavaleiro":1}}],"plano":"p","depoimento":"d"}';

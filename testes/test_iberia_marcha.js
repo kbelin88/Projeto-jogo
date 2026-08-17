@@ -5,6 +5,11 @@
 //   2. a marcha sai de rota(), NAO de Math.hypot  (a lacuna L3, de vez)
 //   3. o fator de tropa preserva o espelhamento do mapa
 //   4. o mapa procedural (v1/v2) continua medindo por pixel como antes
+// 17/08: este ficheiro fixa numeros calculados A MAO sob o ruleset que hoje
+// se chama CONFIG_V3_ARQUIVO. O que ele testa e a FORMULA (combate, rota,
+// minimo), nao o balanceamento — entao continua a correr contra o arquivo,
+// que e imutavel. Os mesmos invariantes sob o ruleset VIVO estao em
+// testes/test_ruleset_vivo.js.
 const assert = require("assert");
 const Engine = require("../engine.js");
 const Iberia = require("../world-iberia.js");
@@ -13,7 +18,7 @@ let ok = 0;
 const t = (nome, fn) => { fn(); ok++; console.log("  ok  " + nome); };
 
 const cfgIberia = () => JSON.parse(JSON.stringify(
-  Object.assign({}, Engine.CONFIG, { layout: "iberia", seed: 1 })));
+  Object.assign({}, Engine.CONFIG_V3_ARQUIVO, { layout: "iberia", seed: 1 })));
 
 const idDe = (estado, slug) => estado.aldeias.find((a) => a.slug === slug).id;
 
@@ -167,7 +172,7 @@ t("a marcha mostrada no relatorio e a que o motor pratica", () => {
 
 console.log("NAO-REGRESSAO");
 t("mapa procedural (v2) continua medindo por pixel", () => {
-  const cfg = JSON.parse(JSON.stringify(Object.assign({}, Engine.CONFIG, { layout: "v2", seed: 7 })));
+  const cfg = JSON.parse(JSON.stringify(Object.assign({}, Engine.CONFIG_V3_ARQUIVO, { layout: "v2", seed: 7 })));
   const e = Engine.criarEstadoInicial(cfg);
   assert.ok(!e.estradas.custo, "o mapa procedural nao deve ter custo autoral");
   const a = e.aldeias[0], b = e.aldeias[1];
