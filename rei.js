@@ -297,7 +297,7 @@ function criarReiIA(cliente) {
 // prompt -> resposta crua -> ordem parseada -> aceito/rejeitado.
 async function decidirRei(estado, dono, cliente, opcoesPrompt) {
   const visao = Engine.montarVisao(estado, dono);
-  const prompt = Engine.montarPrompt(visao, opcoesPrompt); // H2: variante opcional
+  const prompt = Engine.montarPrompt(visao, opcoesPrompt || { rejeicaoNoFim: true }); // P4 (17/08): rejeicoes no fim por padrao, igual ao browser
   let cru = "", raciocinio = null, erroRede = null;
   try { const r = await cliente.gerar(prompt); cru = r.texto; raciocinio = r.raciocinio; }
   catch (e) { erroRede = e.message; }
@@ -360,7 +360,7 @@ function montarPromptValidador(visao, ordem) {
 async function decidirReiComposto(estado, dono, cliente, opcoesPrompt, composto) {
   const validador = (composto && composto.validador) || cliente;
   const visao = Engine.montarVisao(estado, dono);
-  const prompt = Engine.montarPrompt(visao, opcoesPrompt);
+  const prompt = Engine.montarPrompt(visao, opcoesPrompt || { rejeicaoNoFim: true }); // P4 (17/08): idem decidirRei
 
   let cru = "", raciocinio = null, erroRede = null;
   try { const r = await cliente.gerar(prompt); cru = r.texto; raciocinio = r.raciocinio; }

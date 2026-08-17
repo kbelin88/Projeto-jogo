@@ -2735,6 +2735,10 @@
     // H3: a normalizacao NAO esconde o desvio — cada correcao vira linha no
     // txt, p/ o eval contar "quantas vezes o modelo errou a grafia" separado
     // de "quantas ordens valeram".
+    // P4 (17/08): a causa REAL de uma resposta invalida, no log. Antes o .txt
+    // mostrava a resposta crua e a ordem vazia, e quem lia tinha de adivinhar se
+    // foi JSON quebrado, campo errado ou modelo calado.
+    if (!r.ok && r.erroParse) L.push("ERRO DE FORMATO: " + r.erroParse);
     (r.normalizacoes || []).forEach((n) => L.push("NORMALIZADO: " + n));
     const diag = r.erroRede ? null : r.diag; // sem resposta nao ha o que aceitar/rejeitar
     if (diag) {
@@ -2915,10 +2919,12 @@
       coletarDiag(lado, ordemB, dgB, true, null);
       return null;
     }
-    // PROMPT PADRAO OFICIAL DO JOGO = P2 (minimo pre-calculado por alvo no
-    // relatorio). Decisao do Lucas apos o experimento v3 (exp-prompt-tropas).
-    // A visao precisa de {minimos:true} p/ o P2 mostrar "| para tomar: ...".
-    const prompt = Engine.montarPrompt(Engine.montarVisao(game, lado, { minimos: true }), { variante: "P2" });
+    // PROMPT PADRAO OFICIAL DO JOGO = P4 (17/08, sessao Fable): ingles, sem
+    // exemplo com valores, sem "para tomar" (o minimo pre-calculado saiu do
+    // jogo a pedido do Lucas), fog of war, condicao de vitoria real, reforco
+    // dito como mecanica. rejeicaoNoFim liga o H2 (rejeicoes no fim absoluto
+    // do prompt — a flag existia desde o LOTE B e o browser nunca a usou).
+    const prompt = Engine.montarPrompt(Engine.montarVisao(game, lado), { rejeicaoNoFim: true });
     setStatus("Rei " + lado + " pensando... (" + rotulo + ")");
     let cru = "", raciocinio = null, erroRede = null;
     tokensUltimaChamada = null; // zera ANTES: erro de rede nao herda tokens do turno anterior
@@ -2949,7 +2955,7 @@
     Engine.guardarPlano(game, lado, p.plano);
     definirDepoimento(lado, p.depoimento, game.turno);
     coletarDiag(lado, ordem, diag, p.ok, tokensDoLado);
-    return { cru, raciocinio, ordem, diag, ok: p.ok, normalizacoes: p.normalizacoes || [], plano: p.plano, depoimento: p.depoimento }; // H3: p/ o txt
+    return { cru, raciocinio, ordem, diag, ok: p.ok, erroParse: p.erro, normalizacoes: p.normalizacoes || [], plano: p.plano, depoimento: p.depoimento }; // H3 + P4 (erroParse p/ o txt)
   }
 
   // LOTE E, E2 — metade 1 do turno SIMULTANEO (achado A1): monta visao+prompt,
@@ -2967,7 +2973,7 @@
     if (!gerador) { // burro: decide sem rede (D1 fica nulo)
       return { kind: "burro", ordem: Engine.jogadorBurro(Engine.montarVisao(game, lado)), tokens: null, d1: snapD1() };
     }
-    const prompt = Engine.montarPrompt(Engine.montarVisao(game, lado, { minimos: true }), { variante: "P2" });
+    const prompt = Engine.montarPrompt(Engine.montarVisao(game, lado), { rejeicaoNoFim: true }); // P4 (17/08): mesmo caminho do deliberarLado
     setStatus("Rei " + lado + " pensando... (" + rotulo + ")");
     let cru = "", raciocinio = null, erroRede = null;
     tokensUltimaChamada = null; // zera ANTES: erro de rede nao herda tokens do turno anterior
@@ -2978,7 +2984,11 @@
     if (runId !== meuRun) return "abort"; // resposta atrasada de run antigo
     if (erroRede) return { kind: "erroRede", cru, erroRede, tokens: null, d1 };
     const p = Engine.parsearOrdem(cru); // sem retry (benchmark)
-    return { kind: "llm", cru, raciocinio, ordem: p.ordem, ok: p.ok, normalizacoes: p.normalizacoes || [], tokens: tokensDoLado, d1, plano: p.plano, depoimento: p.depoimento };
+    // P4 (17/08): `erroParse` viaja junto. O motor passou a dar a causa REAL de
+    // uma resposta invalida ("bloco JSON desbalanceado: faltam 1 '}'") e a fazer
+    // salvamento parcial — se o browser nao propagasse isso, o .txt continuaria
+    // sem dizer POR QUE a ordem foi invalida. O log tem de descrever o que correu.
+    return { kind: "llm", cru, raciocinio, ordem: p.ordem, ok: p.ok, erroParse: p.erro, normalizacoes: p.normalizacoes || [], tokens: tokensDoLado, d1, plano: p.plano, depoimento: p.depoimento };
   }
 
   // LOTE E, E2 — metade 2 do turno SIMULTANEO: diagnostica, executa e coleta o
@@ -3006,7 +3016,7 @@
     Engine.guardarPlano(game, lado, delib.plano);
     definirDepoimento(lado, delib.depoimento, game.turno);
     coletarDiag(lado, delib.ordem, diag, delib.ok, delib.tokens, delib.d1);
-    return { cru: delib.cru, raciocinio: delib.raciocinio, ordem: delib.ordem, diag, ok: delib.ok, normalizacoes: delib.normalizacoes, plano: delib.plano, depoimento: delib.depoimento };
+    return { cru: delib.cru, raciocinio: delib.raciocinio, ordem: delib.ordem, diag, ok: delib.ok, erroParse: delib.erroParse, normalizacoes: delib.normalizacoes, plano: delib.plano, depoimento: delib.depoimento };
   }
 
   async function passoTurnoDuelo(meuRun) {
@@ -3123,7 +3133,7 @@
           ", vitoria " + Math.round((_c.vitoriaFracao || 0) * 100) + "%/" + _c.vitoriaTurnos + "t)"
         : "regras=congeladas v3";
       const resumosTxt = (_c.resumosDoRei !== false) ? " | resumos do Rei: plano+depoimento" : "";
-      geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=P2 (minimo por alvo) + relatorio v3 + combate v3 | " + regrasTxt + resumosTxt + " | normalizacao H3 ativa | thinking=on | max_tokens_resposta=" + maxTokensLLM + " | " + (semLimite ? "SEM LIMITE de turnos (empate por estagnacao em 30t)" : "maxTurnos " + maxT) + " | teto=" + (TETO_CUSTO > 0 ? "$" + TETO_CUSTO.toFixed(2) : "desligado") + "\n"); // LOTE E, E6
+      geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=" + (_c.promptP4 === true ? "P4 EN (esquema declarado, sem exemplo, sem minimos, vitoria real, reforco, quantidade)" : "P2 (minimo por alvo)") + (_c.fogOfWar === true ? " + FOG OF WAR" : "") + " + combate v3 | " + regrasTxt + resumosTxt + " | normalizacao H3 ativa | thinking=on | max_tokens_resposta=" + maxTokensLLM + " | " + (semLimite ? "SEM LIMITE de turnos (empate por estagnacao em 30t)" : "maxTurnos " + maxT) + " | teto=" + (TETO_CUSTO > 0 ? "$" + TETO_CUSTO.toFixed(2) : "desligado") + "\n"); // LOTE E, E6
       // AUTO-SAVE: cria o checkpoint .txt no disco com o cabecalho (via servir.py).
       const tsCp = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 16);
       checkpointArquivo = ("partida_" + vA + "_vs_" + vB + "_" + tsCp).replace(/[^a-z0-9._-]/gi, "-") + ".txt";
