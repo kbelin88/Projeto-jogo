@@ -52,11 +52,18 @@ gabarito escrito antes de experimento, artefato publicado antes da próxima fase
 - **`servir.py`** — servidor HTTP local (`localhost:8000`). Necessário porque `file://`
   bloqueia fetch/localStorage/downloads. Rotas: `/salvar-mapa` (editor) e `/checkpoint`
   (auto-save do `.txt` por turno, sobrevive a crash).
+- **`ferramentas/reconstruir-prompts.js`** — recupera o PROMPT EXATO de qualquer partida
+  reexecutando o motor com as ordens gravadas no `.txt` e **verificando** o estado contra o
+  replay `.json`. Detecta pelo cabeçalho se a partida foi P4 ou legado.
+- **`ferramentas/alucinacao-espacial.js`** — E9: mede alucinação espacial nos raciocínios já
+  gravados (adjacência, rota em turnos, ids inexistentes), sem gastar API. Deduz a
+  `escalaMarcha` do **replay**, não do cabeçalho (que já mentiu).
 - **`ferramentas/analisar-log.js`** — analisador pós-jogo (métricas do `.txt` + replay
   `.json`). Métricas: reforço-vs-ataque (pelo replay = estado do motor), distribuição de
   counter, taxa de ataque viável (conquistas/COMBATES, nunca /envios), cobertura de
   raciocínio, etc.
-- **`testes/`** — 23 testes do motor (`test_*.js`). **`testes/test_lote_c.js`** cobre
+- **`testes/`** — 29 ficheiros de teste do motor (`test_*.js`). **`testes/test_prompt_p4.js`**
+  (38 casos) cobre o P4, o fog e o parser tolerante. **`testes/test_lote_c.js`** cobre
   LOTE C/D (regressão byte-idêntica + features). **`testes/ref-lote-c/`** = os 3 outputs
   de referência da regressão. **`testes_arena/`** — 5 smokes que fazem `eval` do
   `index.html` num stub Node.
@@ -98,7 +105,7 @@ Smoke2,Smoke3duelo,Smoke4pausa}.js`. Invariante: `node --check` NÃO basta — u
 
 ---
 
-## 5. O PROMPT (P2 → P3) e o sistema de flags
+## 5. O PROMPT (P4, atual) e o sistema de flags
 
 O relatório que o Rei vê é montado em `relatorioTexto`. Evoluiu por LOTES, cada
 alteração de texto ATRÁS DE UMA FLAG (default ligada), e com **todas as flags a `false`
@@ -108,10 +115,47 @@ Flags (em `cfg`, lidas como `cfg.X !== false`, override por `opcoes.X`):
 `promptP3` (LOTE B), `marchaComOrigem`, `redeComDono`, `marcarFronteira`,
 `contagemAgregada`, `rotulosExpectativa` (LOTE C), `deltaDefesa`, `memoriaAlvo` (LOTE D).
 
-O que o P3 (atual) mostra que o P2 não mostrava: `defesa efetiva (inclui bonus do
+O que o P3 mostrava que o P2 não mostrava: `defesa efetiva (inclui bonus do
 local)`, `tropas em casa: N/300`, `marcha desde [id]: L lenta / M media / R rapida`,
 tags FRONTEIRA/INTERIOR, donos na rede de estradas, `TOTAL:` de tropas, `para tomar
 AGORA`, `(era X ha N turnos)` de defesa, `voce atacou aqui Nx nos ultimos 8 turnos`.
+
+### 5.1 P4 — o prompt VIVO (17/08/2026)
+
+**O jogo usa o P4.** É em **inglês**, tem **fog of war**, e **não tem exemplo**. Flags no
+`CONFIG`: `promptP4: true` e `fogOfWar: true`, lidas como **`=== true`** (e não `!== false`
+como as flags de lote) para que os estados congelados do `test_lote_c`, gerados com
+`CONFIG_V3_ARQUIVO`, continuem a render o texto legado byte a byte.
+
+- `montarPrompt` / `relatorioTexto` fazem **dispatch**: com `config.promptP4 === true` vão
+  para `montarPromptP4` / `relatorioTextoP4`; `opcoes.promptP4 === false` força o legado.
+- O renderizador legado (`montarPromptLegado`, `relatorioTextoLegado`) está **intocado** e
+  continua a ser o que reproduz os logs antigos.
+- Tokens do protocolo continuam PT (`construir`/`envios`, `lanceiro`/`arqueiro`/`cavaleiro`).
+  Só a **prosa** é inglesa. `normalizarTipo` aceita os nomes ingleses como sinónimos,
+  **com registro** em `normalizacoes`.
+- O que o P4 diz e o P2/P3 não diziam: a **condição de vitória real** (75%/2 turnos, com o
+  progresso ao vivo), a **simultaneidade** das ordens, o **reforço a aldeia própria** como
+  mecânica, o **endurecimento das neutras**, e o **corte de 600 chars** do plano.
+- O que **saiu**: o exemplo JSON com valores (virou **esquema declarado**, com os três tipos
+  sempre enumerados juntos), o `para tomar AGORA` (o mínimo pré-calculado saiu do jogo por
+  decisão do Lucas: *o prompt informa, não recomenda*), e a frase que **proibia reforçar**.
+- `construir` aceita **`quantidade`** (ou `count`): `parsearOrdem` expande em N ordens de 1,
+  então motor, diagnóstico e log continuam a ver ordens unitárias.
+
+### 5.2 Fog of war
+
+`estado.visto[dono][id]` guarda a última fotografia que cada Rei teve de cada aldeia
+(turno, dono, tropas). Escrito por `registrarAvistamentos`, chamado no fim do `tick` —
+a memória é **do motor**, porque o modelo é stateless.
+
+Visibilidade (`visiveisPara`): aldeias próprias + **vizinhas diretas na rede** + o destino
+de cada exército próprio em marcha (o cavaleiro ganhou papel de batedor). A **topologia é
+sempre pública** — o fog esconde estado (dono, guarnição, defesa), nunca geografia; a
+localização da capital inimiga também é pública.
+
+O fog é **do relatório**: `montarVisao` continua a carregar todos os alvos (com `visivel` e
+`visto` anotados), então motor, `jogadorBurro` e espectador seguem omniscientes.
 
 ---
 
@@ -165,19 +209,28 @@ recente é **`HANDOFF_2026-08-17.md`** — leia-o para retomar, sobretudo o §2 
   deliberada entre turnos); `depoimento` **não volta nunca**, vai só para a tela e o `.txt`
   (roteiro de narração). Funcionaram em 100% das respostas de DeepSeek R1 e Qwen3-235B.
 
-**Testes:** 28 no motor + 5 smokes + `verificarEquilibrio()` = 0. Destaque para
+**Testes:** 29 ficheiros no motor + 5 smokes + `verificarEquilibrio()` = 0. Destaque para
 **`testes/test_ruleset_vivo.js`**: prova que há um ruleset só, que é o que pensamos, e que os
 invariantes valem sob ele (produção observada = declarada, marcha executada = marcha prometida
 no relatório, escala mesmo aplicada, `minimoParaTomar` == `preverCombate`).
 
-**Próximo passo:** validar o ruleset novo em **free-tier** (sem crédito até ~fim de agosto). As
-perguntas: o duelo rei-contra-rei chega por volta do turno 10? As neutras esgotam-se? **Alguém
-compra cavaleiro** agora que ele custa 1.5 turnos de produção em vez de 5?
+**RULESET NOVO VALIDADO (17/08, partida Gemini × Nemotron):** duelo rei-contra-rei no **T8**
+(era zero em 25 turnos), neutras esgotadas no **T15**, **95 cavaleiros** construídos (era 0 em
+4 partidas). Ver `RELATORIO_PARTIDA_2026-08-17_1303.md`.
 
-**Abertos:** (a) monocultura endereçada no papel, **nunca testada** sob o ruleset novo com dois
-reasoners; (b) zero cavaleiros em 4 partidas; (c) **entesouramento** — 62 de 90 envios com uma
-única tropa, achado comportamental novo; (d) 23 respostas vazias (13/08) não reapareceram;
-(e) cliente OpenRouter duplicado; (f) 2 chaves expostas 03/08 a revogar; (g) `main` a consolidar.
+**P4 + FOG APLICADOS (17/08, sessão Fable):** as 12 incoerências do `ESTUDO_PROMPT_P4.md`
+estão fechadas no código, sem testes de campo (decisão do Lucas: crédito a expirar). Ver
+`HANDOFF_2026-08-17_P4.md` — **é o ponto de partida da próxima sessão.**
+
+**Próximo passo:** a primeira partida real em P4 + fog. Nada foi medido com modelo de verdade.
+
+**Abertos:** (a) monocultura — **nunca testada** com dois reasoners sob o ruleset novo, e agora
+com o P4 há uma hipótese nova (era o exemplo do prompt que fixava `lanceiro`?); (b) cavaleiro
+**resolvido** (95 construídos em 17/08); (c) **entesouramento** — 62 de 90 envios com uma tropa;
+o P4 pode tê-lo mudado porque a instrução antiga **proibia reforçar** (ver handoff §2);
+(d) 23 respostas vazias (13/08) não reapareceram; (e) cliente OpenRouter duplicado — **o P4 foi
+aplicado nos dois**, a dívida continua; (f) 2 chaves expostas 03/08 a revogar; (g) `main` a
+consolidar; (h) **P4 e fog sem nenhum teste de campo** — a maior thread aberta.
 
 **Orçamento OpenRouter: ESGOTADO** (HTTP 403 no turno 25 de 17/08). Recarrega ~fim de agosto.
 Custo observado ~$0.041/turno com dois raciocinadores.
