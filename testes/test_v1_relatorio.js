@@ -56,7 +56,7 @@ const estado = {
 };
 
 const visao = Engine.montarVisao(estado, "A");
-const rel = Engine.relatorioTexto(visao);
+const rel = Engine.relatorioTexto(visao, { promptP4: false }); // P4: este ficheiro guarda o relatorio LEGADO (PT)
 
 console.log("============ RELATORIO (cenario sintetico, visao do Rei A) ============");
 console.log(rel);
@@ -95,7 +95,7 @@ checa("neutras aparecem ordenadas por distancia (mais proxima primeiro)",
 console.log("\n--- Relatorio de uma partida real (burro-vs-burro), turno 6, visao de A ---");
 const g = Engine.criarEstadoInicial(CONFIG);
 for (let i = 0; i < 6; i++) Engine.rodarTurno(g, null);
-console.log(Engine.relatorioTexto(Engine.montarVisao(g, "A")));
+console.log(Engine.relatorioTexto(Engine.montarVisao(g, "A"), { promptP4: false }));
 
 console.log("");
 console.log(falhas === 0 ? "RESULTADO: TODOS OS TESTES PASSARAM ✔" : `RESULTADO: ${falhas} FALHA(S) ✘`);

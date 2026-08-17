@@ -132,7 +132,8 @@ t("4d o jogo NAO manda conquistar neutras primeiro; o arquivo continua a mandar"
   assert.ok(!/Conquiste aldeias neutras primeiro/.test(pv4), "v4 nao pode prescrever a ordem");
   assert.ok(/Conquiste aldeias neutras primeiro/.test(pv3), "v3 congelado mantem a frase");
   // o FACTO fica nos dois: tirar o vies nao pode tirar a informacao
-  assert.ok(/cada aldeia produz recursos por turno/i.test(pv4), "v4 tem de manter o facto");
+  // P4 (17/08): o prompt do jogo vivo e ingles; o arquivo v3 continua em PT.
+  assert.ok(/produces resources every turn/i.test(pv4), "v4 tem de manter o facto (P4, ingles)");
   assert.ok(/cada aldeia produz recursos por turno/i.test(pv3));
 });
 

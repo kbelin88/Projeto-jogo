@@ -21,7 +21,7 @@ t("1a default LIGADA: o prompt pede os dois campos", () => {
   const p = prompt(st());
   assert.ok(/"plano"/.test(p), "prompt tem de pedir plano");
   assert.ok(/"depoimento"/.test(p), "prompt tem de pedir depoimento");
-  assert.ok(/NOTA PARA O PROXIMO TURNO/.test(p), "o plano e pedido como nota, nao como resumo");
+  assert.ok(/NOTE TO YOUR NEXT TURN/.test(p), "o plano e pedido como nota, nao como resumo (P4, ingles)");
 });
 t("1b flag OFF por opcoes: nenhum vestigio dos dois campos", () => {
   const p = prompt(st(), { resumosDoRei: false });
@@ -76,7 +76,7 @@ t("3a o plano guardado aparece no prompt do turno seguinte", () => {
   assert.ok(!/NOTA DO TURNO ANTERIOR/.test(prompt(e)), "turno 1 nao tem nota");
   E.guardarPlano(e, "A", "Toledo e o eixo. Nao dispersar.");
   const p = prompt(e);
-  assert.ok(/NOTA DO TURNO ANTERIOR/.test(p), "a nota tem de voltar");
+  assert.ok(/YOUR NOTE FROM LAST TURN/.test(p), "a nota tem de voltar (P4, ingles)");
   assert.ok(p.indexOf("Toledo e o eixo. Nao dispersar.") !== -1);
 });
 t("3b a nota de A NAO vaza para o prompt de B", () => {

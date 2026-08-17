@@ -38,16 +38,16 @@ function visaoCom(rejeicoes) {
 
 console.log("=== (A) default intocado: benchmark antigo segue comparavel ===");
 const v = visaoCom([REJ]);
-const base = Engine.montarPrompt(v);
+const base = Engine.montarPrompt(v, { promptP4: false }); // P4: H2 no renderizador LEGADO (o P4 tem o seu, em test_prompt_p4.js)
 checa("bloco de rejeicao no MEIO (dentro do relatorio)", base.indexOf("ORDENS RECUSADAS") >= 0 &&
   base.indexOf("ORDENS RECUSADAS") < base.indexOf("=== SUAS ALDEIAS"));
 checa("fim do prompt e o exemplo (nada de rejeicao no rabo)",
   base.lastIndexOf(REJ) < base.lastIndexOf("{"));
-checa("funcao pura: duas chamadas, mesma string", base === Engine.montarPrompt(v));
-checa("chamada com opcoes vazias = default byte-igual", base === Engine.montarPrompt(v, {}));
+checa("funcao pura: duas chamadas, mesma string", base === Engine.montarPrompt(v, { promptP4: false }));
+checa("chamada com opcoes vazias = default byte-igual", base === Engine.montarPrompt(v, { promptP4: false }));
 
 console.log("\n=== (B) variante rejeicaoNoFim: bloco MOVIDO para o fim absoluto ===");
-const fim = Engine.montarPrompt(v, { rejeicaoNoFim: true });
+const fim = Engine.montarPrompt(v, { rejeicaoNoFim: true, promptP4: false });
 checa("rejeicao presente na variante", fim.indexOf(REJ) >= 0);
 checa("bloco saiu do meio do relatorio (ocorre 1x so)",
   fim.indexOf(REJ) === fim.lastIndexOf(REJ));

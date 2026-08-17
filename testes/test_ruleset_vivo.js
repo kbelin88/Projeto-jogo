@@ -95,7 +95,39 @@ t("2d a escala de marcha esta MESMO aplicada (nao e so um campo no config)", () 
 t("2e o prompt do jogo NAO prescreve a ordem de conquista", () => {
   const p = E.montarPrompt(E.montarVisao(stJogo(), "A", {}), {});
   assert.ok(!/Conquiste aldeias neutras primeiro/.test(p));
-  assert.ok(/cada aldeia produz recursos por turno/i.test(p), "o FACTO tem de ficar");
+  // P4 (17/08): o prompt do jogo vivo e em INGLES. O FACTO tem de ficar.
+  assert.ok(/produces resources every turn/i.test(p), "o FACTO tem de ficar");
+});
+// P4 (17/08) — o prompt que o jogo REALMENTE usa e o P4, e nao prescreve jogada.
+// Este bloco existe pelo mesmo motivo do resto do ficheiro: provar que a coisa
+// ligada e a que pensamos. O bug do toggle nasceu de acreditar sem conferir.
+t("2e2 o prompt VIVO e o P4 (ingles); o legado so vem se for pedido", () => {
+  assert.strictEqual(E.CONFIG.promptP4, true, "o jogo vivo tem de estar no P4");
+  const v = E.montarVisao(stJogo(), "A", {});
+  const p = E.montarPrompt(v, {});
+  assert.ok(/You are King A/.test(p), "o prompt vivo tem de ser o P4 em ingles");
+  assert.ok(!/Voce e o Rei/.test(p), "o prompt vivo nao pode cair no legado PT");
+  assert.ok(/Voce e o Rei/.test(E.montarPrompt(v, { promptP4: false })), "o legado tem de continuar alcancavel quando PEDIDO");
+});
+t("2e3 o P4 nao tem exemplo com valores nem minimo pre-calculado", () => {
+  const p = E.montarPrompt(E.montarVisao(stJogo(), "A", { minimos: true }), {});
+  assert.ok(!/para tomar|to take/i.test(p), "o minimo pre-calculado saiu do jogo — nao pode voltar");
+  assert.ok(!/"destinoId":\s*\d/.test(p), "exemplo com ids concretos nao pode voltar");
+  assert.ok(!/"aldeiaId":\s*\d/.test(p), "exemplo com ids concretos nao pode voltar");
+  assert.ok(!/"lanceiro":\s*\d/.test(p), "exemplo com quantidades nao pode voltar");
+  assert.ok(/"lanceiro" \| "arqueiro" \| "cavaleiro"/.test(p), "o esquema tem de enumerar os TRES tipos juntos");
+});
+t("2e4 o P4 diz as regras que o motor EXECUTA (vitoria, simultaneidade, reforco, endurecimento)", () => {
+  const p = E.montarPrompt(E.montarVisao(stJogo(), "A", {}), {});
+  const alvo = Math.ceil(24 * E.CONFIG.vitoriaFracao);
+  assert.ok(new RegExp("hold at least " + alvo + " of the map's 24 villages").test(p),
+    "a condicao de vitoria tem de estar dita, com o numero certo");
+  assert.ok(new RegExp("for " + E.CONFIG.vitoriaTurnos + " consecutive turns").test(p));
+  assert.ok(/taking it is NOT required to win/.test(p), "nao pode voltar a dizer que o objetivo E a capital");
+  assert.ok(/Orders are SIMULTANEOUS/.test(p), "a simultaneidade (LOTE E) tem de estar dita");
+  assert.ok(/send troops to a village YOU already own/.test(p), "o reforco tem de estar dito como mecanica");
+  assert.ok(/one of YOURS to reinforce it/.test(p), "o esquema tem de permitir destino proprio");
+  assert.ok(/Neutral villages harden with time/.test(p), "o endurecimento das neutras tem de estar dito");
 });
 t("2f a partida TERMINA: vitoria por dominancia esta ligada", () => {
   assert.strictEqual(E.CONFIG.vitoriaFracao, 0.75);

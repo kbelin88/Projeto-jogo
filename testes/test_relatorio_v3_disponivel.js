@@ -1,3 +1,8 @@
+// P4 (17/08): este ficheiro guarda o renderizador LEGADO (PT, P2/P3). O jogo
+// vivo usa o P4 (ingles, fog) — coberto por testes/test_prompt_p4.js. Aqui as
+// chamadas pedem o legado EXPLICITAMENTE (promptP4:false): o mesmo padrao que
+// test_minimo_para_tomar usa ao apontar para CONFIG_V3_ARQUIVO. Sem isto, o
+// dispatch levaria estes asserts para o texto ingles e a regressao morreria.
 // test_relatorio_v3_disponivel.js — FASE 2 (04/08): bloco de aldeia do relatorio.
 //
 // Protege o redesenho que ataca as CAUSAS 1 e 2:
@@ -39,7 +44,7 @@ const estado1 = {
   ],
   log: [],
 };
-const rel1 = Engine.relatorioTexto(Engine.montarVisao(estado1, "A"));
+const rel1 = Engine.relatorioTexto(Engine.montarVisao(estado1, "A"), { promptP4: false });
 
 t("cabecalho reafirma o turno atual", () => {
   assert.ok(rel1.includes("Estes numeros sao do TURNO 8. Ignore quantidades de turnos anteriores."), rel1);
@@ -76,7 +81,7 @@ const estado2 = {
   movimentos: [], // nenhum em marcha
   log: [],
 };
-const rel2 = Engine.relatorioTexto(Engine.montarVisao(estado2, "A"));
+const rel2 = Engine.relatorioTexto(Engine.montarVisao(estado2, "A"), { promptP4: false });
 
 t("aldeia sem transito NAO tem linha 'saiu daqui'", () => {
   assert.ok(!rel2.includes("saiu daqui"), rel2);
@@ -97,7 +102,7 @@ const estado3 = {
   ],
   movimentos: [], log: [],
 };
-const rel3 = Engine.relatorioTexto(Engine.montarVisao(estado3, "A"));
+const rel3 = Engine.relatorioTexto(Engine.montarVisao(estado3, "A"), { promptP4: false });
 t("sem nome -> linha comeca por '[0] | madeira'", () => {
   assert.ok(rel3.includes("[0] | madeira 5 "), rel3);
 });
@@ -124,7 +129,7 @@ const estado4 = {
   ],
   log: [],
 };
-const rel4 = Engine.relatorioTexto(Engine.montarVisao(estado4, "A"));
+const rel4 = Engine.relatorioTexto(Engine.montarVisao(estado4, "A"), { promptP4: false });
 
 t("soma das linhas 'saiu daqui' == meu transito total (sem duplicacao, sem inimigo)", () => {
   // esperado calculado do estado: so os movimentos dono A
