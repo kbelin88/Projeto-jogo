@@ -1993,12 +1993,14 @@
   const CATALOGO_FREE = {
     "z-ai/glm-5.2:free":                      { ctx: 128000,  maxOut: 128000, rac: true,  nota: "lider de raciocinio open-weight (Intelligence Index 51); candidato a degrau 3" },
     "nvidia/nemotron-3-ultra-550b-a55b:free": { ctx: 1000000, maxOut: 65536,  rac: true,  nota: "550B a55b; ja correu contra o burro em 07/08" },
-    "deepseek/deepseek-v4-flash:free":        { ctx: 1000000, maxOut: null,   rac: null,  nota: "MoE 284B com 13B ativos, otimizado p/ velocidade" },
-    "minimax/minimax-m3:free":                { ctx: 1000000, maxOut: null,   rac: null,  nota: "multimodal; vendido para trabalho agentico de horizonte longo" },
+    // MORTOS EM 18/08 (menos de 24h depois de verificados): HTTP 404 "unavailable
+    // for free, use the paid slug". O catalogo :free ROTA — sonde antes de usar.
+    // "deepseek/deepseek-v4-flash:free":     MORTO 18/08 (404)
+    // "minimax/minimax-m3:free":             MORTO 18/08 (404)
+    // "liquid/lfm-2.5-2.6b:free":            MORTO 18/08 (404 "no endpoints found"; o id pode ter mudado)
     "nvidia/nemotron-3.5-lightning:free":     { ctx: 1000000, maxOut: 65536,  rac: false, nota: "SEM raciocinio: serve para isolar o efeito do thinking" },
-    "liquid/lfm-2.5-2.6b:free":               { ctx: 128000,  maxOut: 8192,   rac: true,  nota: "2.6B - baseline FRACO de proposito (mede degrau 0/1). maxOut 8192: baixe o max_tokens do painel" },
     "nvidia/nemotron-3-super-120b-a12b:free": { ctx: 262144,  maxOut: 262144, rac: true,  nota: "o da partida de 17/08 13:03" },
-    "openai/gpt-oss-20b:free":                { ctx: 131072,  maxOut: null,   rac: true,  nota: "21B MoE Apache-2.0" },
+    "openai/gpt-oss-20b:free":                { ctx: 131072,  maxOut: null,   rac: true,  nota: "21B MoE Apache-2.0. 18/08: LENTISSIMO em partida real (turnos de ate 45 min, 5x o que a sonda previu) e falha o degrau 2/3 — razao ataque/defesa mediana 0.64, ataca com menos forca que a defesa" },
     "google/gemma-4-31b-it:free":             { ctx: 262144,  maxOut: null,   rac: true,  nota: "via Google AI Studio; thinking configuravel" },
     "nvidia/nemotron-nano-9b-v2:free":        { ctx: null,    maxOut: null,   rac: null,  nota: "ja estava no jogo; nao reverificado em 17/08" },
   };

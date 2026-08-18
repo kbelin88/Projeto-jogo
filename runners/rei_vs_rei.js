@@ -61,6 +61,61 @@ const L = [];
 const out = (s) => L.push(s);
 const gravar = () => fs.writeFileSync(outfile, L.join("\n"));
 
+// ===== REPLAY .json (18/08) — paridade com o browser =====================
+//  Porque isto existe: ate hoje so o browser gravava replay, e o headless e
+//  como as baterias correm. Sem replay ficam CEGAS as metricas que leem o
+//  ESTADO DO MOTOR em vez de reparsear o texto: A3 (reforco vs ataque, pelo
+//  dono no INICIO do turno), a deteccao de escala de marcha, a alucinacao
+//  espacial e o reconstruir-prompts. Na analise da bateria de 17/08 foi
+//  preciso reconstruir a posse das aldeias a mao a partir das conquistas —
+//  possivel, mas e reparsear o .txt, exatamente o que o projeto proibiu
+//  ("o .txt narra, o JSON mede").
+//
+//  O formato e o MESMO do gravarFrame() do index.html, campo por campo, para
+//  o analisar-log.js e as ferramentas nao saberem de onde veio o replay.
+const replayFile = outfile.replace(/\.txt$/i, "") + ".replay.json";
+const replay = { v: 1, versaoDiag: 1, frames: [] };
+const diagTurno = { A: null, B: null };
+function coletarDiagRunner(dono, registro, cli) {
+  const tk = cli && cli.ultimosTokens;
+  const ord = registro.ordemParseada || { construir: [], envios: [] };
+  diagTurno[dono] = {
+    propostas: (ord.construir || []).length + (ord.envios || []).length,
+    executadas: registro.aceito.construir.length + registro.aceito.envios.length,
+    rejeicoes: registro.rejeicoes || [],
+    formatoOk: !!registro.jsonValido,
+    reincidente: false,
+    ataquesIniciados: registro.aceito.envios.filter((e) => e.alvo && e.alvo.dono !== dono).length,
+    tokens: (tk && !registro.erroRede) ? { prompt: tk.prompt || 0, resposta: tk.resposta || 0, raciocinio: tk.raciocinio || 0 } : null,
+    truncado: !!(cli && cli.ultimoFinish === "length"),
+    modoRac: registro.raciocinio ? "completo" : null,
+    finish: (cli && cli.ultimoFinish) || null,
+    finishNativo: (cli && cli.ultimoFinishNativo) || null,
+    erroApi: registro.erroRede || null,
+    ms: (tk && tk.ms != null) ? tk.ms : null,
+    vazio: !registro.erroRede && !String(registro.cru || "").trim(),
+  };
+}
+function gravarFrame(estado) {
+  const d = { A: diagTurno.A, B: diagTurno.B };
+  for (const lado of ["A", "B"]) {                    // estoque ao FIM do turno
+    if (!d[lado]) continue;
+    const rec = {};
+    for (const a of Engine.aldeiasDe(estado, lado)) for (const k in a.recursos) rec[k] = (rec[k] || 0) + a.recursos[k];
+    d[lado].recursos = rec;
+  }
+  replay.frames.push(JSON.parse(JSON.stringify({
+    turno: estado.turno,
+    etiqueta: etiquetaDe.B, etiquetaA: etiquetaDe.A, etiquetaB: etiquetaDe.B,
+    aldeias: estado.aldeias,
+    movimentos: estado.movimentos,
+    eventos: estado.log.filter((e) => e.turno === estado.turno),
+    diag: d,
+  })));
+  diagTurno.A = diagTurno.B = null;                   // frame novo, pensamento novo
+  fs.writeFileSync(replayFile, JSON.stringify(replay)); // checkpoint: sobrevive a crash
+}
+
 out(`=== PARTIDA Rei A (${etiquetaDe.A}) vs Rei B (${etiquetaDe.B}) | seed ${seed} | maxTurnos ${maxTurnos} | ${new Date().toLocaleString()} ===`);
 out("condicoes: ambiente=iberia | temp=0 | prompt=relatorio v3 (disponivel-para-enviar) + combate v3 (atq/def, counter " + cfg.bonus_forca_triangulo + ") + clamp | thinking=on" + (cfg.vitoriaPorDominancia ? " | regras=v4 (cav def2/1t, madeira 15, dist x2/3, vitoria 75%/2t)" : ""));
 out("");
@@ -193,9 +248,11 @@ async function main() {
       registro.aceito.envios.filter((e) => e.ajustado).forEach((e) =>
         out(`AJUSTADO envio [${e.origemId}]->[${e.destinoId}]: pediu ${compStrG(e.pedido)}, enviado ${compStrG(e.tropas)} (estoque real)`));
       registro.rejeicoes.forEach((r) => out("REJEITADO: " + r));
+      coletarDiagRunner(dono, registro, cliente[dono]); // replay: o pensamento deste lado
       gravar(); // checkpoint por LADO
     }
     logEventos(estado, turno);
+    gravarFrame(estado);   // replay: 1 frame por turno, depois de A e B aplicarem
     gravar();
     const conq = estado.log.filter((l) => l.tipo === "combate" && l.conquista).length;
     console.error(`  T${turno} | A ${Engine.aldeiasDe(estado, "A").length} B ${Engine.aldeiasDe(estado, "B").length} neutras ${Engine.aldeiasDe(estado, null).length} | conquistas ate agora ${conq} | ${((Date.now() - t0) / 1000).toFixed(0)}s`);
@@ -229,6 +286,7 @@ async function main() {
   console.error(`TAMANHO MEDIO DE ENVIO: A ${mdA} (${m.A.envios} env) | B ${mdB} (${m.B.envios} env)`);
   console.error(`ultima conquista: T${conquistas.length ? Math.max(...conquistas.map((c) => c.turno)) : "-"}`);
   console.error(`log: ${outfile}`);
+  console.error(`replay: ${replayFile} (${replay.frames.length} frames)`);
   return motivoAbort;
 }
 
