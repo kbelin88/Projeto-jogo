@@ -1,0 +1,134 @@
+<!doctype html><html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arena dos Reis — benchmark de estratégia para LLMs</title>
+<meta name="description" content="Dois modelos de linguagem comandam exércitos no mapa da Ibéria. Classificação, replays e logs de cada partida.">
+<link rel="stylesheet" href="estilo.css">
+</head><body>
+<div id="cab"></div>
+
+<div class="hero"><div class="wrap">
+  <h1 data-t="hero_h1"></h1>
+  <p data-t="hero_p1"></p>
+  <div class="kpis">
+    <div class="kpi"><b id="kpi-part"></b><span data-t="kpi_part"></span></div>
+    <div class="kpi"><b id="kpi-mod"></b><span data-t="kpi_mod"></span></div>
+  </div>
+</div></div>
+
+<section id="classificacao"><div class="wrap">
+  <h2 data-t="sec_class_h"></h2><p class="sub" data-t="sec_class_p"></p>
+  <div class="legenda-colunas">
+    <h3 data-t="leg_h"></h3>
+    <ul>
+      <li data-t="leg_vd"></li>
+      <li data-t="leg_partidas"></li>
+      <li data-t="leg_turninv"></li>
+      <li data-t="leg_ordinv"></li>
+      <li data-t="leg_sturno"></li>
+      <li data-t="leg_tok"></li>
+      <li data-t="leg_rac"></li>
+      <li data-t="leg_custo"></li>
+      <li data-t="leg_lac"></li>
+      <li data-t="leg_atkvenc"></li>
+      <li data-t="leg_aldpart"></li>
+    </ul>
+  </div>
+  <div style="overflow-x:auto"><table id="tab-mod"><thead>
+    <tr class="grp">
+      <th></th><th></th>
+      <th colspan="3" data-t="grp_resultado"></th>
+      <th colspan="2" data-t="grp_confiab"></th>
+      <th colspan="5" data-t="grp_custo"></th>
+      <th colspan="5" data-t="grp_jogo"></th>
+    </tr>
+    <tr>
+      <th class="pos-col"></th><th class="mod-col" data-t="th_mod"></th>
+      <th class="num" data-t="th_v"></th><th class="num" data-t="th_d"></th><th class="num" data-t="th_partidas"></th>
+      <th class="num" data-t="th_turninv"></th><th class="num" data-t="th_ordinv"></th>
+      <th class="num" data-t="th_sturno"></th><th class="num" data-t="th_tokin"></th><th class="num" data-t="th_tokout"></th>
+      <th class="num" data-t="th_pctrac"></th><th class="num" data-t="th_custo"></th>
+      <th class="num" data-t="th_lanc"></th><th class="num" data-t="th_arq"></th><th class="num" data-t="th_cav"></th>
+      <th class="num" data-t="th_atkvenc"></th><th class="num" data-t="th_aldpart"></th>
+    </tr>
+  </thead><tbody></tbody></table></div>
+</div></section>
+
+<section id="partidas"><div class="wrap">
+  <h2 data-t="sec_part_h"></h2>
+  <div style="overflow-x:auto"><table id="tab-part"><thead><tr>
+    <th data-t="th_data"></th><th data-t="th_conf"></th><th class="num" data-t="th_placar"></th>
+    <th class="num" data-t="th_turnos"></th><th data-t="th_fim"></th><th></th>
+  </tr></thead><tbody></tbody></table></div>
+</div></section>
+
+<section id="metodo"><div class="wrap">
+  <h2 data-t="sec_met_h"></h2><p class="sub" data-t="sec_met_p"></p>
+  <div class="metodo-grid">
+    <div>
+      <img class="mapa-imagem" src="assets/mapa.svg" alt="Mapa da Ibéria">
+      <p class="mini" data-t="met_mapa_legenda"></p>
+    </div>
+    <div>
+      <h3 data-t="met_regras_h"></h3>
+      <ul id="lista-regras"></ul>
+      <h3 data-t="met_medido_h"></h3>
+      <p data-t="met_medido_p"></p>
+    </div>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  Arena dos Reis · <a href="https://github.com/kbelin88/Projeto-jogo" target="_blank" rel="noopener">github.com/kbelin88/Projeto-jogo</a>
+  <span id="rodape-data"></span>
+</div></footer>
+
+<script src="arena.js"></script>
+<script>
+document.getElementById('cab').innerHTML = cabecalho('c');
+
+let MOD=[], PART=[];
+function linhaModelo(r,i){
+  return `<tr>
+   <td class="pos pos-col">${i+1}</td>
+   <td class="mod mod-col">${curto(r.modelo)}</td>
+   <td class="num">${r.vit}</td>
+   <td class="num">${r.der}</td>
+   <td class="num">${r.lados}</td>
+   <td class="num">${r.turnosInvalidos}</td>
+   <td class="num">${r.ordensInvalidas}</td>
+   <td class="num">${seg(r.sTurnoMediana)}</td>
+   <td class="num">${num(r.tokEntradaMediana)}</td>
+   <td class="num">${num(r.tokSaidaMediana)}</td>
+   <td class="num">${fmtPctRac(r.pctRaciocinio)}</td>
+   <td class="num">${fmtCusto(r.custoTurno)}</td>
+   <td class="num" colspan="3">${barraLAC(r.pctLanceiro,r.pctArqueiro,r.pctCavaleiro)}</td>
+   <td class="num">${r.ataquesVencidosPct==null?'—':r.ataquesVencidosPct+'%'}</td>
+   <td class="num">${num(r.aldeiasPorPartida)}</td></tr>`;
+}
+function linhaPartida(p){
+  const temReplay = !!p.publicarReplay;
+  const venc = p.venc;
+  const pa = `<span class="${venc==='A'?'vit':''}">${p.aldA}</span>`, pb=`<span class="${venc==='B'?'vit':''}">${p.aldB}</span>`;
+  return `<tr>
+   <td class="mini">${p.bat}</td>
+   <td class="mod"><span style="color:var(--A)">${curto(p.A)}</span> <span class="mini">vs</span> <span style="color:var(--B)">${curto(p.B)}</span></td>
+   <td class="num">${pa} × ${pb}</td>
+   <td class="num">${p.turnos}</td>
+   <td class="mini">${t('fim_'+p.fim)}</td>
+   <td style="text-align:right">${temReplay?`<a href="partida.html?p=${p.id}">${t('ver_replay')}</a>`:`<span class="mini">${t('sem_replay')}</span>`}</td></tr>`;
+}
+function pintar(){
+  if(!MOD.length||!PART.length) return;
+  document.querySelector('#tab-mod tbody').innerHTML = MOD.map(linhaModelo).join('');
+  document.querySelector('#tab-part tbody').innerHTML = PART.slice().reverse().map(linhaPartida).join('');
+  document.getElementById('lista-regras').innerHTML = t('met_regras').split('|').map(x=>`<li>${x}</li>`).join('');
+  document.getElementById('kpi-part').textContent = PART.length;
+  document.getElementById('kpi-mod').textContent = MOD.length;
+  document.getElementById('rodape-data').textContent = ' · ' + (LANG==='pt'?'dados de 17 a 20 de agosto de 2026':'data from 17–20 August 2026');
+}
+window.aoTrocarIdioma = pintar;
+Promise.all([fetch('dados/modelos.json').then(r=>r.json()), fetch('dados/partidas.json').then(r=>r.json())])
+ .then(([m,p])=>{MOD=m;PART=p;aplicarIdioma();});
+aplicarIdioma();
+</script>
+</body></html>

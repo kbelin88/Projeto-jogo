@@ -117,7 +117,22 @@ function gravarFrame(estado) {
 }
 
 out(`=== PARTIDA Rei A (${etiquetaDe.A}) vs Rei B (${etiquetaDe.B}) | seed ${seed} | maxTurnos ${maxTurnos} | ${new Date().toLocaleString()} ===`);
-out("condicoes: ambiente=iberia | temp=0 | prompt=relatorio v3 (disponivel-para-enviar) + combate v3 (atq/def, counter " + cfg.bonus_forca_triangulo + ") + clamp | thinking=on" + (cfg.vitoriaPorDominancia ? " | regras=v4 (cav def2/1t, madeira 15, dist x2/3, vitoria 75%/2t)" : ""));
+// FASE 0 (20/08, SPEC_SITE_V1 §2.2): esta linha era TEXTO FIXO ("prompt v3 ...
+// regras=v4 cav def2/1t, madeira 15, dist x2/3") e mentiu desde que o ruleset
+// mudou para P4+fog (17/08) — todo .txt das baterias de 17-19/08 carrega um
+// cabecalho falso. index.html ja le de game.config (commit bfc3a77); agora o
+// runner le do MESMO cfg que de fato executa. Nenhum valor literal de regra aqui.
+const regrasTxt = cfg.vitoriaPorDominancia
+  ? "regras=v4 (counter " + cfg.bonus_forca_triangulo +
+    ", cav def" + cfg.tropas.cavaleiro.def + "/" + cfg.tropas.cavaleiro.turnos + "t" +
+    ", madeira " + cfg.producao.madeira +
+    ", dist x" + (cfg.escalaMarcha != null ? cfg.escalaMarcha : 1) +
+    ", vitoria " + Math.round((cfg.vitoriaFracao || 0) * 100) + "%/" + cfg.vitoriaTurnos + "t)"
+  : "regras=congeladas v3";
+out("condicoes: ambiente=" + (cfg.layout || "v1") + " | temp=0 | prompt=" +
+  (cfg.promptP4 === true ? "P4 EN (esquema declarado, sem exemplo, sem minimos, vitoria real, reforco, quantidade)" : "P2 (minimo por alvo)") +
+  (cfg.fogOfWar === true ? " + FOG OF WAR" : "") +
+  " + combate v3 (atq/def, counter " + cfg.bonus_forca_triangulo + ") + clamp | " + regrasTxt + " | thinking=on");
 out("");
 
 function logEventos(estado, turno) {

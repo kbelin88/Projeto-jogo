@@ -96,6 +96,10 @@ function novoRei() {
     razaoAtkDef: [],            // E7.3: FatkEf/FdefEf por COMBATE deste rei como atacante
     somaPrompt: 0, somaResp: 0, somaRac: 0, // E7.4: tokens agregados
     somaCusto: 0,               // E7.4: soma de "custo turno: $X"
+    // SPEC_SITE_V1 (20/08, FASE 1): listas cruas por turno — a soma so serve para
+    // o total do log inteiro; a tabela do site precisa da MEDIANA agregada por
+    // MODELO (varias partidas), e mediana de somas != soma de medianas.
+    listaPrompt: [], listaResp: [], listaRac: [],
   };
 }
 
@@ -143,13 +147,15 @@ function analisarLog(caminho, replayPath) {
     }
 
     // LOTE E, E7.1: linha de tokens -> finish/nativo (histograma), usage (tokens agregados) e ms.
-    if (linha.startsWith("tokens:") && reiAtual) {
+    // FASE 0 (20/08, SPEC_SITE_V1 §2.1): o browser escreve "tokens:", o runner
+    // headless escreve "tokens.contexto:" (rei_vs_rei.js) — os dois tem de contar.
+    if (/^tokens(?:\.contexto)?:/.test(linha) && reiAtual) {
       const r = reis[reiAtual];
       const fm = /\|\s*finish\s+(\S+)/.exec(linha); if (fm) r.finishHist[fm[1]] = (r.finishHist[fm[1]] || 0) + 1;
       const nm = /\|\s*nativo\s+(\S+)/.exec(linha); if (nm) r.nativoHist[nm[1]] = (r.nativoHist[nm[1]] || 0) + 1;
       const pm = /prompt\s+(\d+)\s*\|\s*resposta\s+(\d+)/.exec(linha); // usage = prompt|resposta
-      if (pm) { usoAtual = true; r.somaPrompt += +pm[1]; r.somaResp += +pm[2]; } // E7.4
-      const rm = /\|\s*raciocinio\s+(\d+)/.exec(linha); if (rm) r.somaRac += +rm[1]; // raciocinio e opcional (logs antigos nao tem)
+      if (pm) { usoAtual = true; r.somaPrompt += +pm[1]; r.somaResp += +pm[2]; r.listaPrompt.push(+pm[1]); r.listaResp.push(+pm[2]); } // E7.4
+      const rm = /\|\s*raciocinio\s+(\d+)/.exec(linha); if (rm) { r.somaRac += +rm[1]; r.listaRac.push(+rm[1]); } // raciocinio e opcional (logs antigos nao tem)
       const mm = /\|\s*ms\s+(\d+)/.exec(linha); msAtual = mm ? +mm[1] : null; // E5
       continue;
     }
@@ -427,6 +433,10 @@ function analisarLog(caminho, replayPath) {
       // LOTE E, E7.4: tokens/custo agregados (0 se o log nao traz; custo so quando ha preco)
       tokens_prompt_total: r.somaPrompt, tokens_resposta_total: r.somaResp, tokens_raciocinio_total: r.somaRac,
       custo_total_usd: _r2(r.somaCusto),
+      // SPEC_SITE_V1 FASE 1: listas cruas, para o site agregar por MODELO (varias
+      // partidas) sem cometer mediana-de-medianas nem media-de-somas.
+      tokens_prompt_lista: r.listaPrompt, tokens_resposta_lista: r.listaResp, tokens_raciocinio_lista: r.listaRac,
+      ms_turnos_nao_vazios_lista: r.msNaoVazio, ms_turnos_vazios_lista: r.msVazio,
     };
   };
 
