@@ -69,6 +69,7 @@ catch (e) { console.error("(sem resultados_arena.json — tabela sai so com o ca
 for (const m of modelos) m.arena = medidos[m.id] || null;
 // modelos medidos que NAO estao mais no catalogo free (morreram) entram como fantasmas
 for (const id of Object.keys(medidos)) {
+  if (id.startsWith("_")) continue;            // chaves de nota do JSON, nao sao modelos
   if (modelos.some((m) => m.id === id)) continue;
   modelos.push({ id, nome: medidos[id].nome || id, provider: id.split("/")[0], foraDoCatalogo: true,
     apto: false, motivosInapto: ["fora do catalogo free em " + geradoEm.slice(0, 10)],
@@ -92,19 +93,34 @@ L.push("");
 L.push("**Critério de aptidão** (regra, não gosto): produz texto, contexto ≥ " + fmt(MIN_CTX) +
        ", saída máxima ≥ " + fmt(MIN_OUT) + ", não é classificador nem router.");
 L.push("");
-L.push("## Aptos e já medidos na Arena");
+L.push("## Aptos e já medidos em partida");
 L.push("");
 L.push("| modelo | ctx | saída | racioc. | partidas | vit. | atq/unid | counter (inim.) | latência med. | formato | nota |");
 L.push("|---|---|---|---|---|---|---|---|---|---|---|");
-for (const m of modelos.filter((x) => x.arena && !x.foraDoCatalogo)) {
+const temPartida = (x) => x.arena && !x.foraDoCatalogo && Number(x.arena.partidas) > 0;
+const soSondado = (x) => x.arena && !x.foraDoCatalogo && !(Number(x.arena.partidas) > 0);
+for (const m of modelos.filter(temPartida)) {
   const a = m.arena;
   L.push(`| \`${m.id}\` | ${fmt(m.ctx)} | ${fmt(m.maxOut)} | ${m.racMandatorio ? "obrig." : m.racPadrao ? "padrão" : m.racSuportado ? "opc." : "não"} | ${a.partidas ?? "?"} | ${a.vitorias ?? "?"} | ${a.atqUnidade ?? "?"} | ${a.counterInimigo ?? "?"} | ${a.latenciaMediana ?? "?"} | ${a.formato ?? "?"} | ${a.nota ?? ""} |`);
 }
 L.push("");
-L.push("## Aptos, ainda não testados");
+L.push("## Sondados (1 turno), ainda sem partida");
+L.push("");
+L.push("Passaram — ou falharam — a sonda barata de 1 turno. A sonda mede **disponibilidade e formato**;");
+L.push("não mede latência de partida nem estabilidade ao longo de 30 turnos (ver a legenda).");
+L.push("");
+L.push("| modelo | ctx | saída | racioc. | veredito | latência (sonda) | formato | nota |");
+L.push("|---|---|---|---|---|---|---|---|");
+for (const m of modelos.filter(soSondado)) {
+  const a = m.arena;
+  L.push(`| \`${m.id}\` | ${fmt(m.ctx)} | ${fmt(m.maxOut)} | ${m.racMandatorio ? "obrig." : m.racPadrao ? "padrão" : m.racSuportado ? "opc." : "não"} | ${a.estado ?? "?"} | ${a.latenciaMediana ?? "?"} | ${a.formato ?? "?"} | ${a.nota ?? ""} |`);
+}
+L.push("");
+L.push("## Aptos, ainda não sondados");
 L.push("");
 L.push("| modelo | ctx | saída | racioc. | modalidade | criado | descrição |");
 L.push("|---|---|---|---|---|---|---|");
+if (!modelos.some((x) => x.apto && !x.arena)) L.push("| — | | | | | | _nenhum: os aptos do catálogo já foram todos sondados_ |");
 for (const m of modelos.filter((x) => x.apto && !x.arena)) {
   L.push(`| \`${m.id}\` | ${fmt(m.ctx)} | ${fmt(m.maxOut)} | ${m.racMandatorio ? "obrig." : m.racPadrao ? "padrão" : m.racSuportado ? "opc." : "não"} | ${m.modalidade} | ${m.criado || "?"} | ${(m.descricao || "").slice(0, 90)} |`);
 }
@@ -120,11 +136,16 @@ L.push("");
 L.push("## Legenda das colunas medidas");
 L.push("");
 L.push("- **atq/unid** — ataque médio por unidade construída: `(1·lanceiros + 2·arqueiros + 4·cavaleiros) / total`.");
-L.push("  Correlação +0.80 com aldeias finais em 10 lados de 5 partidas; o lado com o valor maior venceu 6 de 6.");
+L.push("  Correlação +0.80 com aldeias finais em 10 lados de 5 partidas de 17/08; o lado com o valor maior venceu 6 de 6.");
+L.push("  **Em 18/08 a regra falhou 2 vezes em 3**: o Lightning venceu o espelho com 1.08 contra 1.71, e o");
+L.push("  `nano-12b-v2-vl` perdeu com 3.29 contra 1.55. A leitura de 17/08 fica em aberto, não confirmada.");
 L.push("- **counter (inim.)** — taxa de counter **só contra o inimigo**. A taxa contra neutras mede leitura de");
 L.push("  tabela (guarnição de um tipo só); contra o inimigo mede estratégia (exército misto que muda por turno).");
 L.push("- **latência med.** — mediana de segundos por turno. É o custo real em free-tier, não o dólar.");
 L.push("- **formato** — degrau 0/1: emite JSON válido e usa ids reais? `ok` / o modo de falha observado.");
+L.push("- **sonda ≠ partida** — em 18/08 dois modelos passaram a sonda de 1 turno e desmentiram-na em partida:");
+L.push("  `laguna-s-2.1` (5 s na sonda, 181 s de mediana em jogo, com degeneração) e `nemotron-nano-12b-v2-vl`");
+L.push("  (5.6 s na sonda, 19 de 30 turnos válidos). Um veredito de sonda é uma licença para jogar, não uma nota.");
 fs.writeFileSync(path.join(RAIZ, "MODELOS_ARENA.md"), L.join("\n") + "\n");
 fs.writeFileSync(path.join(RAIZ, "modelos_arena.json"), JSON.stringify({ geradoEm, criterio: { MIN_CTX, MIN_OUT }, modelos }, null, 2));
 console.log(`MODELOS_ARENA.md + modelos_arena.json: ${modelos.length} modelos (${modelos.filter((m) => m.apto).length} aptos, ${modelos.filter((m) => m.arena).length} medidos)`);

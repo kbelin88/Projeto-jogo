@@ -1,4 +1,4 @@
-/* Arena dos Reis — base comum: idioma, formatação, cabeçalho. */
+/* The Kings Arena — base comum: idioma, formatação, cabeçalho. */
 const DIC = {
   pt:{
     marca_sub:"benchmark de estratégia para LLMs",
@@ -33,6 +33,10 @@ const DIC = {
     ver_replay:"ver replay →", sem_replay:"—",
     sec_met_h:"Método",
     sec_met_p:"Dois modelos de linguagem jogam como Reis, um de cada lado do mapa. A cada turno, cada Rei recebe um relatório em texto do que consegue ver e responde com um JSON de ordens: o que construir e para onde mandar tropa. Um motor determinístico executa as duas ordens ao mesmo tempo e devolve o mundo novo. Os modelos nunca se falam e nunca veem o código.",
+    met_partida_legenda:"Uma partida a correr: as duas capitais, as 22 aldeias neutras e a rede de estradas. O mapa é simétrico — para cada cidade do Oeste existe uma gêmea no Este com os custos de marcha invertidos.",
+    reiA_lbl:"Rei A",
+    reiB_lbl:"Rei B",
+    rodape_arte:"Ilustrações geradas com IA e tratadas para o projeto.",
     met_mapa_legenda:"24 aldeias, 41 estradas. As duas capitais são o ponto de partida de cada Rei. O mapa é simétrico: para cada cidade do Oeste existe uma gêmea no Este com os custos de marcha invertidos.",
     met_regras_h:"As regras",
     met_regras:"Cada aldeia produz 30 de madeira e 20 de ferro por turno.|Três tropas: lanceiro (ataque 1, barato), arqueiro (ataque 2), cavaleiro (ataque 4, caro e rápido). Elas se contra-atacam em triângulo — lanceiro vence cavaleiro, cavaleiro vence arqueiro, arqueiro vence lanceiro — e acertar o contra-ataque multiplica a força por 1,5.|Marchar leva turnos, e o custo é o da estrada, nunca a distância no desenho.|Aldeias neutras endurecem sozinhas com o tempo: quem demora a expandir paga mais caro.|Névoa de guerra: cada Rei vê as próprias aldeias e as vizinhas diretas. Vê onde ficam todas as cidades — o mapa é público — mas não o que há dentro das que não alcança. Não existe unidade de exploração: explorar é conquistar.|Vitória: quem segurar 75% das aldeias por dois turnos seguidos ganha. Sem isso, a partida vai até o limite de turnos e quem tiver mais aldeias fica na frente.",
@@ -83,6 +87,10 @@ const DIC = {
     ver_replay:"watch replay →", sem_replay:"—",
     sec_met_h:"Method",
     sec_met_p:"Two language models play as Kings, one on each side of the map. Each turn, every King gets a text report of what it can see and answers with a JSON of orders: what to build and where to send troops. A deterministic engine runs both orders at the same time and returns the new world. The models never talk to each other and never see the code.",
+    met_partida_legenda:"A match in progress: the two capitals, the 22 neutral villages and the road network. The map is symmetric — every city in the West has a twin in the East with mirrored marching costs.",
+    reiA_lbl:"King A",
+    reiB_lbl:"King B",
+    rodape_arte:"Illustrations generated with AI and processed for the project.",
     met_mapa_legenda:"24 villages, 41 roads. The two capitals are each King's starting point. The map is symmetric: every city in the West has a twin in the East with mirrored marching costs.",
     met_regras_h:"The rules",
     met_regras:"Each village produces 30 wood and 20 iron per turn.|Three troop types: spearman (attack 1, cheap), archer (attack 2), knight (attack 4, expensive and fast). They counter each other in a triangle — spearman beats knight, knight beats archer, archer beats spearman — and landing the counter multiplies force by 1.5.|Marching takes turns, and the cost is the road's, never the distance on the drawing.|Neutral villages harden on their own over time: waiting to expand costs more.|Fog of war: each King sees its own villages and their direct neighbours. It sees where every city is — the map is public — but not what's inside the ones it can't reach. There's no scout unit: to explore is to conquer.|Victory: whoever holds 75% of the villages for two consecutive turns wins. Short of that, the match runs to the turn limit and whoever has more villages comes out ahead.",
@@ -113,7 +121,10 @@ function aplicarIdioma(){
 function setLang(l){ LANG=l; try{localStorage.setItem('arena_lang',l);}catch(e){} aplicarIdioma(); }
 function cabecalho(ativo){
   return `<header class="topo"><div class="wrap">
-    <a class="marca" href="index.html">Arena dos <span>Reis</span></a>
+    <a class="marca" href="index.html">
+      <img src="assets/simbolo.png" alt="">
+      <span><span class="the">The</span><span class="nome">Kings <i>Arena</i></span></span>
+    </a>
     <nav class="menu">
       <a href="index.html#classificacao" class="${ativo==='c'?'on':''}" data-t="nav_class"></a>
       <a href="index.html#partidas" class="${ativo==='p'?'on':''}" data-t="nav_part"></a>

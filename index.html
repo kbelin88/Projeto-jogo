@@ -257,13 +257,11 @@
   .pt-cabo-ghost { position: absolute; top: 0; bottom: 0; opacity: .70;
     transition: opacity 1.5s ease; pointer-events: none; }
   /* brasao minimo (arte heraldica de verdade e E5): escudo chapado + inicial */
-  .pt-brasao { width: 30px; height: 36px; flex-shrink: 0;
-    clip-path: polygon(0 0, 100% 0, 100% 52%, 50% 100%, 0 52%);
-    display: flex; align-items: center; justify-content: center;
-    font: bold 16px Georgia, serif; color: rgba(255,255,255,.94);
-    text-shadow: 0 1px 2px rgba(0,0,0,.7); }
-  .pt-brasao.a { background: linear-gradient(180deg, #6d9af6, #4a76d6); }
-  .pt-brasao.b { background: linear-gradient(180deg, #f66d6d, #d64a4a); }
+  .pt-brasao { width: 34px; height: 36px; flex-shrink: 0;
+    background-repeat: no-repeat; background-position: center; background-size: contain;
+    filter: drop-shadow(0 1px 3px rgba(0,0,0,.65)); }
+  .pt-brasao.a { background-image: url("assets/brasoes/rei_a_azul.png"); }
+  .pt-brasao.b { background-image: url("assets/brasoes/rei_b_vermelho.png"); }
 
   /* ===== TRANSMISSAO v5 (16/08/2026) — BARRA DE TOPO + RODAPE DOS REIS ===
      Decisao do Lucas: a lista de aldeias dos paineis laterais rendia pouco
@@ -3848,8 +3846,8 @@
   const ESP_COR = { lanceiro: "#c9a227", arqueiro: "#5b9c6b", cavaleiro: "#a8577c" };
   const ESP_NOME = { A: "Rei do Norte", B: "Rei do Sul" };  // rotulo de exibicao (o estado guarda "Rei A"/"Rei B")
   const ESP_BRASAO = {
-    A: '<svg class="esp-brasao" viewBox="0 0 44 51"><path d="M2 2h40v30c0 9.5-9.5 15.5-20 17C11.5 47.5 2 41.5 2 32V2z" fill="#2f5d8a" stroke="#e8dfc8" stroke-width="1.6"/><path d="M22 13l3.9 7.6 8.4 1.2-6.1 5.9 1.5 8.3-7.7-4-7.7 4 1.5-8.3-6.1-5.9 8.4-1.2z" fill="#e8dfc8" opacity=".92"/></svg>',
-    B: '<svg class="esp-brasao" viewBox="0 0 44 51"><path d="M2 2h40v30c0 9.5-9.5 15.5-20 17C11.5 47.5 2 41.5 2 32V2z" fill="#9b2c2c" stroke="#e8dfc8" stroke-width="1.6"/><path d="M22 11c4.6 4.6 9.2 7 9.2 14s-4.2 11.5-9.2 14c-5-2.5-9.2-7-9.2-14s4.6-9.4 9.2-14z" fill="#e8dfc8" opacity=".92"/></svg>'
+    A: '<svg class="esp-brasao" viewBox="0 0 44 51"><image href="assets/brasoes/rei_a_azul.png" x="0" y="0" width="44" height="51" preserveAspectRatio="xMidYMid meet"/></svg>',
+    B: '<svg class="esp-brasao" viewBox="0 0 44 51"><image href="assets/brasoes/rei_b_vermelho.png" x="0" y="0" width="44" height="51" preserveAspectRatio="xMidYMid meet"/></svg>'
   };
   // snapshot p/ variacao por turno (aldeias/tropas) e deteccao de "nova".
   // So rola quando o turno avanca; deltas persistem durante todo o turno.

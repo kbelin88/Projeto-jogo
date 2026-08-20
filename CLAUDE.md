@@ -1,7 +1,7 @@
 # CLAUDE.md — Arena dos Reis (Projeto Jogo)
 
 Guia de contexto para qualquer modelo/agente que for trabalhar neste repositório.
-Atualizado: 17/08/2026. Repo público: https://github.com/kbelin88/Projeto-jogo
+Atualizado: 19/08/2026. Repo público: https://github.com/kbelin88/Projeto-jogo
 
 ---
 
@@ -62,6 +62,12 @@ gabarito escrito antes de experimento, artefato publicado antes da próxima fase
   `.json`). Métricas: reforço-vs-ataque (pelo replay = estado do motor), distribuição de
   counter, taxa de ataque viável (conquistas/COMBATES, nunca /envios), cobertura de
   raciocínio, etc.
+- **`ferramentas/tabela-modelos.js`** — gera **`MODELOS_ARENA.md`** (a tabela viva de quais
+  modelos free servem para jogar) a partir de `modelos_free_openrouter.txt` (dump do catálogo)
+  + **`resultados_arena.json`** (o que já foi medido, escrito à mão a cada bateria).
+  ⚠️ **Não edite `MODELOS_ARENA.md` à mão** — edite o JSON e rode `node ferramentas/tabela-modelos.js`.
+  A coluna "apto" é regra explícita (texto→texto, ctx ≥ 32k, saída ≥ 4k, não é router nem
+  classificador), não gosto.
 - **`testes/`** — 29 ficheiros de teste do motor (`test_*.js`). **`testes/test_prompt_p4.js`**
   (39 casos) cobre o P4, o fog e o parser tolerante. **`testes_arena/`** — 7 smokes; o
   **`Smoke5fog.js`** guarda a câmara do Rei e o **`Smoke6rede.js`** a resiliência a throttle
@@ -81,6 +87,11 @@ A chave da API fica no `localStorage` do navegador (o jogo pede uma vez).
 **Duelo headless:** `node runners/rei_vs_rei.js <backend:modelo> <backend:modelo> <seed>
 <maxTurnos> <out.txt>` (ex.: `openrouter:deepseek/deepseek-r1 burro 1 40 out.txt`). Lê a
 chave do `.env` (`OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `GROK_API_KEY`).
+
+**Bateria (headless, uma sessão inteira de partidas):** cada bateria tem uma spec própria
+(`SPEC_TESTES_HEADLESS_<data>.md`), é conduzida por um agente e deixa tudo em
+`resultados/p4-bateria-<data>/` — sondas, `.txt`, `.replay.json` e o `DIARIO.md`. Regra da
+spec: **o condutor aponta o dedo, não julga** — a análise é do Lucas, depois.
 
 **Testes:** `for f in testes/*.js; do node "$f"; done` + `node testes_arena/{Race,Smoke,
 Smoke2,Smoke3duelo,Smoke4pausa}.js`. Invariante: `node --check` NÃO basta — usar
@@ -183,6 +194,14 @@ precisa de 5 tentativas por turno parecia igual a um que responde de primeira.
 **Latência importa mais que custo em free-tier:** Nemotron 3 Ultra 550B tem mediana de
 **167 s/turno** (máx. 264 s) contra 5.9 s do GLM 5.2. Quatro turnos = 11 min; 20 turnos ≈ 1h45.
 
+**Atualização 18/08 (60 turnos medidos por partida, mediana por lado tirada do campo `| ms N`
+do próprio log):** a dispersão é de duas ordens de grandeza — `nemotron-nano-12b-v2-vl` **7 s**,
+Lightning **128–196 s**, Ultra 550B **324 s**, `laguna-xs-2.1` **1200 s** num turno só. Fora
+isso, o throttle deixou de ser a maior causa de morte: das 4 partidas de 18/08, **1** caiu por
+erro de rede (e o mesmo modelo correu 30/30 limpos horas depois, no mesmo dia — se fosse teto
+diário não teria voltado). As outras falhas foram **do modelo**, não da rede: resposta cortada
+no teto (`finish length`), degeneração por repetição, e `construir: []` sem erro nenhum.
+
 **A câmara do Rei (UI):** o seletor `olhos de` (`#gvisao`) no painel escurece o que o Rei
 escolhido não vê, marca as lembradas com `T<turno do último avistamento>` em pontilhado, põe
 `?` nas nunca exploradas, e mostra uma etiqueta `ve N · lembra N · nunca viu N`. É só câmara
@@ -221,11 +240,13 @@ Funciona com a partida pausada, a correr e dentro de um replay. Trancado por
 
 ---
 
-## 7. Estado atual (17/08/2026)
+## 7. Estado atual (19/08/2026)
 
-⚠️ **`main` local está DESATUALIZADA** (`1ee5cc2`, 03-04/08). Todo o trabalho recente está na
-branch **`spec-lote-e-fairness`**. **Branches locais, ainda não pushadas.** O ponto salvo mais
-recente é **`HANDOFF_2026-08-17.md`** — leia-o para retomar, sobretudo o §2 (o erro do dia).
+⚠️ **`main` local está DESATUALIZADA** (`1ee5cc2`, 03-04/08, 30 commits atrás). Todo o trabalho
+recente está na branch **`spec-lote-e-fairness`**, último commit `9a41920` (18/08). **Nada
+pushado, e há ~84 ficheiros por commitar** — incluindo as duas baterias em `resultados/` e a
+tabela da Arena. O ponto salvo mais recente é **`HANDOFF_2026-08-17.md`**; o §2 dele (o erro do
+dia) continua a valer.
 
 - **LOTES A→D** — instrumentação, prompt P3, visão de mapa, diagnóstico+memória.
 - **LOTE E** — fairness do turno: ordens simultâneas (A1), interceptação na chegada (A3),
@@ -233,37 +254,78 @@ recente é **`HANDOFF_2026-08-17.md`** — leia-o para retomar, sobretudo o §2 
   no analisador (E7). Ver `RELATORIO_LOTE_E.md`.
 - **RULESET (17/08)** — o que era o "reboot v4" **é agora o jogo**, sem toggle:
   produção madeira 30 / ferro 20, counter 1.5, cavaleiro def 2 em 1 turno, `escalaMarcha` 0.2
-  (Lisboa→Barcelona 6 turnos, era 27), `dicaNeutras` false (saiu "conquiste neutras primeiro"),
-  vitória por ≥75% das aldeias por 2 turnos. O `CONFIG_V3_ARQUIVO` guarda o antigo, não jogável.
+  (Lisboa→Barcelona 6 turnos, era 27), `dicaNeutras` false, vitória por ≥75% das aldeias por 2
+  turnos. O `CONFIG_V3_ARQUIVO` guarda o antigo, não jogável.
 - **TRANSMISSÃO v5** — barra longa no topo (modelo, aldeias, tropas, composição L/A/C
-  empilhada, madeira, ferro, deltas, turno ao centro) e dois quadros separados no rodapé
-  (depoimento do turno + benchmark ao vivo com custo em US$). Painéis laterais fora por CSS.
-- **RESUMOS DO REI** (flag `resumosDoRei`) — `plano` volta no prompt do turno seguinte (memória
-  deliberada entre turnos); `depoimento` **não volta nunca**, vai só para a tela e o `.txt`
-  (roteiro de narração). Funcionaram em 100% das respostas de DeepSeek R1 e Qwen3-235B.
+  empilhada, madeira, ferro, deltas, turno ao centro) e dois quadros no rodapé (depoimento do
+  turno + benchmark ao vivo com custo em US$). Painéis laterais fora por CSS.
+- **RESUMOS DO REI** (flag `resumosDoRei`) — `plano` volta no prompt do turno seguinte;
+  `depoimento` não volta nunca, vai só para a tela e o `.txt`.
+- **RUNNER GRAVA REPLAY (18/08)** — `runners/rei_vs_rei.js` escreve `<saida>.replay.json` ao
+  lado do `.txt`. Era o maior buraco de ferramenta: sem ele, métricas A3 e reconstrução de
+  prompt ficavam cegas em toda partida headless. **Nunca apagar os `.replay.json`.**
 
 **Testes:** 29 ficheiros no motor + 7 smokes + `verificarEquilibrio()` = 0. Destaque para
-**`testes/test_ruleset_vivo.js`**: prova que há um ruleset só, que é o que pensamos, e que os
-invariantes valem sob ele (produção observada = declarada, marcha executada = marcha prometida
-no relatório, escala mesmo aplicada, `minimoParaTomar` == `preverCombate`).
+**`testes/test_ruleset_vivo.js`** (há um ruleset só e é o que pensamos) e
+**`testes_arena/Smoke6rede.js`** (resiliência a throttle, com `fetch` falso — não gasta cota).
 
-**RULESET NOVO VALIDADO (17/08, partida Gemini × Nemotron):** duelo rei-contra-rei no **T8**
-(era zero em 25 turnos), neutras esgotadas no **T15**, **95 cavaleiros** construídos (era 0 em
-4 partidas). Ver `RELATORIO_PARTIDA_2026-08-17_1303.md`.
+### 7.1 A Arena medida — três baterias (17, 18 e 19/08)
 
-**P4 + FOG APLICADOS (17/08, sessão Fable):** as 12 incoerências do `ESTUDO_PROMPT_P4.md`
-estão fechadas no código, sem testes de campo (decisão do Lucas: crédito a expirar). Ver
-`HANDOFF_2026-08-17_P4.md` — **é o ponto de partida da próxima sessão.**
+O P4 + fog deixaram de ser teóricos: **9 partidas de LLM contra LLM** já correram sob eles.
 
-**Próximo passo:** a primeira partida real em P4 + fog. Nada foi medido com modelo de verdade.
+| bateria | o que correu | registro |
+|---|---|---|
+| 17→18/08 | 5 partidas completas, 222 req, zero interrompidas | `RELATORIO_BATERIA_P4_2026-08-18.md` |
+| 18→19/08 | 10 sondas + 4 partidas (3 completas, 1 interrompida no t7), ~207 req, 11h40 | `resultados/p4-bateria-0818/DIARIO.md` |
+| 19/08 | **planeada, ainda não corrida** | `SPEC_TESTES_HEADLESS_0819.md` |
 
-**Abertos:** (a) monocultura — **nunca testada** com dois reasoners sob o ruleset novo, e agora
-com o P4 há uma hipótese nova (era o exemplo do prompt que fixava `lanceiro`?); (b) cavaleiro
-**resolvido** (95 construídos em 17/08); (c) **entesouramento** — 62 de 90 envios com uma tropa;
-o P4 pode tê-lo mudado porque a instrução antiga **proibia reforçar** (ver handoff §2);
-(d) 23 respostas vazias (13/08) não reapareceram; (e) cliente OpenRouter duplicado — **o P4 foi
-aplicado nos dois**, a dívida continua; (f) 2 chaves expostas 03/08 a revogar; (g) `main` a
-consolidar; (h) **P4 e fog sem nenhum teste de campo** — a maior thread aberta.
+**Estado do catálogo:** 18 modelos free, **14 aptos**, todos já sondados; **6 já jogaram**
+partida. Quem está onde, e por quê, está em `MODELOS_ARENA.md` — leia-a antes de gastar cota.
+Régua da tabela: `nvidia/nemotron-3.5-lightning:free` (9 lados). Mais forte medido:
+`nemotron-3-ultra-550b-a55b` e `nemotron-3-super-120b-a12b`.
 
-**Orçamento OpenRouter: ESGOTADO** (HTTP 403 no turno 25 de 17/08). Recarrega ~fim de agosto.
-Custo observado ~$0.041/turno com dois raciocinadores.
+**O que as baterias ensinaram (e que muda como se testa):**
+
+1. **A primeira vitória por dominância do projeto** aconteceu no T24 de 17/08 (Super 120B).
+   A regra dos 75%/2 turnos está no ponto de tensão: 3 partidas tocaram o limiar, 1 converteu.
+   `maxTurnos` subiu de 25 para **30** por causa disto.
+2. **"Quem constrói menos lanceiro ganha" está EM ABERTO.** Valeu 5 de 5 em 17/08
+   (correlação +0.80 entre ataque médio por unidade e aldeias finais) e **falhou 2 de 3 em
+   18/08**: no espelho venceu o lado com 94% de lanceiro, e o `nano-12b-v2-vl` perdeu com o
+   maior atq/unid já medido (3.29). Não trate como facto.
+3. **Sonda de 1 turno não prevê latência nem estabilidade.** `laguna-s-2.1` deu 5 s na sonda e
+   181 s de mediana em jogo, degenerando (repetia a mesma frase até estourar o teto);
+   `nano-12b-v2-vl` deu 5.6 s e entregou 19 de 30 turnos. Por isso a spec de 19/08 usa
+   **sonda de 3 turnos** e teto de latência de 180 s.
+4. **Dá para falhar sem erro nenhum.** `laguna-xs-2.1` passou 20 minutos "a pensar", gastou os
+   12401 tokens de resposta no raciocínio e devolveu `construir: []` com `finish: error` — sem
+   uma linha de erro de rede. Modo de falha novo, e caro se apanhar uma partida.
+5. **O catálogo `:free` roda rápido:** 3 dos 8 modelos de 17/08 morreram (404) em menos de 24 h.
+   Conferir o catálogo é a primeira coisa de qualquer bateria.
+6. **O custo agora é relógio, não dólar.** Partidas de 30 turnos levaram de **2h09 a 4h14**; a
+   bateria de 18/08 levou 11h40 para 4 partidas. A spec de 19/08 tem regra de aborto por
+   projeção de tempo (acima de 5 h, corta).
+
+**Próximo passo:** correr a bateria de 19/08 (`SPEC_TESTES_HEADLESS_0819.md`) — sondas de 3
+turnos dos 5 aptos que nunca jogaram, repetição do `nano-12b-v2-vl` (os 11 turnos perdidos
+repetem?), espelho com seed 3 (fecha o trio 18×4 / 16×8 / ?) e dois modelos novos contra a régua.
+
+**Abertos:**
+(a) **monocultura/composição** — medida três vezes, ainda sem veredito (ver 7.1 §2);
+(b) cavaleiro **resolvido** (95 construídos em 17/08, 62 e 110 em 18/08);
+(c) **entesouramento** — envios de 1 tropa caíram de 62 em 90 (69%) para **6–35%** dos envios
+em 18/08; o P4 parece ter resolvido, falta confirmar num relatório;
+(d) **respostas vazias voltaram com outra cara**: não são erro de rede, são `construir: []` com
+`finish error`/`length` (laguna-xs-2.1, nano-12b-v2-vl, e o próprio Lightning em 18 dos 30
+turnos de um lado do espelho);
+(e) cliente OpenRouter **duplicado** (`rei.js` × `index.html`) — a dívida continua;
+(f) 2 chaves expostas em 03/08 por revogar;
+(g) `main` por consolidar + ~84 ficheiros por commitar;
+(h) **`analisar-log.js` ainda não separa a taxa de counter por tipo de alvo** (neutra vs
+inimigo) — é a recomendação nº 1 do relatório de 18/08 e não foi feita; sem ela, os números de
+counter das baterias novas são agregados e não comparáveis com os de 17/08.
+
+**Orçamento OpenRouter pago: ESGOTADO** (HTTP 403 no turno 25 de 17/08; recarrega ~fim de
+agosto). Desde então tudo corre em modelos **`:free`**, com teto de **20 req/min e 1000/dia** —
+e é esse teto, mais o relógio, que dimensiona uma bateria. Custo observado quando havia crédito:
+~$0.041/turno com dois raciocinadores.
