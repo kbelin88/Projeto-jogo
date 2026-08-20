@@ -21,7 +21,11 @@ const seed = parseInt(process.argv[4], 10) || 1;
 const maxTurnos = parseInt(process.argv[5], 10) || 40;
 const outfile = process.argv[6] || path.join(__dirname, "..", "resultados", "fase7-llama3", `seed${seed}.txt`);
 
-const cfg = JSON.parse(JSON.stringify(Engine.CONFIG));
+// 7o arg: IGNORADO desde 17/08 (havia um "v4" opcional; o jogo tem um ruleset so).
+// Aceito em silencio para nao quebrar scripts antigos. Antes era: default = regras
+// congeladas (CONFIG). Ver ruleset v4 no engine.js.
+const regras = (process.argv[7] || "v3").toLowerCase();
+const cfg = JSON.parse(JSON.stringify(Engine.CONFIG)); // ruleset unico (17/08)
 cfg.layout = "iberia"; cfg.seed = seed;
 const ehBurro = (spec) => spec.toLowerCase() === "burro";
 const cliente = {
@@ -57,8 +61,78 @@ const L = [];
 const out = (s) => L.push(s);
 const gravar = () => fs.writeFileSync(outfile, L.join("\n"));
 
+// ===== REPLAY .json (18/08) — paridade com o browser =====================
+//  Porque isto existe: ate hoje so o browser gravava replay, e o headless e
+//  como as baterias correm. Sem replay ficam CEGAS as metricas que leem o
+//  ESTADO DO MOTOR em vez de reparsear o texto: A3 (reforco vs ataque, pelo
+//  dono no INICIO do turno), a deteccao de escala de marcha, a alucinacao
+//  espacial e o reconstruir-prompts. Na analise da bateria de 17/08 foi
+//  preciso reconstruir a posse das aldeias a mao a partir das conquistas —
+//  possivel, mas e reparsear o .txt, exatamente o que o projeto proibiu
+//  ("o .txt narra, o JSON mede").
+//
+//  O formato e o MESMO do gravarFrame() do index.html, campo por campo, para
+//  o analisar-log.js e as ferramentas nao saberem de onde veio o replay.
+const replayFile = outfile.replace(/\.txt$/i, "") + ".replay.json";
+const replay = { v: 1, versaoDiag: 1, frames: [] };
+const diagTurno = { A: null, B: null };
+function coletarDiagRunner(dono, registro, cli) {
+  const tk = cli && cli.ultimosTokens;
+  const ord = registro.ordemParseada || { construir: [], envios: [] };
+  diagTurno[dono] = {
+    propostas: (ord.construir || []).length + (ord.envios || []).length,
+    executadas: registro.aceito.construir.length + registro.aceito.envios.length,
+    rejeicoes: registro.rejeicoes || [],
+    formatoOk: !!registro.jsonValido,
+    reincidente: false,
+    ataquesIniciados: registro.aceito.envios.filter((e) => e.alvo && e.alvo.dono !== dono).length,
+    tokens: (tk && !registro.erroRede) ? { prompt: tk.prompt || 0, resposta: tk.resposta || 0, raciocinio: tk.raciocinio || 0 } : null,
+    truncado: !!(cli && cli.ultimoFinish === "length"),
+    modoRac: registro.raciocinio ? "completo" : null,
+    finish: (cli && cli.ultimoFinish) || null,
+    finishNativo: (cli && cli.ultimoFinishNativo) || null,
+    erroApi: registro.erroRede || null,
+    ms: (tk && tk.ms != null) ? tk.ms : null,
+    vazio: !registro.erroRede && !String(registro.cru || "").trim(),
+  };
+}
+function gravarFrame(estado) {
+  const d = { A: diagTurno.A, B: diagTurno.B };
+  for (const lado of ["A", "B"]) {                    // estoque ao FIM do turno
+    if (!d[lado]) continue;
+    const rec = {};
+    for (const a of Engine.aldeiasDe(estado, lado)) for (const k in a.recursos) rec[k] = (rec[k] || 0) + a.recursos[k];
+    d[lado].recursos = rec;
+  }
+  replay.frames.push(JSON.parse(JSON.stringify({
+    turno: estado.turno,
+    etiqueta: etiquetaDe.B, etiquetaA: etiquetaDe.A, etiquetaB: etiquetaDe.B,
+    aldeias: estado.aldeias,
+    movimentos: estado.movimentos,
+    eventos: estado.log.filter((e) => e.turno === estado.turno),
+    diag: d,
+  })));
+  diagTurno.A = diagTurno.B = null;                   // frame novo, pensamento novo
+  fs.writeFileSync(replayFile, JSON.stringify(replay)); // checkpoint: sobrevive a crash
+}
+
 out(`=== PARTIDA Rei A (${etiquetaDe.A}) vs Rei B (${etiquetaDe.B}) | seed ${seed} | maxTurnos ${maxTurnos} | ${new Date().toLocaleString()} ===`);
-out("condicoes: ambiente=iberia | temp=0 | prompt=relatorio v3 (disponivel-para-enviar) + combate v3 (atq/def, counter 1.25) + clamp | thinking=on");
+// FASE 0 (20/08, SPEC_SITE_V1 §2.2): esta linha era TEXTO FIXO ("prompt v3 ...
+// regras=v4 cav def2/1t, madeira 15, dist x2/3") e mentiu desde que o ruleset
+// mudou para P4+fog (17/08) — todo .txt das baterias de 17-19/08 carrega um
+// cabecalho falso. index.html ja le de game.config (commit bfc3a77); agora o
+// runner le do MESMO cfg que de fato executa. Nenhum valor literal de regra aqui.
+const regrasTxt = cfg.vitoriaPorDominancia
+  ? "regras=v4 (counter " + cfg.bonus_forca_triangulo +
+    ", cav def" + cfg.tropas.cavaleiro.def + "/" + cfg.tropas.cavaleiro.turnos + "t" +
+    ", madeira " + cfg.producao.madeira +
+    ", dist x" + (cfg.escalaMarcha != null ? cfg.escalaMarcha : 1) +
+    ", vitoria " + Math.round((cfg.vitoriaFracao || 0) * 100) + "%/" + cfg.vitoriaTurnos + "t)"
+  : "regras=congeladas v3";
+out("condicoes: ambiente=" + (cfg.layout || "v1") + " | temp=0 | prompt=" +
+  (cfg.promptP4 === true ? "P4 EN (esquema declarado, sem exemplo, sem minimos, vitoria real, reforco, quantidade)" : "P2 (minimo por alvo)") +
+  (cfg.fogOfWar === true ? " + FOG OF WAR" : "") +
+  " + combate v3 (atq/def, counter " + cfg.bonus_forca_triangulo + ") + clamp | " + regrasTxt + " | thinking=on");
 out("");
 
 function logEventos(estado, turno) {
@@ -171,7 +245,8 @@ async function main() {
       const tk = (!registro.erroRede && cliente[dono] && cliente[dono].ultimosTokens) ? cliente[dono].ultimosTokens : null;
       if (tk) {
         serieTokens[dono].push({ turno, prompt: tk.prompt || 0, resposta: tk.resposta || 0 });
-        out(`tokens.contexto: prompt ${tk.prompt} | resposta ${tk.resposta}`);
+        // LOTE C, E2: raciocinio e finish sempre presentes (colunas fixas p/ parser).
+        out(`tokens.contexto: prompt ${tk.prompt} | resposta ${tk.resposta} | raciocinio ${tk.raciocinio || 0} | finish ${(cliente[dono] && cliente[dono].ultimoFinish) || "?"}${tk.ms != null ? " | ms " + tk.ms : ""}`); // LOTE E, E5
       }
       if (!registro.erroRede && cliente[dono] && cliente[dono].ultimoFinish === "length")
         out("TRUNCADO: resposta atingiu o teto de tokens do provedor (finish_reason=length) — turno conta como passado, sem retry"); // A1
@@ -188,9 +263,11 @@ async function main() {
       registro.aceito.envios.filter((e) => e.ajustado).forEach((e) =>
         out(`AJUSTADO envio [${e.origemId}]->[${e.destinoId}]: pediu ${compStrG(e.pedido)}, enviado ${compStrG(e.tropas)} (estoque real)`));
       registro.rejeicoes.forEach((r) => out("REJEITADO: " + r));
+      coletarDiagRunner(dono, registro, cliente[dono]); // replay: o pensamento deste lado
       gravar(); // checkpoint por LADO
     }
     logEventos(estado, turno);
+    gravarFrame(estado);   // replay: 1 frame por turno, depois de A e B aplicarem
     gravar();
     const conq = estado.log.filter((l) => l.tipo === "combate" && l.conquista).length;
     console.error(`  T${turno} | A ${Engine.aldeiasDe(estado, "A").length} B ${Engine.aldeiasDe(estado, "B").length} neutras ${Engine.aldeiasDe(estado, null).length} | conquistas ate agora ${conq} | ${((Date.now() - t0) / 1000).toFixed(0)}s`);
@@ -224,6 +301,7 @@ async function main() {
   console.error(`TAMANHO MEDIO DE ENVIO: A ${mdA} (${m.A.envios} env) | B ${mdB} (${m.B.envios} env)`);
   console.error(`ultima conquista: T${conquistas.length ? Math.max(...conquistas.map((c) => c.turno)) : "-"}`);
   console.error(`log: ${outfile}`);
+  console.error(`replay: ${replayFile} (${replay.frames.length} frames)`);
   return motivoAbort;
 }
 

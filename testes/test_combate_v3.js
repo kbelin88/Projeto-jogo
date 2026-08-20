@@ -3,6 +3,11 @@
 // empate fica com o defensor, atrito, vencedor sobrevive, ataqueDe/defesaDe
 // nunca trocados, tipoDominante = mais numeroso, tetos contam unidades,
 // regrasCombateTexto reflete a CONFIG.
+// 17/08: este ficheiro fixa numeros calculados A MAO sob o ruleset que hoje
+// se chama CONFIG_V3_ARQUIVO. O que ele testa e a FORMULA (combate, rota,
+// minimo), nao o balanceamento — entao continua a correr contra o arquivo,
+// que e imutavel. Os mesmos invariantes sob o ruleset VIVO estao em
+// testes/test_ruleset_vivo.js.
 "use strict";
 const assert = require("assert");
 const E = require("../engine.js");
@@ -10,7 +15,7 @@ const E = require("../engine.js");
 let ok = 0;
 const t = (nome, fn) => { fn(); ok++; console.log("  ok  " + nome); };
 
-const cfg = () => JSON.parse(JSON.stringify(E.CONFIG));
+const cfg = () => JSON.parse(JSON.stringify(E.CONFIG_V3_ARQUIVO));
 const full = (x) => Object.assign({ lanceiro: 0, arqueiro: 0, cavaleiro: 0 }, x);
 function estado() { return { config: cfg(), turno: 0, aldeias: [], movimentos: [], log: [] }; }
 
@@ -77,7 +82,7 @@ t("atrito: o defensor que segura perde tropas (mas nao zera)", () => {
 
 console.log("ATAQUE vs DEFESA NUNCA TROCADOS (7.4)");
 t("ataqueDe usa atq; defesaDe usa def", () => {
-  const c = E.CONFIG;
+  const c = E.CONFIG_V3_ARQUIVO;
   assert.strictEqual(E.ataqueDe(full({ cavaleiro: 1 }), c), c.tropas.cavaleiro.atq); // 4
   assert.strictEqual(E.defesaDe(full({ cavaleiro: 1 }), c), c.tropas.cavaleiro.def); // 1
   assert.strictEqual(E.ataqueDe(full({ lanceiro: 1 }), c), c.tropas.lanceiro.atq);   // 1

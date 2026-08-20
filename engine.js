@@ -34,7 +34,23 @@
   //  nunca espalhado pelo codigo. TODOS sao PROVISORIOS (V1 do
   //  balanceamento): ponto de partida coerente, nao a verdade.
   // ==========================================================
-  const CONFIG = {
+  // ==========================================================
+  //  CONFIG_V3_ARQUIVO — o ruleset ANTIGO, congelado.
+  // ----------------------------------------------------------
+  //  NAO e jogavel. Existe por UM motivo: `testes/test_lote_c.js` congela o
+  //  texto do relatorio contra 3 estados de referencia gerados com estes
+  //  valores, e essa regressao e o que garante que mexer no PROMPT nao muda o
+  //  texto sem querer. Nenhum caminho da UI ou do runner chega aqui.
+  //
+  //  17/08 — porque deixou de ser selecionavel: enquanto havia DOIS rulesets
+  //  escolhiveis em tempo de execucao, existia a possibilidade de correr o
+  //  errado. E aconteceu: as 3 partidas pagas de 16/08 (~$2.25) correram com
+  //  este objeto enquanto o log dizia v4, porque o checkbox era lido depois do
+  //  estado ja estar criado. A licao nao foi "faltou um listener" — foi que uma
+  //  regra que PODE nao estar ligada mais cedo ou mais tarde nao esta. Agora o
+  //  jogo tem um ruleset so, o CONFIG abaixo, e nao ha como escolher outro.
+  // ==========================================================
+  const CONFIG_V3_ARQUIVO = {
     // Semente da partida: torna a geracao (guarnicoes, escolhas)
     // reproduzivel. Mude para gerar outra partida.
     seed: 1,
@@ -194,6 +210,9 @@
     // marcha" no relatorio (o modelo nao faz geometria). "media" = referencia
     // neutra entre lento (lanceiro) e rapido (cavaleiro).
     relatorio: { velocidade_referencia: "media" },
+    // LOTE B: flag UNICA do prompt P3 (default LIGADO apos merge). false reproduz o
+    // P2 byte-a-byte (o lote de logs de controlo). Liga/desliga B1+B2+B3 JUNTOS.
+    promptP3: true,
 
     // ORDENACAO DAS ALDEIAS no relatorio (7.5.3). 'id' = como sempre (por id);
     // 'custo' = por custo de marcha desde a capital (simetrico, tira o vies de
@@ -214,6 +233,79 @@
     // para a simulacao nunca rodar para sempre. Partida real deve acabar antes.
     max_turnos: 500,
   };
+
+  // RULESET V4 (16/08/2026): reboot deliberado de balanceamento a partir da
+  // analise da partida qwen3-235b x deepseek-r1 (15/08). NAO e byte-identico ao
+  // CONFIG — de proposito (o Lucas aprovou fechar a comparabilidade). O CONFIG
+  // (regras congeladas) continua o default; o v4 e opt-in (runner: passe-o como
+  // config; browser: toggle "regras v4"). Muda 6 coisas, todas lidas do config:
+  //   1. madeira 10->15  (afrouxa o gargalo; risco Fase 4 coberto pelo counter)
+  //   2. cavaleiro def 1->2 e turnos 2->1 (deixa de ser vidro; sai em 1 turno;
+  //      vira o SUMIDOURO de ferro que faltava)
+  //   3. counter 1.25->1.5 (revive o triangulo; pune QUALQUER monocultura).
+  //      CUSTO CONHECIDO: 1 cavaleiro deixa de tomar 1 lanceiro NO CASTELO
+  //      (2*1.5castelo*1.5counter=4.5 > atq 4). Coerente e reversivel.
+  //   4. escalaMarcha 0.3 (centro do mapa 9->3 turnos, corte UNIFORME; nao toca
+  //      world-iberia.js nem verificarEquilibrio()). Comecou em 2/3 (16/08) e
+  //      desceu para 0.3 no mesmo dia: com 2/3 o primeiro combate REI-x-REI so
+  //      chegava no turno ~36 (mediana, burro x burro, 12 seeds) e a partida
+  //      arrastava-se ate 68; a 0.3 o duelo cai para ~22 e a cauda de 127 para
+  //      81 turnos. O que encarece o benchmark e a QUANTIDADE de turnos, e o
+  //      dado que falta e o duelo entre modelos — nao a expansao contra neutras.
+  //   5-6. VITORIA por dominancia: >=75% das aldeias por 2 turnos consecutivos
+  //      (alem da eliminacao). Faz a partida TERMINAR com vencedor.
+  // ==========================================================
+  //  CONFIG — O RULESET DO JOGO. Unico. Sem toggle, sem opt-in.
+  // ----------------------------------------------------------
+  //  Foi o "reboot v4" enquanto era opcional; desde 17/08 e simplesmente o
+  //  jogo. Derivado do arquivo v3 acima para o diff continuar legivel: cada
+  //  linha abaixo e uma decisao de balanceamento, com o porque ao lado.
+  // ==========================================================
+  const CONFIG = (function () {
+    const c = JSON.parse(JSON.stringify(CONFIG_V3_ARQUIVO)); // sem funcoes: seguro
+    c.producao.madeira = 30;
+    // FERRO 6 -> 20 (16/08, v5). A madeira sozinha nao resolvia: com ferro 6 o
+    // arqueiro fica preso em 0.60 e o cavaleiro em 0.20 unidade por aldeia por
+    // turno (5 turnos por cavaleiro!) por mais madeira que se ponha. Subir so a
+    // madeira dobrava APENAS o lanceiro (1.00 -> 2.00) e empurrava direto para
+    // a lanceiro-mono — o modo de falha que o Gemini ja mostrou no smoke.
+    // Com ferro 20: arqueiro 1.50, cavaleiro 0.67. E a primeira vez que o
+    // cavaleiro do v4 (def 2, 1 turno, counter 1.5) e comprável de facto.
+    c.producao.ferro = 20;
+    c.tropas.cavaleiro.def = 2;
+    c.tropas.cavaleiro.turnos = 1;
+    c.bonus_forca_triangulo = 1.5;
+    c.escalaMarcha = 0.2;
+    c.dicaNeutras = false;
+    c.vitoriaPorDominancia = true;
+    c.vitoriaFracao = 0.75;
+    c.vitoriaTurnos = 2;
+    // PROMPT P4 (17/08, sessao Fable): prompt em INGLES, sem exemplo com valores
+    // (esquema declarado), sem "para tomar" (o minimo pre-calculado saiu do jogo
+    // a pedido do Lucas: o prompt informa, nao recomenda), com a condicao de
+    // vitoria REAL (dominancia 75%/2t), com a simultaneidade dita, e com o
+    // reforco a aldeia propria dito como MECANICA (a instrucao antiga proibia
+    // no texto o que o motor sempre aceitou — o Nemotron obedeceu e perdeu).
+    // LEITURA `=== true` (deliberada, diferente das flags de lote `!== false`):
+    // os estados congelados do test_lote_c usam CONFIG_V3_ARQUIVO, que nao tem
+    // esta chave — com `!== false` eles virariam ingles e a regressao byte-
+    // identica morreria. O ruleset vivo poe `true` aqui, e test_prompt_p4
+    // tranca que isto esta ligado no jogo real (mesma protecao do bug do toggle).
+    c.promptP4 = true;
+    // FOG OF WAR (17/08, sessao Fable): o Rei ve as SUAS aldeias, as vizinhas
+    // diretas na rede e o destino dos seus exercitos em marcha. O resto e
+    // memoria ("last seen") guardada NO MOTOR (estado.visto) — o modelo e
+    // stateless, a memoria tem de ser do motor (mesma familia do histDefesa).
+    // A topologia (REDE DE ESTRADAS) continua publica: mapa e conhecimento de
+    // qualquer rei; o fog esconde dono/guarnicao/defesa de quem esta longe.
+    // Explorar = CONQUISTAR: nao ha unidade de reconhecimento, e uma marcha
+    // para na 1a aldeia nao-sua, entao quem quer ver o mapa tem de tomar
+    // aldeias. O cavaleiro pesa nisto por ser rapido, nao por ver longe.
+    // O fog e do RELATORIO (o que o Rei LE): o motor continua onisciente, o
+    // espectador ve tudo, o jogadorBurro (ancora deterministica) ve tudo.
+    c.fogOfWar = true;
+    return c;
+  })();
 
   // ==========================================================
   //  PRNG semeado da partida (mulberry32)
@@ -666,12 +758,81 @@
       // FEEDBACK (memoria): ordens RECUSADAS no ultimo turno, por dono. O
       // relatorio do turno seguinte ecoa isto p/ o Rei nao repetir o erro.
       rejeicoesAnteriores: { A: [], B: [] },
+      // RESUMOS DO REI (v5): `plano` e a nota que o Rei escreve para o seu
+      // PROXIMO turno — a unica memoria deliberada que ele tem entre turnos.
+      // O `depoimento` NAO mora aqui: e so para a tela/log, nunca volta ao
+      // contexto, e por isso nao e estado de jogo.
+      planosAnteriores: { A: null, B: null },
+      // FOG OF WAR (P4): memoria de avistamentos POR REI. visto[dono][id] =
+      // { turno, dono, tropas, capital } — a ultima fotografia que aquele Rei
+      // teve daquela aldeia. Atualizada no tick (registrarAvistamentos). O
+      // modelo e stateless: se a memoria nao morar no motor, nao existe.
+      visto: { A: {}, B: {} },
     };
+  }
+
+  // ---- FOG OF WAR (P4): visibilidade e memoria de avistamentos ----
+  // Regra de visibilidade (deliberadamente simples e deterministica):
+  //   1. aldeias do proprio Rei;
+  //   2. vizinhas DIRETAS das suas na rede de estradas (posto de vigia);
+  //   3. o DESTINO EFETIVO de cada exercito seu em marcha. Note o alcance real
+  //      disto: a marcha PARA na 1a aldeia nao-sua do caminho, entao o destino
+  //      efetivo e quase sempre um vizinho direto, que ja estava visivel. NAO
+  //      existe "espiar ao longe" — o que abre mapa e a CONQUISTA (cada aldeia
+  //      tomada revela a vizinhanca dela). Intencao nao da visao: o destino
+  //      apenas PEDIDO continua no escuro (test_prompt_p4 B6).
+  // A topologia inteira e sempre publica — o fog esconde ESTADO (dono,
+  // guarnicao), nunca GEOGRAFIA.
+  function visiveisPara(estado, dono) {
+    const vis = new Set();
+    for (const a of estado.aldeias) if (a.dono === dono) vis.add(a.id);
+    if (estado.estradas && estado.estradas.adj) {
+      for (const a of estado.aldeias) {
+        if (a.dono !== dono) continue;
+        for (const v of (estado.estradas.adj[a.id] || [])) vis.add(v);
+      }
+    }
+    for (const m of estado.movimentos) {
+      if (m.dono !== dono) continue;
+      vis.add(m.destinoId);
+      if (m.caminho && m.caminho.length) vis.add(m.caminho[m.caminho.length - 1]);
+    }
+    return vis;
+  }
+
+  // Grava, para cada Rei, a fotografia das aldeias que ele VE neste turno.
+  // Chamada no fim do tick (combates ja resolvidos): o que se ve e o estado
+  // real do fim do turno, o mesmo que o relatorio mostra.
+  function registrarAvistamentos(estado) {
+    if (estado.config.fogOfWar !== true) return;
+    estado.visto = estado.visto || { A: {}, B: {} };
+    for (const dono of ["A", "B"]) {
+      const vis = visiveisPara(estado, dono);
+      const mem = (estado.visto[dono] = estado.visto[dono] || {});
+      for (const a of estado.aldeias) {
+        if (!vis.has(a.id)) continue;
+        mem[a.id] = {
+          turno: estado.turno,
+          dono: a.dono,
+          tropas: { lanceiro: a.tropas.lanceiro, arqueiro: a.tropas.arqueiro, cavaleiro: a.tropas.cavaleiro },
+          capital: !!a.capital,
+        };
+      }
+    }
   }
 
   // estado inicial completo da partida
   function criarEstadoInicial(config) {
-    return gerarTeatro(config || CONFIG);
+    // COPIA PROFUNDA (17/08). Antes o estado guardava a config POR REFERENCIA:
+    // `criarEstadoInicial(Engine.CONFIG)` devolvia uma partida cujo `config` ERA
+    // o objeto global. Bastava alguem escrever em `estado.config.producao.x`
+    // para o ruleset mudar para todas as partidas seguintes da mesma pagina —
+    // um estado de jogo a reescrever as regras do jogo.
+    // Nao mordeu ainda, mas e a mesma familia do bug do checkbox: uma via pela
+    // qual a partida pode acabar a correr com regras que ninguem escolheu.
+    // O CONFIG nao tem funcoes (ja assumido em varios sitios), entao o clone
+    // por JSON e seguro e custa uma vez por partida.
+    return gerarTeatro(JSON.parse(JSON.stringify(config || CONFIG)));
   }
 
   // ==========================================================
@@ -793,11 +954,21 @@
   // letra. Escopo Degrau 0->1 APENAS: espaco, caixa, acento, plural.
   // Traducao ("archer") e tipo inventado sao erro REAL: ficam crus para
   // a rejeicao nomear o que o modelo escreveu e o eval contar o desvio.
+  // P4: sinonimos INGLESES aceites como variacao trivial (o prompt e em ingles;
+  // os tokens canonicos do protocolo continuam PT \u2014 lanceiro/arqueiro/cavaleiro \u2014
+  // mas um modelo que escreva o nome ingles nao pode perder a jogada por isso).
+  // Cada correcao continua a virar linha em `normalizacoes` (H3: mede-se o desvio).
+  const TIPO_EN = {
+    spearman: "lanceiro", spearmen: "lanceiro", lancer: "lanceiro", pikeman: "lanceiro", pikemen: "lanceiro",
+    archer: "arqueiro", archers: "arqueiro", bowman: "arqueiro", bowmen: "arqueiro",
+    knight: "cavaleiro", knights: "cavaleiro", cavalry: "cavaleiro", horseman: "cavaleiro", horsemen: "cavaleiro",
+  };
   function normalizarTipo(t) {
     if (typeof t !== "string") return t;
     let s = t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
     if (TIPOS.indexOf(s) >= 0) return s;
     if (s.endsWith("s") && TIPOS.indexOf(s.slice(0, -1)) >= 0) return s.slice(0, -1);
+    if (TIPO_EN[s]) return TIPO_EN[s];
     return t; // fora do escopo: devolve o cru
   }
 
@@ -824,6 +995,13 @@
   // Forca DEFENSIVA da aldeia (reis E neutras usam tropas tipadas). So `def`.
   function forcaDefesa(estado, aldeia) {
     return defesaDe(aldeia.tropas, estado.config);
+  }
+  // LOTE D, D4: defesa EFETIVA = defesa crua x bonus do terreno. MESMA conta que o
+  // `defefetiva` do relatorio (defesaDe x terreno) — extraida p/ o historico D4 usar a
+  // mesma implementacao (invariante i: uma regra, uma conta).
+  function defesaEfetivaDe(tropas, capital, cfg) {
+    const bonus = capital ? cfg.combate.bonus_defesa_castelo : cfg.combate.bonus_defesa_aldeia;
+    return Math.round(defesaDe(tropas, cfg) * bonus);
   }
   // Tropas COMPROMETIDAS da aldeia = em casa + a fila de construcao. E o que o
   // teto de producao (limite_tropas_aldeia) mede: CONTAGEM, nao poder. Contar a
@@ -1030,7 +1208,12 @@
     const ref = (cfg.relatorio && cfg.relatorio.velocidade_referencia) || "media";
     const passoRef = cfg.velocidade_passo[ref];
     const passoTropa = cfg.velocidade_passo[velExercito(estado, tropas)];
-    return Math.max(1, Math.ceil(pesoRota(estado, caminho) * (passoRef / passoTropa)));
+    // escalaMarcha (v4): encurta TODAS as rotas pelo mesmo fator. Ausente/1 =
+    // comportamento antigo byte-identico. Aplicado ao peso, ANTES do ceil, para
+    // o corte ser uniforme e o espelho do mapa sobreviver (os dois lados escalam
+    // igual). NAO toca world-iberia.js.
+    const escala = cfg.escalaMarcha || 1;
+    return Math.max(1, Math.ceil(pesoRota(estado, caminho) * escala * (passoRef / passoTropa)));
   }
   // LINHA RETA entre dois pontos, ignorando a rede. NAO e o tempo de marcha
   // real — quem manda na marcha e turnosDeCaminho(), pela rota. Fica como
@@ -1178,13 +1361,28 @@
   // "atacante" (a conta em si nao depende da ordem dos argumentos).
   function resolverCombateEstrada(estado, m1, m2) {
     const cfg = estado.config;
-    const atk = m1.dono < m2.dono ? m1 : m2;
-    const def = atk === m1 ? m2 : m1;
+    let atk = m1.dono < m2.dono ? m1 : m2;
+    let def = atk === m1 ? m2 : m1;
     // Choque de dois EXERCITOS em marcha (campo aberto): ninguem guarnece
     // terreno, entao os DOIS lados usam ATAQUE (nao def). Decisao 7.4.
-    const Fa = ataqueDe(atk.tropas, cfg), Fd = ataqueDe(def.tropas, cfg);
-    const ta = tipoDominante(estado, atk.tropas), td = tipoDominante(estado, def.tropas);
-    const { v, FatkEf, FdefEf, atacanteVence } = preverCombateTipos(estado, Fa, ta, Fd, td, 1); // campo aberto
+    const prever = (a, d) => {
+      const Fa = ataqueDe(a.tropas, cfg), Fd = ataqueDe(d.tropas, cfg);
+      const ta = tipoDominante(estado, a.tropas), td = tipoDominante(estado, d.tropas);
+      return Object.assign({ Fa, Fd }, preverCombateTipos(estado, Fa, ta, Fd, td, 1)); // campo aberto
+    };
+    let prev = prever(atk, def);
+    // LOTE E, E4 (achado A4): no EMPATE de forca efetiva o lado no papel de
+    // "atacante" PERDE (empate favorece o defensor). Fixar atk = dono "A" matava o
+    // exercito de A em TODO empate de estrada — vies de assento, a mesma classe do
+    // vies de id que o chaveRngAlvo ja resolveu para os alvos. Sorteia o papel por
+    // hash puro e determinista (sem lado). O empate e simetrico a troca (a forca
+    // efetiva do vencedor e a mesma dos dois jeitos), entao so muda QUEM sobrevive;
+    // fora do empate, o desfecho nao depende da ordem dos argumentos.
+    if (cfg.desempateEstradaRng !== false && prev.FatkEf === prev.FdefEf) {
+      const lo = Math.min(m1.origemId, m2.origemId), hi = Math.max(m1.origemId, m2.origemId);
+      if (chaveRngAlvo(cfg.seed, estado.turno, lo, hi) < 0.5) { const t = atk; atk = def; def = t; prev = prever(atk, def); }
+    }
+    const { v, FatkEf, FdefEf, atacanteVence, Fa, Fd } = prev;
     const vencedor = atacanteVence ? atk : def, perdedor = atacanteVence ? def : atk;
     const Fwin = atacanteVence ? FatkEf : FdefEf, Flose = atacanteVence ? FdefEf : FatkEf;
     const baixasEf = Math.min(Flose * cfg.combate.atrito_base, Fwin);
@@ -1218,13 +1416,29 @@
   // (3+4) MOVIMENTO + COMBATE: avanca transitos; cruzamentos na estrada
   // resolvem no meio do caminho; os que chegam resolvem no destino.
   function avancarMovimentos(estado) {
-    const chegaram = [], viajando = [];
-    for (const m of estado.movimentos) {
-      m.turnosRestantes -= 1;
-      (m.turnosRestantes <= 0 ? chegaram : viajando).push(m);
+    if (estado.config.interceptaChegada === false) {
+      // caminho antigo (separa primeiro, so `viajando` intercepta), byte a byte.
+      const chegaram = [], viajando = [];
+      for (const m of estado.movimentos) {
+        m.turnosRestantes -= 1;
+        (m.turnosRestantes <= 0 ? chegaram : viajando).push(m);
+      }
+      // #2: quem segue viajando pode se cruzar com inimigo no mesmo trecho
+      estado.movimentos = detectarCombatesEstrada(estado, viajando);
+      for (const m of chegaram) resolverChegada(estado, m);
+      return;
     }
-    // #2: quem segue viajando pode se cruzar com inimigo no mesmo trecho
-    estado.movimentos = detectarCombatesEstrada(estado, viajando);
+    // LOTE E, E3 (achado A3): um exercito no ULTIMO passo de marcha tambem cruza
+    // inimigos no mesmo trecho. No caminho antigo ele ia direto para `chegaram`
+    // (que nao passa pelo detectarCombatesEstrada) e atravessava o inimigo sem
+    // lutar. Aqui detecta os cruzamentos sobre a lista INTEIRA (posicaoRota clampa
+    // o progresso ao fim da rota, mesmo com turnosRestantes negativo) e so entao
+    // separa quem chegou de quem segue.
+    for (const m of estado.movimentos) m.turnosRestantes -= 1;
+    const sobreviventes = detectarCombatesEstrada(estado, estado.movimentos);
+    const chegaram = [], viajando = [];
+    for (const m of sobreviventes) (m.turnosRestantes <= 0 ? chegaram : viajando).push(m);
+    estado.movimentos = viajando;
     for (const m of chegaram) resolverChegada(estado, m);
   }
 
@@ -1235,6 +1449,32 @@
     avancarConstrucao(estado);   // 2
     avancarMovimentos(estado);   // 3 MOVIMENTO + 4 COMBATE
     endurecer(estado);           // 5
+    // LOTE D, D4: no FIM do tick (producao + combates ja resolvidos), grava a defesa
+    // efetiva de TODAS as aldeias (sem nevoa de guerra). Janela curta de 6 -> o relatorio
+    // mostra a DERIVADA observada, nao uma projecao (projecao = mais um numero em que o
+    // modelo confia cego, o erro que o 'para tomar' ja causou).
+    if (estado.config.deltaDefesa !== false) {
+      estado.histDefesa = estado.histDefesa || {};
+      for (const a of estado.aldeias) {
+        const h = (estado.histDefesa[a.id] = estado.histDefesa[a.id] || []);
+        h.push({ turno: estado.turno, defEf: defesaEfetivaDe(a.tropas, !!a.capital, estado.config) });
+        if (h.length > 6) h.shift();
+      }
+    }
+    // VITORIA POR DOMINANCIA (v4): conta turnos CONSECUTIVOS com >=fracao das
+    // aldeias. Fica no TICK (roda 1x/turno) e NAO na checarVitoria — esta e
+    // pura e o browser a chama varias vezes por turno; contar la contaria
+    // dobrado. checarVitoria so LE estado.dominancia.
+    if (estado.config.vitoriaPorDominancia) {
+      const alvo = Math.ceil(estado.aldeias.length * (estado.config.vitoriaFracao || 0.75));
+      estado.dominancia = estado.dominancia || { A: 0, B: 0 };
+      for (const d of ["A", "B"]) {
+        estado.dominancia[d] = aldeiasDe(estado, d).length >= alvo ? estado.dominancia[d] + 1 : 0;
+      }
+    }
+    // FOG OF WAR (P4): registra o que cada Rei VE no fim deste turno. Fica no
+    // tick pelo mesmo motivo da dominancia: roda exatamente 1x por turno.
+    registrarAvistamentos(estado);
     // 6) DECISAO e 7) VITORIA sao orquestrados por rodarTurno (PECA 4),
     //    para manter o TICK puramente mecanico e a decisao isolada.
     return estado;
@@ -1265,6 +1505,12 @@
     // `capital` e `minimos` por alvo. SEM a flag, o objeto e byte-identico
     // ao de sempre (todo o benchmark anterior continua comparavel).
     const comMinimos = !!(opcoes && opcoes.minimos === true);
+    // FOG OF WAR (P4): a visao continua a carregar TODOS os alvos (o motor e
+    // onisciente; burro e espectador dependem disso), mas cada alvo ganha
+    // `visivel` e `visto` (ultima fotografia). Quem esconde e o RELATORIO P4.
+    const fog = estado.config.fogOfWar === true;
+    const visSet = fog ? visiveisPara(estado, dono) : null;
+    const memVisto = fog ? ((estado.visto && estado.visto[dono]) || {}) : null;
     return {
       dono,
       turno: estado.turno,
@@ -1281,6 +1527,14 @@
           tropas: copiaTropas(a.tropas),
           forcaDefesa: forcaDefesa(estado, a), // usado pelo jogador burro
         };
+        // P4 (incoerencia 12): nome em TODAS as aldeias, nao so nas suas.
+        // ATRAS DA FLAG, e nao solto: o relatorio LEGADO ja lia `a.nome` no bloco
+        // REDE DE ESTRADAS (era undefined nos alvos, logo omitido). Popular o
+        // campo sem gatilho fez a rede legada passar a nomear aldeias inimigas
+        // — +179 chars num renderizador cuja funcao e reproduzir byte a byte os
+        // logs antigos. Mesmo padrao do `minimos`: campo novo so existe quando o
+        // renderizador que o pediu esta ligado.
+        if (estado.config.promptP4 === true) alvo.nome = a.nome;
         if (comMinimos) {
           alvo.minimos = {
             lanceiro:  minimoParaTomar(estado, "lanceiro",  a),
@@ -1288,8 +1542,26 @@
             cavaleiro: minimoParaTomar(estado, "cavaleiro", a),
           };
         }
+        // LOTE D, D4: entrada de defesa mais ANTIGA na janela com turno <= atual-2.
+        if (estado.config.deltaDefesa !== false && estado.histDefesa && estado.histDefesa[a.id]) {
+          const janela = estado.histDefesa[a.id].filter((e) => e.turno <= estado.turno - 2);
+          if (janela.length) alvo.defAntes = { defEf: janela[0].defEf, turno: janela[0].turno };
+        }
+        // LOTE D, D5: minhas tentativas de ataque a este alvo nos ultimos 8 turnos.
+        // Nao cria estrutura nova — le estado.log (eventos de combate ja tem tudo).
+        if (estado.config.memoriaAlvo !== false && estado.log) {
+          const ats = estado.log.filter((ev) => ev.tipo === "combate" && ev.alvoId === a.id && ev.atacante === dono && ev.turno > estado.turno - 8);
+          if (ats.length) alvo.tentativas = { n: ats.length, conquistas: ats.filter((ev) => ev.conquista).length, janela: 8 };
+        }
+        // FOG OF WAR (P4): anotacao de visibilidade + ultima fotografia vista.
+        if (fog) {
+          alvo.visivel = visSet.has(a.id);
+          alvo.visto = memVisto[a.id] || null;
+        }
         return alvo;
       }),
+      // FOG OF WAR (P4): true quando o relatorio deve esconder o que o Rei nao ve.
+      fog,
       // REDE DE ESTRADAS (grafo fixo da partida): so leitura, p/ o relatorio
       // mostrar a topologia ao modelo. null em estados sinteticos sem rede.
       estradas: (estado.estradas && estado.estradas.adj) || null,
@@ -1311,6 +1583,8 @@
       rejeicoesAnteriores: (estado.rejeicoesAnteriores && estado.rejeicoesAnteriores[dono]) || [],
       // ordens EXECUTADAS COM AJUSTE no turno anterior (modo clamp; vazio fora dele)
       avisosAnteriores: (estado.avisosAnteriores && estado.avisosAnteriores[dono]) || [],
+      // v5: a nota que ESTE Rei escreveu para si no turno passado (null no turno 1)
+      planoAnterior: (estado.planosAnteriores && estado.planosAnteriores[dono]) || null,
     };
   }
 
@@ -1354,7 +1628,15 @@
   }
 
   // RELATORIO EM TEXTO de uma visao.
+  // P4 (17/08): dispatch. Com config.promptP4 === true (o ruleset vivo), o
+  // relatorio e o P4 em ingles com fog. opcoes.promptP4 === false forca o
+  // legado (testes de regressao). O caminho legado abaixo esta INTOCADO.
   function relatorioTexto(visao, opcoes) {
+    const usaP4 = (opcoes && opcoes.promptP4 != null) ? !!opcoes.promptP4 : (visao.config.promptP4 === true);
+    if (usaP4) return relatorioTextoP4(visao, opcoes);
+    return relatorioTextoLegado(visao, opcoes);
+  }
+  function relatorioTextoLegado(visao, opcoes) {
     const cfg = visao.config;
     const me = visao.dono;
     const inimigo = me === "A" ? "B" : "A";
@@ -1381,20 +1663,53 @@
     // Nos dois casos o numero mostrado e o que o motor pratica: mesma funcao
     // de peso, mesma rota. Se isto divergir, a lacuna L3 reabre.
     const porCusto = temRede && !!visao.estradasCusto;
-    const marcha = (alvo) => {
-      let best = Infinity;
+    // ISOLACAO (LOTE B, passo 3): o tempo de marcha sai de turnosDeCaminho — a
+    // MESMA funcao que o motor usa em enviarExercito. O relatorio NAO reimplementa
+    // a conta (invariante i: uma regra, uma implementacao). marchaVel(alvo, tropaRep)
+    // devolve os turnos para uma tropa de referencia (velExercito deriva a velocidade
+    // da composicao). No mapa autoral (porCusto) rota pelo turnosDeCaminho; sem P3 a
+    // tropaRep e a MEDIA (arqueiro) -> fator passoRef/passoRef=1 -> identico ao P2.
+    const marchaVel = (alvo, tropaRep) => {
+      let best = Infinity, bestCaminho = null;
       for (const m of visao.minhas) {
-        let d;
+        let d, cam = null;
         if (temRede) {
-          const caminho = caminhoEntre(shim, m.id, alvo.id);
-          d = caminho ? pesoRota(shim, caminho) : Math.hypot(m.x - alvo.x, m.y - alvo.y);
+          cam = caminhoEntre(shim, m.id, alvo.id);
+          d = cam ? pesoRota(shim, cam) : Math.hypot(m.x - alvo.x, m.y - alvo.y);
         } else {
           d = Math.hypot(m.x - alvo.x, m.y - alvo.y);
         }
-        if (d < best) best = d;
+        if (d < best) { best = d; bestCaminho = cam; }
       }
       if (best === Infinity) return "?";
+      if (porCusto && bestCaminho) return turnosDeCaminho(shim, bestCaminho, tropaRep);
       return Math.max(1, Math.ceil(porCusto ? best : best / passoRef));
+    };
+    const marcha = (alvo) => marchaVel(alvo, { arqueiro: 1 }); // media = comportamento P2
+    // LOTE C, E5: a aldeia de origem do menor caminho (a mesma p/ as 3 velocidades,
+    // porque a rota mais curta nao depende da composicao). marchaVel descartava qual era.
+    const origemMaisProxima = (alvo) => {
+      let best = Infinity, bestM = null;
+      for (const m of visao.minhas) {
+        let d;
+        if (temRede) { const cam = caminhoEntre(shim, m.id, alvo.id); d = cam ? pesoRota(shim, cam) : Math.hypot(m.x - alvo.x, m.y - alvo.y); }
+        else d = Math.hypot(m.x - alvo.x, m.y - alvo.y);
+        if (d < best) { best = d; bestM = m; }
+      }
+      return bestM;
+    };
+    // LOTE B (prompt P3): rotula defesa efetiva (B1) e mostra marcha por velocidade (B3).
+    // A ordenacao das aldeias segue por 'marcha' media (t), estavel; so o TEXTO muda.
+    const p3 = (opcoes && opcoes.promptP3 != null) ? !!opcoes.promptP3 : (cfg.promptP3 !== false);
+    const marchaComOrigem = (opcoes && opcoes.marchaComOrigem != null) ? !!opcoes.marchaComOrigem : (cfg.marchaComOrigem !== false); // LOTE C, E5
+    const rotulosExpectativa = (opcoes && opcoes.rotulosExpectativa != null) ? !!opcoes.rotulosExpectativa : (cfg.rotulosExpectativa !== false); // LOTE C, E11
+    const defLabel = (a) => p3 ? `defesa efetiva (inclui bonus do local): ${defefetiva(a)}` : `defesa: ${defefetiva(a)}`;
+    const marchaTexto = (a) => {
+      if (!p3) return `${marcha(a)} turnos de marcha`;
+      const vs = `${marchaVel(a, { lanceiro: 1 })} lenta / ${marchaVel(a, { arqueiro: 1 })} media / ${marchaVel(a, { cavaleiro: 1 })} rapida`;
+      if (!marchaComOrigem) return `marcha: ${vs}`; // E5 off = texto P3 identico ao atual
+      const o = origemMaisProxima(a); // E5: nomeia de onde sai a marcha mais curta
+      return `marcha desde ${o ? "[" + o.id + "]" + (o.nome ? " " + o.nome : "") : "?"}: ${vs}`;
     };
     const classifica = (dono) => (dono === me ? "SUA" : dono === null ? "NEUTRA" : "INIMIGA");
 
@@ -1408,7 +1723,7 @@
       if (m.lanceiro)  p.push(`${m.lanceiro} lanc`);
       if (m.arqueiro)  p.push(`${m.arqueiro} arq`);
       if (m.cavaleiro) p.push(`${m.cavaleiro} cav`);
-      return p.length ? ` | para tomar: ${p.join(" ou ")}` : "";
+      return p.length ? ` | para tomar${rotulosExpectativa ? " AGORA" : ""}: ${p.join(" ou ")}` : ""; // LOTE C, E11
     };
 
     // cabecalho
@@ -1449,6 +1764,16 @@
     // nunca deve ter de multiplicar atq/def. terreno = bonus de defesa do lugar.
     const terreno = (x) => x.capital ? cfg.combate.bonus_defesa_castelo : cfg.combate.bonus_defesa_aldeia;
     const defefetiva = (x) => Math.round(defesaDe(x.tropas, cfg) * terreno(x));
+    // LOTE D, D4/D5: sufixos por alvo (delta de defesa observada + memoria de ataque).
+    const deltaDefesa = (opcoes && opcoes.deltaDefesa != null) ? !!opcoes.deltaDefesa : (cfg.deltaDefesa !== false);
+    const memoriaAlvo = (opcoes && opcoes.memoriaAlvo != null) ? !!opcoes.memoriaAlvo : (cfg.memoriaAlvo !== false);
+    const deltaTexto = (a) => { // D4: "era X ha N" / "estavel ha N" (estabilidade tambem e info: nao sobredimensionar alvo parado).
+      if (!deltaDefesa || !a.defAntes) return "";
+      const dt = visao.turno - a.defAntes.turno;
+      return defefetiva(a) === a.defAntes.defEf ? ` (estavel ha ${dt} turnos)` : ` (era ${a.defAntes.defEf} ha ${dt} turnos)`;
+    };
+    const memoriaTexto = (a) => // D5: so quando houve tentativa; linha ausente e mais barata que vazia.
+      (memoriaAlvo && a.tentativas) ? ` | voce atacou aqui ${a.tentativas.n}x nos ultimos ${a.tentativas.janela} turnos (${a.tentativas.conquistas} conquistas)` : "";
     // ORDENACAO (7.5.3): 'id' (padrao) mantem a ordem por id; 'custo' ordena por
     // custo de marcha desde a MINHA capital (simetrico). Flag desligada por ora.
     let minhasOrd = visao.minhas.slice();
@@ -1464,9 +1789,36 @@
       minhasOrd.sort((p, q) => p.id - q.id);
     }
     L.push(`=== SUAS ALDEIAS (${visao.minhas.length}) ===`);
+    // LOTE C, E10: contagem agregada. NAO e "forca" (abstracao removida em 19/07) —
+    // e a soma de numeros que ja estao no prompt. Sem media/percentagem/recomendacao.
+    const contagemAgregada = (opcoes && opcoes.contagemAgregada != null) ? !!opcoes.contagemAgregada : (cfg.contagemAgregada !== false);
+    if (contagemAgregada) {
+      const casa = { lanceiro: 0, arqueiro: 0, cavaleiro: 0 };
+      for (const m of visao.minhas) for (const t of TIPOS) casa[t] += (m.tropas[t] || 0);
+      let marchando = 0;
+      if (visao.transito) for (const mv of visao.transito) if (mv.dono === me) marchando += contarTropas(mv.tropas);
+      const totCasa = casa.lanceiro + casa.arqueiro + casa.cavaleiro;
+      L.push(`TOTAL: ${totCasa} soldados em casa (${casa.lanceiro} lanceiros, ${casa.arqueiro} arqueiros, ${casa.cavaleiro} cavaleiros) + ${marchando} em marcha`);
+    }
+    // LOTE C, E9: FRONTEIRA (tem vizinho direto inimigo na rede) vs INTERIOR. Marcar
+    // o interior importa tanto quanto a fronteira: torna acionavel esvaziar uma aldeia
+    // segura. Sem rede (estados sinteticos) -> sem tag.
+    const marcarFronteira = (opcoes && opcoes.marcarFronteira != null) ? !!opcoes.marcarFronteira : (cfg.marcarFronteira !== false);
+    const donoPorId = {};
+    if (marcarFronteira && visao.estradas) {
+      for (const m of visao.minhas) donoPorId[m.id] = me;
+      for (const al of visao.alvos) donoPorId[al.id] = al.dono;
+    }
+    const fronteiraTag = (a) => {
+      if (!marcarFronteira || !visao.estradas) return "";
+      const inimigos = (visao.estradas[a.id] || []).filter((v) => donoPorId[v] === inimigo);
+      if (!inimigos.length) return " | INTERIOR (sem divisa inimiga)";
+      const lista = inimigos.slice(0, 2).map((v) => `[${v}] INIMIGA`).join(", ");
+      return ` | FRONTEIRA com ${lista}${inimigos.length > 2 ? ` +${inimigos.length - 2}` : ""}`;
+    };
     for (const a of minhasOrd) {
       const nome = a.nome ? ` ${a.nome}` : ""; // mapa autoral traz nome; procedural pode nao ter
-      L.push(`[${a.id}]${nome} | madeira ${a.recursos.madeira} (+${prod.madeira}/turno) | ferro ${a.recursos.ferro} (+${prod.ferro}/turno) | defesa: ${defefetiva(a)}`);
+      L.push(`[${a.id}]${nome}${fronteiraTag(a)} | madeira ${a.recursos.madeira} (+${prod.madeira}/turno) | ferro ${a.recursos.ferro} (+${prod.ferro}/turno) | ${defLabel(a)}${p3 ? ` | tropas em casa: ${contarTropas(a.tropas)} / ${cfg.limite_tropas_aldeia}` : ""}`);
       // DISPONIVEL PARA ENVIAR AGORA: instrucao (maiusculas), nao descricao.
       // ataque: poder de ATAQUE se enviar TODA a guarnicao de casa (7.5.2).
       L.push(`    DISPONIVEL PARA ENVIAR AGORA: ${a.tropas.lanceiro} lanceiros, ${a.tropas.arqueiro} arqueiros, ${a.tropas.cavaleiro} cavaleiros (ataque se enviar tudo: ${ataqueDe(a.tropas, cfg)})`);
@@ -1509,7 +1861,7 @@
       .sort((p, q) => p.t - q.t || p.a.id - q.a.id);
     L.push(`=== ALDEIAS NEUTRAS (${neutras.length}) - ordenadas por distancia da sua mais proxima ===`);
     for (const { a, t } of neutras) {
-      L.push(`[${a.id}] ${compTexto(a.tropas)} | defesa: ${defefetiva(a)} | ${t} turnos de marcha${minTexto(a)}`);
+      L.push(`[${a.id}] ${compTexto(a.tropas)} | ${defLabel(a)}${deltaTexto(a)} | ${marchaTexto(a)}${minTexto(a)}${memoriaTexto(a)}`);
     }
     L.push("");
 
@@ -1520,7 +1872,7 @@
     L.push(`=== INIMIGO (Rei ${inimigo}) - ${inimigas.length} aldeia(s) ===`);
     if (!inimigas.length) L.push("(nenhuma aldeia inimiga)");
     for (const { a, t } of inimigas) {
-      L.push(`[${a.id}] ${compTexto(a.tropas)} | defesa: ${defefetiva(a)} | ${t} turnos de marcha${minTexto(a)}`);
+      L.push(`[${a.id}] ${compTexto(a.tropas)} | ${defLabel(a)}${deltaTexto(a)} | ${marchaTexto(a)}${minTexto(a)}${memoriaTexto(a)}`);
     }
     L.push("");
 
@@ -1531,11 +1883,26 @@
     // sinteticos sem rede.
     const semRede = !!(opcoes && opcoes.semRede); // validador nao precisa da topologia
     if (visao.estradas && !semRede) {
+      // LOTE C, E8: anota o dono de cada aldeia na rede (usa classifica, a MESMA
+      // funcao do resto do relatorio). Nao acrescenta info (o dono ja esta noutra
+      // seccao); so poupa um join manual de ~41 ligacoes por turno. Flag redeComDono.
+      const redeComDono = (opcoes && opcoes.redeComDono != null) ? !!opcoes.redeComDono : (cfg.redeComDono !== false);
+      const infoAld = {};
+      if (redeComDono) {
+        for (const m of visao.minhas) infoAld[m.id] = { dono: me, nome: m.nome };
+        for (const a of visao.alvos) infoAld[a.id] = { dono: a.dono, nome: a.nome };
+      }
       L.push(`=== REDE DE ESTRADAS (por onde os exercitos marcham) ===`);
       const idsRede = Object.keys(visao.estradas).map(Number).sort((a, b) => a - b);
       for (const id of idsRede) {
         const viz = (visao.estradas[id] || []).slice().sort((a, b) => a - b);
-        L.push(`Aldeia [${id}] liga-se a: ${viz.map((v) => `[${v}]`).join(", ")}`);
+        if (redeComDono) {
+          const i = infoAld[id];
+          const cab = `Aldeia [${id}]${i && i.nome ? " " + i.nome : ""}${i ? " (" + classifica(i.dono) + ")" : ""}`;
+          L.push(`${cab} liga-se a: ${viz.map((v) => `[${v}]${infoAld[v] ? " " + classifica(infoAld[v].dono) : ""}`).join(", ")}`);
+        } else {
+          L.push(`Aldeia [${id}] liga-se a: ${viz.map((v) => `[${v}]`).join(", ")}`);
+        }
       }
       L.push("");
     }
@@ -1584,7 +1951,7 @@
   //     presente na visao).
   // NAO ensina a DECISAO: alvo e tropas sao genericos/arbitrarios (1a aldeia,
   // 1o alvo, numero redondo qualquer), NAO a jogada otima.
-  function exemploAncorado(visao) {
+  function exemploAncorado(visao, comResumos) {
     const minhas = (visao && visao.minhas) || [];
     const alvos = (visao && visao.alvos) || [];
     const a0 = minhas.length ? minhas[0] : null;
@@ -1615,7 +1982,7 @@
     if (segundoDestino != null && hl + ha + hc > 0) {
       envios.push(`    {"origemId": ${origem}, "destinoId": ${segundoDestino}, "tropas": ${tropas(hl, ha, hc)}}`);
     }
-    return [
+    const linhas = [
       "{",
       '  "construir": [',
       `    {"aldeiaId": ${origem}, "tipo": "lanceiro"}`,
@@ -1623,8 +1990,16 @@
       '  "envios": [',
       envios.join(",\n"),
       "  ]",
-      "}",
-    ].join("\n");
+    ];
+    // v5: os dois textos entram no MOLDE, senao o modelo nao sabe onde os por.
+    // Vao por ultimo e com reticencias, para nao servirem de conteudo a copiar.
+    if (comResumos) {
+      linhas[linhas.length - 1] = "  ],";
+      linhas.push('  "plano": "...",');
+      linhas.push('  "depoimento": "..."');
+    }
+    linhas.push("}");
+    return linhas.join("\n");
   }
 
   // montarPrompt(visao) -> string. FUNCAO PURA: sem rede, sem efeito
@@ -1713,33 +2088,445 @@
     return L.join("\n");
   }
 
+  // ==========================================================
+  //  PROMPT P4 (17/08, sessao Fable) — INGLES, sem exemplo, com fog.
+  // ----------------------------------------------------------
+  //  Principios (ESTUDO_PROMPT_P4.md):
+  //   1. toda regra que o motor executa esta dita (vitoria por dominancia,
+  //      simultaneidade, endurecimento, reforco);
+  //   2. nenhuma frase prescreve jogada (sem "para tomar", sem dica de alvo,
+  //      sem exemplo com valores — esquema declarado);
+  //   3. o que o texto proibe == o que diagnosticarOrdem recusa;
+  //   4. a memoria e do motor (plano, "last seen", "was X N turns ago");
+  //   5. tokens do protocolo continuam PT (lanceiro/arqueiro/cavaleiro,
+  //      construir/envios) — sao vocabulario do jogo; a prosa e inglesa.
+  //      normalizarTipo aceita os nomes ingleses como sinonimos.
+  // ==========================================================
+  // Composicao em texto para o renderizador P4 (tokens do protocolo + caso vazio
+  // em ingles). Fora do relatorioTextoP4 porque o eventoTextoEN tambem precisa.
+  function compTextoEN(t) {
+    const p = [];
+    if (t.lanceiro) p.push(`${t.lanceiro} lanceiro${t.lanceiro > 1 ? "s" : ""}`);
+    if (t.arqueiro) p.push(`${t.arqueiro} arqueiro${t.arqueiro > 1 ? "s" : ""}`);
+    if (t.cavaleiro) p.push(`${t.cavaleiro} cavaleiro${t.cavaleiro > 1 ? "s" : ""}`);
+    return p.length ? p.join(", ") : "empty (no troops)";
+  }
+  function eventoTextoEN(ev, me) {
+    if (ev.tipo === "combate") {
+      const euAtaquei = ev.atacante === me;
+      const quem = euAtaquei ? "You" : "King " + ev.atacante;
+      if (ev.vencedor === "atacante") {
+        const baixas = euAtaquei ? ` (your losses: ${ev.baixasForca} troops)` : "";
+        return `${quem} attacked [${ev.alvoId}] ${ev.alvoNome}: VICTORY, conquered${baixas}`;
+      }
+      const perdeu = euAtaquei ? " (your army was lost)" : "";
+      return `${quem} attacked [${ev.alvoId}] ${ev.alvoNome}: DEFEAT${perdeu}`;
+    }
+    if (ev.tipo === "reforco") {
+      const quem = ev.dono === me ? "Your reinforcement" : "A reinforcement of King " + ev.dono;
+      return `${quem} (${compTextoEN(ev.tropas)}) arrived at [${ev.alvoId}] ${ev.alvoNome}`;
+    }
+    if (ev.tipo === "cancelado") return `Order ignored: ${ev.motivo || "invalid send"}`;
+    if (ev.tipo === "combate_estrada") {
+      const euAtaquei = ev.atacante === me;
+      const venciMeu = ev.vencedorDono === me;
+      return `Armies met ON THE ROAD${euAtaquei || ev.defensor === me ? "" : ""}: ${venciMeu ? "your army won the field" : "your army was beaten in the field"} (no location bonus in the open)`;
+    }
+    return JSON.stringify(ev);
+  }
+
+  function relatorioTextoP4(visao, opcoes) {
+    const cfg = visao.config;
+    const me = visao.dono;
+    const inimigo = me === "A" ? "B" : "A";
+    const semRejeicoes = !!(opcoes && opcoes.semRejeicoes);
+    const fog = !!visao.fog;
+    const L = [];
+
+    // ---- marcha pela rede (mesmas funcoes do motor; ver L3 no legado) ----
+    const temRede = !!visao.estradas;
+    const shim = temRede ? { config: cfg, estradas: { adj: visao.estradas, custo: visao.estradasCusto || null },
+                             aldeias: visao.minhas.concat(visao.alvos) } : null;
+    const porCusto = temRede && !!visao.estradasCusto;
+    const marchaVel = (alvo, tropaRep) => {
+      let best = Infinity, bestCaminho = null;
+      for (const m of visao.minhas) {
+        let d, cam = null;
+        if (temRede) {
+          cam = caminhoEntre(shim, m.id, alvo.id);
+          d = cam ? pesoRota(shim, cam) : Math.hypot(m.x - alvo.x, m.y - alvo.y);
+        } else d = Math.hypot(m.x - alvo.x, m.y - alvo.y);
+        if (d < best) { best = d; bestCaminho = cam; }
+      }
+      if (best === Infinity) return "?";
+      if (porCusto && bestCaminho) return turnosDeCaminho(shim, bestCaminho, tropaRep);
+      const passoRef = cfg.velocidade_passo[cfg.relatorio.velocidade_referencia];
+      return Math.max(1, Math.ceil(porCusto ? best : best / passoRef));
+    };
+    const origemMaisProxima = (alvo) => {
+      let best = Infinity, bestM = null;
+      for (const m of visao.minhas) {
+        let d;
+        if (temRede) { const cam = caminhoEntre(shim, m.id, alvo.id); d = cam ? pesoRota(shim, cam) : Math.hypot(m.x - alvo.x, m.y - alvo.y); }
+        else d = Math.hypot(m.x - alvo.x, m.y - alvo.y);
+        if (d < best) { best = d; bestM = m; }
+      }
+      return bestM;
+    };
+    const marchaTexto = (a) => {
+      const vs = `${marchaVel(a, { lanceiro: 1 })} slow / ${marchaVel(a, { arqueiro: 1 })} medium / ${marchaVel(a, { cavaleiro: 1 })} fast`;
+      const o = origemMaisProxima(a);
+      return `march from ${o ? "[" + o.id + "]" + (o.nome ? " " + o.nome : "") : "?"}: ${vs} turns`;
+    };
+    const marchaMedia = (a) => { const t = marchaVel(a, { arqueiro: 1 }); return t === "?" ? Infinity : t; };
+
+    const prod = cfg.producao;
+    const terreno = (x) => x.capital ? cfg.combate.bonus_defesa_castelo : cfg.combate.bonus_defesa_aldeia;
+    const defefetiva = (x) => Math.round(defesaDe(x.tropas, cfg) * terreno(x));
+    const deltaDefesa = (opcoes && opcoes.deltaDefesa != null) ? !!opcoes.deltaDefesa : (cfg.deltaDefesa !== false);
+    const memoriaAlvo = (opcoes && opcoes.memoriaAlvo != null) ? !!opcoes.memoriaAlvo : (cfg.memoriaAlvo !== false);
+    const deltaTexto = (a) => {
+      if (!deltaDefesa || !a.defAntes) return "";
+      const dt = visao.turno - a.defAntes.turno;
+      return defefetiva(a) === a.defAntes.defEf ? ` (stable for ${dt} turns)` : ` (was ${a.defAntes.defEf}, ${dt} turns ago)`;
+    };
+    const memoriaTexto = (a) =>
+      (memoriaAlvo && a.tentativas) ? ` | you attacked here ${a.tentativas.n}x in the last ${a.tentativas.janela} turns (${a.tentativas.conquistas} conquered)` : "";
+    const nomeDe = (a) => a.nome ? ` ${a.nome}` : "";
+    // Composicao: as QUANTIDADES usam os tokens do protocolo (lanceiro/arqueiro/
+    // cavaleiro sao vocabulario do jogo, iguais aos do JSON), mas o caso vazio
+    // tem de ser ingles — o compTexto devolve "sem tropas" e isso vazava PT
+    // para dentro do relatorio ingles ("garrison: sem tropas").
+    const compEN = compTextoEN;
+
+    // ---- cabecalho ----
+    L.push(`TURN ${visao.turno} - You are King ${me}.`);
+    L.push(`These numbers are from TURN ${visao.turno}. Ignore quantities from earlier turns.`);
+    L.push("");
+
+    if (!semRejeicoes && visao.rejeicoesAnteriores && visao.rejeicoesAnteriores.length) {
+      L.push("=== WARNING: ORDERS OF YOURS REFUSED LAST TURN ===");
+      L.push("The orders below were NOT executed (the engine refused them). Fix the mistake this turn and do NOT repeat the same order:");
+      for (const r of visao.rejeicoesAnteriores) L.push(`- ${r}`);
+      L.push("");
+    }
+    if (visao.avisosAnteriores && visao.avisosAnteriores.length) {
+      L.push("=== ORDERS OF YOURS ADJUSTED LAST TURN ===");
+      L.push("The orders below WERE executed, but reduced to the real stock. This turn, only order what you HAVE:");
+      for (const a of visao.avisosAnteriores) L.push(`- ${a}`);
+      L.push("");
+    }
+
+    // ---- suas aldeias ----
+    const minhasOrd = visao.minhas.slice().sort((p, q) => p.id - q.id);
+    L.push(`=== YOUR VILLAGES (${visao.minhas.length}) ===`);
+    const casa = { lanceiro: 0, arqueiro: 0, cavaleiro: 0 };
+    let marchando = 0;
+    for (const m of visao.minhas) for (const t of TIPOS) casa[t] += m.tropas[t];
+    if (visao.transito) for (const mv of visao.transito) if (mv.dono === me) marchando += mv.tropas.lanceiro + mv.tropas.arqueiro + mv.tropas.cavaleiro;
+    L.push(`TOTAL: ${casa.lanceiro + casa.arqueiro + casa.cavaleiro} soldiers at home (${casa.lanceiro} lanceiros, ${casa.arqueiro} arqueiros, ${casa.cavaleiro} cavaleiros) + ${marchando} marching`);
+    const adj = visao.estradas || {};
+    const donoDe = {};
+    for (const m of visao.minhas) donoDe[m.id] = me;
+    for (const a of visao.alvos) donoDe[a.id] = a.dono;
+    const fronteiraTag = (a) => {
+      const inimigos = (adj[a.id] || []).filter((v) => donoDe[v] === inimigo);
+      if (!inimigos.length) return " | INTERIOR (no enemy border)";
+      const lista = inimigos.slice(0, 2).map((v) => `[${v}]`).join(", ");
+      return ` | BORDER with ${lista}${inimigos.length > 2 ? ` +${inimigos.length - 2}` : ""} (enemy)`;
+    };
+    for (const a of minhasOrd) {
+      const nome = a.nome ? ` ${a.nome}` : "";
+      const cap = a.capital ? " - YOUR CAPITAL" : "";
+      L.push(`[${a.id}]${nome}${cap}${fronteiraTag(a)} | wood ${a.recursos.madeira} (+${prod.madeira}/turn) | iron ${a.recursos.ferro} (+${prod.ferro}/turn) | effective defense (location bonus included): ${defefetiva(a)} | troops at home: ${contarTropas(a.tropas)} / ${cfg.limite_tropas_aldeia}`);
+      L.push(`    AVAILABLE TO SEND NOW: ${a.tropas.lanceiro} lanceiros, ${a.tropas.arqueiro} arqueiros, ${a.tropas.cavaleiro} cavaleiros (attack power if all sent: ${ataqueDe(a.tropas, cfg)})`);
+      const emMarcha = { lanceiro: 0, arqueiro: 0, cavaleiro: 0 };
+      let temMarcha = false;
+      if (visao.transito) for (const mv of visao.transito) if (mv.origemId === a.id && mv.dono === me) { for (const t of TIPOS) emMarcha[t] += (mv.tropas[t] || 0); temMarcha = true; }
+      if (temMarcha && (emMarcha.lanceiro + emMarcha.arqueiro + emMarcha.cavaleiro) > 0)
+        L.push(`    already marching out (NOT available): ${compEN(emMarcha)}`);
+      if (a.construindo.length) {
+        const cont = {}; let maxT = 0;
+        for (const c of a.construindo) { cont[c.tipo] = (cont[c.tipo] || 0) + 1; maxT = Math.max(maxT, c.turnosRestantes); }
+        const desc = TIPOS.filter((t) => cont[t]).map((t) => `${cont[t]} ${t}`).join(", ");
+        L.push(`    ${maxT > 1 ? `ready in ${maxT} turns` : "ready next turn"}: ${desc} (cannot be sent this turn)`);
+      }
+    }
+    L.push("");
+
+    // ---- alvos ----
+    const ordenar = (lista) => lista.map((a) => ({ a, t: marchaMedia(a) })).sort((p, q) => p.t - q.t || p.a.id - q.a.id);
+    const linhaAlvo = (a) => {
+      const donoTag = a.dono === null ? "NEUTRAL" : (a.capital ? `ENEMY CAPITAL (King ${a.dono})` : `ENEMY (King ${a.dono})`);
+      return `[${a.id}]${nomeDe(a)} | ${donoTag} | garrison: ${compEN(a.tropas)} | effective defense (location bonus included): ${defefetiva(a)}${deltaTexto(a)} | ${marchaTexto(a)}${memoriaTexto(a)}`;
+    };
+    if (!fog) {
+      const neutras = ordenar(visao.alvos.filter((a) => a.dono === null));
+      L.push(`=== NEUTRAL VILLAGES (${neutras.length}) - sorted by march distance from your nearest ===`);
+      for (const { a } of neutras) L.push(linhaAlvo(a));
+      L.push("");
+      const inimigas = ordenar(visao.alvos.filter((a) => a.dono === inimigo));
+      L.push(`=== ENEMY (King ${inimigo}) - ${inimigas.length} village(s) ===`);
+      if (!inimigas.length) L.push("(no enemy villages)");
+      for (const { a } of inimigas) L.push(linhaAlvo(a));
+      L.push("");
+    } else {
+      const visiveis = ordenar(visao.alvos.filter((a) => a.visivel));
+      L.push(`=== VILLAGES YOU CAN SEE (${visiveis.length}) - sorted by march distance from your nearest ===`);
+      if (!visiveis.length) L.push("(none - your watchmen see no village beyond your own)");
+      for (const { a } of visiveis) L.push(linhaAlvo(a));
+      L.push("");
+      const lembradas = ordenar(visao.alvos.filter((a) => !a.visivel && a.visto));
+      if (lembradas.length) {
+        L.push(`=== KNOWN FROM BEFORE (${lembradas.length}) - out of sight now, the real state may have changed ===`);
+        for (const { a } of lembradas) {
+          const v = a.visto;
+          const idade = visao.turno - v.turno;
+          const donoTag = v.dono === null ? "NEUTRAL" : v.dono === me ? "YOURS" : (v.capital ? `ENEMY CAPITAL (King ${v.dono})` : `ENEMY (King ${v.dono})`);
+          L.push(`[${a.id}]${nomeDe(a)} | last seen on turn ${v.turno} (${idade} turn${idade === 1 ? "" : "s"} ago): ${donoTag}, garrison was ${compEN(v.tropas)} | ${marchaTexto(a)}${memoriaTexto(a)}`);
+        }
+        L.push("");
+      }
+      const nunca = visao.alvos.filter((a) => !a.visivel && !a.visto).sort((p, q) => p.id - q.id);
+      if (nunca.length) {
+        L.push(`=== UNEXPLORED (${nunca.length}) - never seen; find them on the ROAD NETWORK below ===`);
+        L.push(nunca.map((a) => `[${a.id}]${nomeDe(a)}${a.capital ? " (THE ENEMY CAPITAL - its garrison is unknown to you)" : ""}`).join(", "));
+        L.push("");
+      }
+    }
+
+    // ---- rede de estradas (compacta: uma linha por aldeia, dono so quando sabido) ----
+    if (visao.estradas) {
+      L.push("=== ROAD NETWORK (armies march along these roads; the geography never changes) ===");
+      const conhecidoDe = (id) => {
+        if (donoDe[id] === me) return " (yours)";
+        const alvo = visao.alvos.find((x) => x.id === id);
+        // Capitais sao conhecimento publico (qualquer rei sabe ONDE fica o
+        // reino inimigo — o fog esconde o que ha la, nao a geografia politica).
+        const capTag = (alvo && alvo.capital) ? " - THE ENEMY CAPITAL" : "";
+        if (!fog) return (donoDe[id] === null ? " (neutral)" : " (enemy)") + capTag;
+        if (alvo && alvo.visivel) return (alvo.dono === null ? " (neutral)" : " (enemy)") + capTag;
+        if (alvo && alvo.visto) return (alvo.visto.dono === null ? " (last seen: neutral)" : (alvo.visto.dono === me ? " (last seen: yours)" : " (last seen: enemy)")) + capTag;
+        return capTag;
+      };
+      const nomePorId = {};
+      for (const m of visao.minhas) nomePorId[m.id] = m.nome;
+      for (const a of visao.alvos) nomePorId[a.id] = a.nome;
+      const ids = Object.keys(adj).map(Number).sort((x, y) => x - y);
+      for (const id of ids) {
+        const nm = nomePorId[id] ? " " + nomePorId[id] : "";
+        L.push(`[${id}]${nm}${conhecidoDe(id)}: ${(adj[id] || []).map((v) => `[${v}]`).join(", ")}`);
+      }
+      L.push("");
+    }
+
+    // ---- exercitos em transito ----
+    L.push("=== ARMIES ON THE MARCH ===");
+    L.push("YOURS:");
+    const meus = (visao.transito || []).filter((m) => m.dono === me);
+    if (!meus.length) L.push("- none");
+    for (const m of meus) L.push(`- ${compEN(m.tropas)}: [${m.origemId}] -> [${m.destinoId}], arrives in ${m.turnosRestantes} turn${m.turnosRestantes === 1 ? "" : "s"}`);
+    const inimigosMv = (visao.transito || []).filter((m) => m.dono !== me)
+      .filter((m) => !fog || donoDe[m.destinoId] === me || (visao.alvos.find((x) => x.id === m.destinoId) || {}).visivel);
+    L.push(fog ? "ENEMY (only what your watchmen can see):" : "ENEMY:");
+    if (!inimigosMv.length) L.push(fog ? "- none sighted" : "- none");
+    for (const m of inimigosMv) L.push(`- enemy army marching toward [${m.destinoId}]${nomePorIdSeguro(visao, m.destinoId)}, arrives in ${m.turnosRestantes} turn${m.turnosRestantes === 1 ? "" : "s"}`);
+    L.push("");
+
+    // ---- o que aconteceu ----
+    L.push("=== WHAT HAPPENED LAST TURN ===");
+    let evs = visao.eventos || [];
+    if (fog) {
+      const visIds = new Set(visao.minhas.map((m) => m.id));
+      for (const a of visao.alvos) if (a.visivel) visIds.add(a.id);
+      evs = evs.filter((ev) => ev.atacante === me || ev.dono === me || ev.defensor === me || visIds.has(ev.alvoId));
+    }
+    if (!evs.length) L.push("- nothing you could see");
+    for (const ev of evs) L.push("- " + eventoTextoEN(ev, me));
+
+    return L.join("\n");
+  }
+  function nomePorIdSeguro(visao, id) {
+    for (const m of visao.minhas) if (m.id === id) return m.nome ? " " + m.nome : "";
+    for (const a of visao.alvos) if (a.id === id) return a.nome ? " " + a.nome : "";
+    return "";
+  }
+
+  // Regras em INGLES, geradas da CONFIG (mesmo principio de sempre: se o eval
+  // varrer um numero, o prompt conta a verdade sozinho).
+  function regrasP4Texto(cfg) {
+    const B = cfg.bonus_forca_triangulo;
+    const bA = cfg.combate.bonus_defesa_aldeia, bC = cfg.combate.bonus_defesa_castelo;
+    const contra = { lanceiro: cfg.triangulo.lanceiro, arqueiro: cfg.triangulo.arqueiro, cavaleiro: cfg.triangulo.cavaleiro };
+    const velEN = { lenta: "slow", media: "medium", rapida: "fast" };
+    const L = [];
+    L.push("=== COMBAT RULES ===");
+    L.push("Each troop type has its own ATTACK and DEFENSE values (they are not equal):");
+    for (const t of TIPOS) {
+      const d = cfg.tropas[t];
+      L.push(`  ${t}: attack ${d.atq}, defense ${d.def}, speed ${velEN[d.vel] || d.vel} (costs ${d.custo.madeira} wood + ${d.custo.ferro} iron).`);
+    }
+    L.push("When you ATTACK, your troops count their ATTACK; the DEFENDER counts the DEFENSE of theirs.");
+    L.push(`Counter triangle (a BONUS, not an automatic win): ${TIPOS.map((t) => `${t} counters ${contra[t]}`).join("; ")}. Having the counter multiplies your force by ${B}.`);
+    L.push("The MOST NUMEROUS type of each army sets the counter matchup (ties in count break in the order lanceiro, arqueiro, cavaleiro).");
+    L.push(`Defending is easier: defense counts x${bA} in a village and x${bC} in a castle (capital). In the open field (on a road) there is no bonus.`);
+    L.push("The side with the HIGHER effective force wins. A tie favors the DEFENDER.");
+    L.push("The winner also takes losses (attrition against the loser's effective force).");
+    L.push('The "effective defense" values in the report ALREADY include the location bonus. Use them directly; do not apply the bonus again.');
+    L.push("");
+    L.push("=== ECONOMY RULES ===");
+    for (const t of TIPOS) {
+      const d = cfg.tropas[t];
+      L.push(`${t}: costs ${d.custo.madeira} wood + ${d.custo.ferro} iron, ready in ${d.turnos} turn${d.turnos > 1 ? "s" : ""}.`);
+    }
+    L.push(`Each village you hold produces ${cfg.producao.madeira} wood and ${cfg.producao.ferro} iron per turn. Resources belong to EACH village (there is no shared treasury): a village pays for its own builds from its own stock.`);
+    if (cfg.limite_tropas_aldeia)
+      L.push(`Cap per village: when the NUMBER of troops at home reaches ${cfg.limite_tropas_aldeia}, that village STOPS building (it still produces resources and can still receive reinforcements).`);
+    if (cfg.neutra && cfg.neutra.endurecimento)
+      L.push(`Neutral villages harden with time: every ${cfg.neutra.endurecimento_intervalo || 1} turns, each neutral village gains +${cfg.neutra.endurecimento} troop of its own type.`);
+    L.push("Only order a build the village can pay for NOW.");
+    L.push("");
+    L.push("=== MOVEMENT RULES ===");
+    L.push("Armies march along the ROAD NETWORK that connects the villages, never in a straight line. Travel time is measured along the roads: a village that looks close on the map can be far by road. See the ROAD NETWORK block in the report.");
+    L.push("An army STOPS at the first village on its path that is not yours and fights there, even if you ordered a more distant destination. You cannot march past an enemy or neutral village to hit one behind it.");
+    L.push("Troops sent from DIFFERENT villages never add up, even when they arrive at the same target on the same turn: each send fights alone, one at a time.");
+    L.push("You may also send troops to a village YOU already own: they march the same way and, on arrival, join that village's garrison as reinforcements.");
+    L.push(`Each troop type has a speed: lanceiro (slow), arqueiro (medium), cavaleiro (fast). A MIXED army marches at the speed of its SLOWEST troop. The report shows travel time per speed (e.g. "march from [x]: 5 slow / 3 medium / 2 fast turns").`);
+    L.push("Marching takes turns, and during those turns the enemy keeps building and moving. The defense you see in the report is TODAY'S defense, not the defense on arrival.");
+    return L.join("\n");
+  }
+
+  function montarPromptP4(visao, opcoes) {
+    const cfg = visao.config;
+    const resumos = (opcoes && opcoes.resumosDoRei != null) ? !!opcoes.resumosDoRei : (cfg.resumosDoRei !== false);
+    const rejNoFim = !!(opcoes && opcoes.rejeicaoNoFim) &&
+      !!(visao.rejeicoesAnteriores && visao.rejeicoesAnteriores.length);
+    const fog = !!visao.fog;
+    const totalAldeias = visao.minhas.length + visao.alvos.length;
+    const L = [];
+
+    L.push(`You are King ${visao.dono}. The villages listed under "YOUR VILLAGES" are yours.`);
+    // Incoerencia 2 (a mais grave depois do reforco): a condicao de vitoria REAL,
+    // com o progresso ao vivo. O objetivo "conquiste a capital" era mentira util —
+    // o Gemini ia ganhar por dominancia a declarar a capital em todos os turnos.
+    if (cfg.vitoriaPorDominancia) {
+      const alvoDom = Math.ceil(totalAldeias * (cfg.vitoriaFracao || 0.75));
+      L.push(`HOW TO WIN: hold at least ${alvoDom} of the map's ${totalAldeias} villages (${Math.round((cfg.vitoriaFracao || 0.75) * 100)}%) for ${cfg.vitoriaTurnos || 2} consecutive turns, or eliminate every enemy village. You currently hold ${visao.minhas.length} of ${totalAldeias}. The enemy capital is the hardest single target on the map; taking it is NOT required to win.`);
+    } else {
+      L.push("HOW TO WIN: eliminate every enemy village. The enemy capital is the hardest single target on the map.");
+    }
+    L.push("Each village you hold produces resources every turn, and resources are what build your army.");
+    // Incoerencia 7: o LOTE E tornou as ordens simultaneas e o prompt nunca disse.
+    if (cfg.ordensSimultaneas !== false) {
+      L.push("Orders are SIMULTANEOUS: the enemy writes their orders at the same time as you, over the same snapshot of the map you are reading now. Nothing you order this turn is visible to them before it happens.");
+    }
+    L.push("");
+    L.push(regrasP4Texto(cfg));
+    if (fog) {
+      L.push("");
+      L.push("=== FOG OF WAR ===");
+      L.push("You do NOT see the whole map. You see: your own villages, every village directly connected to one of yours by road, and the destination of each army you have on the march. Anything else shows only what you knew the LAST time you saw it (marked \"last seen\"), or nothing at all (marked \"unexplored\"). The road map itself is public knowledge. The enemy is under the same rule: they see you only where their villages and armies reach.");
+    }
+    L.push("");
+    L.push(relatorioTextoP4(visao, Object.assign({}, opcoes, { semRejeicoes: rejNoFim })));
+    L.push("");
+    if (resumos) {
+      L.push("Besides your orders, write two short texts in English:");
+      L.push('- "plano": your NOTE TO YOUR NEXT TURN, 2 to 4 lines (anything past 600 characters is cut off). You will read it next turn. Write what you are trying to do, what you must not forget, and what you decided NOT to do. It is a note to yourself: be useful, not eloquent.');
+      L.push('- "depoimento": 2 to 4 lines telling the audience what you did THIS turn. It may have emotion. This text never comes back to you.');
+      L.push("");
+    }
+    L.push("Reply with ONE valid JSON object and nothing else - no text before or after it.");
+    L.push("");
+    // ESQUEMA DECLARADO (fim do exemplo com valores): mostra a FORMA, enumera os
+    // tres tipos SEMPRE juntos, e nao contem nenhum numero nem alvo copiavel.
+    L.push("Field by field - this describes the SHAPE of the reply; it is not a suggested move, and there is no example to copy:");
+    L.push("{");
+    L.push('  "construir": [ {"aldeiaId": <id of one of YOUR villages>, "tipo": <"lanceiro" | "arqueiro" | "cavaleiro">, "quantidade": <how many to build, 1 or more>} ],');
+    L.push('  "envios": [ {"origemId": <id of one of YOUR villages>, "destinoId": <id of ANY other village - enemy or neutral to attack it, one of YOURS to reinforce it>, "tropas": {"lanceiro": <n>, "arqueiro": <n>, "cavaleiro": <n>}} ]' + (resumos ? "," : ""));
+    if (resumos) {
+      L.push('  "plano": "<your note to your next turn>",');
+      L.push('  "depoimento": "<2-4 lines for the audience>"');
+    }
+    L.push("}");
+    L.push("Use only ids that appear in the report above. Do not send troops a village does not have. Empty lists are valid orders.");
+    if (rejNoFim) {
+      L.push("");
+      L.push("=== WARNING: ORDERS OF YOURS REFUSED LAST TURN ===");
+      L.push("The orders below were REFUSED by the engine:");
+      for (const r of visao.rejeicoesAnteriores) L.push(`- ${r}`);
+      L.push("Do NOT repeat the same order. The troop and resource numbers AVAILABLE are in the report above: use them.");
+    }
+    if (resumos && visao.planoAnterior) {
+      L.push("");
+      L.push("=== YOUR NOTE FROM LAST TURN (written by you) ===");
+      L.push(String(visao.planoAnterior));
+      L.push("Reread it: the map has changed since. Follow it if it still makes sense; change it if it does not.");
+    }
+    return L.join("\n");
+  }
+
   // opcoes (H2, experimento de POSICAO do feedback — uma variavel):
   //   { rejeicaoNoFim: true } MOVE o bloco de rejeicoes do meio do relatorio
   //   para o FIM ABSOLUTO do prompt (depois do exemplo), com a instrucao
   //   anti-repeticao do handoff. Sem opcoes ou sem rejeicoes: prompt
   //   BYTE-IGUAL ao de sempre — o benchmark antigo segue comparavel.
+  // P4 (17/08): dispatch identico ao do relatorioTexto — config.promptP4 === true
+  // (o ruleset vivo) manda para o montarPromptP4; opcoes.promptP4 === false
+  // forca o legado (regressao). O legado abaixo esta INTOCADO.
   function montarPrompt(visao, opcoes) {
+    const usaP4 = (opcoes && opcoes.promptP4 != null) ? !!opcoes.promptP4 : (visao.config.promptP4 === true);
+    if (usaP4) return montarPromptP4(visao, opcoes);
+    return montarPromptLegado(visao, opcoes);
+  }
+  function montarPromptLegado(visao, opcoes) {
     // VARIANTE de prompt (experimento de tropas): "P0" (default, inalterado),
     // "P1" (conta explicita no bloco de combate), "P2" (minimo pre-calculado
     // no relatorio — depende da visao trazer `minimos`, ligado pelo caller).
     const variante = (opcoes && opcoes.variante) || "P0";
     const rejNoFim = !!(opcoes && opcoes.rejeicaoNoFim) &&
       !!(visao.rejeicoesAnteriores && visao.rejeicoesAnteriores.length);
+    // LOTE B: mesma resolucao da flag promptP3 que o relatorioTexto usa.
+    const p3 = (opcoes && opcoes.promptP3 != null) ? !!opcoes.promptP3 : (visao.config.promptP3 !== false);
+    // v5: mesma resolucao das outras flags — default LIGADA, byte-identica se off.
+    const resumos = (opcoes && opcoes.resumosDoRei != null) ? !!opcoes.resumosDoRei : (visao.config.resumosDoRei !== false);
     const L = [];
     // TOPO: identidade + tarefa (curto)
     L.push('Voce e o Rei. As aldeias listadas em "SUAS ALDEIAS" pertencem a voce.');
     L.push("Seu objetivo e conquistar a CAPITAL inimiga. A capital tem o maior bonus de defesa do jogo: e o alvo mais caro do mapa, e so cai com um exercito grande.");
-    L.push("Conquiste aldeias neutras primeiro: cada aldeia produz recursos por turno, e sao os recursos que constroem esse exercito.");
+    // DICA DAS NEUTRAS (flag `dicaNeutras`): a frase tinha duas metades, uma
+    // FACTUAL ("cada aldeia produz recursos") e uma PRESCRITIVA ("conquiste
+    // neutras primeiro"). A segunda enviesava o benchmark: com 22 neutras
+    // contra 2 capitais, o Rei que obedece gasta ~27 turnos a expandir e nunca
+    // encontra o inimigo — foi o que aconteceu em 3 partidas seguidas, 20
+    // turnos sem um unico combate rei-contra-rei. Desligar a flag remove a
+    // PRESCRICAO e mantem o FACTO: o modelo continua a saber que aldeia rende
+    // recurso, mas escolhe sozinho a ordem. Default ligada (v3 byte-identico).
+    if (visao.config.dicaNeutras !== false) {
+      L.push("Conquiste aldeias neutras primeiro: cada aldeia produz recursos por turno, e sao os recursos que constroem esse exercito.");
+    } else {
+      L.push("Cada aldeia produz recursos por turno, e sao os recursos que constroem esse exercito.");
+    }
     L.push("");
     // P1 troca SO o bloco de combate pela conta explicita; P0/P2 usam o padrao.
     L.push(variante === "P1" ? regrasCombateTextoP1(visao.config) : regrasCombateTexto(visao.config));
+    if (p3) L.push("O valor de defesa no relatorio (\"defesa efetiva\") JA INCLUI o bonus do local (aldeia x1.25, castelo x1.5). Use-o diretamente; nao aplique o bonus de novo.");
     L.push("");
     L.push(regrasEconomiaTexto(visao.config));
     L.push("");
     L.push(regrasMovimentoTexto(visao.config));
+    if (p3) L.push("Cada tropa tem uma velocidade: lanceiro (lenta), arqueiro (media), cavaleiro (rapida). Um exercito MISTO marcha a velocidade da tropa MAIS LENTA. O relatorio ja mostra o tempo por velocidade (ex.: \"marcha: 5 lenta / 3 media / 2 rapida\").");
+    // LOTE C, E11: a promessa implicita do "para tomar" estava errada — a defesa vista
+    // e a de AGORA, nao a da chegada (2-4 turnos depois). Nao muda o calculo, so o rotulo.
+    if ((opcoes && opcoes.rotulosExpectativa != null) ? opcoes.rotulosExpectativa : (visao.config.rotulosExpectativa !== false))
+      L.push("A marcha demora turnos, e nesses turnos o inimigo continua a construir e a mover tropas. A defesa que voce ve e a de AGORA, nao a da chegada.");
     L.push("");
     // MEIO: dados do turno (relatorio integral)
-    L.push(relatorioTexto(visao, rejNoFim ? { semRejeicoes: true } : undefined));
+    // LOTE B: a flag promptP3 tem de ATRAVESSAR ate o relatorioTexto (senao nao
+    // desliga o P3). semRejeicoes:false le igual a undefined no relatorioTexto.
+    // P4: promptP4:false explicito — o caminho legado NUNCA pode cair no P4 por
+    // re-dispatch (o cfg pode ter promptP4 true com opcoes a forcar o legado).
+    L.push(relatorioTexto(visao, { semRejeicoes: rejNoFim, promptP3: opcoes && opcoes.promptP3, promptP4: false }));
     L.push("");
     // FIM: instrucao de formato -> processo -> exemplo (ultimo).
     // A "permissao de vazio" ("Listas vazias sao uma resposta valida... E melhor
@@ -1749,13 +2536,31 @@
     // copiava a linha construir do exemplo e esvaziava os envios. Remove-la
     // destrava (0->1.71 envios/turno, 1->5.2 aldeias) e ajuda tambem os 3B, sem
     // o efeito colateral do nudge factual (que fazia MAL ao llama3.2:3b).
+    // ===== RESUMOS DO REI (v5, flag `resumosDoRei`) ======================
+    //  DOIS textos com funcoes diferentes, e a diferenca e deliberada:
+    //   - `plano`      -> VOLTA no prompt do turno seguinte. E memoria: da ao
+    //                     modelo um bloco de notas entre turnos que ele nunca
+    //                     teve. Pedido como "nota para o seu proximo turno" e
+    //                     nao como "resumo da sua tatica" de proposito — a 1a
+    //                     formulacao produz planeamento, a 2a produz retorica.
+    //   - `depoimento` -> NAO volta. Vai so para a tela e para o log, e e o
+    //                     roteiro de narracao do video.
+    //  Os dois sao OPCIONAIS por construcao: parsearOrdem le `construir` e
+    //  `envios` e ignora o resto, entao um modelo que os omita nao perde o
+    //  turno. Campo cosmetico nunca pode custar uma jogada.
+    if (resumos) {
+      L.push("Alem das ordens, escreva dois textos curtos, em portugues:");
+      L.push('- "plano": a sua NOTA PARA O PROXIMO TURNO, 2 a 4 linhas. Voce vai ler isto no turno seguinte. Escreva o que esta a tentar fazer, o que nao pode esquecer, e o que decidiu NAO fazer. E uma nota para si mesmo: seja util a voce, nao eloquente.');
+      L.push('- "depoimento": 2 a 4 linhas contando a jogada DESTE turno a quem esta a assistir. Pode ter emocao. Este texto NAO volta para voce.');
+      L.push("");
+    }
     L.push("Responda APENAS com um JSON valido no formato abaixo. Nenhum texto antes ou depois do JSON.");
     L.push("");
     // INSTRUCAO DE PROCESSO (curta, logo antes do exemplo): forca o modelo a
     // ancorar nos ids REAIS da visao em vez de copiar numeros do exemplo.
     L.push("Antes de responder: em 'origemId' e em 'aldeiaId' use SOMENTE ids que aparecem na secao SUAS ALDEIAS. Escolha o 'destinoId' entre os ids das secoes ALDEIAS NEUTRAS e INIMIGO. Nao envie tropas que voce nao tem: se uma aldeia esta sem tropas, nao a use em 'envios'. O exemplo abaixo so mostra o FORMATO com ids reais deste turno; nao copie os numeros dele como se fossem sua jogada.");
     L.push("");
-    L.push(exemploAncorado(visao));
+    L.push(exemploAncorado(visao, resumos));
     if (rejNoFim) {
       // FIM ABSOLUTO (H2): modelos pequenos pesam mais o rabo do prompt.
       L.push("");
@@ -1763,6 +2568,14 @@
       L.push("As ordens abaixo foram RECUSADAS pelo motor:");
       for (const r of visao.rejeicoesAnteriores) L.push(`- ${r}`);
       L.push("NAO repita a mesma ordem. Os numeros de tropas e recursos DISPONIVEIS estao no relatorio acima: use-os.");
+    }
+    // A NOTA vem no fim, depois das rejeicoes: e o ultimo contexto antes de
+    // decidir. Nao e ordem nem regra — e o Rei a falar consigo mesmo.
+    if (resumos && visao.planoAnterior) {
+      L.push("");
+      L.push("=== A SUA NOTA DO TURNO ANTERIOR (escrita por voce) ===");
+      L.push(String(visao.planoAnterior));
+      L.push("Reveja-a: o mapa mudou desde entao. Siga-a se ainda faz sentido, e mude-a se nao faz.");
     }
     return L.join("\n");
   }
@@ -1790,6 +2603,70 @@
     return null; // bloco aberto sem fechar
   }
 
+  // P4 (F6): diagnostico HONESTO de por que nao ha bloco balanceado. A mensagem
+  // antiga ("nenhum bloco {...} na resposta") mentia quando o bloco EXISTIA mas
+  // estava desbalanceado — foi o que apagou o melhor turno do Nemotron (T10 de
+  // 17/08: um '}' a menos). Invariante do projeto: o log descreve o que houve.
+  function diagnosticarBloco(texto) {
+    if (typeof texto !== "string" || texto.indexOf("{") < 0) return "nenhum bloco {...} na resposta";
+    let chaves = 0, colchetes = 0, emString = false, escape = false;
+    for (let i = texto.indexOf("{"); i < texto.length; i++) {
+      const ch = texto[i];
+      if (emString) {
+        if (escape) escape = false;
+        else if (ch === "\\") escape = true;
+        else if (ch === '"') emString = false;
+        continue;
+      }
+      if (ch === '"') emString = true;
+      else if (ch === "{") chaves++;
+      else if (ch === "}") chaves--;
+      else if (ch === "[") colchetes++;
+      else if (ch === "]") colchetes--;
+    }
+    const partes = [];
+    if (chaves > 0) partes.push(`faltam ${chaves} '}'`);
+    if (chaves < 0) partes.push(`sobram ${-chaves} '}'`);
+    if (colchetes > 0) partes.push(`faltam ${colchetes} ']'`);
+    if (colchetes < 0) partes.push(`sobram ${-colchetes} ']'`);
+    if (emString) partes.push("string aberta sem fechar");
+    return partes.length ? `bloco JSON desbalanceado: ${partes.join(", ")}` : "nenhum bloco {...} fechado na resposta";
+  }
+
+  // P4 (F6): SALVAMENTO PARCIAL. `construir` e `envios` sao listas independentes;
+  // um erro de sintaxe numa nao pode matar a outra (politica tudo-ou-nada apagava
+  // ordens validas junto com a invalida). Extrai cada array [..] balanceado pelo
+  // nome do campo e parseia cada um por si. Devolve null no que nao se salvou.
+  function extrairArrayDoCampo(texto, campo) {
+    if (typeof texto !== "string") return null;
+    const m = new RegExp('"' + campo + '"\\s*:\\s*\\[').exec(texto);
+    if (!m) return null;
+    const ini = m.index + m[0].length - 1; // aponta para o '['
+    let prof = 0, emString = false, escape = false;
+    for (let i = ini; i < texto.length; i++) {
+      const ch = texto[i];
+      if (emString) {
+        if (escape) escape = false;
+        else if (ch === "\\") escape = true;
+        else if (ch === '"') emString = false;
+        continue;
+      }
+      if (ch === '"') emString = true;
+      else if (ch === "[") prof++;
+      else if (ch === "]") { prof--; if (prof === 0) {
+        try { const arr = JSON.parse(texto.slice(ini, i + 1)); return Array.isArray(arr) ? arr : null; }
+        catch (e) { return null; }
+      } }
+    }
+    return null;
+  }
+  function extrairStringDoCampo(texto, campo) {
+    if (typeof texto !== "string") return null;
+    const m = new RegExp('"' + campo + '"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"').exec(texto);
+    if (!m) return null;
+    try { return JSON.parse('"' + m[1] + '"'); } catch (e) { return null; }
+  }
+
   // parsearOrdem(textoCru) -> { ok, ordem, erro, bloco, normalizacoes }.
   // SEM RETRY (decisao de design: medir a taxa CRUA de falha do qwen).
   // Qualquer falha -> ORDEM VAZIA (o Rei "passa" o turno) + erro p/ o log.
@@ -1803,17 +2680,59 @@
   function parsearOrdem(textoCru) {
     const vazia = { construir: [], envios: [] };
     const bloco = extrairBlocoJSON(textoCru);
-    if (bloco == null) return { ok: false, ordem: vazia, erro: "nenhum bloco {...} na resposta", bloco: null, normalizacoes: [] };
-    let obj;
-    try { obj = JSON.parse(bloco); }
-    catch (e) { return { ok: false, ordem: vazia, erro: "JSON invalido: " + e.message, bloco, normalizacoes: [] }; }
-    if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
-      return { ok: false, ordem: vazia, erro: "JSON nao e um objeto", bloco, normalizacoes: [] };
+    let obj = null, erroBase = null, salvamento = false;
+    if (bloco == null) {
+      erroBase = diagnosticarBloco(textoCru); // F6: a causa real, nao "nenhum bloco"
+    } else {
+      try { obj = JSON.parse(bloco); }
+      catch (e) { erroBase = "JSON invalido: " + e.message; }
+      if (obj && (typeof obj !== "object" || Array.isArray(obj))) {
+        return { ok: false, ordem: vazia, erro: "JSON nao e um objeto", bloco, normalizacoes: [] };
+      }
     }
-    const construir = Array.isArray(obj.construir) ? obj.construir : [];
+    // F6: SALVAMENTO PARCIAL. Se o objeto inteiro nao parseia, tenta cada campo
+    // por si — construir e envios sao independentes, e um '}' perdido num nao
+    // pode apagar o outro (T10 do Nemotron, 17/08: perdeu 2 construcoes validas
+    // junto com 1 envio quebrado). ok fica FALSE (a resposta FOI invalida — a
+    // metrica nao mente), mas as ordens recuperaveis executam.
+    if (!obj && erroBase) {
+      const c = extrairArrayDoCampo(textoCru, "construir");
+      const e = extrairArrayDoCampo(textoCru, "envios") || extrairArrayDoCampo(textoCru, "ataques");
+      if (c || e) {
+        obj = {
+          construir: c || [], envios: e || [],
+          plano: extrairStringDoCampo(textoCru, "plano"),
+          depoimento: extrairStringDoCampo(textoCru, "depoimento"),
+        };
+        salvamento = true;
+      }
+    }
+    if (!obj) return { ok: false, ordem: vazia, erro: erroBase, bloco, normalizacoes: [] };
+    const construirCru = Array.isArray(obj.construir) ? obj.construir : [];
     const envios = Array.isArray(obj.envios) ? obj.envios
       : Array.isArray(obj.ataques) ? obj.ataques : []; // aceita nome antigo
     const normalizacoes = [];
+    if (salvamento) {
+      normalizacoes.push(`salvamento parcial (${erroBase}): construir ${construirCru.length} item(ns), envios ${envios.length} item(ns) recuperados`);
+    }
+    // P4 (F6): campo `quantidade` no construir — {"aldeiaId":12,"tipo":"lanceiro",
+    // "quantidade":8} vale por 8 ordens de 1. Mata a classe de falha do T7 do
+    // Nemotron (loop de 44 objetos identicos ate os 32k tokens) e corta o custo
+    // de resposta. Expande AQUI (choke point unico): motor, diagnostico e log
+    // continuam a ver ordens unitarias, nada muda rio abaixo. Aceita tambem o
+    // alias "count". Sem o campo, vale 1 (compativel com todo o historico).
+    const construir = [];
+    for (const c of construirCru) {
+      if (!c || typeof c !== "object") { construir.push(c); continue; }
+      const qCru = (c.quantidade != null) ? c.quantidade : c.count;
+      let q = Math.floor(Number(qCru));
+      if (qCru == null || !isFinite(q)) q = 1;
+      if (q < 1) q = 1;
+      const teto = 300; // teto de sanidade (= limite_tropas_aldeia); o motor corta pelo recurso de qualquer forma
+      if (q > teto) { normalizacoes.push(`construir [${c.aldeiaId}]: quantidade ${q} limitada a ${teto}`); q = teto; }
+      if (q > 1) normalizacoes.push(`construir [${c.aldeiaId}]: quantidade ${q} expandida em ${q} ordens de 1`);
+      for (let i = 0; i < q; i++) construir.push({ aldeiaId: c.aldeiaId, tipo: c.tipo });
+    }
     for (const c of construir) {
       if (!c || typeof c !== "object" || typeof c.tipo !== "string") continue;
       const n = normalizarTipo(c.tipo);
@@ -1832,7 +2751,31 @@
         delete e.tropas[k];
       }
     }
-    return { ok: true, ordem: { construir, envios }, erro: null, bloco, normalizacoes };
+    // v5: os dois resumos saem do MESMO objeto, mas NAO entram na `ordem` —
+    // o motor nao os executa. Texto solto e limitado a 600 chars para um modelo
+    // verborragico nao inchar o prompt do turno seguinte sem limite.
+    const txt = (v) => {
+      if (typeof v !== "string") return null;
+      const t = v.trim();
+      return t ? t.slice(0, 600) : null;
+    };
+    return {
+      // salvamento: ok=false (a resposta FOI invalida; a metrica de formato nao
+      // mente) mas a ordem recuperada executa e o erro diz a causa real.
+      ok: !salvamento, ordem: { construir, envios }, erro: salvamento ? erroBase : null,
+      bloco, normalizacoes,
+      plano: txt(obj.plano), depoimento: txt(obj.depoimento),
+    };
+  }
+
+  // Guarda a nota do Rei para o proximo turno. Chamada pelo caller (browser ou
+  // runner) depois de parsear a resposta — o motor nao fala com a API, entao
+  // nao pode buscar isto sozinho. `null`/vazio limpa (o Rei nao deixou nota).
+  function guardarPlano(estado, dono, plano) {
+    if (!estado) return;
+    if (!estado.planosAnteriores) estado.planosAnteriores = { A: null, B: null };
+    const t = (typeof plano === "string") ? plano.trim() : "";
+    estado.planosAnteriores[dono] = t ? t.slice(0, 600) : null;
   }
 
   // diagnosticarOrdem(estado, dono, ordem) -> { aceitoConstruir, aceitoEnvios,
@@ -2133,11 +3076,32 @@
 
   // (6) DECISAO: cada jogador vivo monta visao, decide e executa.
   function decidirEExecutar(estado, decisores) {
+    // LOTE E, E1 — ordens simultaneas (achado A1). Com a flag ligada, as DUAS
+    // ordens saem da MESMA fotografia do estado (ninguem executou ainda) e so
+    // depois se executam em sequencia A->B. Isso tira do Rei B a visao dos envios
+    // que A ordenou NESTE turno (no caminho antigo, executarOrdem(A) empurrava os
+    // movimentos de A antes de montarVisao(B), e montarVisao inclui `transito`).
+    // Seguranca: a execucao segue sequencial e determinista — executarOrdem(A) so
+    // muta aldeias/movimentos de A e rejeicoesAnteriores[A]; diagnosticarOrdem(B)
+    // le apenas aldeias/estoque/teto de B (verificado). Conquista acontece no tick,
+    // nao aqui, entao A nunca remove um destino que B referencie.
+    if (estado.config.ordensSimultaneas === false) {
+      // caminho antigo (decide-e-executa em sequencia), INALTERADO / byte a byte.
+      for (const dono of ["A", "B"]) {
+        if (!aldeiasDe(estado, dono).length) continue; // morto nao decide
+        const decisor = (decisores && decisores[dono]) || jogadorBurro;
+        executarOrdem(estado, dono, decisor(montarVisao(estado, dono)));
+      }
+      return;
+    }
+    const vivos = [], ordens = {};
     for (const dono of ["A", "B"]) {
       if (!aldeiasDe(estado, dono).length) continue; // morto nao decide
       const decisor = (decisores && decisores[dono]) || jogadorBurro;
-      executarOrdem(estado, dono, decisor(montarVisao(estado, dono)));
+      ordens[dono] = decisor(montarVisao(estado, dono)); // ninguem executou ainda
+      vivos.push(dono);
     }
+    for (const dono of vivos) executarOrdem(estado, dono, ordens[dono]);
   }
 
   // jogador vivo = possui >=1 aldeia. Regra literal da spec: perdeu a ULTIMA
@@ -2146,8 +3110,16 @@
     return aldeiasDe(estado, dono).length > 0;
   }
 
-  // (7) VITORIA por eliminacao. null = partida continua.
+  // (7) VITORIA por dominancia (v4) OU eliminacao. null = partida continua.
   function checarVitoria(estado) {
+    // v4: >=vitoriaFracao das aldeias por vitoriaTurnos consecutivos. Leitura
+    // pura de estado.dominancia (o contador vive no tick). Ambos nunca passam
+    // o limiar juntos (2x75% > 100%), entao no maximo um vence aqui.
+    if (estado.config.vitoriaPorDominancia && estado.dominancia) {
+      const need = estado.config.vitoriaTurnos || 2;
+      if (estado.dominancia.A >= need) return "A";
+      if (estado.dominancia.B >= need) return "B";
+    }
     const aVivo = jogadorVivo(estado, "A"), bVivo = jogadorVivo(estado, "B");
     if (aVivo && bVivo) return null;
     if (aVivo) return "A";
@@ -2198,9 +3170,22 @@
       }
       if (vencedor) break;
     }
+    // Motivo do fim, ANTES de qualquer desempate de teto.
+    const needVit = ((config || CONFIG).vitoriaTurnos) || 2;
+    let motivo;
+    if (vencedor === "empate") motivo = "empate";
+    else if (vencedor) motivo = (estado.dominancia && estado.dominancia[vencedor] >= needVit) ? "dominancia" : "eliminacao";
+    else motivo = "limite";
+    // v4: bateu o teto sem vitoria -> desempata por numero de aldeias, para a
+    // partida SEMPRE sair com um vencedor. Regras antigas: mantem "limite".
+    if (!vencedor && (config || CONFIG).vitoriaPorDominancia) {
+      const na = aldeiasDe(estado, "A").length, nb = aldeiasDe(estado, "B").length;
+      vencedor = na > nb ? "A" : nb > na ? "B" : "empate";
+      motivo = vencedor === "empate" ? "empate" : "limite_aldeias";
+    }
     return {
       vencedor: vencedor || "limite",
-      motivo: vencedor ? (vencedor === "empate" ? "empate" : "eliminacao") : "limite",
+      motivo,
       turnos: estado.turno,
       aldeiasA: aldeiasDe(estado, "A").length,
       aldeiasB: aldeiasDe(estado, "B").length,
@@ -2296,6 +3281,7 @@
 
   return {
     CONFIG,
+    CONFIG_V3_ARQUIVO,
     relatorioDesfecho,
     criarRng, rngInt,
     criarAldeia,
@@ -2357,6 +3343,13 @@
     exemploAncorado,
     extrairBlocoJSON,
     parsearOrdem,
+    // P4 (17/08): fog of war + prompt ingles + parser tolerante
+    visiveisPara,
+    registrarAvistamentos,
+    relatorioTextoP4,
+    montarPromptP4,
+    diagnosticarBloco,
+    guardarPlano,
     diagnosticarOrdem,
     assinaturasRejeitadas,
     clampearEnvios,

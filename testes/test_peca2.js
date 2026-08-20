@@ -11,9 +11,14 @@
 //      (lanceiro/arqueiro = 1 turno, cavaleiro = 2 turnos)
 //    - o custo e debitado ao enfileirar; sem recurso, nao constroi
 // ============================================================
+// 17/08: este ficheiro fixa numeros calculados A MAO sob o ruleset que hoje
+// se chama CONFIG_V3_ARQUIVO. O que ele testa e a FORMULA (combate, rota,
+// minimo), nao o balanceamento — entao continua a correr contra o arquivo,
+// que e imutavel. Os mesmos invariantes sob o ruleset VIVO estao em
+// testes/test_ruleset_vivo.js.
 "use strict";
 const Engine = require("../engine.js");
-const CONFIG = Engine.CONFIG;
+const CONFIG = Engine.CONFIG_V3_ARQUIVO;
 
 let falhas = 0;
 function checa(nome, cond, detalhe) {

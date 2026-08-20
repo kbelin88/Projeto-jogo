@@ -6,13 +6,27 @@
 //  Contexto (partida 3B vs 3B de 03/07): llama escreveu "arqueiros"
 //  (plural) e perdeu a jogada por UMA letra. Decisao de design:
 //  NORMALIZAR com registro — Degrau 0->1 apenas (plural/caixa/acento/
-//  espaco). Traducao ("archer") e tipo inventado sao ERRO REAL e ficam
-//  intactos, para o eval continuar contando o desvio.
+//  espaco). Tipo inventado e ERRO REAL e fica intacto, para o eval
+//  continuar contando o desvio.
+//
+//  MUDANCA DE CONTRATO (17/08, P4) — ler antes de estranhar o teste:
+//  ate hoje "archer" era classificado como ERRO REAL ("traducao"), e o
+//  parser deixava-o cru de proposito. Isso fazia sentido quando o prompt
+//  era em PORTUGUES: escrever ingles era desvio do protocolo apresentado.
+//  O prompt do jogo agora e o P4, em INGLES — um modelo que le "archer
+//  counters spearman" e responde "archer" nao esta a desviar, esta a ser
+//  coerente com o que leu. Manter a punicao seria medir a nossa propria
+//  troca de idioma como erro do modelo.
+//  Agora: os nomes ingleses (spearman/archer/knight e variantes) sao
+//  SINONIMOS normalizados COM REGISTRO em `normalizacoes` — o desvio
+//  continua medido, deixa e de custar a jogada. Tipo inventado
+//  ("dragao", "catapulta") continua cru, como sempre.
 //
 //  Regras testadas:
 //  1. parsearOrdem normaliza `tipo` em construir e as CHAVES de
 //     `tropas` em envios; devolve `normalizacoes: []` (sempre array).
-//  2. Fora do escopo fica cru ("archer" nao vira "arqueiro").
+//  2. Fora do escopo fica cru (tipo inventado nao vira nada).
+//  2b. (P4) nome ingles vira o canonico PT, COM registro.
 //  3. diagnosticarOrdem para de MENTIR no envio: chave desconhecida
 //     que zera o envio e nomeada na rejeicao (hoje diz so "zero
 //     tropas" — feedback que nao descreve o erro alimenta o loop de
@@ -53,9 +67,23 @@ r = Engine.parsearOrdem('{"construir":[{"aldeiaId":1,"tipo":"arqueiro"}],"envios
 checa("tipo ja canonico: intocado e SEM registro", r.ordem.construir[0].tipo === "arqueiro" &&
   r.normalizacoes.length === 0, JSON.stringify(r.normalizacoes));
 
+// P4: 'archer' agora e SINONIMO (o prompt do jogo e em ingles), normalizado COM
+// registro — o desvio continua medido, mas nao custa mais a jogada.
 r = Engine.parsearOrdem('{"construir":[{"aldeiaId":1,"tipo":"archer"}],"envios":[]}');
-checa("'archer' (traducao = erro REAL) fica CRU, sem registro",
-  r.ordem.construir[0].tipo === "archer" && r.normalizacoes.length === 0,
+checa("(P4) 'archer' -> 'arqueiro' COM registro (prompt do jogo e ingles)",
+  r.ordem.construir[0].tipo === "arqueiro" && r.normalizacoes.length === 1,
+  JSON.stringify(r.ordem.construir[0]) + " " + JSON.stringify(r.normalizacoes));
+
+for (const [en, pt] of [["spearman", "lanceiro"], ["knights", "cavaleiro"], ["cavalry", "cavaleiro"], ["bowmen", "arqueiro"]]) {
+  const rr = Engine.parsearOrdem('{"construir":[{"aldeiaId":1,"tipo":"' + en + '"}],"envios":[]}');
+  checa(`(P4) '${en}' -> '${pt}' COM registro`,
+    rr.ordem.construir[0].tipo === pt && rr.normalizacoes.length === 1, rr.ordem.construir[0].tipo);
+}
+
+// tipo INVENTADO continua cru: a fronteira da tolerancia nao se mexeu.
+r = Engine.parsearOrdem('{"construir":[{"aldeiaId":1,"tipo":"dragao"}],"envios":[]}');
+checa("tipo inventado ('dragao') fica CRU, sem registro (erro REAL preservado)",
+  r.ordem.construir[0].tipo === "dragao" && r.normalizacoes.length === 0,
   JSON.stringify(r.ordem.construir[0]));
 
 r = Engine.parsearOrdem('{"construir":[{"aldeiaId":1}],"envios":[]}');
@@ -79,9 +107,18 @@ r = Engine.parsearOrdem('{"construir":[],"envios":[{"origemId":1,"destinoId":2,"
 checa("chave 'Lanceiro' (caixa) -> 'lanceiro'", r.ordem.envios[0].tropas.lanceiro === 4,
   JSON.stringify(r.ordem.envios[0].tropas));
 
+// P4: a chave inglesa segue a MESMA regra do `tipo` (um choke point, uma regra).
 r = Engine.parsearOrdem('{"construir":[],"envios":[{"origemId":1,"destinoId":2,"tropas":{"archer":5}}]}');
-checa("chave 'archer' fica CRUA (erro real preservado p/ o diagnostico nomear)",
-  r.ordem.envios[0].tropas.archer === 5, JSON.stringify(r.ordem.envios[0].tropas));
+checa("(P4) chave 'archer' -> 'arqueiro' COM registro, valor preservado",
+  r.ordem.envios[0].tropas.arqueiro === 5 && r.ordem.envios[0].tropas.archer === undefined &&
+  r.normalizacoes.length === 1, JSON.stringify(r.ordem.envios[0].tropas));
+
+// chave INVENTADA continua crua — e e o (C) abaixo que prova que o diagnostico
+// a nomeia em vez de dizer "zero tropas".
+r = Engine.parsearOrdem('{"construir":[],"envios":[{"origemId":1,"destinoId":2,"tropas":{"catapulta":5}}]}');
+checa("chave inventada ('catapulta') fica CRUA, sem registro",
+  r.ordem.envios[0].tropas.catapulta === 5 && r.normalizacoes.length === 0,
+  JSON.stringify(r.ordem.envios[0].tropas));
 
 // contrato: normalizacoes SEMPRE array, mesmo em falha de parse
 r = Engine.parsearOrdem("sem json nenhum aqui");

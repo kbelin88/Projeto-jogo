@@ -1,0 +1,129 @@
+{
+  "_nota": "O que foi MEDIDO em partida ou em sonda. Editado a mao a cada bateria; a tabela e regenerada a partir daqui (node ferramentas/tabela-modelos.js). Fontes: resultados/p4-bateria-0818/DIARIO.md, RELATORIO_BATERIA_P4_2026-08-18.md, RELATORIO_PRIMEIRO_P4_2026-08-17.md, RELATORIO_PARTIDA_2026-08-17_1303.md.",
+  "_nota_counter": "counterInimigo so foi separado por tipo de alvo na bateria de 17/08 (reconstrucao manual da posse). O analisar-log.js ainda reporta a taxa agregada, entao os numeros de 18/08 aparecem como 'agregado'.",
+  "_nota_latencia": "latenciaMediana das partidas de 18/08 saiu do proprio log (mediana dos campos '| ms N' por lado), nao da sonda. A sonda de 1 turno provou nao prever latencia nem estabilidade.",
+
+  "nvidia/nemotron-3.5-lightning:free": {
+    "estado": "TESTADO",
+    "partidas": 9, "vitorias": 3,
+    "atqUnidade": "1.08–1.82 (mediano 1.54)",
+    "counterInimigo": "0.18–0.61 (17/08)",
+    "latenciaMediana": "128–196 s (máx 600 s)",
+    "formato": "ok, mas corta: 9 respostas por `length` e 4 `error` nas 60 chamadas de P4",
+    "nota": "régua da bateria (9 lados em 4 baterias); tende a lanceiro e perde por isso — **exceto no espelho de 18/08**, onde o lado com 94% de lanceiro venceu 16×8. Derrubou P1 no t7 por erro de rede e horas depois fez 29/30 e 30/30 turnos válidos em P3/P4"
+  },
+  "nvidia/nemotron-3-super-120b-a12b:free": {
+    "estado": "TESTADO",
+    "partidas": 4, "vitorias": 2,
+    "atqUnidade": "1.68–2.65",
+    "counterInimigo": "0.29–0.50 (17/08); agregado 0.48 em 18/08",
+    "latenciaMediana": "~140–148 s (máx 1371 s)",
+    "formato": "ok (3 de 30 respostas cortadas por `length` em P2)",
+    "nota": "**a 1ª vitória por dominância do projeto** (T24, 17/08); venceu dos dois lados do A/B de assento. Em 18/08 perdeu 8×16 para o Ultra 550B com o atq/unid mais baixo que já fez (1.68, 62% de lanceiro)"
+  },
+  "nvidia/nemotron-3-ultra-550b-a55b:free": {
+    "estado": "TESTADO",
+    "partidas": 3, "vitorias": 2,
+    "atqUnidade": "2.46–2.63",
+    "counterInimigo": "0.33 (17/08); agregado 0.66 em 18/08",
+    "latenciaMediana": "324 s em P2 (167–500 s em 17/08)",
+    "formato": "ok (1 `error` em 28 chamadas)",
+    "nota": "venceu o Super 120B **16×8** em 30 turnos (4h14) construindo 3% de lanceiro contra 62% do adversário. Forte e caríssimo em relógio"
+  },
+  "nvidia/nemotron-nano-12b-v2-vl:free": {
+    "estado": "TESTADO",
+    "partidas": 1, "vitorias": 0,
+    "atqUnidade": "3.29 (o maior já medido)",
+    "counterInimigo": "agregado 0.29",
+    "latenciaMediana": "**7 s** em partida — o mais rápido do catálogo por uma ordem de grandeza",
+    "formato": "instável: só 19/30 turnos com resposta registrada, 11 delas com `construir: []`, 18 rejeições",
+    "nota": "a sonda de 1 turno deu 5.6 s e ele parecia o candidato ideal; em partida perdeu 6×16 para o Lightning. Constrói pouco (58 unidades contra 132) e é o 1º caso de atq/unid alto **perdendo**"
+  },
+  "poolside/laguna-s-2.1:free": {
+    "estado": "TESTADO (interrompida no t7)",
+    "partidas": 1, "vitorias": 0,
+    "atqUnidade": "1.28 (7 turnos)",
+    "counterInimigo": "agregado 0.57 (7 turnos)",
+    "latenciaMediana": "181 s em partida (máx 804 s) — a sonda tinha dado 5 s",
+    "formato": "degenera: 3 de 7 respostas cortadas por `length`, com repetição literal da mesma frase; 3 turnos com `construir: []`",
+    "nota": "P1 de 18/08 caiu no t7 por erro de rede do **adversário**, mas o pouco que jogou já mostra o degrau 0 (formato) falhando. É o caso que provou que a sonda de 1 turno não prevê latência nem estabilidade"
+  },
+
+  "cohere/north-mini-code:free": {
+    "estado": "SONDADO — LENTO DEMAIS",
+    "partidas": 0, "vitorias": 0,
+    "latenciaMediana": "353 s (1 turno)",
+    "formato": "ok — JSON válido, 2 lanceiros, raciocínio 9229 tok",
+    "nota": "acima do teto de 300 s da spec: 30 turnos custariam ~6 h só do lado dele. Não usar em partida longa"
+  },
+  "dots-studio/dots-3-note-preview:free": {
+    "estado": "SONDADO — OK",
+    "partidas": 0, "vitorias": 0,
+    "latenciaMediana": "35 s (1 turno)",
+    "formato": "ok — raciocínio 2620 tok",
+    "nota": "maior teto de saída do catálogo (512k). Candidato a partida, ainda sem nenhuma"
+  },
+  "google/gemma-4-26b-a4b-it:free": {
+    "estado": "SONDADO — OK (no retry)",
+    "partidas": 0, "vitorias": 0,
+    "latenciaMediana": "32 s (1 turno)",
+    "formato": "ok — raciocínio 0 tok (não pensou)",
+    "nota": "429 na 1ª sonda (pool compartilhado Google AI Studio → fallback Darkbloom, também 429); passou 10 min depois. Instabilidade de provedor, não de modelo"
+  },
+  "google/gemma-4-31b-it:free": {
+    "estado": "BANIDO (18/08)",
+    "partidas": 0, "vitorias": 0,
+    "latenciaMediana": "—",
+    "formato": "não chegou a responder",
+    "nota": "429 em duas sondas seguidas com 10 min de intervalo, mesmo provedor (Google AI Studio, `upstream_provider_shared_pool`). Vale **uma** re-sonda noutro dia antes de gastar mais cota"
+  },
+  "poolside/laguna-xs-2.1:free": {
+    "estado": "SONDADO — RESPONDE MAS NÃO JOGA",
+    "partidas": 0, "vitorias": 0,
+    "latenciaMediana": "1200 s (20 min, 1 turno)",
+    "formato": "`finish: error`, `construir: []`, **sem** erro de rede",
+    "nota": "gastou os 12401 tokens de resposta inteiros no raciocínio e nunca fechou o JSON. Achado do dia: dá para falhar sem erro nenhum. Não gaste partida"
+  },
+  "nvidia/nemotron-3-nano-30b-a3b:free": {
+    "estado": "SONDADO — OK",
+    "partidas": 0, "vitorias": 0,
+    "latenciaMediana": "24 s (1 turno)",
+    "formato": "ok — raciocínio 5071 tok",
+    "nota": "nano da família que domina a tabela; candidato natural a partida"
+  },
+  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free": {
+    "estado": "SONDADO — OK",
+    "partidas": 0, "vitorias": 0,
+    "latenciaMediana": "47 s (1 turno)",
+    "formato": "ok — raciocínio 8059 tok",
+    "nota": "raciocínio ligado por padrão; ainda sem partida"
+  },
+  "nvidia/nemotron-nano-9b-v2:free": {
+    "estado": "SONDADO — OK",
+    "partidas": 0, "vitorias": 0,
+    "latenciaMediana": "63 s (1 turno)",
+    "formato": "ok — raciocínio 1445 tok",
+    "nota": "o menor apto; construiu 5 lanceiros + 2 arqueiros na sonda. Candidato a baseline fraco"
+  },
+
+  "openai/gpt-oss-20b:free": {
+    "estado": "TESTADO",
+    "partidas": 1, "vitorias": 0,
+    "atqUnidade": "1.07",
+    "counterInimigo": "0.00 (1 duelo)",
+    "latenciaMediana": "~1200 s (até 45 min/turno)",
+    "formato": "ok, mas clamp 0.27 e 8 rejeições",
+    "nota": "falha o degrau 2/3: razão atq/def mediana **0.64** — ataca com menos força que a defesa"
+  },
+  "z-ai/glm-5.2:free": {
+    "estado": "BANIDO",
+    "partidas": 2, "vitorias": 0,
+    "atqUnidade": "?", "counterInimigo": "?",
+    "latenciaMediana": "~6 s",
+    "formato": "nunca completou uma partida",
+    "nota": "3× HTTP 429 de pool compartilhado (Decart) em 8 chamadas; saiu do catálogo free"
+  },
+  "deepseek/deepseek-v4-flash:free": { "estado": "MORTO", "nota": "404 'unavailable for free' em 18/08, <24 h depois de verificado" },
+  "minimax/minimax-m3:free": { "estado": "MORTO", "nota": "404 'unavailable for free' em 18/08" },
+  "liquid/lfm-2.5-2.6b:free": { "estado": "MORTO", "nota": "404 'no endpoints found' em 18/08" }
+}

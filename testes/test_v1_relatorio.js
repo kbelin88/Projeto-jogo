@@ -56,7 +56,7 @@ const estado = {
 };
 
 const visao = Engine.montarVisao(estado, "A");
-const rel = Engine.relatorioTexto(visao);
+const rel = Engine.relatorioTexto(visao, { promptP4: false }); // P4: este ficheiro guarda o relatorio LEGADO (PT)
 
 console.log("============ RELATORIO (cenario sintetico, visao do Rei A) ============");
 console.log(rel);
@@ -75,7 +75,7 @@ console.log("Conferencias da Parte B:");
 const secoes = ["SUAS ALDEIAS", "ALDEIAS NEUTRAS", "INIMIGO", "EXERCITOS EM TRANSITO", "O QUE ACONTECEU NO ULTIMO TURNO"];
 checa("todas as 5 secoes presentes", secoes.every((s) => rel.includes("=== " + s)), secoes.filter((s) => !rel.includes("=== " + s)).join(",") || "ok");
 checa("relatorio NAO fala 'forca' (so tropas)", !/forca/i.test(rel), (rel.match(/forca/i) || []).join());
-checa("distancia em TURNOS DE MARCHA", rel.includes("turnos de marcha"));
+checa("distancia em marcha por velocidade", /\d+ lenta \/ \d+ media \/ \d+ rapida/.test(rel));
 checa('sem a palavra "estimado"', !/estimad/i.test(rel));
 checa("sem coordenadas (x,y) entre parenteses", !/\(\s*\d+\s*,\s*\d+\s*\)/.test(rel));
 checa('sem veredito "vence/vencer"', !/vence|vencer/i.test(rel));
@@ -95,7 +95,7 @@ checa("neutras aparecem ordenadas por distancia (mais proxima primeiro)",
 console.log("\n--- Relatorio de uma partida real (burro-vs-burro), turno 6, visao de A ---");
 const g = Engine.criarEstadoInicial(CONFIG);
 for (let i = 0; i < 6; i++) Engine.rodarTurno(g, null);
-console.log(Engine.relatorioTexto(Engine.montarVisao(g, "A")));
+console.log(Engine.relatorioTexto(Engine.montarVisao(g, "A"), { promptP4: false }));
 
 console.log("");
 console.log(falhas === 0 ? "RESULTADO: TODOS OS TESTES PASSARAM ✔" : `RESULTADO: ${falhas} FALHA(S) ✘`);

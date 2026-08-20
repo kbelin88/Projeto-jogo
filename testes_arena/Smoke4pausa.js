@@ -51,7 +51,9 @@ global.localStorage = global.window.localStorage;
 global.requestAnimationFrame = noop;
 global.alert = (m) => { global.__alerta = String(m); console.log("[alert]", String(m).slice(0, 70)); };
 global.URL = { createObjectURL: () => "blob:x", revokeObjectURL: noop };
-global.Blob = class { constructor(parts) { global.__blob = parts.join(""); } };
+// captura SO o blob de texto (.txt do log). O replay .json (auto-baixado no fim
+// da partida) NAO sobrescreve — senao __blob viraria o replay e o teste do .txt falha.
+global.Blob = class { constructor(parts, opts) { const s = parts.join(""); if (!opts || !/json/.test(opts.type || "")) global.__blob = s; } };
 
 // fetch fake: os dois constroem lanceiro na propria aldeia (jogo anda, log enche)
 global.fetch = (url, opts) => {

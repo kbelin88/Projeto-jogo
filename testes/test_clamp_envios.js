@@ -126,7 +126,7 @@ const t = (n, f) => { f(); ok++; console.log("  ok  " + n); };
   E.executarOrdem(est, "A", { construir: [], envios: [{ origemId: a.id, destinoId: d.id, tropas: { lanceiro: 4, arqueiro: 2 } }] });
   const prompt = E.montarPrompt(E.montarVisao(est, "A"));
   t("clamp visivel ao modelo: bloco 'ORDENS AJUSTADAS' no PROMPT", () => {
-    assert.ok(/=== SUAS ORDENS AJUSTADAS NO TURNO ANTERIOR ===/.test(prompt), "sem bloco de aviso no prompt");
+    assert.ok(/=== ORDERS OF YOURS ADJUSTED LAST TURN ===/.test(prompt), "sem bloco de aviso no prompt (P4)");
   });
   t("clamp visivel ao modelo: o corte concreto (pediu 4, enviado 1) no PROMPT", () => {
     assert.ok(/reduzida ao estoque real/.test(prompt), "sem texto de ajuste");

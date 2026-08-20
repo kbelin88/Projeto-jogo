@@ -82,6 +82,7 @@ function clienteOllama(opcoes) {
     // apos a chamada. null = backend nao reportou (nunca estimar em silencio).
     ultimosTokens: null,
     async gerar(prompt) {
+      const t0 = Date.now(); // LOTE E, E5
       const resp = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -90,7 +91,7 @@ function clienteOllama(opcoes) {
       if (!resp.ok) throw new Error(`Ollama HTTP ${resp.status}`);
       const data = await resp.json();
       this.ultimosTokens = (data.prompt_eval_count != null || data.eval_count != null)
-        ? { prompt: data.prompt_eval_count || 0, resposta: data.eval_count || 0 }
+        ? { prompt: data.prompt_eval_count || 0, resposta: data.eval_count || 0, ms: Date.now() - t0 } // LOTE E, E5
         : null;
       return separarThink(data.response || ""); // { texto, raciocinio }
     },
@@ -136,6 +137,7 @@ function clienteGemini(opcoes) {
     async gerar(prompt) {
       for (let tentativa = 1; ; tentativa++) {
         await respeitarPiso();
+        const t0 = Date.now(); // LOTE E, E5
         const resp = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
@@ -143,14 +145,14 @@ function clienteGemini(opcoes) {
             contents: [{ parts: [{ text: prompt }] }],
             // thinking sempre-ligado: pede os thought parts de volta (senao o
             // texto do raciocinio nunca chega — so o thoughtsTokenCount).
-            generationConfig: { temperature: temperatura, thinkingConfig: { includeThoughts: true } },
+            generationConfig: { temperature: temperatura, thinkingConfig: { includeThoughts: true }, maxOutputTokens: (opcoes.maxTokens != null ? opcoes.maxTokens : 32000) }, // LOTE C, E1
           }),
         });
         if (resp.ok) {
           const data = await resp.json();
           const um = data.usageMetadata;
           this.ultimosTokens = um
-            ? { prompt: um.promptTokenCount || 0, resposta: (um.candidatesTokenCount || 0) + (um.thoughtsTokenCount || 0) }
+            ? { prompt: um.promptTokenCount || 0, resposta: (um.candidatesTokenCount || 0) + (um.thoughtsTokenCount || 0), ms: Date.now() - t0 } // LOTE E, E5
             : null;
           const cand = data.candidates && data.candidates[0];
           const parts = (cand && cand.content && cand.content.parts) || [];
@@ -217,6 +219,7 @@ function clienteOpenRouter(opcoes) {
     async gerar(prompt) {
       for (let tentativa = 1; ; tentativa++) {
         await respeitarPiso();
+        const t0 = Date.now(); // LOTE E, E5
         const resp = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": "Bearer " + apiKey },
@@ -226,12 +229,16 @@ function clienteOpenRouter(opcoes) {
             temperature: temperatura,
             stream: false,
             reasoning: { enabled: true }, // thinking sempre-ligado
+            // LOTE C, E1: teto explicito e IGUAL p/ os dois lados. Nao e p/ cortar o
+            // raciocinio (32000 > max observado 27764), e p/ tornar o corte visivel.
+            max_tokens: (opcoes.maxTokens != null ? opcoes.maxTokens : 32000),
           }),
         });
         if (resp.ok) {
           const data = await resp.json();
           const u = data.usage;
-          this.ultimosTokens = u ? { prompt: u.prompt_tokens || 0, resposta: u.completion_tokens || 0 } : null;
+          const det = (u && u.completion_tokens_details) || {}; // LOTE C, E2
+          this.ultimosTokens = u ? { prompt: u.prompt_tokens || 0, resposta: u.completion_tokens || 0, raciocinio: det.reasoning_tokens || 0, ms: Date.now() - t0 } : null; // LOTE E, E5
           const ch = (data.choices && data.choices[0]) || {};
           this.ultimoFinish = ch.finish_reason || null; // A1
           const msg = ch.message || {};
@@ -290,7 +297,7 @@ function criarReiIA(cliente) {
 // prompt -> resposta crua -> ordem parseada -> aceito/rejeitado.
 async function decidirRei(estado, dono, cliente, opcoesPrompt) {
   const visao = Engine.montarVisao(estado, dono);
-  const prompt = Engine.montarPrompt(visao, opcoesPrompt); // H2: variante opcional
+  const prompt = Engine.montarPrompt(visao, opcoesPrompt || { rejeicaoNoFim: true }); // P4 (17/08): rejeicoes no fim por padrao, igual ao browser
   let cru = "", raciocinio = null, erroRede = null;
   try { const r = await cliente.gerar(prompt); cru = r.texto; raciocinio = r.raciocinio; }
   catch (e) { erroRede = e.message; }
@@ -353,7 +360,7 @@ function montarPromptValidador(visao, ordem) {
 async function decidirReiComposto(estado, dono, cliente, opcoesPrompt, composto) {
   const validador = (composto && composto.validador) || cliente;
   const visao = Engine.montarVisao(estado, dono);
-  const prompt = Engine.montarPrompt(visao, opcoesPrompt);
+  const prompt = Engine.montarPrompt(visao, opcoesPrompt || { rejeicaoNoFim: true }); // P4 (17/08): idem decidirRei
 
   let cru = "", raciocinio = null, erroRede = null;
   try { const r = await cliente.gerar(prompt); cru = r.texto; raciocinio = r.raciocinio; }

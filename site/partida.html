@@ -1,0 +1,306 @@
+<!doctype html><html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Kings Arena — partida</title>
+<meta name="description" content="Replay, log e análise de uma partida de LLM contra LLM na The Kings Arena.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="The Kings Arena">
+<meta property="og:title" content="The Kings Arena — replay de uma partida">
+<meta property="og:description" content="Dois modelos de linguagem comandam exércitos num mapa, constroem tropas e conquistam aldeias. 15 partidas medidas, com replay, log e o raciocínio de cada turno — tudo público.">
+<meta property="og:url" content="https://kbelin88.github.io/Projeto-jogo/site/">
+<meta property="og:image" content="https://kbelin88.github.io/Projeto-jogo/site/assets/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="The Kings Arena — LLMs jogam estratégia">
+<meta name="twitter:description" content="15 partidas de LLM contra LLM num jogo de estratégia. Replays, logs e o raciocínio dos modelos, tudo aberto.">
+<meta name="twitter:image" content="https://kbelin88.github.io/Projeto-jogo/site/assets/og.jpg">
+<meta name="theme-color" content="#12100c">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="estilo.css">
+<link rel="icon" href="assets/simbolo.png">
+</head><body>
+<div id="cab"></div>
+<div class="wrap" style="padding-top:26px;padding-bottom:60px">
+  <a href="index.html#partidas" class="mini" data-t="p_voltar"></a>
+  <h1 id="titulo" style="font-size:24px;margin:10px 0 4px;letter-spacing:-.01em"></h1>
+  <p class="mini" id="subtitulo" style="margin:0 0 18px"></p>
+
+  <div class="abas">
+    <button data-aba="replay" class="on" data-t="aba_replay"></button>
+    <button data-aba="log" data-t="aba_log"></button>
+    <button data-aba="analise" data-t="aba_analise"></button>
+  </div>
+
+  <div class="painel on" id="pan-replay">
+    <div class="grid2">
+      <div>
+        <div class="mapa-wrap"><svg id="mapa" viewBox="130 144 1429 886" preserveAspectRatio="xMidYMid meet"></svg></div>
+        <div class="ctrl">
+          <button id="b-ini" data-t="ctrl_ini"></button>
+          <button id="b-play"></button>
+          <button id="b-fim" data-t="ctrl_fim"></button>
+          <input type="range" id="slider" min="1" value="1">
+          <span class="turno-n" id="rot-turno"></span>
+        </div>
+        <div class="legenda">
+          <span><i style="background:var(--A)"></i><span data-t="leg_A"></span></span>
+          <span><i style="background:var(--B)"></i><span data-t="leg_B"></span></span>
+          <span><i style="background:var(--neu)"></i><span data-t="leg_neu"></span></span>
+          <span><i style="background:transparent;border:2px solid var(--ouro)"></i><span data-t="leg_cap"></span></span>
+        </div>
+      </div>
+      <div>
+        <div class="lados">
+          <div class="lado A"><h4 id="nomeA"></h4>
+            <div class="n"><span id="aldA"></span> <span class="mini" data-t="lbl_aldeias"></span></div>
+            <div class="comp" id="compA"></div>
+            <div class="mini" id="trA"></div></div>
+          <div class="lado B"><h4 id="nomeB"></h4>
+            <div class="n"><span id="aldB"></span> <span class="mini" data-t="lbl_aldeias"></span></div>
+            <div class="comp" id="compB"></div>
+            <div class="mini" id="trB"></div></div>
+        </div>
+        <h5 style="margin:18px 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt3)" data-t="lbl_eventos"></h5>
+        <div id="eventos" style="min-height:80px"></div>
+        <h5 style="margin:18px 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt3)"><span data-t="lbl_dep"></span> <span class="pill A">A</span></h5>
+        <div class="dep" id="depA"></div>
+        <h5 style="margin:14px 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt3)"><span data-t="lbl_dep"></span> <span class="pill B">B</span></h5>
+        <div class="dep" id="depB"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="painel" id="pan-log"><div id="log-lista" class="mini" data-t="log_carregando"></div></div>
+  <div class="painel" id="pan-analise"><div id="analise-txt"></div></div>
+</div>
+<script src="arena.js"></script>
+<script src="analises.js"></script>
+<script>
+document.getElementById('cab').innerHTML = cabecalho('p');
+const PID = new URLSearchParams(location.search).get('p') || '0819-P2';
+const CORES = {A:'var(--A)',B:'var(--B)',null:'var(--neu)'};
+let MAPA=null, REP=null, LOG=null, RAC=null, PARTIDA=null, T=1, tocando=null;
+
+function el(tag,attrs){ const e=document.createElementNS('http://www.w3.org/2000/svg',tag);
+  for(const k in attrs) e.setAttribute(k,attrs[k]); return e; }
+
+function desenharBase(){
+  const svg=document.getElementById('mapa'); svg.innerHTML='';
+  const xs=MAPA.cidades.map(c=>c.x), ys=MAPA.cidades.map(c=>c.y), pd=78;
+  svg.setAttribute('viewBox', [Math.min(...xs)-pd, Math.min(...ys)-pd,
+     (Math.max(...xs)-Math.min(...xs))+pd*2, (Math.max(...ys)-Math.min(...ys))+pd*2].map(v=>v.toFixed(0)).join(' '));
+  const defs=el('defs'); defs.innerHTML=`<filter id="brilho"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;
+  svg.appendChild(defs);
+  // ARTE DO MAPA por baixo. O encaixe vem do index.html do jogo: a imagem e
+  // desenhada em COVER ancorado no topo do viewBox (ox 130, oy 144, larg 1429),
+  // escala uniforme -> altura = 1429 * naturalH/naturalW = 1016.2. Mesmo
+  // sistema de coordenadas das aldeias, entao alinha ao pixel.
+  const arte=el('image',{x:130,y:144,width:1429,height:1016.2,preserveAspectRatio:'none',opacity:.88});
+  arte.setAttributeNS('http://www.w3.org/1999/xlink','href','assets/mapa_arte.jpg');
+  arte.setAttribute('href','assets/mapa_arte.jpg');
+  svg.appendChild(arte);
+  const veu=el('rect',{x:-2000,y:-2000,width:6000,height:6000,fill:'#12100c','fill-opacity':.20});
+  svg.appendChild(veu);
+  const gEst=el('g',{id:'g-est'}); svg.appendChild(gEst);
+  MAPA.estradas.forEach(e=>{
+    const a=MAPA.cidades[e.a], b=MAPA.cidades[e.b];
+    const pts = e.via ? [[a.x,a.y]].concat(e.via).concat([[b.x,b.y]]) : [[a.x,a.y],[b.x,b.y]];
+    const d = 'M'+pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' L');
+    gEst.appendChild(el('path',{d:d,fill:'none',stroke:'#e9dfc6',
+      'stroke-opacity':.42,
+      'stroke-width': e.terreno==='serra'?2.6:2, 'stroke-linecap':'round',
+      'stroke-dasharray': e.terreno==='serra'?'9 6':''}));
+  });
+  svg.appendChild(el('g',{id:'g-ald'}));
+  svg.appendChild(el('g',{id:'g-mov'}));
+  svg.appendChild(el('g',{id:'g-evt'}));
+}
+function pontoNoCaminho(caminho,frac){
+  if(!caminho||caminho.length<2) return null;
+  const pts=caminho.map(id=>MAPA.cidades[id]).filter(Boolean);
+  if(pts.length<2) return null;
+  let tot=0,seg=[];
+  for(let i=1;i<pts.length;i++){const d=Math.hypot(pts[i].x-pts[i-1].x,pts[i].y-pts[i-1].y);seg.push(d);tot+=d;}
+  let alvo=tot*Math.max(0,Math.min(1,frac)), acc=0;
+  for(let i=0;i<seg.length;i++){
+    if(acc+seg[i]>=alvo||i===seg.length-1){
+      const f=seg[i]?(alvo-acc)/seg[i]:0;
+      return {x:pts[i].x+(pts[i+1].x-pts[i].x)*f, y:pts[i].y+(pts[i+1].y-pts[i].y)*f};
+    } acc+=seg[i];
+  } return null;
+}
+function pintarTurno(){
+  const f = REP.frames[T-1]; if(!f) return;
+  const gA=document.getElementById('g-ald'), gM=document.getElementById('g-mov'), gE=document.getElementById('g-evt');
+  gA.innerHTML=''; gM.innerHTML=''; gE.innerHTML='';
+  // exercitos em marcha
+  (f.m||[]).forEach(m=>{
+    const [dono,ori,dst,l,a,c,rest,tot,cam]=m;
+    let frac = tot? (tot-rest+0.55)/tot : 0.5; frac=Math.max(0.14,Math.min(0.86,frac));
+    const p = pontoNoCaminho(cam&&cam.length?cam:[ori,dst], frac); if(!p) return;
+    const n=l+a+c; const s=Math.min(13,6+Math.sqrt(n)*1.5);
+    gM.appendChild(el('rect',{x:p.x-s,y:p.y-s,width:s*2,height:s*2,rx:2,
+      transform:`rotate(45 ${p.x} ${p.y})`,
+      fill: dono==='A'?'#1d3d5c':'#5c2523', 'fill-opacity':.95,
+      stroke:dono==='A'?'var(--A)':'var(--B)','stroke-width':1.6,'stroke-dasharray':'3 2'}));
+    const tx=el('text',{x:p.x,y:p.y+4,'text-anchor':'middle','font-size':12,fill:'#fff','font-family':'monospace','font-weight':600}); tx.textContent=n; gM.appendChild(tx);
+  });
+  // aldeias
+  f.a.forEach(row=>{
+    const [id,dono,l,a,c,constr]=row; const cid=MAPA.cidades[id]; if(!cid) return;
+    const n=l+a+c; const r = 11 + Math.min(18,Math.sqrt(n)*2.0);
+    const cap = cid.papel==='capital';
+    gA.appendChild(el('circle',{cx:cid.x,cy:cid.y,r:r,fill:dono==='A'?'var(--A2)':(dono==='B'?'var(--B2)':'#2f2a24'),
+      'fill-opacity':.92, stroke: cap?'var(--ouro)':(dono?CORES[dono]:'#4a4239'),'stroke-width':cap?2.6:1.6}));
+    if(constr) gA.appendChild(el('circle',{cx:cid.x+r*0.75,cy:cid.y-r*0.75,r:3.4,fill:'var(--ouro)'}));
+    const tn=el('text',{x:cid.x,y:cid.y+4,'text-anchor':'middle','font-size':14,fill:'#f7efdd','font-family':'monospace','font-weight':600,
+      'paint-order':'stroke',stroke:'#12100c','stroke-width':2.6,'stroke-opacity':.7,'stroke-linejoin':'round'});
+    tn.textContent=n||''; gA.appendChild(tn);
+    const tl=el('text',{x:cid.x,y:cid.y+r+13,'text-anchor':'middle','font-size':14,fill: dono?'#f2e8d4':'#c3b291',
+      'paint-order':'stroke',stroke:'#12100c','stroke-width':3.2,'stroke-opacity':.85,'stroke-linejoin':'round'});
+    tl.textContent=cid.nome; gA.appendChild(tl);
+  });
+  // combates deste turno
+  (f.e||[]).filter(e=>e.tipo==='combate').forEach(e=>{
+    const cid=MAPA.cidades[e.alvoId]; if(!cid) return;
+    gE.appendChild(el('circle',{cx:cid.x,cy:cid.y,r:30,fill:'none',
+      stroke: e.conquista?'var(--ouro)':'#e0a35b','stroke-width':2.2,'stroke-opacity':.85,'stroke-dasharray':'5 5',filter:'url(#brilho)'}));
+  });
+  // painel
+  const som=(d,i)=>f.a.filter(r=>r[1]===d).reduce((s,r)=>s+r[i],0);
+  const cnt=d=>f.a.filter(r=>r[1]===d).length;
+  ['A','B'].forEach(d=>{
+    const l=som(d,2),a=som(d,3),c=som(d,4), tot=l+a+c;
+    document.getElementById('ald'+d).textContent=cnt(d);
+    const marchando=(f.m||[]).filter(m=>m[0]===d).reduce((s,m)=>s+m[3]+m[4]+m[5],0);
+    document.getElementById('tr'+d).innerHTML =
+      `${tot} ${t('lbl_tropas')} · ${l}L ${a}A ${c}C` + (marchando?` · <b>${marchando}</b> ${t('lbl_transito')}`:'');
+    const w=x=>tot?(x/tot*100).toFixed(1)+'%':'0%';
+    document.getElementById('comp'+d).innerHTML =
+      `<i style="width:${w(l)};background:#7c7060"></i><i style="width:${w(a)};background:#9c8a4e"></i><i style="width:${w(c)};background:${d==='A'?'var(--A)':'var(--B)'}"></i>`;
+  });
+  // eventos
+  const evs=(f.e||[]).filter(e=>e.tipo==='combate');
+  document.getElementById('eventos').innerHTML = evs.length? evs.map(e=>{
+    const conq = e.conquista;
+    const quem = e.atacante==='A'?'<span class="pill A">A</span>':'<span class="pill B">B</span>';
+    const res = e.vencedor==='atacante'? (conq?t('conquista'):t('venceu_atk')) : t('venceu_def');
+    return `<div class="evt ${conq?'conq':''}">${quem} → <b>${e.alvoNome}</b> · ${e.atkType||'—'} ${e.FatkEf!=null?e.FatkEf:e.Fatk} vs ${e.defType||(LANG==='pt'?'vazia':'empty')} ${e.FdefEf!=null?e.FdefEf:e.Fdef}` +
+      (e.vantagem===1?' <span style="color:var(--verde)">×1.5</span>':(e.vantagem===-1?' <span style="color:var(--B)">×0.67</span>':'')) +
+      ` — ${res}</div>`;
+  }).join('') : `<div class="mini">${t('lbl_semeventos')}</div>`;
+  // depoimentos
+  ['A','B'].forEach(d=>{
+    const b = LOG && LOG.turnos.find(x=>x.t===T && x.r===d);
+    const txt = b && b.dep ? b.dep : '';
+    document.getElementById('dep'+d).textContent = txt || t('lbl_semdep');
+    document.getElementById('dep'+d).style.opacity = txt?1:.5;
+  });
+  document.getElementById('rot-turno').textContent = (LANG==='pt'?'turno ':'turn ')+T+' / '+REP.frames.length;
+  document.getElementById('slider').value=T;
+}
+function irPara(n){ T=Math.max(1,Math.min(REP.frames.length,n)); pintarTurno(); }
+function play(){
+  if(tocando){ clearInterval(tocando); tocando=null; }
+  else { if(T>=REP.frames.length) T=1;
+    tocando=setInterval(()=>{ if(T>=REP.frames.length){clearInterval(tocando);tocando=null;botaoPlay();} else irPara(T+1); },1100); }
+  botaoPlay();
+}
+function botaoPlay(){ document.getElementById('b-play').textContent = tocando? t('ctrl_pause'):t('ctrl_play'); }
+
+// ---- log ----
+function pintarLog(){
+  if(!LOG){ return; }
+  const porTurno={};
+  LOG.turnos.forEach(b=>{ (porTurno[b.t]=porTurno[b.t]||[]).push(b); });
+  const chaves=Object.keys(porTurno).map(Number).sort((a,b)=>a-b);
+  document.getElementById('log-lista').innerHTML = chaves.map(n=>porTurno[n].map(b=>{
+    const tk=b.tok||{};
+    const alerta = (tk.finish&&tk.finish!=='stop') ? `<span class="pill warn">finish ${tk.finish}</span>`:'';
+    const vazio = (b.constr==='[]'&&b.env==='[]') ? `<span class="pill warn">${LANG==='pt'?'turno vazio':'empty turn'}</span>`:'';
+    return `<div class="log-turno" data-t="${b.t}" data-r="${b.r}">
+      <div class="log-cab" onclick="this.parentNode.classList.toggle('aberto')">
+        <b>${LANG==='pt'?'Turno':'Turn'} ${b.t}</b> <span class="pill ${b.r}">${LANG==='pt'?'Rei':'King'} ${b.r}</span>
+        ${tk.ms!=null?`<span class="pill">${(tk.ms/1000).toFixed(0)}s</span>`:''}
+        ${tk.raciocinio!=null?`<span class="pill">${tk.raciocinio} tok ${LANG==='pt'?'de raciocínio':'reasoning'}</span>`:''}
+        ${alerta}${vazio}
+        <span style="margin-left:auto;color:var(--txt3)">▾</span>
+      </div>
+      <div class="log-corpo">
+        ${b.plano?`<h5>${t('log_plano')}</h5><div class="dep">${escapar(b.plano)}</div>`:''}
+        ${b.dep?`<h5>${t('lbl_dep')}</h5><div class="dep">${escapar(b.dep)}</div>`:''}
+        <h5>${t('log_ordens')}</h5>
+        <pre class="cru">construir: ${escapar(b.constr)}\nenvios:    ${escapar(b.env)}</pre>
+        <h5>${t('log_motor')}</h5>
+        <pre class="cru">${escapar((b.motor||[]).join('\n'))||'—'}</pre>
+        <h5>${t('log_rac')}</h5>
+        <button class="pill" style="cursor:pointer" onclick="mostrarRac(this,${b.t},'${b.r}')">${t('log_verrac')}</button>
+        <div class="rac-slot"></div>
+      </div></div>`;
+  }).join('')).join('');
+}
+function escapar(s){ return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function mostrarRac(btn,turno,rei){
+  const slot=btn.nextElementSibling;
+  const render=()=>{ const b=RAC.find(x=>x.t===turno&&x.r===rei);
+    slot.innerHTML = `<pre class="cru">${escapar(b&&b.rac?b.rac:t('log_semrac'))}</pre>` +
+      (b&&b.crua?`<h5>${t('log_crua')}</h5><pre class="cru">${escapar(b.crua)}</pre>`:'');
+    btn.style.display='none'; };
+  if(RAC) return render();
+  btn.textContent='…';
+  fetch('dados/rac_'+PID+'.json').then(r=>r.json()).then(j=>{RAC=j;render();});
+}
+// ---- abas ----
+document.querySelectorAll('.abas button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.abas button').forEach(x=>x.classList.remove('on'));
+  document.querySelectorAll('.painel').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); document.getElementById('pan-'+b.dataset.aba).classList.add('on');
+});
+function curvaSVG(){
+  if(!PARTIDA||!PARTIDA.curva) return '';
+  const c=PARTIDA.curva, W=740,H=210,pad=34, n=c.length;
+  const maxY=Math.max(...c.map(r=>Math.max(r[1],r[2])),1);
+  const X=i=>pad+(W-pad*2)*(n>1?i/(n-1):0), Y=v=>H-pad-(H-pad*2)*(v/maxY);
+  const linha=(k,cor)=>`<path d="M${c.map((r,i)=>X(i).toFixed(1)+','+Y(r[k]).toFixed(1)).join(' L')}" fill="none" stroke="${cor}" stroke-width="2.4" stroke-linejoin="round"/>`;
+  let grid='';
+  for(let v=0;v<=maxY;v+=6) grid+=`<line x1="${pad}" y1="${Y(v)}" x2="${W-pad}" y2="${Y(v)}" stroke="#2a241e" stroke-width="1"/><text x="${pad-8}" y="${Y(v)+4}" text-anchor="end" font-size="10" fill="#7a6f5e">${v}</text>`;
+  const marcas=c.filter((r,i)=>i%5===0||i===n-1).map((r,i)=>{const idx=c.indexOf(r);return `<text x="${X(idx)}" y="${H-pad+16}" text-anchor="middle" font-size="10" fill="#7a6f5e">${r[0]}</text>`;}).join('');
+  const t18=`<line x1="${pad}" y1="${Y(18)}" x2="${W-pad}" y2="${Y(18)}" stroke="#c9a227" stroke-width="1" stroke-dasharray="4 4" opacity=".6"/><text x="${W-pad}" y="${Y(18)-6}" text-anchor="end" font-size="10" fill="#c9a227">75% = 18</text>`;
+  return `<h3 style="margin-top:26px">${LANG==='pt'?'Aldeias por turno':'Villages per turn'}</h3>
+   <div style="background:var(--bg2);border:1px solid var(--linha);border-radius:10px;padding:8px">
+   <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${grid}${t18}${linha(1,'var(--A)')}${linha(2,'var(--B)')}${marcas}</svg></div>
+   <p class="mini" style="margin-top:6px"><span style="color:var(--A)">■</span> ${curto(PARTIDA.A)} &nbsp; <span style="color:var(--B)">■</span> ${curto(PARTIDA.B)}</p>`;
+}
+function pintarAnalise(){
+  const a = (window.ANALISES&&window.ANALISES[PID]) ? (window.ANALISES[PID][LANG]||window.ANALISES[PID].pt) : '';
+  document.getElementById('analise-txt').innerHTML = (a||'<p class="mini">—</p>') + curvaSVG();
+}
+function pintarCabecalhoPartida(){
+  if(!PARTIDA) return;
+  document.getElementById('titulo').innerHTML =
+    `<span style="color:var(--A)">${curto(PARTIDA.A)}</span> <span class="mini">vs</span> <span style="color:var(--B)">${curto(PARTIDA.B)}</span>`;
+  document.getElementById('subtitulo').textContent =
+    `${PARTIDA.bat} · ${t('p_seed')} ${PARTIDA.seed} · ${PARTIDA.turnos} ${t('p_turnos')} · ${t('fim_'+PARTIDA.fim)} · ${PARTIDA.aldA} × ${PARTIDA.aldB}`;
+  document.getElementById('nomeA').textContent = curto(PARTIDA.A);
+  document.getElementById('nomeB').textContent = curto(PARTIDA.B);
+}
+window.aoTrocarIdioma=()=>{ pintarCabecalhoPartida(); if(REP&&MAPA) pintarTurno(); botaoPlay(); pintarLog(); pintarAnalise(); };
+Promise.all([
+  fetch('dados/mapa.json').then(r=>r.json()),
+  fetch('dados/replay_'+PID+'.json').then(r=>r.json()),
+  fetch('dados/partidas.json').then(r=>r.json()),
+  fetch('dados/log_'+PID+'.json').then(r=>r.json()).catch(()=>null)
+]).then(([m,rep,parts,log])=>{
+  MAPA=m; REP=rep; LOG=log; PARTIDA=parts.find(p=>p.id===PID);
+  document.getElementById('slider').max=REP.frames.length;
+  desenharBase(); aplicarIdioma(); irPara(1);
+  document.getElementById('slider').oninput=e=>{ if(tocando){clearInterval(tocando);tocando=null;botaoPlay();} irPara(+e.target.value); };
+  document.getElementById('b-play').onclick=play;
+  document.getElementById('b-ini').onclick=()=>irPara(1);
+  document.getElementById('b-fim').onclick=()=>irPara(REP.frames.length);
+  document.addEventListener('keydown',e=>{ if(e.key==='ArrowRight')irPara(T+1); if(e.key==='ArrowLeft')irPara(T-1); });
+});
+aplicarIdioma();
+</script>
+</body></html>

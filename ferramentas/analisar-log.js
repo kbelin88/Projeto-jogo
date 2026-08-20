@@ -86,6 +86,20 @@ function novoRei() {
     turnosComRaciocinio: 0,
     turnosSemRaciocinio: 0,
     truncamentos: 0,            // A1: linhas TRUNCADO (so em logs pos-A1)
+    // LOTE E, E7.1: diagnostico de fim de geracao (logs pos-D1/E5; ausente -> null/vazio)
+    vazios: 0,                  // turnos com `resposta crua: ""`
+    vaziosSemUsage: 0,          // desses, sem contagem de tokens (nem "prompt N" na linha)
+    finishHist: {},             // finish_reason -> contagem
+    nativoHist: {},             // native_finish_reason -> contagem
+    errosApi: 0,                // linhas "ERRO API:"
+    msVazio: [], msNaoVazio: [], // E5: duracoes (ms) separadas por turno vazio/nao-vazio
+    razaoAtkDef: [],            // E7.3: FatkEf/FdefEf por COMBATE deste rei como atacante
+    somaPrompt: 0, somaResp: 0, somaRac: 0, // E7.4: tokens agregados
+    somaCusto: 0,               // E7.4: soma de "custo turno: $X"
+    // SPEC_SITE_V1 (20/08, FASE 1): listas cruas por turno — a soma so serve para
+    // o total do log inteiro; a tabela do site precisa da MEDIANA agregada por
+    // MODELO (varias partidas), e mediana de somas != soma de medianas.
+    listaPrompt: [], listaResp: [], listaRac: [],
   };
 }
 
@@ -100,6 +114,7 @@ function analisarLog(caminho, replayPath) {
 
   let turnoAtual = 0;
   let reiAtual = null;
+  let msAtual = null, usoAtual = false; // LOTE E, E7.1: estado do turno atual (ms da chamada; teve usage?)
 
   const reHeaderTurno = /^#+\s*TURNO\s+(\d+)\s+.*Rei\s+([AB])\s+\((.+)\)\s+#+/;
   const rePartida = /^===\s*PARTIDA\s+Rei\s+A\s+\((.+?)\)\s+vs\s+Rei\s+B\s+\((.+?)\)\s*\|\s*seed\s+(\d+)\s*\|\s*maxTurnos\s+(\d+)/;
@@ -127,6 +142,35 @@ function analisarLog(caminho, replayPath) {
       turnoAtual = parseInt(m[1], 10);
       reiAtual = m[2];
       meta.modelos[reiAtual] = m[3];
+      msAtual = null; usoAtual = false; // LOTE E, E7.1: novo turno, nada herdado
+      continue;
+    }
+
+    // LOTE E, E7.1: linha de tokens -> finish/nativo (histograma), usage (tokens agregados) e ms.
+    // FASE 0 (20/08, SPEC_SITE_V1 §2.1): o browser escreve "tokens:", o runner
+    // headless escreve "tokens.contexto:" (rei_vs_rei.js) — os dois tem de contar.
+    if (/^tokens(?:\.contexto)?:/.test(linha) && reiAtual) {
+      const r = reis[reiAtual];
+      const fm = /\|\s*finish\s+(\S+)/.exec(linha); if (fm) r.finishHist[fm[1]] = (r.finishHist[fm[1]] || 0) + 1;
+      const nm = /\|\s*nativo\s+(\S+)/.exec(linha); if (nm) r.nativoHist[nm[1]] = (r.nativoHist[nm[1]] || 0) + 1;
+      const pm = /prompt\s+(\d+)\s*\|\s*resposta\s+(\d+)/.exec(linha); // usage = prompt|resposta
+      if (pm) { usoAtual = true; r.somaPrompt += +pm[1]; r.somaResp += +pm[2]; r.listaPrompt.push(+pm[1]); r.listaResp.push(+pm[2]); } // E7.4
+      const rm = /\|\s*raciocinio\s+(\d+)/.exec(linha); if (rm) { r.somaRac += +rm[1]; r.listaRac.push(+rm[1]); } // raciocinio e opcional (logs antigos nao tem)
+      const mm = /\|\s*ms\s+(\d+)/.exec(linha); msAtual = mm ? +mm[1] : null; // E5
+      continue;
+    }
+    if (linha.startsWith("ERRO API:") && reiAtual) { reis[reiAtual].errosApi++; continue; } // E7.1
+    if (linha.startsWith("custo turno:") && reiAtual) { // E7.4
+      const cm = /\$(\d+(?:\.\d+)?)/.exec(linha); if (cm) reis[reiAtual].somaCusto += parseFloat(cm[1]);
+      continue;
+    }
+    // LOTE E, E7.1: `resposta crua: ""` = turno VAZIO. Aqui se fecha o ms do turno
+    // (separado por vazio/nao-vazio) — o teste da hipotese do E5 direto no JSON.
+    if (linha.startsWith("resposta crua:") && reiAtual) {
+      const r = reis[reiAtual];
+      const vazio = linha.slice("resposta crua:".length).trim() === '""';
+      if (vazio) { r.vazios++; if (!usoAtual) r.vaziosSemUsage++; }
+      if (msAtual != null) (vazio ? r.msVazio : r.msNaoVazio).push(msAtual);
       continue;
     }
 
@@ -199,6 +243,10 @@ function analisarLog(caminho, replayPath) {
       const alvoId = m[1];
       const r = reis[atacante];
       r.ataques++;
+      // LOTE E, E7.3: razao de forca EFETIVA do atacante (metrica de concentracao do
+      // degrau 3). Le "(ef X) ... (ef Y)" da mesma linha; log antigo sem `ef` -> nao empurra.
+      const efM = /\(ef\s+(\d+)\)[^(]*\(ef\s+(\d+)\)/.exec(linha);
+      if (efM && +efM[2] > 0) r.razaoAtkDef.push(+efM[1] / +efM[2]);
       if (vant === 1) r.ataquesCounter1++;
       else if (vant === 0) r.vant0++;
       else if (vant === -1) r.vantM1++;
@@ -253,6 +301,16 @@ function analisarLog(caminho, replayPath) {
   };
   const _r2 = (x) => Math.round(x * 100) / 100;
   const _soma = (a) => a.reduce((x, y) => x + y, 0);
+  // LOTE E, E7.1/E7.3: percentil, stats de duracao e histograma-ou-null (retro-compat).
+  const _percentil = (arr, p) => {
+    if (!arr.length) return null;
+    const s = arr.slice().sort((a, b) => a - b);
+    return s[Math.min(s.length - 1, Math.max(0, Math.round((p / 100) * (s.length - 1))))];
+  };
+  const _statsMs = (arr) => arr.length ? { n: arr.length, min: Math.min(...arr), mediana: _mediana(arr), max: Math.max(...arr) } : null;
+  const _histOuNull = (h) => Object.keys(h).length ? h : null;
+  const _medR2 = (arr) => arr.length ? _r2(_mediana(arr)) : null;
+  const _pctR2 = (arr, p) => arr.length ? _r2(_percentil(arr, p)) : null;
   const a3De = (r, lado) => {
     if (!framesByTurno) return "indisponivel: sem replay .json (passe-o como 2o argumento ou --replay)";
     const donoNoInicio = (T, d) => {
@@ -272,6 +330,9 @@ function analisarLog(caminho, replayPath) {
     const destRef = {}; for (const e of reforco) destRef[e.destino] = (destRef[e.destino] || 0) + 1;
     const maxRef = Object.values(destRef).reduce((a, b) => Math.max(a, b), 0);
     const destAtqSet = new Set(ataque.map((e) => e.destino));
+    // LOTE E, E7.2: repeticao do ALVO ATACADO mais martelado (sem reforcos).
+    const destAtqRep = {}; for (const e of ataque) destAtqRep[e.destino] = (destAtqRep[e.destino] || 0) + 1;
+    const maxAtq = Object.values(destAtqRep).reduce((a, b) => Math.max(a, b), 0);
     const faixas = {};
     for (const e of ataque) { const f = Math.floor((e.turno - 1) / 10); (faixas[f] = faixas[f] || []).push(e.tot); }
     const serieFaixa = Object.keys(faixas).sort((a, b) => a - b).map((f) => ({
@@ -296,6 +357,9 @@ function analisarLog(caminho, replayPath) {
       alvos_distintos_atacados: destAtqSet.size,
       reincidencia: ataque.length ? _r2((ataque.length - destAtqSet.size) / ataque.length) : null,
       concentracao_logistica: reforco.length ? _r2(maxRef / reforco.length) : null,
+      // LOTE E, E7.2: monomania sobre ATAQUES (nao reforcos). O indice_monomania
+      // legado punia concentracao logistica (juntar tropa numa aldeia = jogo certo).
+      indice_monomania_ataques: ataque.length ? _r2(maxAtq / ataque.length) : null,
       tropas_por_ataque_por_faixa_de_10t: serieFaixa,
       _nota: "reforco/ataque classificado pelo dono NO INICIO do turno (replay). taxa_ataque_viavel (em derivarRei) e conquistas/COMBATES, nao /envios.",
     };
@@ -332,7 +396,9 @@ function analisarLog(caminho, replayPath) {
         : null,
       conquistas: r.conquistas,
       turno_ultima_conquista: r.turnoUltimaConquista,
-      indice_monomania: r.enviosAceitos ? Math.round((maxDest / r.enviosAceitos) * 100) / 100 : null,
+      // LOTE E, E7.2: renomeado — este indice conta reforco como repeticao de alvo,
+      // logo pune a concentracao logistica. A versao sobre ATAQUES esta em reforco_vs_ataque.
+      indice_monomania_legado_inclui_reforcos: r.enviosAceitos ? Math.round((maxDest / r.enviosAceitos) * 100) / 100 : null,
       alvo_mais_repetido: (() => {
         let melhor = null, n = -1;
         for (const [d, c] of Object.entries(r.destinos)) if (c > n) { n = c; melhor = d; }
@@ -351,6 +417,26 @@ function analisarLog(caminho, replayPath) {
       raciocinio_metricas: r.turnosSemRaciocinio > 0
         ? ("indisponivel: cobertura " + r.turnosComRaciocinio + "/" + (r.turnosComRaciocinio + r.turnosSemRaciocinio))
         : "disponivel (cobertura 100%)",
+      // LOTE E, E7.1: diagnostico de fim de geracao (null/vazio em logs antigos sem os campos)
+      vazios: r.vazios,
+      vazios_sem_usage: r.vaziosSemUsage,
+      finish_hist: _histOuNull(r.finishHist),
+      nativo_hist: _histOuNull(r.nativoHist),
+      erros_api: r.errosApi,
+      ms_turnos_vazios: _statsMs(r.msVazio),        // E5: teste do corte por tempo
+      ms_turnos_nao_vazios: _statsMs(r.msNaoVazio),
+      // LOTE E, E7.3: razao de forca efetiva do atacante (concentracao do degrau 3)
+      razao_atk_def_mediana: _medR2(r.razaoAtkDef),
+      razao_atk_def_p25: _pctR2(r.razaoAtkDef, 25),
+      razao_atk_def_p75: _pctR2(r.razaoAtkDef, 75),
+      share_ataques_razao_maior_1: r.razaoAtkDef.length ? _r2(r.razaoAtkDef.filter((x) => x > 1).length / r.razaoAtkDef.length) : null,
+      // LOTE E, E7.4: tokens/custo agregados (0 se o log nao traz; custo so quando ha preco)
+      tokens_prompt_total: r.somaPrompt, tokens_resposta_total: r.somaResp, tokens_raciocinio_total: r.somaRac,
+      custo_total_usd: _r2(r.somaCusto),
+      // SPEC_SITE_V1 FASE 1: listas cruas, para o site agregar por MODELO (varias
+      // partidas) sem cometer mediana-de-medianas nem media-de-somas.
+      tokens_prompt_lista: r.listaPrompt, tokens_resposta_lista: r.listaResp, tokens_raciocinio_lista: r.listaRac,
+      ms_turnos_nao_vazios_lista: r.msNaoVazio, ms_turnos_vazios_lista: r.msVazio,
     };
   };
 
@@ -430,7 +516,7 @@ function main() {
   linha("taxa counter (todos ataques)", A.taxa_counter_correto, B.taxa_counter_correto);
   linha("taxa counter (1o/alvo distinto)", A.taxa_counter_correto_primeiro, B.taxa_counter_correto_primeiro);
   linha("  alvos distintos atacados", A.alvos_distintos_atacados, B.alvos_distintos_atacados);
-  linha("indice monomania", A.indice_monomania, B.indice_monomania);
+  linha("indice monomania (legado)", A.indice_monomania_legado_inclui_reforcos, B.indice_monomania_legado_inclui_reforcos);
   linha("alvo mais repetido", A.alvo_mais_repetido ? `[${A.alvo_mais_repetido.destinoId}]x${A.alvo_mais_repetido.envios}` : "-",
     B.alvo_mais_repetido ? `[${B.alvo_mais_repetido.destinoId}]x${B.alvo_mais_repetido.envios}` : "-");
   linha("turno ultima conquista", A.turno_ultima_conquista, B.turno_ultima_conquista);
@@ -440,6 +526,16 @@ function main() {
     `${B.counter_dist.vant_mais1}/${B.counter_dist.vant_0}/${B.counter_dist.vant_menos1}`);
   linha("conquistas/combates (viavel)", `${A.conquistas}/${A.ataques} (${A.taxa_ataque_viavel})`, `${B.conquistas}/${B.ataques} (${B.taxa_ataque_viavel})`);
   linha("raciocinio cobertura", A.raciocinio_cobertura, B.raciocinio_cobertura);
+  // LOTE E, E7: diagnostico de fim de geracao + razao de forca
+  linha("vazios (sem usage)", `${A.vazios} (${A.vazios_sem_usage})`, `${B.vazios} (${B.vazios_sem_usage})`);
+  linha("erros API", A.erros_api, B.erros_api);
+  const _fh = (o) => o ? Object.entries(o).map(([k, v]) => k + ":" + v).join(" ") : "-";
+  console.log("   finish/nativo A: " + _fh(A.finish_hist) + " / " + _fh(A.nativo_hist) + "  |  B: " + _fh(B.finish_hist) + " / " + _fh(B.nativo_hist));
+  const _ms = (s) => s ? `n${s.n} ${s.min}/${s.mediana}/${s.max}` : "-";
+  console.log("   ms vazios (min/med/max)     A: " + _ms(A.ms_turnos_vazios) + "  |  B: " + _ms(B.ms_turnos_vazios));
+  console.log("   ms nao-vazios (min/med/max) A: " + _ms(A.ms_turnos_nao_vazios) + "  |  B: " + _ms(B.ms_turnos_nao_vazios));
+  linha("razao atk/def (mediana)", A.razao_atk_def_mediana, B.razao_atk_def_mediana);
+  linha("share ataques razao>1", A.share_ataques_razao_maior_1, B.share_ataques_razao_maior_1);
   const RA = A.reforco_vs_ataque, RB = B.reforco_vs_ataque;
   if (RA && typeof RA === "object") {
     console.log("   --- A3 reforco vs ataque (replay, dono no inicio do turno) ---");
@@ -449,6 +545,7 @@ function main() {
     linha("alvos distintos atacados (A3)", RA.alvos_distintos_atacados, RB.alvos_distintos_atacados);
     linha("reincidencia", RA.reincidencia, RB.reincidencia);
     linha("concentracao logistica", RA.concentracao_logistica, RB.concentracao_logistica);
+    linha("monomania ataques (A3)", RA.indice_monomania_ataques, RB.indice_monomania_ataques);
     console.log("   tropas/ataque por faixa 10t (A): " + RA.tropas_por_ataque_por_faixa_de_10t.map((x) => x.turnos + ":" + x.media).join("  "));
   } else {
     console.log("   A3 reforco vs ataque: " + RA);

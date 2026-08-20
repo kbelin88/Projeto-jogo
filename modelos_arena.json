@@ -1,0 +1,521 @@
+{
+  "geradoEm": "2026-08-18T12:51:48.643Z",
+  "criterio": {
+    "MIN_CTX": 32000,
+    "MIN_OUT": 4096
+  },
+  "modelos": [
+    {
+      "id": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "nome": "NVIDIA: Nemotron 3 Ultra (free)",
+      "provider": "nvidia",
+      "criado": "2026-06-04",
+      "ctx": 1000000,
+      "maxOut": 65536,
+      "modalidade": "text->text",
+      "tokenizer": "?",
+      "racMandatorio": false,
+      "racPadrao": true,
+      "racSuportado": true,
+      "esforcos": "high, medium",
+      "descricao": "NVIDIA Nemotron 3 Ultra is an open frontier-reasoning and orchestration model from NVIDIA, with 55B active parameters out of 550B total (MoE). Built on a hybrid",
+      "motivosInapto": [],
+      "apto": true,
+      "arena": {
+        "estado": "TESTADO",
+        "partidas": 3,
+        "vitorias": 2,
+        "atqUnidade": "2.46–2.63",
+        "counterInimigo": "0.33 (17/08); agregado 0.66 em 18/08",
+        "latenciaMediana": "324 s em P2 (167–500 s em 17/08)",
+        "formato": "ok (1 `error` em 28 chamadas)",
+        "nota": "venceu o Super 120B **16×8** em 30 turnos (4h14) construindo 3% de lanceiro contra 62% do adversário. Forte e caríssimo em relógio"
+      }
+    },
+    {
+      "id": "nvidia/nemotron-3.5-lightning:free",
+      "nome": "NVIDIA: Nemotron 3.5 Lightning (free)",
+      "provider": "nvidia",
+      "criado": "2026-08-11",
+      "ctx": 1000000,
+      "maxOut": 65536,
+      "modalidade": "text->text",
+      "tokenizer": "?",
+      "racMandatorio": false,
+      "racPadrao": false,
+      "racSuportado": true,
+      "esforcos": "-",
+      "descricao": "NVIDIA Nemotron 3.5 Lightning is an open mixture-of-experts model from NVIDIA, with 3B active parameters out of 30B total. It is suited for high-throughput agen",
+      "motivosInapto": [],
+      "apto": true,
+      "arena": {
+        "estado": "TESTADO",
+        "partidas": 9,
+        "vitorias": 3,
+        "atqUnidade": "1.08–1.82 (mediano 1.54)",
+        "counterInimigo": "0.18–0.61 (17/08)",
+        "latenciaMediana": "128–196 s (máx 600 s)",
+        "formato": "ok, mas corta: 9 respostas por `length` e 4 `error` nas 60 chamadas de P4",
+        "nota": "régua da bateria (9 lados em 4 baterias); tende a lanceiro e perde por isso — **exceto no espelho de 18/08**, onde o lado com 94% de lanceiro venceu 16×8. Derrubou P1 no t7 por erro de rede e horas depois fez 29/30 e 30/30 turnos válidos em P3/P4"
+      }
+    },
+    {
+      "id": "dots-studio/dots-3-note-preview:free",
+      "nome": "Dots Studio: Dots3-Note Preview (free)",
+      "provider": "dots-studio",
+      "criado": "2026-08-14",
+      "ctx": 512000,
+      "maxOut": 512000,
+      "modalidade": "text+image->text",
+      "tokenizer": "?",
+      "racMandatorio": false,
+      "racPadrao": false,
+      "racSuportado": true,
+      "esforcos": "-",
+      "descricao": "Dots3-Note Preview is an open-weight mixture-of-experts model from Dots Studio, with 16B active parameters out of 280B total. It is the lightest model in the Do",
+      "motivosInapto": [],
+      "apto": true,
+      "arena": {
+        "estado": "SONDADO — OK",
+        "partidas": 0,
+        "vitorias": 0,
+        "latenciaMediana": "35 s (1 turno)",
+        "formato": "ok — raciocínio 2620 tok",
+        "nota": "maior teto de saída do catálogo (512k). Candidato a partida, ainda sem nenhuma"
+      }
+    },
+    {
+      "id": "google/gemma-4-26b-a4b-it:free",
+      "nome": "Google: Gemma 4 26B A4B  (free)",
+      "provider": "google",
+      "criado": "2026-04-03",
+      "ctx": 262144,
+      "maxOut": 32768,
+      "modalidade": "text+image+video->text",
+      "tokenizer": "?",
+      "racMandatorio": false,
+      "racPadrao": false,
+      "racSuportado": true,
+      "esforcos": "-",
+      "descricao": "Gemma 4 26B A4B IT is an instruction-tuned Mixture-of-Experts (MoE) model from Google DeepMind. Despite 25.2B total parameters, only 3.8B activate per token dur",
+      "motivosInapto": [],
+      "apto": true,
+      "arena": {
+        "estado": "SONDADO — OK (no retry)",
+        "partidas": 0,
+        "vitorias": 0,
+        "latenciaMediana": "32 s (1 turno)",
+        "formato": "ok — raciocínio 0 tok (não pensou)",
+        "nota": "429 na 1ª sonda (pool compartilhado Google AI Studio → fallback Darkbloom, também 429); passou 10 min depois. Instabilidade de provedor, não de modelo"
+      }
+    },
+    {
+      "id": "google/gemma-4-31b-it:free",
+      "nome": "Google: Gemma 4 31B (free)",
+      "provider": "google",
+      "criado": "2026-04-02",
+      "ctx": 262144,
+      "maxOut": 32768,
+      "modalidade": "text+image+video->text",
+      "tokenizer": "?",
+      "racMandatorio": false,
+      "racPadrao": false,
+      "racSuportado": true,
+      "esforcos": "-",
+      "descricao": "Gemma 4 31B Instruct is Google DeepMind's 30.7B dense multimodal model supporting text and image input with text output. Features a 256K token context window, c",
+      "motivosInapto": [],
+      "apto": true,
+      "arena": {
+        "estado": "BANIDO (18/08)",
+        "partidas": 0,
+        "vitorias": 0,
+        "latenciaMediana": "—",
+        "formato": "não chegou a responder",
+        "nota": "429 em duas sondas seguidas com 10 min de intervalo, mesmo provedor (Google AI Studio, `upstream_provider_shared_pool`). Vale **uma** re-sonda noutro dia antes de gastar mais cota"
+      }
+    },
+    {
+      "id": "nvidia/nemotron-3-super-120b-a12b:free",
+      "nome": "NVIDIA: Nemotron 3 Super (free)",
+      "provider": "nvidia",
+      "criado": "2026-03-11",
+      "ctx": 262144,
+      "maxOut": 262144,
+      "modalidade": "text->text",
+      "tokenizer": "?",
+      "racMandatorio": false,
+      "racPadrao": true,
+      "racSuportado": true,
+      "esforcos": "medium, low",
+      "descricao": "NVIDIA Nemotron 3 Super is a 120B-parameter open hybrid MoE model, activating just 12B parameters for maximum compute efficiency and accuracy in complex multi-a",
+      "motivosInapto": [],
+      "apto": true,
+      "arena": {
+        "estado": "TESTADO",
+        "partidas": 4,
+        "vitorias": 2,
+        "atqUnidade": "1.68–2.65",
+        "counterInimigo": "0.29–0.50 (17/08); agregado 0.48 em 18/08",
+        "latenciaMediana": "~140–148 s (máx 1371 s)",
+        "formato": "ok (3 de 30 respostas cortadas por `length` em P2)",
+        "nota": "**a 1ª vitória por dominância do projeto** (T24, 17/08); venceu dos dois lados do A/B de assento. Em 18/08 perdeu 8×16 para o Ultra 550B com o atq/unid mais baixo que já fez (1.68, 62% de lanceiro)"
+      }
+    },
+    {
+      "id": "poolside/laguna-s-2.1:free",
+      "nome": "Poolside: Laguna S 2.1 (free)",
+      "provider": "poolside",
+      "criado": "2026-07-21",
+      "ctx": 262144,
+      "maxOut": 32768,
+      "modalidade": "text->text",
+      "tokenizer": "?",
+      "racMandatorio": false,
+      "racPadrao": true,
+      "racSuportado": true,
+      "esforcos": "-",
+      "descricao": "Laguna S 2.1 is the latest coding agent model from [Poolside](<https://poolside.ai/>). Laguna S 2.1 is a 118B total parameter model with 8B active parameters, s",
+      "motivosInapto": [],
+      "apto": true,
+      "arena": {
+        "estado": "TESTADO (interrompida no t7)",
+        "partidas": 1,
+        "vitorias": 0,
+        "atqUnidade": "1.28 (7 turnos)",
+        "counterInimigo": "agregado 0.57 (7 turnos)",
+        "latenciaMediana": "181 s em partida (máx 804 s) — a sonda tinha dado 5 s",
+        "formato": "degenera: 3 de 7 respostas cortadas por `length`, com repetição literal da mesma frase; 3 turnos com `construir: []`",
+        "nota": "P1 de 18/08 caiu no t7 por erro de rede do **adversário**, mas o pouco que jogou já mostra o degrau 0 (formato) falhando. É o caso que provou que a sonda de 1 turno não prevê latência nem estabilidade"
+      }
+    },
+    {
+      "id": "poolside/laguna-xs-2.1:free",
+      "nome": "Poolside: Laguna XS 2.1 (free)",
+      "provider": "poolside",
+      "criado": "2026-07-02",
+      "ctx": 262144,
+      "maxOut": 32768,
+      "modalidade": "text->text",
+      "tokenizer": "?",
+      "racMandatorio": false,
+      "racPadrao": true,
+      "racSuportado": true,
+      "esforcos": "-",
+      "descricao": "Laguna XS 2.1 is the latest coding agent model in the 33B-A3B category from [Poolside](https://poolside.ai/) and a step forward from their Laguna XS.2 model (re",
+      "motivosInapto": [],
+      "apto": true,
+      "arena": {
+        "estado": "SONDADO — RESPONDE MAS NÃO JOGA",
+        "partidas": 0,
+        "vitorias": 0,
+        "latenciaMediana": "1200 s (20 min, 1 turno)",
+        "formato": "`finish: error`, `construir: []`, **sem** erro de rede",
+        "nota": "gastou os 12401 tokens de resposta inteiros no raciocínio e nunca fechou o JSON. Achado do dia: dá para falhar sem erro nenhum. Não gaste partida"
+      }
+    },
+    {
+      "id": "cohere/north-mini-code:free",
+      "nome": "Cohere: North Mini Code (free)",
+      "provider": "cohere",
+      "criado": "2026-06-17",
+      "ctx": 256000,
+      "maxOut": 64000,
+      "modalidade": "text->text",
+      "tokenizer": "?",
+      "racMandatorio": false,
+      "racPadrao": false,
+      "racSuportado": true,
+      "esforcos": "-",
+      "descricao": "North Mini Code is Cohere's first agentic coding model and the debut of its North family. A sparse mixture-of-experts model with 30B total parameters and 3B act",
+      "motivosInapto": [],
+      "apto": true,
+      "arena": {
+        "estado": "SONDADO — LENTO DEMAIS",
+        "partidas": 0,
+        "vitorias": 0,
+        "latenciaMediana": "353 s (1 turno)",
+        "formato": "ok — JSON válido, 2 lanceiros, raciocínio 9229 tok",
+        "nota": "acima do teto de 300 s da spec: 30 turnos custariam ~6 h só do lado dele. Não usar em partida longa"
+      }
+    },
+    {
+      "id": "nvidia/nemotron-3-nano-30b-a3b:free",
+      "nome": "NVIDIA: Nemotron 3 Nano 30B A3B (free)",
+      "provider": "nvidia",
+      "criado": "2025-12-14",
+      "ctx": 256000,
+      "maxOut": null,
+      "modalidade": "text->text",
+      "tokenizer": "?",
+      "racMandatorio": false,
+      "racPadrao": false,
+      "racSuportado": true,
+      "esforcos": "-",
+      "descricao": "NVIDIA Nemotron 3 Nano 30B A3B is a small language MoE model with highest compute efficiency and accuracy for developers to build specialized agentic AI systems",
+      "motivosInapto": [],
+      "apto": true,
+      "arena": {
+        "estado": "SONDADO — OK",
+        "partidas": 0,
+        "vitorias": 0,
+        "latenciaMediana": "24 s (1 turno)",
+        "formato": "ok — raciocínio 5071 tok",
+        "nota": "nano da família que domina a tabela; candidato natural a partida"
+      }
+    },
+    {
+      "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+      "nome": "NVIDIA: Nemotron 3 Nano Omni (free)",
+      "provider": "nvidia",
+      "criado": "2026-04-28",
+      "ctx": 256000,
+      "maxOut": 65536,
+      "modalidade": "text+image+audio+video->text",
+      "tokenizer": "?",
+      "racMandatorio": false,
+      "racPadrao": true,
+      "racSuportado": true,
+      "esforcos": "-",
+      "descricao": "NVIDIA Nemotron™ 3 Nano Omni is a 30B-A3B open multimodal model designed to function as a perception and context sub-agent in enterprise agent systems. It accep",
+      "motivosInapto": [],
+      "apto": true,
+      "arena": {
+        "estado": "SONDADO — OK",
+        "partidas": 0,
+        "vitorias": 0,
+        "latenciaMediana": "47 s (1 turno)",
+        "formato": "ok — raciocínio 8059 tok",
+        "nota": "raciocínio ligado por padrão; ainda sem partida"
+      }
+    },
+    {
+      "id": "openai/gpt-oss-20b:free",
+      "nome": "OpenAI: gpt-oss-20b (free)",
+      "provider": "openai",
+      "criado": "2025-08-05",
+      "ctx": 131072,
+      "maxOut": 32768,
+      "modalidade": "text->text",
+      "tokenizer": "?",
+      "racMandatorio": true,
+      "racPadrao": false,
+      "racSuportado": true,
+      "esforcos": "high, medium, low",
+      "descricao": "gpt-oss-20b is an open-weight 21B parameter model released by OpenAI under the Apache 2.0 license. It uses a Mixture-of-Experts (MoE) architecture with 3.6B act",
+      "motivosInapto": [],
+      "apto": true,
+      "arena": {
+        "estado": "TESTADO",
+        "partidas": 1,
+        "vitorias": 0,
+        "atqUnidade": "1.07",
+        "counterInimigo": "0.00 (1 duelo)",
+        "latenciaMediana": "~1200 s (até 45 min/turno)",
+        "formato": "ok, mas clamp 0.27 e 8 rejeições",
+        "nota": "falha o degrau 2/3: razão atq/def mediana **0.64** — ataca com menos força que a defesa"
+      }
+    },
+    {
+      "id": "nvidia/nemotron-nano-12b-v2-vl:free",
+      "nome": "NVIDIA: Nemotron Nano 12B 2 VL (free)",
+      "provider": "nvidia",
+      "criado": "2025-10-28",
+      "ctx": 128000,
+      "maxOut": 128000,
+      "modalidade": "text+image+video->text",
+      "tokenizer": "?",
+      "racMandatorio": false,
+      "racPadrao": false,
+      "racSuportado": true,
+      "esforcos": "-",
+      "descricao": "NVIDIA Nemotron Nano 2 VL is a 12-billion-parameter open multimodal reasoning model designed for video understanding and document intelligence. It introduces a ",
+      "motivosInapto": [],
+      "apto": true,
+      "arena": {
+        "estado": "TESTADO",
+        "partidas": 1,
+        "vitorias": 0,
+        "atqUnidade": "3.29 (o maior já medido)",
+        "counterInimigo": "agregado 0.29",
+        "latenciaMediana": "**7 s** em partida — o mais rápido do catálogo por uma ordem de grandeza",
+        "formato": "instável: só 19/30 turnos com resposta registrada, 11 delas com `construir: []`, 18 rejeições",
+        "nota": "a sonda de 1 turno deu 5.6 s e ele parecia o candidato ideal; em partida perdeu 6×16 para o Lightning. Constrói pouco (58 unidades contra 132) e é o 1º caso de atq/unid alto **perdendo**"
+      }
+    },
+    {
+      "id": "nvidia/nemotron-nano-9b-v2:free",
+      "nome": "NVIDIA: Nemotron Nano 9B V2 (free)",
+      "provider": "nvidia",
+      "criado": "2025-09-05",
+      "ctx": 128000,
+      "maxOut": null,
+      "modalidade": "text->text",
+      "tokenizer": "?",
+      "racMandatorio": false,
+      "racPadrao": false,
+      "racSuportado": true,
+      "esforcos": "-",
+      "descricao": "NVIDIA-Nemotron-Nano-9B-v2 is a large language model (LLM) trained from scratch by NVIDIA, and designed as a unified model for both reasoning and non-reasoning ",
+      "motivosInapto": [],
+      "apto": true,
+      "arena": {
+        "estado": "SONDADO — OK",
+        "partidas": 0,
+        "vitorias": 0,
+        "latenciaMediana": "63 s (1 turno)",
+        "formato": "ok — raciocínio 1445 tok",
+        "nota": "o menor apto; construiu 5 lanceiros + 2 arqueiros na sonda. Candidato a baseline fraco"
+      }
+    },
+    {
+      "id": "deepseek/deepseek-v4-flash:free",
+      "nome": "deepseek/deepseek-v4-flash:free",
+      "provider": "deepseek",
+      "foraDoCatalogo": true,
+      "apto": false,
+      "motivosInapto": [
+        "fora do catalogo free em 2026-08-18"
+      ],
+      "modalidade": "?",
+      "tokenizer": "?",
+      "arena": {
+        "estado": "MORTO",
+        "nota": "404 'unavailable for free' em 18/08, <24 h depois de verificado"
+      }
+    },
+    {
+      "id": "liquid/lfm-2.5-2.6b:free",
+      "nome": "liquid/lfm-2.5-2.6b:free",
+      "provider": "liquid",
+      "foraDoCatalogo": true,
+      "apto": false,
+      "motivosInapto": [
+        "fora do catalogo free em 2026-08-18"
+      ],
+      "modalidade": "?",
+      "tokenizer": "?",
+      "arena": {
+        "estado": "MORTO",
+        "nota": "404 'no endpoints found' em 18/08"
+      }
+    },
+    {
+      "id": "minimax/minimax-m3:free",
+      "nome": "minimax/minimax-m3:free",
+      "provider": "minimax",
+      "foraDoCatalogo": true,
+      "apto": false,
+      "motivosInapto": [
+        "fora do catalogo free em 2026-08-18"
+      ],
+      "modalidade": "?",
+      "tokenizer": "?",
+      "arena": {
+        "estado": "MORTO",
+        "nota": "404 'unavailable for free' em 18/08"
+      }
+    },
+    {
+      "id": "z-ai/glm-5.2:free",
+      "nome": "z-ai/glm-5.2:free",
+      "provider": "z-ai",
+      "foraDoCatalogo": true,
+      "apto": false,
+      "motivosInapto": [
+        "fora do catalogo free em 2026-08-18"
+      ],
+      "modalidade": "?",
+      "tokenizer": "?",
+      "arena": {
+        "estado": "BANIDO",
+        "partidas": 2,
+        "vitorias": 0,
+        "atqUnidade": "?",
+        "counterInimigo": "?",
+        "latenciaMediana": "~6 s",
+        "formato": "nunca completou uma partida",
+        "nota": "3× HTTP 429 de pool compartilhado (Decart) em 8 chamadas; saiu do catálogo free"
+      }
+    },
+    {
+      "id": "google/lyria-3-clip-preview",
+      "nome": "Google: Lyria 3 Clip Preview",
+      "provider": "google",
+      "criado": "2026-03-30",
+      "ctx": 1048576,
+      "maxOut": 65536,
+      "modalidade": "text+image->text+audio",
+      "tokenizer": "?",
+      "racMandatorio": false,
+      "racPadrao": false,
+      "racSuportado": false,
+      "esforcos": null,
+      "descricao": "30 second duration clips are priced at $0.04 per clip. Lyria 3 is Google's family of music generation models, available through the Gemini API. With Lyria 3, yo",
+      "motivosInapto": [
+        "saida de audio"
+      ],
+      "apto": false,
+      "arena": null
+    },
+    {
+      "id": "google/lyria-3-pro-preview",
+      "nome": "Google: Lyria 3 Pro Preview",
+      "provider": "google",
+      "criado": "2026-03-30",
+      "ctx": 1048576,
+      "maxOut": 65536,
+      "modalidade": "text+image->text+audio",
+      "tokenizer": "?",
+      "racMandatorio": false,
+      "racPadrao": false,
+      "racSuportado": false,
+      "esforcos": null,
+      "descricao": "Full-length songs are priced at $0.08 per song. Lyria 3 is Google's family of music generation models, available through the Gemini API. With Lyria 3, you can g",
+      "motivosInapto": [
+        "saida de audio"
+      ],
+      "apto": false,
+      "arena": null
+    },
+    {
+      "id": "openrouter/free",
+      "nome": "Free Models Router",
+      "provider": "openrouter",
+      "criado": "2026-02-01",
+      "ctx": 200000,
+      "maxOut": null,
+      "modalidade": "text+image->text",
+      "tokenizer": "?",
+      "racMandatorio": false,
+      "racPadrao": false,
+      "racSuportado": true,
+      "esforcos": null,
+      "descricao": "The simplest way to get free inference. openrouter/free is a router that selects free models at random from the models available on OpenRouter. The router smart",
+      "motivosInapto": [
+        "router: escolhe outro modelo por baixo, nao e sujeito de benchmark"
+      ],
+      "apto": false,
+      "arena": null
+    },
+    {
+      "id": "nvidia/nemotron-3.5-content-safety:free",
+      "nome": "NVIDIA: Nemotron 3.5 Content Safety (free)",
+      "provider": "nvidia",
+      "criado": "2026-06-04",
+      "ctx": 128000,
+      "maxOut": 8192,
+      "modalidade": "text+image->text",
+      "tokenizer": "?",
+      "racMandatorio": false,
+      "racPadrao": true,
+      "racSuportado": true,
+      "esforcos": "-",
+      "descricao": "NVIDIA Nemotron 3.5 Content Safety is a compact 4B-parameter multimodal guardrail model from NVIDIA, fine-tuned from Google Gemma-3-4B. It moderates both inputs",
+      "motivosInapto": [
+        "classificador, nao joga"
+      ],
+      "apto": false,
+      "arena": null
+    }
+  ]
+}

@@ -117,6 +117,15 @@
   #placarTop { min-width: 0; padding-bottom: 0; }
   #sb-status { text-align: center; font: 11px Consolas, monospace; color: #d9a441; padding: 0 8px 5px; background: rgba(0,0,0,.18); }
   #sb-status:empty { display: none; }
+  /* HOVER: banner com as tropas ao passar o mouse (aldeia / exercito na estrada) */
+  #hoverTip {
+    position: fixed; display: none; z-index: 60; pointer-events: none;
+    background: rgba(28,24,18,.95); color: #f0e6d2; border: 1px solid #6b5836;
+    border-radius: 7px; padding: 7px 10px; max-width: 250px;
+    font: 12px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    box-shadow: 0 4px 16px rgba(0,0,0,.45);
+  }
+  #hoverTip .ht-d { color: #b6a888; font-size: 11px; }
   body.replay #banner, body.cinema #banner { top: 104px; }
 
   #edTexto {
@@ -248,13 +257,130 @@
   .pt-cabo-ghost { position: absolute; top: 0; bottom: 0; opacity: .70;
     transition: opacity 1.5s ease; pointer-events: none; }
   /* brasao minimo (arte heraldica de verdade e E5): escudo chapado + inicial */
-  .pt-brasao { width: 30px; height: 36px; flex-shrink: 0;
-    clip-path: polygon(0 0, 100% 0, 100% 52%, 50% 100%, 0 52%);
-    display: flex; align-items: center; justify-content: center;
-    font: bold 16px Georgia, serif; color: rgba(255,255,255,.94);
-    text-shadow: 0 1px 2px rgba(0,0,0,.7); }
-  .pt-brasao.a { background: linear-gradient(180deg, #6d9af6, #4a76d6); }
-  .pt-brasao.b { background: linear-gradient(180deg, #f66d6d, #d64a4a); }
+  .pt-brasao { width: 34px; height: 36px; flex-shrink: 0;
+    background-repeat: no-repeat; background-position: center; background-size: contain;
+    filter: drop-shadow(0 1px 3px rgba(0,0,0,.65)); }
+  .pt-brasao.a { background-image: url("assets/brasoes/rei_a_azul.png"); }
+  .pt-brasao.b { background-image: url("assets/brasoes/rei_b_vermelho.png"); }
+
+  /* ===== TRANSMISSAO v5 (16/08/2026) — BARRA DE TOPO + RODAPE DOS REIS ===
+     Decisao do Lucas: a lista de aldeias dos paineis laterais rendia pouco
+     depois que o hover passou a dar as tropas, e comia largura de tela. O
+     AGREGADO (aldeias / tropas / composicao / recursos) sobe para uma barra
+     longa no topo, partida pelo turno; o DEPOIMENTO do modelo e o benchmark
+     ao vivo descem para dois quadros no rodape.
+     Paineis laterais: escondidos por CSS, NAO removidos do DOM (o render
+     antigo continua definido e os smokes seguem encontrando os nos). */
+  :root { --bt-h: 74px; --rr-h: 186px; --rr-w: 33%; }
+  #espA, #espB { display: none !important; }
+  /* o placar antigo so mostrava turno + status; o turno mudou-se para a barra
+     nova, sobra a linha de status, sem moldura, logo abaixo dela. */
+  #placarTop { top: calc(var(--bt-h) + 4px); background: none; border: none;
+    box-shadow: none; padding: 0; border-radius: 0; }
+  #placarTop #pt-turno { display: none; }
+
+  #barraTopo {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 7; display: flex;
+    align-items: stretch; height: var(--bt-h);
+    background: linear-gradient(180deg, rgba(24,21,17,.97), rgba(16,14,11,.97));
+    border-bottom: 1px solid rgba(232,223,200,.18);
+    color: #e8dfc8; font-family: "Trebuchet MS", Verdana, sans-serif;
+    box-shadow: 0 3px 18px rgba(0,0,0,.5);
+  }
+  .bt-lado { flex: 1; display: flex; align-items: center; gap: 14px;
+    padding: 9px 16px 7px; min-width: 0; }
+  .bt-lado.b { flex-direction: row-reverse; text-align: right; }
+  .bt-lado.a { border-top: 3px solid #5b93c9; }
+  .bt-lado.b { border-top: 3px solid #c85a5a; }
+  .bt-bras { width: 38px; height: 45px; flex: none; }
+  /* NOME DO MODELO: unica identidade do rei. Os rotulos "Rei do Norte/Sul"
+     sairam — os reis estao na horizontal, o nome nao descrevia nada. */
+  .bt-modelo { flex: none; min-width: 196px; max-width: 240px;
+    font-family: Georgia, serif; font-size: 17px; font-weight: 700;
+    letter-spacing: .03em; line-height: 1.14;
+    overflow: hidden; text-overflow: ellipsis; }
+  .bt-nums { display: flex; align-items: flex-end; gap: 20px; flex: 1; min-width: 0; }
+  .bt-lado.b .bt-nums { flex-direction: row-reverse; }
+  .bt-cel { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+  .bt-rot { font-size: 8.5px; letter-spacing: .14em; color: #8d8571;
+    text-transform: uppercase; white-space: nowrap; }
+  .bt-val { font-family: Verdana, sans-serif; font-weight: 700; line-height: 1;
+    font-variant-numeric: tabular-nums; }
+  .bt-val.g { font-size: 30px; }
+  .bt-val.m { font-size: 19px; }
+  .bt-val.p { font-size: 15px; color: #c8bfa6; }
+  .bt-delta { font-size: 10px; font-weight: 700; line-height: 1; margin-top: 2px; }
+  .bt-delta.up { color: #7fb069; } .bt-delta.down { color: #c8695f; } .bt-delta.zero { color: #5a5346; }
+  /* composicao L/A/C: FORMA, nao digito — monocultura le-se em meio segundo */
+  .bt-comp { display: flex; flex-direction: column; gap: 3px; min-width: 132px; }
+  .bt-compbar { display: flex; height: 11px; width: 132px;
+    border: 1px solid rgba(232,223,200,.2); overflow: hidden; }
+  .bt-lado.b .bt-compbar { flex-direction: row-reverse; }
+  .bt-compbar i { display: block; height: 100%; transition: width .5s; }
+  .bt-leg { display: flex; gap: 9px; font-size: 9px; color: #8d8571; font-variant-numeric: tabular-nums; }
+  .bt-lado.b .bt-leg { flex-direction: row-reverse; }
+  .bt-leg b { font-weight: 700; }
+  .bt-leg em { display: inline-block; width: 6px; height: 6px; margin-right: 3px;
+    vertical-align: middle; font-style: normal; }
+  .bt-turno { flex: none; width: 118px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 2px; padding: 6px 0;
+    background: rgba(0,0,0,.4);
+    border-left: 1px solid rgba(232,223,200,.14);
+    border-right: 1px solid rgba(232,223,200,.14); }
+  .bt-turno .n { font-family: Georgia, serif; font-size: 33px; font-weight: 700; line-height: .96; }
+
+  /* ---------- RODAPE: depoimento do turno + benchmark ao vivo ---------- */
+  /* Os dois quadros sao SEPARADOS, um em cada canto — nao uma faixa unica
+     atravessando a tela. O vao do meio deixa o mapa respirar. */
+  #rodapeReis {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 7; display: flex;
+    justify-content: space-between; align-items: flex-end;
+    height: var(--rr-h); padding: 0 10px 10px; pointer-events: none;
+    background: none; border: none;
+    color: #e8dfc8; font-family: "Trebuchet MS", Verdana, sans-serif;
+  }
+  .rr-q { flex: 0 0 var(--rr-w); max-width: var(--rr-w); min-width: 0;
+    height: calc(var(--rr-h) - 10px); pointer-events: auto;
+    padding: 10px 15px 11px; display: flex; flex-direction: column; gap: 8px;
+    background: linear-gradient(180deg, rgba(22,19,16,.95), rgba(12,10,9,.96));
+    border: 1px solid rgba(232,223,200,.22); border-radius: 2px;
+    box-shadow: 0 6px 26px rgba(0,0,0,.65); }
+  .rr-q.a { border-top: 2px solid #5b93c9; }
+  .rr-q.b { border-top: 2px solid #c85a5a; }
+  .rr-tit { display: flex; align-items: center; gap: 8px; font-size: 9px;
+    letter-spacing: .16em; color: #8d8571; text-transform: uppercase; }
+  .rr-tit i { flex: 1; height: 1px; background: rgba(232,223,200,.16); }
+  /* DEPOIMENTO: a voz do rei sobre a jogada DESTE turno. E o texto do roteiro
+     de narracao; NAO volta ao contexto do modelo (o que volta e o plano). */
+  .rr-dep { font-family: Georgia, serif; font-size: 13.5px; line-height: 1.45;
+    color: #d7cdb4; border-left: 2px solid rgba(232,223,200,.22);
+    padding-left: 10px; min-height: 56px; overflow: hidden; }
+  .rr-q.b .rr-dep { border-left: none; border-right: 2px solid rgba(232,223,200,.22);
+    padding-left: 0; padding-right: 10px; text-align: right; }
+  .rr-dep.vazio { color: #5a5346; font-style: italic; }
+  .rr-grade { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px 6px; margin-top: auto; }
+  .rr-met { display: flex; flex-direction: column; gap: 1px; }
+  .rr-q.b .rr-met { text-align: right; }
+  .rr-met .r { font-size: 7.5px; letter-spacing: .09em; color: #8d8571; text-transform: uppercase; }
+  .rr-met .v { font-family: Verdana, sans-serif; font-size: 14px; font-weight: 700;
+    font-variant-numeric: tabular-nums; line-height: 1.05; }
+  .rr-met .v small { font-size: 9px; font-weight: 400; color: #8d8571; }
+  .rr-met .v.alerta { color: #d9a441; }
+  .rr-met .v.custo { color: #d9a441; }
+
+  /* --- CONVIVENCIA com o chrome que ja existia -----------------------
+     A barra e o rodape sao `fixed` e ocupam as duas faixas onde varios
+     controlos moravam. Em vez de os mover no HTML (e arriscar os smokes),
+     empurram-se por CSS para fora das faixas novas. */
+  #gamebar { bottom: calc(var(--rr-h) + 12px); }      /* cockpit acima do rodape */
+  #editorbar { bottom: calc(var(--rr-h) + 102px); }    /* acima do cockpit, nao por cima do Play */
+  #replaybar { bottom: calc(var(--rr-h) + 12px); }
+  #banner { top: calc(var(--bt-h) + 16px); }           /* banner abaixo da barra */
+  body.replay #banner, body.cinema #banner { top: calc(var(--bt-h) + 16px); }
+  #sb-toggle { top: calc(var(--bt-h) + 8px); }
+  #zoombar { bottom: calc(var(--rr-h) + 12px); }
+  /* MODO CINEMA: a barra e o rodape SAO a transmissao — ficam. O resto some. */
+  body.cinema #editorbar, body.cinema #banner { }
 
   /* ===== PAINEIS LATERAIS DE ESPECTADOR (fatia 1) =====================
      Adaptado do mockup painel-v2.html. Cantos superiores, um por rei.
@@ -374,6 +500,63 @@
 <div id="espA" class="esp-painel"></div>
 <div id="espB" class="esp-painel dir"></div>
 
+<!-- ===== TRANSMISSAO v5: BARRA DE TOPO =====
+     Agregado dos dois reis, partido pelo turno. Preenchida por
+     renderBarraTopo(), chamada de updateGameHUD() no mesmo ponto em que os
+     paineis laterais eram preenchidos. So le o estado do jogo. -->
+<div id="barraTopo">
+  <div class="bt-lado a">
+    <svg class="bt-bras" id="bt-bras-a" viewBox="0 0 44 51"></svg>
+    <div class="bt-modelo" id="bt-mod-a">-</div>
+    <div class="bt-nums">
+      <div class="bt-cel"><span class="bt-rot">Aldeias</span><span class="bt-val g" id="bt-ald-a">0</span><span class="bt-delta zero" id="bt-dald-a"></span></div>
+      <div class="bt-cel"><span class="bt-rot">Tropas</span><span class="bt-val m" id="bt-tro-a">0</span><span class="bt-delta zero" id="bt-dtro-a"></span></div>
+      <div class="bt-comp">
+        <div class="bt-compbar"><i id="bt-cl-a"></i><i id="bt-ca-a"></i><i id="bt-cc-a"></i></div>
+        <div class="bt-leg" id="bt-leg-a"></div>
+      </div>
+      <div class="bt-cel"><span class="bt-rot">Madeira</span><span class="bt-val p" id="bt-mad-a">0</span></div>
+      <div class="bt-cel"><span class="bt-rot">Ferro</span><span class="bt-val p" id="bt-fer-a">0</span></div>
+    </div>
+  </div>
+  <div class="bt-turno">
+    <span class="bt-rot">Turno</span>
+    <span class="n" id="bt-turno">0</span>
+  </div>
+  <div class="bt-lado b">
+    <svg class="bt-bras" id="bt-bras-b" viewBox="0 0 44 51"></svg>
+    <div class="bt-modelo" id="bt-mod-b">-</div>
+    <div class="bt-nums">
+      <div class="bt-cel"><span class="bt-rot">Aldeias</span><span class="bt-val g" id="bt-ald-b">0</span><span class="bt-delta zero" id="bt-dald-b"></span></div>
+      <div class="bt-cel"><span class="bt-rot">Tropas</span><span class="bt-val m" id="bt-tro-b">0</span><span class="bt-delta zero" id="bt-dtro-b"></span></div>
+      <div class="bt-comp">
+        <div class="bt-compbar"><i id="bt-cl-b"></i><i id="bt-ca-b"></i><i id="bt-cc-b"></i></div>
+        <div class="bt-leg" id="bt-leg-b"></div>
+      </div>
+      <div class="bt-cel"><span class="bt-rot">Madeira</span><span class="bt-val p" id="bt-mad-b">0</span></div>
+      <div class="bt-cel"><span class="bt-rot">Ferro</span><span class="bt-val p" id="bt-fer-b">0</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TRANSMISSAO v5: RODAPE DOS REIS =====
+     Depoimento do turno (voz do modelo, roteiro de narracao) + benchmark ao
+     vivo (le os contadores da partida, incluindo o custo em US$). -->
+<div id="rodapeReis">
+  <div class="rr-q a">
+    <div class="rr-tit"><span id="rr-tit-a">Depoimento do turno</span><i></i></div>
+    <div class="rr-dep vazio" id="rr-dep-a">— sem depoimento neste turno</div>
+    <div class="rr-tit"><span>Benchmark ao vivo</span><i></i></div>
+    <div class="rr-grade" id="rr-grade-a"></div>
+  </div>
+  <div class="rr-q b">
+    <div class="rr-tit"><i></i><span id="rr-tit-b">Depoimento do turno</span></div>
+    <div class="rr-dep vazio" id="rr-dep-b">— sem depoimento neste turno</div>
+    <div class="rr-tit"><i></i><span>Benchmark ao vivo</span></div>
+    <div class="rr-grade" id="rr-grade-b"></div>
+  </div>
+</div>
+
 <div id="placarTop">
   <div id="pt-cabo"><div id="pt-cabo-a"></div><div id="pt-cabo-b"></div></div>
   <div class="pt-linha">
@@ -395,6 +578,7 @@
 </div>
 <div id="cartaoFinal"><button id="cartaoFechar" title="Fechar o cartao">&#10005;</button><div id="cartaoCaixa"></div></div>
 <div id="banner"></div>
+<div id="hoverTip"></div>
 <div id="editorbar">
   <button id="edToggle" title="Ligar/desligar o modo de ajuste do mapa">&#9998; editar mapa</button>
   <span id="edDica">arraste as cidades &middot; clique numa estrada p/ curvar &middot; botao direito apaga a curva</span>
@@ -438,6 +622,13 @@
       <option value="openrouter:deepseek/deepseek-r1">DeepSeek R1 ·OR</option>
       <option value="openrouter:google/gemini-3.1-flash-lite">Gemini 3.1 Flash-lite ·OR</option>
       <option value="openrouter:openai/gpt-5.1">GPT-5.1 ·OR</option>
+      <option value="openrouter:qwen/qwen3-235b-a22b-thinking-2507">Qwen3-235B-thinking ·OR</option>
+      <option value="openrouter:z-ai/glm-5.2:free">GLM 5.2 ·OR free</option>
+      <option value="openrouter:nvidia/nemotron-3-ultra-550b-a55b:free">Nemotron 3 Ultra 550B ·OR free</option>
+      <option value="openrouter:deepseek/deepseek-v4-flash:free">DeepSeek V4 Flash ·OR free</option>
+      <option value="openrouter:minimax/minimax-m3:free">MiniMax M3 ·OR free</option>
+      <option value="openrouter:nvidia/nemotron-3.5-lightning:free">Nemotron 3.5 Lightning ·OR free</option>
+      <option value="openrouter:liquid/lfm-2.5-2.6b:free">LFM 2.5 2.6B ·OR free (baseline fraco)</option>
     </select>
   </label>
   <label title="Quem decide pelo Rei B">Rei B
@@ -456,10 +647,24 @@
       <option value="openrouter:deepseek/deepseek-r1">DeepSeek R1 ·OR</option>
       <option value="openrouter:google/gemini-3.1-flash-lite">Gemini 3.1 Flash-lite ·OR</option>
       <option value="openrouter:openai/gpt-5.1">GPT-5.1 ·OR</option>
+      <option value="openrouter:qwen/qwen3-235b-a22b-thinking-2507">Qwen3-235B-thinking ·OR</option>
+      <option value="openrouter:z-ai/glm-5.2:free">GLM 5.2 ·OR free</option>
+      <option value="openrouter:nvidia/nemotron-3-ultra-550b-a55b:free">Nemotron 3 Ultra 550B ·OR free</option>
+      <option value="openrouter:deepseek/deepseek-v4-flash:free">DeepSeek V4 Flash ·OR free</option>
+      <option value="openrouter:minimax/minimax-m3:free">MiniMax M3 ·OR free</option>
+      <option value="openrouter:nvidia/nemotron-3.5-lightning:free">Nemotron 3.5 Lightning ·OR free</option>
+      <option value="openrouter:liquid/lfm-2.5-2.6b:free">LFM 2.5 2.6B ·OR free (baseline fraco)</option>
     </select>
   </label>
   <label>turnos <input id="gmax" type="number" min="1" max="9999" value="40" style="width:56px"></label>
+  <label title="Teto de gasto (US$): a partida encerra LIMPA (salva .txt + replay) ao atingir o valor. 0 ou vazio desliga o freio.">teto $ <input id="gteto" type="number" min="0" step="0.5" value="7" style="width:56px"></label>
   <label title="Ignora o limite de turnos: a partida corre ate a vitoria ou o empate por estagnacao (30t sem mudanca). Acompanhe o gasto no titulo da aba.">&#8734; sem limite <input type="checkbox" id="gilim"></label>
+  <label title="FOG OF WAR: mostra o mapa como UM Rei o ve. O que ele nao ve fica no escuro; o que ele viu e ja nao ve aparece esmaecido com o turno do ultimo avistamento. NAO muda a partida — e so a camara.">olhos de <select id="gvisao" class="selrei" style="width:auto">
+    <option value="">espectador (ve tudo)</option>
+    <option value="A">Rei A</option>
+    <option value="B">Rei B</option>
+  </select></label>
+
   <button id="glog" title="Baixar o .txt da ultima partida do modelo">Baixar log</button>
   <button id="greplaysave" title="Baixar o replay .json da partida gravada">&#127909; Salvar replay</button>
   <label class="botao-arquivo" title="Reproduzir um replay .json gravado"><button id="greplayload_visual" onclick="document.getElementById('greplayload').click()">&#9654; Ver replay</button><input type="file" id="greplayload" accept=".json" style="display:none"></label>
@@ -1636,6 +1841,67 @@
     draw();
   });
 
+  // ===== HOVER: banner com as tropas ao passar o mouse numa aldeia ou num
+  // exercito em marcha na estrada. So LEITURA — nao interfere no jogo. =====
+  const hoverTip = document.getElementById("hoverTip");
+  const compHover = (t) => {
+    const p = [];
+    if (t.lanceiro) p.push(t.lanceiro + " lanceiro" + (t.lanceiro > 1 ? "s" : ""));
+    if (t.arqueiro) p.push(t.arqueiro + " arqueiro" + (t.arqueiro > 1 ? "s" : ""));
+    if (t.cavaleiro) p.push(t.cavaleiro + " cavaleiro" + (t.cavaleiro > 1 ? "s" : ""));
+    return p.join(", ") || "sem tropas";
+  };
+  const donoLbl = (d) => (d === "A" ? "Rei A" : d === "B" ? "Rei B" : "neutra");
+  const corDono = (d) => (typeof COR !== "undefined" && COR[d]) || "#d8c9a3";
+  function atualizarHover(e) {
+    if (!hoverTip) return;
+    if (!game || dragging || (typeof ED !== "undefined" && ED && ED.pegou)) { hoverTip.style.display = "none"; return; }
+    const mx = e.clientX, my = e.clientY, cs = TILE * scale;
+    let alvo = null, melhor = Infinity;
+    for (const a of game.aldeias) {
+      // a aldeia e desenhada LEVANTADA: base em baseVisualIB(a) e o sprite (largo)
+      // sobe dali. Hit-test = caixa que cobre o sprite, nao a ancora crua SY(a.y).
+      const cap = !!a.capital;
+      const larg = cs * (cap ? 3.2 : 2.4);
+      const spr = cap ? (typeof SPR !== "undefined" && SPR.castelo && SPR.castelo.pronto ? SPR.castelo : null)
+                      : (typeof SPR !== "undefined" && SPR.aldeia_neutra && SPR.aldeia_neutra.pronto ? SPR.aldeia_neutra : null);
+      const alt = alturaSprite(spr, larg, Math.max(20, cs * 0.59));
+      const cx = SX(a.x);
+      const baseY = (typeof baseVisualIB === "function" && IB) ? baseVisualIB(a) : SY(a.y);
+      const meia = larg * 0.46, topo = baseY - alt * 0.92, fundo = baseY + alt * 0.22;
+      if (mx >= cx - meia && mx <= cx + meia && my >= topo && my <= fundo) {
+        const cyc = (topo + fundo) / 2, dd = (cx - mx) * (cx - mx) + (cyc - my) * (cyc - my);
+        if (dd < melhor) { melhor = dd; alvo = { tipo: "aldeia", a }; }
+      }
+    }
+    for (const m of game.movimentos) {
+      const o = game.aldeias.find((a) => a.id === m.origemId), d = game.aldeias.find((a) => a.id === m.destinoId);
+      if (!o || !d) continue;
+      const prog = m.turnosTotal ? (m.turnosTotal - m.turnosRestantes) / m.turnosTotal : 1;
+      const pts = pontosCaminho(m);
+      const p = pts ? pontoNaRota(pts, prog) : { x: o.x + (d.x - o.x) * prog, y: o.y + (d.y - o.y) * prog };
+      const dx = SX(p.x) - mx, dy = SY(p.y) - my, d2 = dx * dx + dy * dy, raio = Math.max(13, cs * 0.38);
+      if (d2 < raio * raio && d2 < melhor) { melhor = d2; alvo = { tipo: "mov", m, d }; }
+    }
+    if (!alvo) { hoverTip.style.display = "none"; return; }
+    let html;
+    if (alvo.tipo === "aldeia") {
+      const a = alvo.a, nome = a.nome || (a.dono === null ? "aldeia neutra" : "aldeia");
+      html = '<b style="color:' + corDono(a.dono) + '">' + nome + '</b> <span class="ht-d">(' +
+        donoLbl(a.dono) + (a.capital ? ", CAPITAL" : "") + ')</span><br>' + compHover(a.tropas);
+    } else {
+      const m = alvo.m, d = alvo.d;
+      html = '<b style="color:' + corDono(m.dono) + '">em marcha (' + donoLbl(m.dono) + ')</b><br>' +
+        compHover(m.tropas) + '<br><span class="ht-d">&rarr; [' + d.id + ']' + (d.nome ? " " + d.nome : "") +
+        ', chega em ' + m.turnosRestantes + ' turno' + (m.turnosRestantes > 1 ? "s" : "") + '</span>';
+    }
+    hoverTip.innerHTML = html;
+    hoverTip.style.display = "block";
+    hoverTip.style.left = Math.min(mx + 14, window.innerWidth - hoverTip.offsetWidth - 8) + "px";
+    hoverTip.style.top = Math.min(my + 16, window.innerHeight - hoverTip.offsetHeight - 8) + "px";
+  }
+  window.addEventListener("mousemove", atualizarHover);
+
   function zoomAt(sx, sy, factor) {
     const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale * factor));
     // mantém o ponto sob o cursor fixo
@@ -1679,14 +1945,62 @@
   let sigsRejAcum = { A: new Set(), B: new Set() };
   let tokensUltimaChamada = null; // canal lateral dos geradores do browser
   let finishUltimaChamada = null; // A1: finish_reason da API ("length" = truncou no teto de tokens)
+  let finishNativoUltimaChamada = null; // LOTE D, D1: finish do provedor (OpenRouter expoe native_finish_reason)
+  let erroUltimaChamada = null; // LOTE D, D1: data.error cru, p/ diagnosticar resposta vazia (causa dos 23 vazios era desconhecida)
   let modoRacUltimaChamada = null; // A2: modo de captura do raciocinio (completo|resumo|ausente)
+  let msUltimaChamada = null; // LOTE E, E5: duracao (ms) da chamada que resolveu, p/ testar corte por tempo nos vazios
+  // FREE-TIER (17/08): quantos 429/503 foram RECUPERADOS nesta chamada. Sem isto o
+  // log so mostra o throttle que MATOU a partida e esconde o que ela sobreviveu —
+  // e é justamente a contagem que diz se um modelo free e usavel sem vigilancia.
+  let throttlesUltimaChamada = 0;
   let custoTotal = 0;             // $ acumulado da partida (medidor ao vivo no titulo da aba)
+  let checkpointArquivo = null, checkpointIdx = 0; // AUTO-SAVE por turno no disco (via servir.py)
+  // Anexa o .txt da partida no disco a cada turno (POST /checkpoint). await curto
+  // (localhost) preserva a ORDEM das linhas. Sem servidor (file:// ou fora) -> ignora.
+  async function checkpointPost(texto, modo) {
+    if (typeof location === "undefined" || !/^https?:$/.test(location.protocol) || !checkpointArquivo) return;
+    try {
+      await fetch("/checkpoint", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ arquivo: checkpointArquivo, texto, modo }) });
+    } catch (_) { /* sem servidor: a partida segue, so nao ha checkpoint */ }
+  }
+  async function checkpointFlush() {
+    if (!checkpointArquivo || checkpointIdx >= geminiLog.length) return;
+    const delta = geminiLog.slice(checkpointIdx);
+    checkpointIdx = geminiLog.length;
+    await checkpointPost(delta.join("\n") + "\n", "anexar");
+  }
   let estagCont = 0, estagPrev = ""; // detector de empate por estagnacao (modo sem-limite)
   // precos OpenRouter por 1M de tokens (in/out) p/ o medidor de custo ao vivo.
+  // Modelos ":free" NAO entram aqui de proposito: precoDe devolve null, nao ha
+  // linha de custo no log e o teto nunca dispara. Correto (custam $0), mas ao ler
+  // o RESUMO lembre que "CUSTO $0.0000" numa partida free significa "nao ha o que
+  // cobrar", e nao "partida barata".
   const PRECOS_OR = {
     "deepseek/deepseek-r1": { in: 0.70, out: 2.50 },
     "google/gemini-3.1-flash-lite": { in: 0.25, out: 1.50 },
     "openai/gpt-5.1": { in: 1.25, out: 10.00 },
+    "qwen/qwen3-235b-a22b-thinking-2507": { in: 0.23, out: 2.30 },
+  };
+  // CATALOGO FREE — verificado um a um em /api/v1/models/<id>/endpoints (17/08/2026).
+  // So documentacao: o jogo nao le isto. Existe para a proxima sessao saber o que
+  // foi conferido e nao ter de sondar a API outra vez, e porque o catalogo free da
+  // OpenRouter ROTA (modelos entram e saem sem aviso).
+  // Limite free desta conta: 20 req/min, 1000 req/dia (eram 50/dia antes dos $10
+  // em credito). Dois Reis = 2 chamadas por turno -> ~500 turnos/dia de teto.
+  const CATALOGO_FREE = {
+    "z-ai/glm-5.2:free":                      { ctx: 128000,  maxOut: 128000, rac: true,  nota: "lider de raciocinio open-weight (Intelligence Index 51); candidato a degrau 3" },
+    "nvidia/nemotron-3-ultra-550b-a55b:free": { ctx: 1000000, maxOut: 65536,  rac: true,  nota: "550B a55b; ja correu contra o burro em 07/08" },
+    // MORTOS EM 18/08 (menos de 24h depois de verificados): HTTP 404 "unavailable
+    // for free, use the paid slug". O catalogo :free ROTA — sonde antes de usar.
+    // "deepseek/deepseek-v4-flash:free":     MORTO 18/08 (404)
+    // "minimax/minimax-m3:free":             MORTO 18/08 (404)
+    // "liquid/lfm-2.5-2.6b:free":            MORTO 18/08 (404 "no endpoints found"; o id pode ter mudado)
+    "nvidia/nemotron-3.5-lightning:free":     { ctx: 1000000, maxOut: 65536,  rac: true,  nota: "raciocinio ATIVO (conferido nos logs de 17-19/08: mediana ~84% da saida em tokens de raciocinio). A nota anterior dizia o contrario e estava errada." },
+    "nvidia/nemotron-3-super-120b-a12b:free": { ctx: 262144,  maxOut: 262144, rac: true,  nota: "o da partida de 17/08 13:03" },
+    "openai/gpt-oss-20b:free":                { ctx: 131072,  maxOut: null,   rac: true,  nota: "21B MoE Apache-2.0. 18/08: LENTISSIMO em partida real (turnos de ate 45 min, 5x o que a sonda previu) e falha o degrau 2/3 — razao ataque/defesa mediana 0.64, ataca com menos forca que a defesa" },
+    "google/gemma-4-31b-it:free":             { ctx: 262144,  maxOut: null,   rac: true,  nota: "via Google AI Studio; thinking configuravel" },
+    "nvidia/nemotron-nano-9b-v2:free":        { ctx: null,    maxOut: null,   rac: null,  nota: "ja estava no jogo; nao reverificado em 17/08" },
   };
   function precoDe(rotulo) { return PRECOS_OR[(rotulo || "").replace(/^openrouter:/, "")] || null; }
   let emReplay = false;          // reproduzindo um replay carregado
@@ -1744,7 +2058,7 @@
         if (!d) continue;
         const s = S[L];
         s.temDiag = true; s.turnosDiag++;
-        s.prop += d.propostas; s.exec += d.executadas;
+        s.prop += d.propostas; s.exec += d.executadas; if (d.vazio) s.vazio = (s.vazio || 0) + 1; // LOTE D, D3.5
         s.rej += d.rejeicoes.length; if (d.reincidente) s.reinc++;
         if (d.tokens) { s.temTok = true; s.tok += (d.tokens.prompt || 0) + (d.tokens.resposta || 0); }
         for (const k in d.recursos || {}) s.rec[k] = (s.rec[k] || 0) + d.recursos[k];
@@ -1803,6 +2117,9 @@
         S.A.exec + "/" + S.A.prop + " \u00b7 " + pct(S.A.exec, S.A.prop),
         S.B.exec + "/" + S.B.prop + " \u00b7 " + pct(S.B.exec, S.B.prop),
         S.A.prop ? S.A.exec / S.A.prop : 0, S.B.prop ? S.B.exec / S.B.prop : 0);
+      // LOTE D, D3.5: turno vazio nao entra em exec/prop; sem esta linha o painel dizia
+      // 100% de agencia p/ um rei que nao respondeu em 23 turnos, contradizendo o log.
+      h += linhaCartao("turnos sem resposta", (S.A.vazio || 0) + "/" + S.A.turnosDiag, (S.B.vazio || 0) + "/" + S.B.turnosDiag, null, null);
       h += linhaCartao("rejei\u00e7\u00f5es", S.A.rej, S.B.rej, null, null);
       h += linhaCartao("turnos reincidentes", S.A.reinc + "/" + S.A.turnosDiag, S.B.reinc + "/" + S.B.turnosDiag, null, null);
       h += linhaCartao("tokens consumidos", S.A.temTok ? S.A.tok.toLocaleString("pt-BR") : "n/d",
@@ -2186,8 +2503,9 @@
     contadores = { A: cont0(), B: cont0() }; // metricas por partida
     motivoInterrupcao = null;
     geminiLog = []; // log zera AQUI (ponto unico, junto dos contadores) — nunca no Play/resume
-    custoTotal = 0; estagCont = 0; estagPrev = ""; // medidor de custo + detector de empate zeram por partida
-    game = Engine.criarEstadoInicial(Engine.CONFIG);
+    custoTotal = 0; estagCont = 0; estagPrev = ""; checkpointArquivo = null; checkpointIdx = 0; // medidor, empate e checkpoint zeram por partida
+    if (typeof depoimentos !== "undefined") { depoimentos.A = null; depoimentos.B = null; } // v5: o depoimento nao atravessa partidas
+    game = Engine.criarEstadoInicial(cfgAtual());
     // indice celula -> aldeia (posicoes fixas): filtro rapido no render
     game.byCell = new Map(game.aldeias.map((a) => [a.x + "," + a.y, a]));
     capitalIds = new Set(game.aldeias.filter((a) => a.dono !== null).map((a) => a.id));
@@ -2195,6 +2513,14 @@
     updateGameHUD();
     draw();
   }
+
+  // Config da partida ao vivo: v4 (reboot) se o toggle estiver ligado, senao as
+  // regras congeladas (CONFIG). Hoisted -> usada tanto no reset quanto no log.
+  // 17/08: havia aqui uma ESCOLHA de ruleset por checkbox. Ela custou 3
+  // partidas pagas logadas como v4 que correram com as regras antigas, porque
+  // o estado era criado antes de a caixa ser lida. O jogo tem um ruleset so —
+  // esta funcao fica como ponto unico de leitura, e nao decide mais nada.
+  function cfgAtual() { return Engine.CONFIG; }
 
   function passoTurno() {
     if (!game || Engine.checarVitoria(game)) { pause(); return; }
@@ -2220,7 +2546,7 @@
   // por rei, zera em novaPartida, vira bloco RESUMO no fim do .txt.
   // errosRede fica FORA de turnos/valido: turno que o modelo nao chegou a
   // responder nao e amostra do modelo (ver decidirLado, bug de 23/07).
-  const cont0 = () => ({ turnos: 0, valido: 0, enviosAceitos: 0, ajustados: 0, constrAceitas: 0, rejeicoes: 0, normalizacoes: 0, errosRede: 0, tokPrompt: 0, tokResp: 0, custo: 0, truncamentos: 0, racCapturado: 0, modoRac: null });
+  const cont0 = () => ({ turnos: 0, valido: 0, enviosAceitos: 0, ajustados: 0, constrAceitas: 0, rejeicoes: 0, normalizacoes: 0, errosRede: 0, tokPrompt: 0, tokResp: 0, custo: 0, truncamentos: 0, racCapturado: 0, modoRac: null, vazio: 0, invalido: 0, msTotal: 0, msN: 0 }); // vazio/invalido: LOTE D, D3 | msTotal/msN: v5, tempo medio de decisao no rodape
   let contadores = { A: cont0(), B: cont0() };
   let motivoInterrupcao = null; // preenchido quando a partida para por erro de rede
   let etiquetaB = "gemini"; // rotulo do decisor do Rei B no log (gemini | ollama:<modelo>)
@@ -2258,6 +2584,7 @@
     if (faltam > 0) await espera(faltam); // pacing p/ caber no free tier
     ultimoEnvioG = Date.now();
     for (let tentativa = 1; ; tentativa++) {
+      const t0 = Date.now(); // LOTE E, E5
       const resp = await fetch(GEMINI_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey },
@@ -2265,6 +2592,7 @@
       });
       if (resp.ok) {
         const data = await resp.json();
+        msUltimaChamada = Date.now() - t0; // LOTE E, E5: duracao da chamada que resolveu
         const um = data.usageMetadata;
         tokensUltimaChamada = um
           ? { prompt: um.promptTokenCount || 0, resposta: (um.candidatesTokenCount || 0) + (um.thoughtsTokenCount || 0) }
@@ -2301,6 +2629,7 @@
     if (faltam > 0) await espera(faltam);
     ultimoEnvioGrok = Date.now();
     for (let tentativa = 1; ; tentativa++) {
+      const t0 = Date.now(); // LOTE E, E5
       const resp = await fetch(GROK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + grokKey },
@@ -2308,6 +2637,7 @@
       });
       if (resp.ok) {
         const data = await resp.json();
+        msUltimaChamada = Date.now() - t0; // LOTE E, E5: duracao da chamada que resolveu
         const u = data.usage;
         tokensUltimaChamada = u ? { prompt: u.prompt_tokens || 0, resposta: u.completion_tokens || 0 } : null;
         const msg = (data.choices && data.choices[0] && data.choices[0].message) || {};
@@ -2333,22 +2663,35 @@
     }
     return openrouterKey;
   }
+  // MAX_TENT_OR: quantas vezes insistir num 429/503 antes de desistir. Subiu de 6
+  // para 9 em 17/08 depois de tres partidas em free-tier morrerem no mesmo ponto:
+  // o endpoint :free do glm-5.2 e servido por UM provedor com pool compartilhado,
+  // e o proprio erro pede "retry shortly" com Retry-After 5s. Insistir e correto —
+  // um 429 nao e resposta do modelo, e infra: nao contamina metrica nenhuma.
+  const MAX_TENT_OR = 9;
   async function gerarOpenRouter(prompt, modelo) {
     const faltam = 300 - (Date.now() - ultimoEnvioOR); // pacing leve p/ rate limit
     if (faltam > 0) await espera(faltam);
     ultimoEnvioOR = Date.now();
+    throttlesUltimaChamada = 0;
     for (let tentativa = 1; ; tentativa++) {
+      const t0 = Date.now(); // LOTE E, E5
       const resp = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + openrouterKey },
-        body: JSON.stringify({ model: modelo, messages: [{ role: "user", content: prompt }], temperature: tempLLM, stream: false, reasoning: { enabled: true } }),
+        body: JSON.stringify({ model: modelo, messages: [{ role: "user", content: prompt }], temperature: tempLLM, stream: false, reasoning: { enabled: true }, max_tokens: (typeof maxTokensLLM === "number" ? maxTokensLLM : 32000) }), // LOTE D, D2
       });
       if (resp.ok) {
         const data = await resp.json();
+        msUltimaChamada = Date.now() - t0; // LOTE E, E5: duracao da chamada que resolveu
         const u = data.usage;
-        tokensUltimaChamada = u ? { prompt: u.prompt_tokens || 0, resposta: u.completion_tokens || 0 } : null;
+        // LOTE D, D1: o booleano `truncado` escondia a causa real. Guardar o cru.
+        const det = (u && u.completion_tokens_details) || {};
+        tokensUltimaChamada = u ? { prompt: u.prompt_tokens || 0, resposta: u.completion_tokens || 0, raciocinio: det.reasoning_tokens || 0 } : null;
         const ch = (data.choices && data.choices[0]) || {};
         finishUltimaChamada = ch.finish_reason || null; // A1: "length" = truncou no teto
+        finishNativoUltimaChamada = ch.native_finish_reason || null; // D1: finish do provedor
+        erroUltimaChamada = (data.error && (data.error.message || JSON.stringify(data.error))) || null; // D1
         const msg = ch.message || {};
         // OpenRouter devolve o raciocinio em message.reasoning (texto) e/ou
         // reasoning_details (estruturado); message.content e a resposta final.
@@ -2362,8 +2705,19 @@
         return { texto: msg.content || "", raciocinio };
       }
       const corpo = await resp.text().catch(() => "");
-      if ((resp.status !== 429 && resp.status !== 503) || tentativa >= 6) throw new Error("OpenRouter HTTP " + resp.status + ": " + corpo);
-      await espera(Math.min(1000 * 2 ** tentativa, 40000) + 500); // backoff p/ throttle (429 = cota free)
+      if ((resp.status !== 429 && resp.status !== 503) || tentativa >= MAX_TENT_OR) throw new Error("OpenRouter HTTP " + resp.status + ": " + corpo);
+      throttlesUltimaChamada++;
+      // HONRAR O Retry-After (17/08): o provedor DIZ quanto esperar, no header e no
+      // corpo (retry_after_seconds). Adivinhar por backoff exponencial gastava as
+      // tentativas mais rapido do que o pool levava a liberar. Usa-se o MAIOR entre
+      // o pedido do provedor e o backoff, com teto de 45s por espera.
+      let pedido = Number(resp.headers.get("retry-after")) * 1000;
+      if (!isFinite(pedido) || pedido <= 0) {
+        const m = /"retry_after_seconds"\s*:\s*(\d+)/.exec(corpo);
+        pedido = m ? Number(m[1]) * 1000 : 0;
+      }
+      const backoff = Math.min(1000 * 2 ** tentativa, 40000) + 500;
+      await espera(Math.min(Math.max(pedido, backoff), 45000)); // backoff p/ throttle (429 = cota free)
     }
   }
 
@@ -2385,8 +2739,21 @@
     if (r.erroRede) ct.errosRede++;
     else {
       ct.turnos++;
-      if (r.ok) ct.valido++;
+      // LOTE D, D3: turno VAZIO (nao respondeu) e turno INVALIDO (respondeu lixo) sao
+      // falhas diferentes; misturar em "validade" escondia os 23 vazios. valido = ok (igual).
+      const cruTrim = (r.cru == null ? "" : String(r.cru)).trim();
+      const ehVazio = !cruTrim || cruTrim === '""';
+      if (ehVazio) ct.vazio++;
+      else if (!r.ok) ct.invalido++;
+      else ct.valido++;
+      if (diagTurno[lado]) diagTurno[lado].vazio = ehVazio; // LOTE D, D3.5: propaga p/ o painel do espectador
       ct.normalizacoes += (r.normalizacoes || []).length;
+      if (r.plano) ct.comPlano = (ct.comPlano || 0) + 1;
+      if (r.depoimento) ct.comDepoimento = (ct.comDepoimento || 0) + 1;
+      // v5: tempo de decisao medio p/ o rodape. Le o mesmo ms do LOTE E/E5 que
+      // ja vai para o log; nao mede nada novo, so acumula.
+      const _msT = diagTurno[lado] && diagTurno[lado].ms;
+      if (typeof _msT === "number" && _msT > 0) { ct.msTotal += _msT; ct.msN++; }
       if (r.raciocinio) { ct.racCapturado++; const md = diagTurno[lado] && diagTurno[lado].modoRac; if (md) ct.modoRac = md; } // A2
       if (r.diag) {
         ct.enviosAceitos += r.diag.aceitoEnvios.length;
@@ -2397,9 +2764,13 @@
     }
     const L = [];
     L.push("########## TURNO " + game.turno + " \u2014 Rei " + lado + " (" + rotulo + ") ##########");
-    const tk = diagTurno[lado] && diagTurno[lado].tokens;
+    const dt = diagTurno[lado] || {};
+    const tk = dt.tokens;
+    // LOTE D, D1: finish/nativo sempre no log (mesmo sem usage) p/ diagnosticar vazio.
+    const finishTxt = dt.finish || "?", nativoTxt = dt.finishNativo || "?";
+    const msTxt = (dt.ms != null) ? " | ms " + dt.ms : ""; // LOTE E, E5: apendice no FIM (o analisador antigo nao ancora aqui)
     if (tk) {
-      L.push("tokens: prompt " + tk.prompt + " | resposta " + tk.resposta);
+      L.push("tokens: prompt " + tk.prompt + " | resposta " + tk.resposta + " | raciocinio " + (tk.raciocinio || 0) + " | finish " + finishTxt + " | nativo " + nativoTxt + msTxt);
       ct.tokPrompt += tk.prompt; ct.tokResp += tk.resposta;
       const pr = precoDe(rotulo);
       if (pr) {
@@ -2407,16 +2778,33 @@
         ct.custo += cst; custoTotal += cst;
         L.push("custo turno: $" + cst.toFixed(5) + " | Rei " + lado + " acum $" + ct.custo.toFixed(4) + " | partida $" + custoTotal.toFixed(4));
       }
+    } else if (dt.finish || dt.finishNativo) {
+      L.push("tokens: (sem usage) | finish " + finishTxt + " | nativo " + nativoTxt + msTxt);
     }
-    if (diagTurno[lado] && diagTurno[lado].truncado) { L.push("TRUNCADO: resposta atingiu o teto de tokens do provedor (finish_reason=length) \u2014 turno conta como passado, sem retry"); ct.truncamentos++; } // A1
+    if (dt.erroApi) L.push("ERRO API: " + dt.erroApi); // LOTE D, D1
+    if (dt.truncado) { L.push("TRUNCADO: resposta atingiu o teto de tokens do provedor (finish_reason=length) \u2014 turno conta como passado, sem retry"); ct.truncamentos++; } // A1
     if (r.erroRede) L.push(">>> ERRO DE REDE \u2014 turno NAO contabilizado (sem resposta do modelo)");
+    // FREE-TIER (17/08): o throttle que a partida SOBREVIVEU tambem tem de aparecer.
+    // Antes o log so mostrava o 429 que a matou; um modelo free que precisa de 5
+    // tentativas por turno parece igual a um que responde de primeira, e nao e.
+    if (dt.throttles) { L.push("THROTTLE: " + dt.throttles + " x 429/503 recuperado(s) nesta chamada (infra, fora das metricas)"); ct.throttles = (ct.throttles || 0) + dt.throttles; }
+    if (r.retentativas) { L.push("RETENTATIVA DE TURNO: " + r.retentativas + " (erro de rede; a deliberacao foi repetida sobre a MESMA fotografia)"); ct.retentativas = (ct.retentativas || 0) + r.retentativas; }
     L.push("resposta crua: " + JSON.stringify(r.cru));
     L.push(r.raciocinio ? "raciocinio: " + r.raciocinio : "raciocinio: (nao capturado)");
     L.push("ordem.construir: " + JSON.stringify(r.ordem.construir || []));
     L.push("ordem.envios   : " + JSON.stringify(r.ordem.envios || []));
+    // v5: os dois resumos ficam no .txt. O `plano` porque e o que o Rei vai LER
+    // no turno seguinte (sem ele o log nao explica a jogada seguinte); o
+    // `depoimento` porque e o roteiro de narracao do video, ja pronto.
+    if (r.plano) L.push("plano (volta no proximo prompt): " + r.plano);
+    if (r.depoimento) L.push("depoimento (so tela/narracao): " + r.depoimento);
     // H3: a normalizacao NAO esconde o desvio — cada correcao vira linha no
     // txt, p/ o eval contar "quantas vezes o modelo errou a grafia" separado
     // de "quantas ordens valeram".
+    // P4 (17/08): a causa REAL de uma resposta invalida, no log. Antes o .txt
+    // mostrava a resposta crua e a ordem vazia, e quem lia tinha de adivinhar se
+    // foi JSON quebrado, campo errado ou modelo calado.
+    if (!r.ok && r.erroParse) L.push("ERRO DE FORMATO: " + r.erroParse);
     (r.normalizacoes || []).forEach((n) => L.push("NORMALIZADO: " + n));
     const diag = r.erroRede ? null : r.diag; // sem resposta nao ha o que aceitar/rejeitar
     if (diag) {
@@ -2464,11 +2852,13 @@
     for (const lado of ["A", "B"]) {
       const c = contadores[lado], rot = lado === "A" ? etiquetaA : etiquetaB;
       if (!c.turnos && !c.errosRede) continue;
-      const ag = c.turnos ? (c.enviosAceitos / c.turnos).toFixed(2) : "n/a";
+      const comResp = c.turnos - (c.vazio || 0); // LOTE D, D3: turnos em que o modelo respondeu
+      const ag = comResp > 0 ? (c.enviosAceitos / comResp).toFixed(2) : "n/a";
       const taxaClamp = c.enviosAceitos ? (c.ajustados / c.enviosAceitos).toFixed(2) : "n/a";
-      resumo.push("Rei " + lado + " (" + rot + "): " + c.turnos + " turnos respondidos | " +
-        "AGENCIA " + ag + " envios/turno (" + c.enviosAceitos + " envios, " + c.constrAceitas + " constr) | " +
-        "validade " + c.valido + "/" + c.turnos + " | rejeicoes " + c.rejeicoes +
+      resumo.push("Rei " + lado + " (" + rot + "): " + c.turnos + " turnos | " +
+        "AGENCIA " + ag + " envios/turno (" + c.enviosAceitos + " envios em " + comResp + " turnos com resposta, " + c.constrAceitas + " constr) | " +
+        "VALIDO " + c.valido + " | INVALIDO " + (c.invalido || 0) + " | VAZIO " + (c.vazio || 0) + " | rejeicoes " + c.rejeicoes +
+        ((c.throttles || c.retentativas) ? " | THROTTLE " + (c.throttles || 0) + " (retentativas de turno " + (c.retentativas || 0) + ")" : "") +
         " | clamp " + c.ajustados + "/" + c.enviosAceitos + " (taxa " + taxaClamp + ")" +
         " | normalizacoes " + c.normalizacoes +
         " | truncamentos " + (c.truncamentos || 0) +
@@ -2498,6 +2888,10 @@
   // Default 0 (benchmark de sempre). Sem UI nova de proposito: cirurgia de
   // HTML foi onde a sessao de 03/07 sangrou. Vale p/ Ollama E Gemini.
   let tempLLM = 0;
+  // LOTE D, D2: teto de resposta no browser como CONTROLO (nao cura). Acima do max
+  // observado (27764) de proposito: raramente dispara; quando disparar, o D1 mostra
+  // "finish length". Os 23 vazios da partida NAO eram truncamento (truncamentos 0).
+  let maxTokensLLM = 32000;
   try {
     const q = new URLSearchParams((window.location && window.location.search) || "");
     if (q.has("temp")) { const v = parseFloat(q.get("temp")); if (isFinite(v) && v >= 0) tempLLM = v; }
@@ -2518,6 +2912,7 @@
   // nos 3B (segue 100% na GPU). 16384 derrama p/ CPU na 3050 Ti — nao subir.
   const OLLAMA_NUM_CTX = 8192;
   async function gerarOllama(prompt, modelo) {
+    const t0 = Date.now(); // LOTE E, E5
     const resp = await fetch(OLLAMA_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2525,6 +2920,7 @@
     });
     if (!resp.ok) throw new Error("Ollama HTTP " + resp.status);
     const data = await resp.json();
+    msUltimaChamada = Date.now() - t0; // LOTE E, E5: duracao da chamada que resolveu
     tokensUltimaChamada = (data.prompt_eval_count != null || data.eval_count != null)
       ? { prompt: data.prompt_eval_count || 0, resposta: data.eval_count || 0 }
       : null; // backend nao reportou: null, nunca estimar
@@ -2545,7 +2941,16 @@
 
   // E3/1c — fotografa o pensamento do turno de UM rei (spec SPEC_E3).
   // recursos NAO entram aqui: sao medidos AO FIM do turno, no gravarFrame.
-  function coletarDiag(lado, ordem, dg, formatoOk, tokens) {
+  function coletarDiag(lado, ordem, dg, formatoOk, tokens, d1) {
+    // LOTE E, E2: no turno simultaneo os globals do D1 ja podem ter sido
+    // sobrescritos pela deliberacao do outro lado, entao aplicarLado passa uma
+    // FOTO (d1) tirada logo apos o await. Sem d1 (caminho antigo/burro sequencial)
+    // le os globals como antes -> byte-identico.
+    const _finish = d1 ? d1.finish : finishUltimaChamada;
+    const _finishNativo = d1 ? d1.finishNativo : finishNativoUltimaChamada;
+    const _erroApi = d1 ? d1.erroApi : erroUltimaChamada;
+    const _modoRac = d1 ? d1.modoRac : modoRacUltimaChamada;
+    const _ms = d1 ? d1.ms : msUltimaChamada; // LOTE E, E5
     const envios = (ordem && ordem.envios) || [], constr = (ordem && ordem.construir) || [];
     const sigs = Engine.assinaturasRejeitadas(dg.rejeicoes);
     let reincidente = false;
@@ -2561,15 +2966,19 @@
       reincidente,
       ataquesIniciados: atq,
       tokens: tokens || null,
-      truncado: finishUltimaChamada === "length", // A1
-      modoRac: modoRacUltimaChamada,               // A2
+      truncado: _finish === "length",              // A1
+      modoRac: _modoRac,                           // A2
+      finish: _finish,                             // LOTE D, D1
+      finishNativo: _finishNativo,                 // D1
+      erroApi: _erroApi,                           // D1
+      ms: _ms,                                     // LOTE E, E5
     };
   }
 
   // Decide e executa a ordem de UM lado. Retorna "abort" se o run mudou.
   async function decidirLado(lado, gerador, rotulo, meuRun) {
     if (!Engine.aldeiasDe(game, lado).length) return null;
-    finishUltimaChamada = null; modoRacUltimaChamada = null; // A1/A2: nao herdam do turno/lado anterior
+    finishUltimaChamada = null; modoRacUltimaChamada = null; finishNativoUltimaChamada = null; erroUltimaChamada = null; msUltimaChamada = null; // A1/A2/D1/E5: nao herdam do turno/lado anterior
     if (!gerador) {
       const ordemB = Engine.jogadorBurro(Engine.montarVisao(game, lado));
       const dgB = Engine.diagnosticarOrdem(game, lado, ordemB); // burro entra no registro: e a ancora do benchmark
@@ -2577,10 +2986,12 @@
       coletarDiag(lado, ordemB, dgB, true, null);
       return null;
     }
-    // PROMPT PADRAO OFICIAL DO JOGO = P2 (minimo pre-calculado por alvo no
-    // relatorio). Decisao do Lucas apos o experimento v3 (exp-prompt-tropas).
-    // A visao precisa de {minimos:true} p/ o P2 mostrar "| para tomar: ...".
-    const prompt = Engine.montarPrompt(Engine.montarVisao(game, lado, { minimos: true }), { variante: "P2" });
+    // PROMPT PADRAO OFICIAL DO JOGO = P4 (17/08, sessao Fable): ingles, sem
+    // exemplo com valores, sem "para tomar" (o minimo pre-calculado saiu do
+    // jogo a pedido do Lucas), fog of war, condicao de vitoria real, reforco
+    // dito como mecanica. rejeicaoNoFim liga o H2 (rejeicoes no fim absoluto
+    // do prompt — a flag existia desde o LOTE B e o browser nunca a usou).
+    const prompt = Engine.montarPrompt(Engine.montarVisao(game, lado), { rejeicaoNoFim: true });
     setStatus("Rei " + lado + " pensando... (" + rotulo + ")");
     let cru = "", raciocinio = null, erroRede = null;
     tokensUltimaChamada = null; // zera ANTES: erro de rede nao herda tokens do turno anterior
@@ -2605,8 +3016,108 @@
     const ordem = p.ordem;
     const diag = Engine.diagnosticarOrdem(game, lado, ordem); // ANTES de executar
     Engine.executarOrdem(game, lado, ordem);
+    // v5: a nota vai para o estado (volta no prompt do proximo turno) e o
+    // depoimento vai so para a tela. Depois de executar: o plano e para o
+    // turno SEGUINTE, nunca para o que acabou de ser decidido.
+    Engine.guardarPlano(game, lado, p.plano);
+    definirDepoimento(lado, p.depoimento, game.turno);
     coletarDiag(lado, ordem, diag, p.ok, tokensDoLado);
-    return { cru, raciocinio, ordem, diag, ok: p.ok, normalizacoes: p.normalizacoes || [] }; // H3: p/ o txt
+    return { cru, raciocinio, ordem, diag, ok: p.ok, erroParse: p.erro, normalizacoes: p.normalizacoes || [], plano: p.plano, depoimento: p.depoimento }; // H3 + P4 (erroParse p/ o txt)
+  }
+
+  // LOTE E, E2 — metade 1 do turno SIMULTANEO (achado A1): monta visao+prompt,
+  // chama o gerador e parseia. NAO diagnostica nem executa (isso e o aplicarLado).
+  // Fotografa os globals do D1 e os tokens em LOCAIS logo apos o await: como as
+  // duas deliberacoes correm ANTES de qualquer aplicacao, deixar esses campos nos
+  // globals ate o aplicarLado faria o lado A herdar o diagnostico do lado B.
+  // ATENCAO: as chamadas de API seguem SEQUENCIAIS (deliberar A await, deliberar B
+  // await) — a simultaneidade e de INFORMACAO (mesma fotografia), nao de rede.
+  // Retorna "abort" se o run mudou, ou null se o lado esta morto.
+  async function deliberarLado(lado, gerador, rotulo, meuRun) {
+    if (!Engine.aldeiasDe(game, lado).length) return null;
+    finishUltimaChamada = null; modoRacUltimaChamada = null; finishNativoUltimaChamada = null; erroUltimaChamada = null; msUltimaChamada = null; // A1/A2/D1/E5
+    const snapD1 = () => ({ finish: finishUltimaChamada, finishNativo: finishNativoUltimaChamada, erroApi: erroUltimaChamada, modoRac: modoRacUltimaChamada, ms: msUltimaChamada, throttles: throttlesUltimaChamada });
+    if (!gerador) { // burro: decide sem rede (D1 fica nulo)
+      return { kind: "burro", ordem: Engine.jogadorBurro(Engine.montarVisao(game, lado)), tokens: null, d1: snapD1() };
+    }
+    const prompt = Engine.montarPrompt(Engine.montarVisao(game, lado), { rejeicaoNoFim: true }); // P4 (17/08): mesmo caminho do deliberarLado
+    setStatus("Rei " + lado + " pensando... (" + rotulo + ")");
+    let cru = "", raciocinio = null, erroRede = null;
+    tokensUltimaChamada = null; // zera ANTES: erro de rede nao herda tokens do turno anterior
+    try { const g = await gerador(prompt); cru = g.texto; raciocinio = g.raciocinio; }
+    catch (e) { cru = "[ERRO DE REDE] " + e.message; erroRede = e.message; }
+    const tokensDoLado = tokensUltimaChamada, d1 = snapD1(); // CAPTURA imediata (antes de outra chamada)
+    setStatus("");
+    if (runId !== meuRun) return "abort"; // resposta atrasada de run antigo
+    if (erroRede) return { kind: "erroRede", cru, erroRede, tokens: null, d1 };
+    const p = Engine.parsearOrdem(cru); // sem retry (benchmark)
+    // P4 (17/08): `erroParse` viaja junto. O motor passou a dar a causa REAL de
+    // uma resposta invalida ("bloco JSON desbalanceado: faltam 1 '}'") e a fazer
+    // salvamento parcial — se o browser nao propagasse isso, o .txt continuaria
+    // sem dizer POR QUE a ordem foi invalida. O log tem de descrever o que correu.
+    return { kind: "llm", cru, raciocinio, ordem: p.ordem, ok: p.ok, erroParse: p.erro, normalizacoes: p.normalizacoes || [], tokens: tokensDoLado, d1, plano: p.plano, depoimento: p.depoimento };
+  }
+
+  // FREE-TIER (17/08) — RETENTATIVA DE TURNO em erro de rede.
+  //
+  //  Porque isto e legitimo e nao "dar segunda chance ao modelo": um 429 nao e
+  //  resposta do modelo, e ausencia de resposta. O projeto ja o trata fora das
+  //  metricas ("ERROS DE REDE ... fora das metricas"). O que se repete aqui e a
+  //  CHAMADA, nunca o parse — um JSON quebrado continua sem retry, porque ESSE
+  //  e o degrau 0 que o benchmark mede.
+  //
+  //  Porque e seguro para a fairness: no caminho de ordens simultaneas nada foi
+  //  aplicado quando isto corre. Os dois Reis deliberam sobre a MESMA fotografia
+  //  e so depois se aplica A e B. Repetir a deliberacao de um lado devolve-lhe
+  //  exatamente o mesmo prompt, sobre exatamente o mesmo estado. Nada vaza.
+  //
+  //  Porque existe: tres partidas de 17/08 morreram no turno 1 e no turno 4 com
+  //  429 do pool compartilhado do glm-5.2:free — sem isto, testar em free-tier
+  //  sem alguem a vigiar o ecra e impossivel.
+  const RETENT_TURNO = 2;        // deliberacoes extras por lado, alem da primeira
+  const ESPERA_RETENT_MS = 20000; // o pool leva dezenas de segundos a liberar
+  async function deliberarComRetentativa(lado, gerador, rotulo, meuRun) {
+    let d = await deliberarLado(lado, gerador, rotulo, meuRun);
+    for (let n = 1; n <= RETENT_TURNO; n++) {
+      if (d === "abort" || !d || d.kind !== "erroRede") return d;
+      if (runId !== meuRun) return "abort";
+      setStatus("Rei " + lado + ": erro de rede — nova tentativa " + n + "/" + RETENT_TURNO + " em " + (ESPERA_RETENT_MS / 1000) + "s");
+      await espera(ESPERA_RETENT_MS);
+      if (runId !== meuRun) return "abort";
+      const nova = await deliberarLado(lado, gerador, rotulo, meuRun);
+      if (nova && nova !== "abort") nova.retentativas = n;   // p/ o log dizer que houve
+      d = nova;
+    }
+    return d;
+  }
+
+  // LOTE E, E2 — metade 2 do turno SIMULTANEO: diagnostica, executa e coleta o
+  // diag do lado a partir da deliberacao ja feita. Espelha exatamente o que o
+  // decidirLado fazia depois do parse. O retorno bate byte a byte com o do
+  // decidirLado (null p/ morto/burro; registro p/ registrarTurnoLado nos demais).
+  function aplicarLado(lado, delib) {
+    if (!delib || delib === "abort") return null;
+    if (delib.kind === "burro") {
+      const dgB = Engine.diagnosticarOrdem(game, lado, delib.ordem); // burro entra no registro: e a ancora do benchmark
+      Engine.executarOrdem(game, lado, delib.ordem);
+      coletarDiag(lado, delib.ordem, dgB, true, null, delib.d1);
+      return null;
+    }
+    if (delib.kind === "erroRede") { // curto-circuito: erro de rede nao passa pelo parser (bug 23/07)
+      // (as retentativas de turno ja foram gastas em deliberarComRetentativa)
+      const vazia = { construir: [], envios: [] };
+      const dgErro = Engine.diagnosticarOrdem(game, lado, vazia);
+      Engine.executarOrdem(game, lado, vazia); // limpa rejeicoesAnteriores do lado
+      coletarDiag(lado, vazia, dgErro, false, null, delib.d1);
+      return { cru: delib.cru, raciocinio: null, ordem: vazia, diag: dgErro, ok: false, normalizacoes: [], erroRede: delib.erroRede, retentativas: delib.retentativas || 0 };
+    }
+    const diag = Engine.diagnosticarOrdem(game, lado, delib.ordem); // ANTES de executar
+    Engine.executarOrdem(game, lado, delib.ordem);
+    // v5: idem ao decidirLado — nota para o proximo turno, depoimento para a tela.
+    Engine.guardarPlano(game, lado, delib.plano);
+    definirDepoimento(lado, delib.depoimento, game.turno);
+    coletarDiag(lado, delib.ordem, diag, delib.ok, delib.tokens, delib.d1);
+    return { cru: delib.cru, raciocinio: delib.raciocinio, ordem: delib.ordem, diag, ok: delib.ok, erroParse: delib.erroParse, normalizacoes: delib.normalizacoes, plano: delib.plano, depoimento: delib.depoimento, retentativas: delib.retentativas || 0 };
   }
 
   async function passoTurnoDuelo(meuRun) {
@@ -2615,10 +3126,24 @@
     etiquetaA = vA; etiquetaB = vB;
     Engine.tick(game);
     diagTurno = { A: null, B: null }; // frame novo, pensamento novo
-    const rA = await decidirLado("A", fabricarGerador(vA), vA, meuRun);
-    if (rA === "abort") return;
-    const rB = await decidirLado("B", fabricarGerador(vB), vB, meuRun);
-    if (rB === "abort") return;
+    let rA, rB;
+    if (Engine.CONFIG.ordensSimultaneas === false) {
+      // LOTE E, E2 — caminho antigo (decide-e-executa em sequencia), INALTERADO.
+      rA = await decidirLado("A", fabricarGerador(vA), vA, meuRun);
+      if (rA === "abort") return;
+      rB = await decidirLado("B", fabricarGerador(vB), vB, meuRun);
+      if (rB === "abort") return;
+    } else {
+      // LOTE E, E2 — ordens simultaneas (achado A1): delibera os DOIS lados sobre
+      // a MESMA fotografia (nenhum executou), depois aplica A->B. Tira do Rei B a
+      // visao dos envios que A ordenou NESTE turno. Chamadas de API sequenciais.
+      const dA = await deliberarComRetentativa("A", fabricarGerador(vA), vA, meuRun);
+      if (dA === "abort") return;
+      const dB = await deliberarComRetentativa("B", fabricarGerador(vB), vB, meuRun);
+      if (dB === "abort") return;
+      rA = aplicarLado("A", dA);
+      rB = aplicarLado("B", dB);
+    }
     if (rA) registrarTurnoLado("A", vA, rA);
     if (rB) registrarTurnoLado("B", vB, rB);
     if (rA || rB) registrarEventosTurno();
@@ -2642,6 +3167,7 @@
     draw();
     document.title = "$" + custoTotal.toFixed(4) + " | T" + game.turno + " — Reino (A " +
       Engine.aldeiasDe(game, "A").length + " x " + Engine.aldeiasDe(game, "B").length + " B)";
+    await checkpointFlush(); // AUTO-SAVE: anexa as linhas deste turno no disco
   }
 
   async function runDuelo(meuRun) {
@@ -2675,7 +3201,11 @@
     const semLimite = !!(document.getElementById("gilim") && document.getElementById("gilim").checked);
     let fimEstagnacao = false;
     let fimCusto = false;
-    const TETO_CUSTO = 7.0; // freio de gasto: encerra a partida LIMPA (salva .txt + replay) antes do credito acabar
+    // LOTE E, E6 (achado A6): teto de gasto configuravel no painel (gteto). O 7.0
+    // fixo era MAIOR que o saldo (~$4.18) — o freio nunca freava. <= 0 (ou vazio)
+    // desliga o freio. Encerra a partida LIMPA (salva .txt + replay) ao atingir.
+    const tetoEl = document.getElementById("gteto");
+    const TETO_CUSTO = tetoEl ? (parseFloat(tetoEl.value) || 0) : 7.0;
     // BUG de 04/07: zerar o log AQUI apagava os turnos anteriores a cada
     // resume (Play depois de pausa), dessincronizando log e contadores.
     // Agora o reset vive em novaPartida; o Play so abre o cabecalho se a
@@ -2686,7 +3216,30 @@
       // PROVENIENCIA (13/07): registrar as condicoes do experimento no proprio
       // log. Descoberto na analise da partida de 13/07: sem isso, so lendo o
       // codigo da pra saber se a rodada foi baseline ou rejfim.
-      geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=P2 (minimo por alvo) + relatorio v3 + combate v3 | normalizacao H3 ativa | thinking=on | max_tokens_resposta=default_provedor | " + (semLimite ? "SEM LIMITE de turnos (empate por estagnacao em 30t)" : "maxTurnos " + maxT) + "\n");
+      // 16/08 (v5): esta linha era um TEXTO FIXO e mentiu. Quando a escala de
+      // marcha desceu de 2/3 para 0.3, o cabecalho continuou a escrever
+      // "dist x2/3" — e a partida das 18:30, que correu de facto a 0.3, foi
+      // lida como se nao tivesse mudado nada. Mesma classe de bug que ja mordeu
+      // 3x no motor: o que se LE tem de ser o que se EXECUTA. Agora le do cfg.
+      // 17/08: LE DO ESTADO, nao do checkbox. O cabecalho descreve a partida
+      // que esta a correr — se ler o toggle, descreve uma intencao que pode
+      // nunca ter sido aplicada (foi o que aconteceu: 3 partidas logadas como
+      // v4 correram em v3 porque o `game` fora criado antes de marcar a caixa).
+      const _c = (game && game.config) ? game.config : cfgAtual();
+      const regrasTxt = _c.vitoriaPorDominancia
+        ? "regras=v4 (counter " + _c.bonus_forca_triangulo +
+          ", cav def" + _c.tropas.cavaleiro.def + "/" + _c.tropas.cavaleiro.turnos + "t" +
+          ", madeira " + _c.producao.madeira +
+          ", dist x" + (_c.escalaMarcha != null ? _c.escalaMarcha : 1) +
+          ", vitoria " + Math.round((_c.vitoriaFracao || 0) * 100) + "%/" + _c.vitoriaTurnos + "t)"
+        : "regras=congeladas v3";
+      const resumosTxt = (_c.resumosDoRei !== false) ? " | resumos do Rei: plano+depoimento" : "";
+      geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=" + (_c.promptP4 === true ? "P4 EN (esquema declarado, sem exemplo, sem minimos, vitoria real, reforco, quantidade)" : "P2 (minimo por alvo)") + (_c.fogOfWar === true ? " + FOG OF WAR" : "") + " + combate v3 | " + regrasTxt + resumosTxt + " | normalizacao H3 ativa | thinking=on | max_tokens_resposta=" + maxTokensLLM + " | " + (semLimite ? "SEM LIMITE de turnos (empate por estagnacao em 30t)" : "maxTurnos " + maxT) + " | teto=" + (TETO_CUSTO > 0 ? "$" + TETO_CUSTO.toFixed(2) : "desligado") + "\n"); // LOTE E, E6
+      // AUTO-SAVE: cria o checkpoint .txt no disco com o cabecalho (via servir.py).
+      const tsCp = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 16);
+      checkpointArquivo = ("partida_" + vA + "_vs_" + vB + "_" + tsCp).replace(/[^a-z0-9._-]/gi, "-") + ".txt";
+      await checkpointPost(geminiLog.join("\n") + "\n", "novo");
+      checkpointIdx = geminiLog.length;
     }
     motivoInterrupcao = null; // Play/resume limpa: so vale a interrupcao deste run
     while (playing && runId === meuRun && game && !Engine.checarVitoria(game) && (semLimite || game.turno < maxT)) {
@@ -2694,7 +3247,7 @@
       const chaveTerr = Engine.aldeiasDe(game, "A").length + "-" + Engine.aldeiasDe(game, "B").length;
       if (chaveTerr === estagPrev) estagCont++; else { estagCont = 0; estagPrev = chaveTerr; }
       if (semLimite && estagCont >= 30) { fimEstagnacao = true; break; }
-      if (custoTotal >= TETO_CUSTO) { fimCusto = true; break; }
+      if (TETO_CUSTO > 0 && custoTotal >= TETO_CUSTO) { fimCusto = true; break; } // LOTE E, E6: teto<=0 desliga o freio
     }
     if (runId !== meuRun) return; // run antigo: nao fecha nem baixa o log do run novo
     pause();
@@ -3183,6 +3736,108 @@
       }
       ctx.globalAlpha = 1;
     }
+
+    // NEVOA POR CIMA DE TUDO (P4, 17/08): quando o espectador escolhe "olhos de
+    // Rei A/B", pinta o que aquele Rei NAO ve. Vai no fim do drawGame de
+    // proposito — e uma camada de camara sobre o mapa ja desenhado, e nao um
+    // filtro no desenho: assim nao ha risco de esquecer de esconder algo novo
+    // que venha a ser desenhado antes (bandeira, sprite, seta, efeito).
+    desenharNevoaDoRei();
+  }
+
+  // ===== FOG OF WAR: A CAMARA DO REI (P4, 17/08) =========================
+  //  So LEITURA e so pixels. Nao toca no estado, no prompt nem no motor: o
+  //  fog de verdade e o do relatorio (engine.relatorioTextoP4). Isto existe
+  //  para o Lucas VER o que o Rei ve — e para a narracao poder mostrar
+  //  "o que ele sabia" ao lado de "o que era verdade".
+  //  Reusa Engine.visiveisPara e game.visto: uma regra, uma implementacao.
+  //  Se divergir do prompt, o bug e este render, nunca a partida.
+  function reiObservado() {
+    const el = document.getElementById("gvisao");
+    const v = el ? el.value : "";
+    return (v === "A" || v === "B") ? v : null;
+  }
+  function desenharNevoaDoRei() {
+    const me = reiObservado();
+    if (!me || !game || game.config.fogOfWar !== true) return;
+    const cs = TILE * scale;
+    const vis = Engine.visiveisPara(game, me);
+    const mem = (game.visto && game.visto[me]) || {};
+
+    // 1) veu sobre o mapa inteiro, com "buracos" onde o Rei ve. Um unico
+    //    caminho com duas subtrajetorias e regra even-odd: barato e sem costura.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, VW, VH);
+    for (const a of game.aldeias) {
+      if (!vis.has(a.id)) continue;
+      const raio = Math.max(34, cs * 1.5);
+      ctx.moveTo(SX(a.x) + raio, SY(a.y));
+      ctx.arc(SX(a.x), SY(a.y), raio, 0, Math.PI * 2, true);
+    }
+    ctx.fillStyle = "rgba(6,10,20,.62)";
+    ctx.fill("evenodd");
+    ctx.restore();
+
+    // 2) aldeias LEMBRADAS (viu antes, nao ve agora): marca com o turno do
+    //    ultimo avistamento. E a informacao com que o Rei esta a decidir —
+    //    ver isto ao lado do mapa real explica meia partida.
+    for (const a of game.aldeias) {
+      if (vis.has(a.id)) continue;
+      const v = mem[a.id];
+      const sx = SX(a.x), sy = SY(a.y);
+      if (sx < -40 || sy < -40 || sx > VW + 40 || sy > VH + 40) continue;
+      if (v) {
+        const idade = game.turno - v.turno;
+        const corDono = v.dono === null ? COR.neutra : COR[v.dono];
+        ctx.save();
+        ctx.globalAlpha = 0.85;
+        ctx.setLineDash([Math.max(3, cs * 0.14), Math.max(3, cs * 0.14)]);
+        ctx.lineWidth = Math.max(1.5, cs * 0.06);
+        ctx.strokeStyle = corDono;
+        ctx.beginPath(); ctx.arc(sx, sy, Math.max(12, cs * 0.5), 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+        if (cs > 14) {
+          const f = Math.max(9, cs * 0.24);
+          ctx.save();
+          ctx.font = `${f}px serif`; ctx.textAlign = "center";
+          ctx.lineWidth = Math.max(2, f * 0.3); ctx.strokeStyle = "rgba(8,6,2,.9)";
+          ctx.strokeText("T" + v.turno, sx, sy - Math.max(14, cs * 0.62));
+          ctx.fillStyle = "rgba(226,216,190,.92)";
+          ctx.fillText("T" + v.turno, sx, sy - Math.max(14, cs * 0.62));
+          ctx.restore();
+        }
+      } else if (cs > 16) {
+        // NUNCA explorada: interrogacao. O Rei sabe que ha uma cidade ali
+        // (a rede de estradas e publica) e nao sabe de quem nem com o que.
+        const f = Math.max(11, cs * 0.34);
+        ctx.save();
+        ctx.font = `bold ${f}px serif`; ctx.textAlign = "center";
+        ctx.globalAlpha = 0.5;
+        ctx.lineWidth = Math.max(2, f * 0.26); ctx.strokeStyle = "rgba(8,6,2,.9)";
+        ctx.strokeText("?", sx, sy + f * 0.35);
+        ctx.fillStyle = "rgba(226,216,190,.9)";
+        ctx.fillText("?", sx, sy + f * 0.35);
+        ctx.restore();
+      }
+    }
+
+    // 3) etiqueta de canto: sem isto o espectador nao sabe que esta a ver
+    //    uma camara subjetiva, e le o mapa escuro como se fosse o jogo.
+    const nVis = game.aldeias.filter((a) => vis.has(a.id)).length;
+    const nLembra = game.aldeias.filter((a) => !vis.has(a.id) && mem[a.id]).length;
+    const nNunca = game.aldeias.length - nVis - nLembra;
+    const txt = `olhos do Rei ${me} — ve ${nVis} · lembra ${nLembra} · nunca viu ${nNunca}`;
+    ctx.save();
+    ctx.font = "bold 15px serif"; ctx.textAlign = "left";
+    const w = ctx.measureText(txt).width + 22;
+    ctx.fillStyle = "rgba(10,8,4,.72)";
+    ctx.fillRect(14, VH - 42, w, 28);
+    ctx.strokeStyle = COR[me]; ctx.lineWidth = 2;
+    ctx.strokeRect(14, VH - 42, w, 28);
+    ctx.fillStyle = "rgba(233,224,200,.96)";
+    ctx.fillText(txt, 25, VH - 22);
+    ctx.restore();
   }
 
   // ===== PAINEIS LATERAIS DE ESPECTADOR (fatia 1: so render) ============
@@ -3191,8 +3846,8 @@
   const ESP_COR = { lanceiro: "#c9a227", arqueiro: "#5b9c6b", cavaleiro: "#a8577c" };
   const ESP_NOME = { A: "Rei do Norte", B: "Rei do Sul" };  // rotulo de exibicao (o estado guarda "Rei A"/"Rei B")
   const ESP_BRASAO = {
-    A: '<svg class="esp-brasao" viewBox="0 0 44 51"><path d="M2 2h40v30c0 9.5-9.5 15.5-20 17C11.5 47.5 2 41.5 2 32V2z" fill="#2f5d8a" stroke="#e8dfc8" stroke-width="1.6"/><path d="M22 13l3.9 7.6 8.4 1.2-6.1 5.9 1.5 8.3-7.7-4-7.7 4 1.5-8.3-6.1-5.9 8.4-1.2z" fill="#e8dfc8" opacity=".92"/></svg>',
-    B: '<svg class="esp-brasao" viewBox="0 0 44 51"><path d="M2 2h40v30c0 9.5-9.5 15.5-20 17C11.5 47.5 2 41.5 2 32V2z" fill="#9b2c2c" stroke="#e8dfc8" stroke-width="1.6"/><path d="M22 11c4.6 4.6 9.2 7 9.2 14s-4.2 11.5-9.2 14c-5-2.5-9.2-7-9.2-14s4.6-9.4 9.2-14z" fill="#e8dfc8" opacity=".92"/></svg>'
+    A: '<svg class="esp-brasao" viewBox="0 0 44 51"><image href="assets/brasoes/rei_a_azul.png" x="0" y="0" width="44" height="51" preserveAspectRatio="xMidYMid meet"/></svg>',
+    B: '<svg class="esp-brasao" viewBox="0 0 44 51"><image href="assets/brasoes/rei_b_vermelho.png" x="0" y="0" width="44" height="51" preserveAspectRatio="xMidYMid meet"/></svg>'
   };
   // snapshot p/ variacao por turno (aldeias/tropas) e deteccao de "nova".
   // So rola quando o turno avanca; deltas persistem durante todo o turno.
@@ -3316,11 +3971,132 @@
       "</div>" +
       '<div class="esp-rec"><span>madeira <b>' + mad + "</b></span><span>ferro <b>" + fer + "</b></span></div>";
   }
+  // ===== TRANSMISSAO v5: BARRA DE TOPO + RODAPE DOS REIS ================
+  //  Mesma fonte de dados dos paineis laterais (espTotais/espDelta) — muda a
+  //  APRESENTACAO, nao a medicao. renderPainelEspectador() segue definido
+  //  acima (nao chamado): os paineis sao escondidos por CSS, e os smokes que
+  //  procuram #espA/#espB continuam achando os nos.
+  //
+  //  DEPOIMENTO: texto que o modelo escreve sobre a jogada DESTE turno, para
+  //  ir a tela e servir de roteiro de narracao. NAO volta ao contexto (o que
+  //  volta e o `plano`, campo separado). Enquanto o campo nao existir na
+  //  resposta do modelo, o quadro mostra o marcador de vazio.
+  const depoimentos = { A: null, B: null };
+  function definirDepoimento(lado, texto, turno) {
+    depoimentos[lado] = (texto && String(texto).trim())
+      ? { texto: String(texto).trim(), turno: turno }
+      : null;
+  }
+
+  function elTxt(id, txt) { const e = document.getElementById(id); if (e) e.textContent = txt; }
+  function elLarg(id, pct) { const e = document.getElementById(id); if (e) e.style.width = pct + "%"; }
+
+  function renderBarraTopo() {
+    const el = document.getElementById("bt-turno");
+    if (el) el.textContent = game.turno;
+    for (const lado of ["A", "B"]) {
+      const s = lado.toLowerCase();
+      const lista = Engine.aldeiasDe(game, lado);
+      let L = 0, Aq = 0, C = 0, mad = 0, fer = 0;
+      for (const a of lista) {
+        L += a.tropas.lanceiro; Aq += a.tropas.arqueiro; C += a.tropas.cavaleiro;
+        mad += a.recursos.madeira; fer += a.recursos.ferro;
+      }
+      // tropas em marcha saem da guarnicao ao partir: contam no exercito
+      for (const m of game.movimentos) {
+        if (m.dono !== lado) continue;
+        L += m.tropas.lanceiro; Aq += m.tropas.arqueiro; C += m.tropas.cavaleiro;
+      }
+      const tot = L + Aq + C;
+      const dl = espDelta[lado] || { ald: 0, tropas: 0 };
+
+      const bras = document.getElementById("bt-bras-" + s);
+      if (bras && !bras.innerHTML.trim() && ESP_BRASAO[lado]) {
+        const m = ESP_BRASAO[lado].match(/<svg[^>]*>([\s\S]*)<\/svg>/);
+        if (m) bras.innerHTML = m[1];
+      }
+      elTxt("bt-mod-" + s, lado === "A" ? etiquetaA : etiquetaB);
+      elTxt("bt-ald-" + s, lista.length);
+      elTxt("bt-tro-" + s, tot);
+      elTxt("bt-mad-" + s, mad);
+      elTxt("bt-fer-" + s, fer);
+      for (const [id, v] of [["bt-dald-" + s, dl.ald], ["bt-dtro-" + s, dl.tropas]]) {
+        const e = document.getElementById(id);
+        if (!e) continue;
+        e.textContent = v > 0 ? "+" + v : (v < 0 ? String(v) : "");
+        e.className = "bt-delta " + (v > 0 ? "up" : v < 0 ? "down" : "zero");
+      }
+      const p = (n) => (tot > 0 ? (100 * n / tot) : 0);
+      elLarg("bt-cl-" + s, p(L)); elLarg("bt-ca-" + s, p(Aq)); elLarg("bt-cc-" + s, p(C));
+      const cl = document.getElementById("bt-cl-" + s), ca = document.getElementById("bt-ca-" + s), cc = document.getElementById("bt-cc-" + s);
+      if (cl) cl.style.background = ESP_COR.lanceiro;
+      if (ca) ca.style.background = ESP_COR.arqueiro;
+      if (cc) cc.style.background = ESP_COR.cavaleiro;
+      const leg = document.getElementById("bt-leg-" + s);
+      if (leg) {
+        leg.innerHTML =
+          '<span><em style="background:' + ESP_COR.lanceiro + '"></em><b>' + L + "</b> L</span>" +
+          '<span><em style="background:' + ESP_COR.arqueiro + '"></em><b>' + Aq + "</b> A</span>" +
+          '<span><em style="background:' + ESP_COR.cavaleiro + '"></em><b>' + C + "</b> C</span>";
+      }
+    }
+  }
+
+  // metricas do rodape: TODAS saem de `contadores[lado]`, que ja alimenta o
+  // RESUMO do .txt. Nada aqui e recalculado nem estimado.
+  function renderRodapeReis() {
+    for (const lado of ["A", "B"]) {
+      const s = lado.toLowerCase();
+      const c = (contadores && contadores[lado]) || null;
+
+      const dep = depoimentos[lado];
+      const elD = document.getElementById("rr-dep-" + s);
+      if (elD) {
+        if (dep) { elD.textContent = dep.texto; elD.className = "rr-dep"; }
+        else { elD.textContent = "— sem depoimento neste turno"; elD.className = "rr-dep vazio"; }
+      }
+      elTxt("rr-tit-" + s, "Depoimento do turno " + (dep ? dep.turno : game.turno));
+
+      const g = document.getElementById("rr-grade-" + s);
+      if (!g) continue;
+      // sem turnos contados = jogador local (burro) ou partida ainda por
+      // comecar: uma grade de zeros mentiria sobre um modelo que nao existe.
+      if (!c || c.turnos === 0) {
+        g.innerHTML = '<div class="rr-met" style="grid-column:1/-1"><span class="v" style="font-size:11px;font-weight:400;color:#5a5346;font-style:italic">'
+          + (c && c.errosRede ? "sem turnos validos ainda" : "jogador local — sem metricas de modelo")
+          + "</span></div>";
+        continue;
+      }
+      const n1 = (x) => (Math.round(x * 10) / 10).toString().replace(".", ",");
+      const agencia = c.turnos > 0 ? n1(c.enviosAceitos / c.turnos) : "0";
+      const msMed = c.msN > 0 ? Math.round(c.msTotal / c.msN) : 0;
+      const tempo = msMed >= 60000
+        ? Math.floor(msMed / 60000) + "m" + String(Math.round((msMed % 60000) / 1000)).padStart(2, "0")
+        : (msMed > 0 ? (msMed / 1000).toFixed(1).replace(".", ",") + "s" : "—");
+      const falhas = c.vazio + c.invalido;
+      const met = [
+        ["Agência", agencia, "env/t", false],
+        ["Construções", c.constrAceitas, "", false],
+        ["Rejeitadas", c.rejeicoes, "", c.rejeicoes > 0],
+        ["Normalizadas", c.normalizacoes, "", false],
+        ["Vazias/inváld.", falhas, "/ " + c.turnos + " t", falhas > 0],
+        ["Truncadas", c.truncamentos, "", c.truncamentos > 0],
+        ["Decisão", tempo, "/ t", false],
+        ["Custo", "$" + (c.custo || 0).toFixed(2).replace(".", ","), "", "custo"],
+      ];
+      g.innerHTML = met.map(([rot, val, suf, flag]) =>
+        '<div class="rr-met"><span class="r">' + esc(rot) + "</span>" +
+        '<span class="v' + (flag === "custo" ? " custo" : (flag ? " alerta" : "")) + '">' +
+        esc(String(val)) + (suf ? ' <small>' + esc(suf) + "</small>" : "") + "</span></div>"
+      ).join("");
+    }
+  }
+
   function renderPaineisEspectador() {
     if (!game) return;
     espAtualizarSnap();
-    renderPainelEspectador("A");
-    renderPainelEspectador("B");
+    renderBarraTopo();
+    renderRodapeReis();
   }
 
   function updateGameHUD() {
@@ -3399,6 +4175,12 @@
   const bcf = document.getElementById("cartaoFechar");
   if (bcf && bcf.addEventListener) bcf.addEventListener("click", fecharCartao);
   document.getElementById("sb-toggle").addEventListener("click", () => document.body.classList.toggle("sb-closed"));
+  // FOG (P4): trocar de olhos redesenha na hora. So camara — nao mexe no jogo,
+  // logo funciona com a partida pausada, a correr, e dentro de um replay.
+  {
+    const elVis = document.getElementById("gvisao");
+    if (elVis) elVis.addEventListener("change", () => draw());
+  }
   document.getElementById("glog").addEventListener("click", baixarLogGemini);
   document.getElementById("greplaysave").addEventListener("click", baixarReplay);
   document.getElementById("greplayload").addEventListener("change", (ev) => {
@@ -3446,6 +4228,8 @@
   // ---------- Início ----------
   resize();
   novaPartida();
+
+
 })();
 </script>
 </body>

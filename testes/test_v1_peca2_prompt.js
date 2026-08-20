@@ -15,7 +15,7 @@ const CONFIG = Engine.CONFIG;
 const estado = Engine.criarEstadoInicial(CONFIG);
 for (let i = 0; i < 5; i++) Engine.rodarTurno(estado, null);
 const visao = Engine.montarVisao(estado, "B");
-const prompt = Engine.montarPrompt(visao);
+const prompt = Engine.montarPrompt(visao, { promptP4: false }); // P4: guarda o prompt LEGADO (PT); o P4 tem test_prompt_p4.js
 
 console.log("============ PROMPT COMPLETO (turno real, visao do Rei B) ============");
 console.log(prompt);
@@ -35,7 +35,7 @@ const iFormato = prompt.indexOf("Responda APENAS com um JSON");
 const iExemplo = prompt.lastIndexOf("{");
 
 console.log("Conferencias do Pedaco 1:");
-checa("funcao pura (mesma visao -> mesmo prompt)", prompt === Engine.montarPrompt(visao));
+checa("funcao pura (mesma visao -> mesmo prompt)", prompt === Engine.montarPrompt(visao, { promptP4: false }));
 checa("TOPO: objetivo = conquistar a capital (nao 'eliminar')",
   iTopo >= 0 && /conquistar a CAPITAL inimiga/.test(prompt) && !/eliminando o inimigo/.test(prompt));
 checa("MEIO: relatorioTexto integral injetado", iDados > iTopo && prompt.includes("=== ALDEIAS NEUTRAS"));

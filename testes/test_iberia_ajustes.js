@@ -5,6 +5,11 @@
 // nao entram em custo de marcha, rota, `par` nem equilibrio. Este teste
 // e o que garante essa premissa — se um dia alguem passar a ler x,y no motor,
 // ele quebra aqui e nao em silencio dentro de uma partida.
+// 17/08: este ficheiro fixa numeros calculados A MAO sob o ruleset que hoje
+// se chama CONFIG_V3_ARQUIVO. O que ele testa e a FORMULA (combate, rota,
+// minimo), nao o balanceamento — entao continua a correr contra o arquivo,
+// que e imutavel. Os mesmos invariantes sob o ruleset VIVO estao em
+// testes/test_ruleset_vivo.js.
 const assert = require("assert");
 const Engine = require("../engine.js");
 const Iberia = require("../world-iberia.js");
@@ -38,7 +43,7 @@ t("arrastar TODAS as cidades nao mexe em rota nem custo", () => {
 });
 
 t("marcha do motor tambem nao muda", () => {
-  const cfg = JSON.parse(JSON.stringify(Object.assign({}, Engine.CONFIG, { layout: "iberia", seed: 1 })));
+  const cfg = JSON.parse(JSON.stringify(Object.assign({}, Engine.CONFIG_V3_ARQUIVO, { layout: "iberia", seed: 1 })));
   const e = Engine.criarEstadoInicial(cfg);
   const id = (slug) => e.aldeias.find((a) => a.slug === slug).id;
   for (const alvo of ["toledo", "murcia", "girona", "porto"]) {
@@ -50,7 +55,7 @@ t("marcha do motor tambem nao muda", () => {
 });
 
 t("as posicoes chegaram mesmo ao teatro (o teste nao passa por acaso)", () => {
-  const cfg = JSON.parse(JSON.stringify(Object.assign({}, Engine.CONFIG, { layout: "iberia", seed: 1 })));
+  const cfg = JSON.parse(JSON.stringify(Object.assign({}, Engine.CONFIG_V3_ARQUIVO, { layout: "iberia", seed: 1 })));
   const e = Engine.criarEstadoInicial(cfg);
   const lis = e.aldeias.find((a) => a.slug === "lisboa");
   const src = Iberia.CIDADES.find((c) => c.id === "lisboa");
@@ -89,7 +94,7 @@ function visaoComXYPermutado(v) {
 }
 
 t("decisao do burro e identica com x,y permutado (rota+rng, nao pixel)", () => {
-  const cfg = JSON.parse(JSON.stringify(Object.assign({}, Engine.CONFIG, { layout: "iberia", seed: 1 })));
+  const cfg = JSON.parse(JSON.stringify(Object.assign({}, Engine.CONFIG_V3_ARQUIVO, { layout: "iberia", seed: 1 })));
   const est = Engine.criarEstadoInicial(cfg);
   let mexeu = false; // garante que a permutacao MUDOU mesmo as coordenadas
   for (let turno = 0; turno < 25; turno++) {
