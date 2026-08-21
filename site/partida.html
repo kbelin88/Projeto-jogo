@@ -249,7 +249,8 @@ function mostrarRac(btn,turno,rei){
     btn.style.display='none'; };
   if(RAC) return render();
   btn.textContent='…';
-  fetch('dados/rac_'+PID+'.json').then(r=>r.json()).then(j=>{RAC=j;render();});
+  buscarJSON('dados/rac_'+PID+'.json').then(j=>{RAC=j;render();})
+    .catch(err=>{ btn.textContent=t('erro_dados_btn'); console.error('[Kings Arena] raciocinio:', err); });
 }
 // ---- abas ----
 document.querySelectorAll('.abas button').forEach(b=>b.onclick=()=>{
@@ -286,11 +287,12 @@ function pintarCabecalhoPartida(){
   document.getElementById('nomeB').textContent = curto(PARTIDA.B);
 }
 window.aoTrocarIdioma=()=>{ pintarCabecalhoPartida(); if(REP&&MAPA) pintarTurno(); botaoPlay(); pintarLog(); pintarAnalise(); };
-Promise.all([
-  fetch('dados/mapa.json').then(r=>r.json()),
-  fetch('dados/replay_'+PID+'.json').then(r=>r.json()),
-  fetch('dados/partidas.json').then(r=>r.json()),
-  fetch('dados/log_'+PID+'.json').then(r=>r.json()).catch(()=>null)
+function carregarPartida(){
+ return Promise.all([
+  buscarJSON('dados/mapa.json'),
+  buscarJSON('dados/replay_'+PID+'.json'),
+  buscarJSON('dados/partidas.json'),
+  buscarJSON('dados/log_'+PID+'.json', 1).catch(()=>null)
 ]).then(([m,rep,parts,log])=>{
   MAPA=m; REP=rep; LOG=log; PARTIDA=parts.find(p=>p.id===PID);
   document.getElementById('slider').max=REP.frames.length;
@@ -300,7 +302,9 @@ Promise.all([
   document.getElementById('b-ini').onclick=()=>irPara(1);
   document.getElementById('b-fim').onclick=()=>irPara(REP.frames.length);
   document.addEventListener('keydown',e=>{ if(e.key==='ArrowRight')irPara(T+1); if(e.key==='ArrowLeft')irPara(T-1); });
-});
+ }).catch(err=>{ mostrarErroDados(err, carregarPartida); });
+}
 aplicarIdioma();
+carregarPartida();
 </script>
 </body></html>

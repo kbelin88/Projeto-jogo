@@ -37,6 +37,10 @@ const DIC = {
     reiA_lbl:"Rei A",
     reiB_lbl:"Rei B",
     rodape_arte:"Ilustrações geradas com IA e tratadas para o projeto.",
+    carregando:"a carregar os dados…",
+    erro_dados_h:"Os dados não carregaram",
+    erro_dados_p:"A página abriu, mas os ficheiros de dados não chegaram ao navegador. Costuma ser uma falha de rede momentânea ou uma versão antiga em cache — tentar de novo resolve quase sempre.",
+    erro_dados_btn:"Tentar de novo",
     met_mapa_legenda:"24 aldeias, 41 estradas. As duas capitais são o ponto de partida de cada Rei. O mapa é simétrico: para cada cidade do Oeste existe uma gêmea no Este com os custos de marcha invertidos.",
     met_regras_h:"As regras",
     met_regras:"Cada aldeia produz 30 de madeira e 20 de ferro por turno.|Três tropas: lanceiro (ataque 1, barato), arqueiro (ataque 2), cavaleiro (ataque 4, caro e rápido). Elas se contra-atacam em triângulo — lanceiro vence cavaleiro, cavaleiro vence arqueiro, arqueiro vence lanceiro — e acertar o contra-ataque multiplica a força por 1,5.|Marchar leva turnos, e o custo é o da estrada, nunca a distância no desenho.|Aldeias neutras endurecem sozinhas com o tempo: quem demora a expandir paga mais caro.|Névoa de guerra: cada Rei vê as próprias aldeias e as vizinhas diretas. Vê onde ficam todas as cidades — o mapa é público — mas não o que há dentro das que não alcança. Não existe unidade de exploração: explorar é conquistar.|Vitória: quem segurar 75% das aldeias por dois turnos seguidos ganha. Sem isso, a partida vai até o limite de turnos e quem tiver mais aldeias fica na frente.",
@@ -91,6 +95,10 @@ const DIC = {
     reiA_lbl:"King A",
     reiB_lbl:"King B",
     rodape_arte:"Illustrations generated with AI and processed for the project.",
+    carregando:"loading the data…",
+    erro_dados_h:"The data did not load",
+    erro_dados_p:"The page opened, but the data files never reached the browser. This is usually a momentary network failure or a stale cached version — retrying almost always fixes it.",
+    erro_dados_btn:"Try again",
     met_mapa_legenda:"24 villages, 41 roads. The two capitals are each King's starting point. The map is symmetric: every city in the West has a twin in the East with mirrored marching costs.",
     met_regras_h:"The rules",
     met_regras:"Each village produces 30 wood and 20 iron per turn.|Three troop types: spearman (attack 1, cheap), archer (attack 2), knight (attack 4, expensive and fast). They counter each other in a triangle — spearman beats knight, knight beats archer, archer beats spearman — and landing the counter multiplies force by 1.5.|Marching takes turns, and the cost is the road's, never the distance on the drawing.|Neutral villages harden on their own over time: waiting to expand costs more.|Fog of war: each King sees its own villages and their direct neighbours. It sees where every city is — the map is public — but not what's inside the ones it can't reach. There's no scout unit: to explore is to conquer.|Victory: whoever holds 75% of the villages for two consecutive turns wins. Short of that, the match runs to the turn limit and whoever has more villages comes out ahead.",
@@ -146,4 +154,63 @@ function barraLAC(l,a,c){
   if(l==null) return '—';
   return `<div class="barra" style="display:flex;min-width:74px"><i style="width:${l}%;background:#7c7060"></i><i style="width:${a}%;background:#9c8a4e"></i><i style="width:${c}%;background:var(--ouro)"></i></div>`+
     `<span class="mini">${l}/${a}/${c}%</span>`;
+}
+
+/* ------------------------------------------------------------------
+   Carregamento de dados que NUNCA falha em silencio.
+
+   O bug que isto corrige: `Promise.all([fetch(...)]).then(...)` sem
+   `.catch()` deixava a pagina inteira renderizada com as tabelas
+   vazias sempre que um dos fetch falhasse — sem mensagem, sem retry,
+   sem nada no ecra. Um engasgo de rede ou um HTML em cache eram
+   indistinguiveis de "o site nao tem dados".
+
+   - `cache:'no-cache'` forca revalidacao (ETag) em vez de servir uma
+     copia velha do disco; o custo e um 304 de algumas centenas de bytes.
+   - retenta 2x com espera crescente antes de desistir.
+   - o erro diz QUAL ficheiro falhou e com que codigo.
+------------------------------------------------------------------ */
+function escaparHTML(x){ return String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function buscarJSON(caminho, tentativas){
+  const n = (tentativas==null) ? 3 : tentativas;
+  function tentar(i, ultimoErro){
+    if(i >= n){
+      const e = new Error(caminho + ' → ' + (ultimoErro && ultimoErro.message || 'falhou'));
+      e.arquivo = caminho;
+      return Promise.reject(e);
+    }
+    return fetch(caminho, {cache:'no-cache'})
+      .then(r=>{ if(!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .catch(err=> new Promise(res=>setTimeout(res, 400*(i+1))).then(()=>tentar(i+1, err)));
+  }
+  return tentar(0, null);
+}
+
+/* Placeholder visivel enquanto os dados nao chegam: uma tabela vazia
+   deixa de ser ambigua. */
+function marcarCarregando(seletor, colspan){
+  const tb = document.querySelector(seletor);
+  if(tb) tb.innerHTML = '<tr><td colspan="'+(colspan||17)+'" class="mini" style="padding:18px;text-align:center">'+escaparHTML(t('carregando'))+'</td></tr>';
+}
+
+function mostrarErroDados(err, tentarDeNovo){
+  console.error('[Kings Arena] falha ao carregar dados:', err);
+  let cx = document.getElementById('erro-dados');
+  if(!cx){
+    cx = document.createElement('div');
+    cx.id = 'erro-dados';
+    cx.className = 'erro-dados';
+    document.body.insertBefore(cx, document.body.firstChild);
+  }
+  cx.innerHTML = '<div class="wrap">'
+    + '<b>' + escaparHTML(t('erro_dados_h')) + '</b>'
+    + '<p>' + escaparHTML(t('erro_dados_p')) + '</p>'
+    + '<p class="mini det">' + escaparHTML(err && err.message || err) + '</p>'
+    + '<button type="button" id="erro-retry">' + escaparHTML(t('erro_dados_btn')) + '</button>'
+    + '</div>';
+  cx.querySelector('#erro-retry').onclick = function(){
+    cx.parentNode.removeChild(cx);
+    tentarDeNovo();
+  };
 }

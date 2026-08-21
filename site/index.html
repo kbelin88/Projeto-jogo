@@ -150,8 +150,19 @@ function pintar(){
   document.getElementById('rodape-data').textContent = ' · ' + (LANG==='pt'?'dados de 17 a 20 de agosto de 2026':'data from 17–20 August 2026');
 }
 window.aoTrocarIdioma = pintar;
-Promise.all([fetch('dados/modelos.json').then(r=>r.json()), fetch('dados/partidas.json').then(r=>r.json())])
- .then(([m,p])=>{MOD=m;PART=p;aplicarIdioma();});
+
+/* Carrega modelos + partidas. Se qualquer um falhar, o utilizador VE o erro
+   e tem um botao para tentar de novo — em vez de uma tabela vazia sem explicacao. */
+function carregarDados(){
+  marcarCarregando('#tab-mod tbody', 17);
+  marcarCarregando('#tab-part tbody', 6);
+  document.getElementById('kpi-part').textContent = '·';
+  document.getElementById('kpi-mod').textContent = '·';
+  return Promise.all([buscarJSON('dados/modelos.json'), buscarJSON('dados/partidas.json')])
+    .then(([m,p])=>{ MOD=m; PART=p; aplicarIdioma(); })
+    .catch(err=>{ mostrarErroDados(err, carregarDados); });
+}
 aplicarIdioma();
+carregarDados();
 </script>
 </body></html>
