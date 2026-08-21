@@ -78,6 +78,9 @@ function novoRei() {
     ataquesCounter1: 0,         // desses, com vant=1 (todos os ataques)
     vant0: 0, vantM1: 0,        // A4: distribuicao de counter (vant=0 e vant=-1)
     primeiroAtaqueAlvo: {},     // alvoId -> vant do PRIMEIRO ataque a esse alvo
+    combatesLista: [],          // ANALISE 20/08 (§1): {turno,alvo,vant,conquista} de cada
+                                // COMBATE deste rei como atacante. Serve para separar a taxa
+                                // de counter por DONO DO ALVO (neutra vs inimigo) com o replay.
     enviosLista: [],            // A3: envios EXECUTADOS (ACEITO envio) {turno,destino,tot}
     enviosPedidosLista: [],     // A3: envios PEDIDOS (ordem.envios) — eixo de grounding vs executados
     conquistas: 0,
@@ -253,6 +256,7 @@ function analisarLog(caminho, replayPath) {
       // segunda forma da taxa de counter (6.3): so o PRIMEIRO ataque a cada alvo
       // distinto. Descontamina a monomania (martelar o mesmo alvo N vezes).
       if (!(alvoId in r.primeiroAtaqueAlvo)) r.primeiroAtaqueAlvo[alvoId] = vant;
+      r.combatesLista.push({ turno: turnoAtual, alvo: parseInt(alvoId, 10), vant, conquista });
       if (conquista) {
         r.conquistas++;
         r.turnoUltimaConquista = turnoAtual;
@@ -364,6 +368,67 @@ function analisarLog(caminho, replayPath) {
       _nota: "reforco/ataque classificado pelo dono NO INICIO do turno (replay). taxa_ataque_viavel (em derivarRei) e conquistas/COMBATES, nao /envios.",
     };
   };
+  // --- ANALISE 20/08 §1: taxa de counter separada por DONO DO ALVO ---
+  // Porque isto existe: a taxa agregada soma duas competencias diferentes.
+  // Contra aldeia NEUTRA a guarnicao e de um tipo so e o relatorio mostra qual —
+  // acertar o triangulo e leitura de tabela (degrau 1, grounding). Contra o
+  // INIMIGO o exercito e misto e muda a cada turno com os reforcos que chegam —
+  // acertar exige prever o estado na chegada (degrau 3, estrategia). Medido em
+  // 16 lados: 0.588 contra neutra e 0.336 contra inimigo, com 14 dos 16 lados a
+  // piorar (teste de sinal p = 0.002). NAO somar as duas: nao sao a mesma coisa.
+  //
+  // O dono vem do replay, no INICIO do turno do combate — o mesmo criterio (e o
+  // mesmo helper) que o A3 usa para separar reforco de ataque. Sem replay, sai
+  // "indisponivel", como o A3.
+  const counterPorAlvoDe = (r, lado) => {
+    if (!framesByTurno) return "indisponivel: sem replay .json (passe-o como 2o argumento ou --replay)";
+    const inimigo = lado === "A" ? "B" : "A";
+    const balde = () => ({ ataques: 0, counter1: 0, vant0: 0, vantM1: 0, conquistas: 0, taxa: null });
+    const out = { neutra: balde(), inimigo: balde(), proprio: balde(), indeterminado: 0 };
+    for (const c of r.combatesLista) {
+      // mesmo frame que o A3: estado no inicio do turno (frame do turno anterior).
+      const fr = framesByTurno[c.turno - 1] || framesByTurno[c.turno] || framesByTurno[1];
+      if (!fr || !Object.prototype.hasOwnProperty.call(fr, c.alvo)) { out.indeterminado++; continue; }
+      const dono = fr[c.alvo];
+      const k = dono == null ? "neutra" : (dono === inimigo ? "inimigo" : "proprio");
+      const g = out[k];
+      g.ataques++;
+      if (c.vant === 1) g.counter1++;
+      else if (c.vant === 0) g.vant0++;
+      else if (c.vant === -1) g.vantM1++;
+      if (c.conquista) g.conquistas++;
+    }
+    for (const k of ["neutra", "inimigo", "proprio"]) {
+      const g = out[k];
+      g.taxa = g.ataques ? Math.round((g.counter1 / g.ataques) * 100) / 100 : null;
+    }
+    // COMPATIBILIDADE COM OS NUMEROS PUBLICADOS (analise 20/08, MODELOS_ARENA.md):
+    // o calculo original tratava o alvo como binario — inimigo ou nao-inimigo — e por
+    // isso somou as RECONQUISTAS ('proprio') dentro da coluna chamada "neutra".
+    // Conferido na partida de 20/08: com esta soma sai exatamente 0.81/0.45 (Rei A) e
+    // 0.15/0.32 (Rei B), os valores publicados; sem ela sai 0.83 e 0.18. Mantem-se o
+    // campo para que numero novo e numero velho continuem comparaveis — mas o campo
+    // `neutra` acima e o correto para medir LEITURA DE TABELA, porque uma reconquista
+    // e alvo que reage, nao guarnicao de um tipo so.
+    out.nao_inimigo = {
+      ataques: out.neutra.ataques + out.proprio.ataques,
+      counter1: out.neutra.counter1 + out.proprio.counter1,
+      taxa: null,
+      _nota: "neutra + reconquista. E o que a analise de 20/08 chamou de 'neutra'. Use para comparar com numeros publicados antes de 21/08; para medir leitura de tabela use `neutra`.",
+    };
+    out.nao_inimigo.taxa = out.nao_inimigo.ataques
+      ? Math.round((out.nao_inimigo.counter1 / out.nao_inimigo.ataques) * 100) / 100 : null;
+    // queda = quanto a taxa piora quando o alvo deixa de ser neutro e passa a reagir.
+    out.queda_neutra_para_inimigo = (out.neutra.taxa != null && out.inimigo.taxa != null)
+      ? Math.round((out.neutra.taxa - out.inimigo.taxa) * 100) / 100 : null;
+    out._nota = "dono do alvo NO INICIO do turno do combate (replay), mesmo criterio do A3. "
+      + "'proprio' NAO e bug: e RECONQUISTA — a aldeia era deste Rei no inicio do turno, mudou "
+      + "de dono durante a resolucao e o exercito que chegou depois atacou-a de volta (ver o "
+      + "T23 de 20/08, em que Burgos trocou de dono duas vezes no mesmo turno). "
+      + "NAO somar neutra com inimigo — medem competencias diferentes (analise 20/08, §1).";
+    return out;
+  };
+
   const a3 = { A: a3De(reis.A, "A"), B: a3De(reis.B, "B") };
 
   // --- derivadas por Rei ---
@@ -459,8 +524,8 @@ function analisarLog(caminho, replayPath) {
   return {
     meta,
     reis: {
-      A: Object.assign(derivarRei(reis.A), { reforco_vs_ataque: a3.A }),
-      B: Object.assign(derivarRei(reis.B), { reforco_vs_ataque: a3.B }),
+      A: Object.assign(derivarRei(reis.A), { reforco_vs_ataque: a3.A, counter_por_tipo_de_alvo: counterPorAlvoDe(reis.A, "A") }),
+      B: Object.assign(derivarRei(reis.B), { reforco_vs_ataque: a3.B, counter_por_tipo_de_alvo: counterPorAlvoDe(reis.B, "B") }),
     },
     partida: {
       turnos_registados: placarSerie.length,
@@ -549,6 +614,20 @@ function main() {
     console.log("   tropas/ataque por faixa 10t (A): " + RA.tropas_por_ataque_por_faixa_de_10t.map((x) => x.turnos + ":" + x.media).join("  "));
   } else {
     console.log("   A3 reforco vs ataque: " + RA);
+  }
+  // ANALISE 20/08 §1: counter separado por dono do alvo.
+  const CA = A.counter_por_tipo_de_alvo, CB = B.counter_por_tipo_de_alvo;
+  if (CA && typeof CA === "object") {
+    console.log("   --- counter por tipo de alvo (replay, dono no inicio do turno) ---");
+    const _c = (g) => g.ataques ? `${g.counter1}/${g.ataques} = ${g.taxa}` : "-";
+    linha("counter vs NEUTRA (leitura)", _c(CA.neutra), _c(CB.neutra));
+    linha("counter vs INIMIGO (estrategia)", _c(CA.inimigo), _c(CB.inimigo));
+    linha("queda neutra->inimigo", CA.queda_neutra_para_inimigo, CB.queda_neutra_para_inimigo);
+    linha("counter vs RECONQUISTA", _c(CA.proprio), _c(CB.proprio));
+    linha("  nao-inimigo (compat. pre-21/08)", _c(CA.nao_inimigo), _c(CB.nao_inimigo));
+    if (CA.indeterminado || CB.indeterminado) linha("  alvo indeterminado", CA.indeterminado, CB.indeterminado);
+  } else {
+    console.log("   counter por tipo de alvo: " + CA);
   }
   console.log("   exercitos em transito (media/turno, GLOBAL): " + r.partida.exercitos_em_transito_medio);
   console.log("   ultima conquista (global): T" + r.partida.turno_ultima_conquista_global);
