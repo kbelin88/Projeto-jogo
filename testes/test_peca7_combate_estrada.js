@@ -90,6 +90,19 @@ console.log("\nC) Antes de se encontrarem, nao ha combate:");
 }
 
 // ---------------------------------------------------------
+//  C2) MESMO SENTIDO: dois inimigos no mesmo trecho, marchando pro mesmo lado,
+//      tambem se enfrentam (23/08, regra do Lucas: qualquer sentido, sempre).
+// ---------------------------------------------------------
+console.log("\nC2) Mesmo sentido tambem cruza:");
+{
+  const e = estado2();
+  const mA = Engine.enviarExercito(e, 0, 1, { lanceiro: 10 }); // 0->1
+  const mB = Engine.enviarExercito(e, 0, 1, { lanceiro: 10 }); // 0->1 (mesmo sentido)
+  mB.dono = "B"; // forca dono B viajando no mesmo sentido que A, mesmo trecho
+  checa("mesmo sentido, inimigos, mesmo trecho = cruzaram", Engine.cruzaramNaEstrada(e, mA, mB) === true);
+}
+
+// ---------------------------------------------------------
 //  D) Combate na estrada NAO usa bonus de terreno (campo aberto):
 //     forcas IGUAIS -> quem vence e o desempate canonico (defensor), nao um
 //     bonus. Aqui so garantimos que o tipo do evento e "combate_estrada" e que

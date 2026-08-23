@@ -303,10 +303,10 @@
   .bt-bras { width: 44px; height: 51px; flex: none; }
   /* NOME DO MODELO: unica identidade do rei. Os rotulos "Rei do Norte/Sul"
      sairam — os reis estao na horizontal, o nome nao descrevia nada. */
-  .bt-modelo { font-family: Georgia, serif; font-weight: 700; font-size: 12px;
-    letter-spacing: .04em; text-transform: uppercase; padding: 3px 9px;
+  .bt-modelo { font-family: Georgia, serif; font-weight: 700; font-size: 14px;
+    letter-spacing: .03em; text-transform: uppercase; padding: 4px 11px;
     border-radius: 999px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    max-width: 130px; flex: none; }
+    max-width: 200px; flex: none; }
   .bt-lado.a .bt-modelo { background: rgba(91,147,201,.22); color: #bcd7f2; }
   .bt-lado.b .bt-modelo { background: rgba(200,90,90,.22); color: #f2c4c0; }
   /* nome e estatisticas voltam a ficar lado a lado (pedido do Lucas 23/08) —
@@ -1111,6 +1111,15 @@
       img.src = "assets/sprites/" + nome + ".png";
       SPR[nome] = img;
     }
+    // ESTANDARTE (23/08): o marcador de tropa em marcha usa o MESMO brasao do
+    // placar do topo (pedido do Lucas) — mesmo arquivo, so carregado aqui como
+    // <img> de canvas em vez de <image> de SVG no HTML.
+    for (const [nome, arq] of [["brasao_a", "rei_a_azul"], ["brasao_b", "rei_b_vermelho"]]) {
+      const img = new Image();
+      img.onload = function () { img.pronto = true; if (typeof draw === "function") draw(); };
+      img.src = "assets/brasoes/" + arq + ".png";
+      SPR[nome] = img;
+    }
   })();
   function desenharSprite(img, xc, yBase, larg, alpha) {
     const alt = larg * img.height / img.width;   // proporcao natural do sprite
@@ -1907,7 +1916,11 @@
     for (const m of game.movimentos) {
       const o = game.aldeias.find((a) => a.id === m.origemId), d = game.aldeias.find((a) => a.id === m.destinoId);
       if (!o || !d) continue;
-      const prog = m.turnosTotal ? (m.turnosTotal - m.turnosRestantes) / m.turnosTotal : 1;
+      // repFrac (23/08): 0 no jogo ao vivo (comportamento identico a antes) —
+      // so o replay avanca repFrac de 0 a 1 entre um quadro e o proximo, pra
+      // a tropa ANDAR pela estrada em vez de saltar de turno em turno no
+      // video. Ver animarEntreQuadros().
+      const prog = m.turnosTotal ? Math.min(1, (m.turnosTotal - m.turnosRestantes + repFrac) / m.turnosTotal) : 1;
       const pts = pontosCaminho(m);
       const p = pts ? pontoNaRota(pts, prog) : { x: o.x + (d.x - o.x) * prog, y: o.y + (d.y - o.y) * prog };
       const dx = SX(p.x) - mx, dy = SY(p.y) - my, d2 = dx * dx + dy * dy, raio = Math.max(13, cs * 0.38);
@@ -2232,6 +2245,11 @@
   }
 
   let rep = null; // { dados, idx } quando em replay
+  // ANDAR PELA ESTRADA NO REPLAY (23/08): 0 = posicao do quadro atual (igual
+  // ao jogo ao vivo); avanca ate 1 = posicao do PROXIMO quadro, ao longo da
+  // janela de tempo entre um quadro e o outro. So mexe no VIDEO — o motor
+  // decide o turno inteiro de uma vez, sempre; isto e so a reproducao.
+  let repFrac = 0;
 
   function atualizarProgresso() {
     if (!rep) return;
@@ -2264,8 +2282,50 @@
       aplicarFrame(rep.dados.frames[rep.idx++]);
       atualizarProgresso();
       const cadencia = parseInt(document.getElementById("grepVel").value, 10) || 2000;
-      await new Promise((r) => setTimeout(r, cadencia));
+      await animarEntreQuadros(cadencia, meuRun);
     }
+  }
+
+  // Espera o proximo frame de tela — rAF de verdade no navegador; salvaguarda
+  // por setTimeout pra ambiente sem rAF de verdade (testes_arena/Smoke*.js
+  // zeram requestAnimationFrame de proposito), senao o loop trava esperando
+  // um callback que nunca chega.
+  function proximoQuadroDeAnimacao() {
+    return new Promise((r) => {
+      let feito = false;
+      const ok = () => { if (!feito) { feito = true; r(); } };
+      requestAnimationFrame(ok);
+      setTimeout(ok, 50);
+    });
+  }
+
+  // Anima repFrac de 0 a 1 ao longo da janela entre este quadro e o proximo,
+  // redesenhando a cada frame de tela — e o que faz a tropa ANDAR pela
+  // estrada no video, em vez de saltar quando aplicarFrame() troca o turno.
+  // Se pausar/sair/trocar de run no meio, sai sem forcar repFrac=1 (fica
+  // congelado onde estava, como pausar um video).
+  async function animarEntreQuadros(cadencia, meuRun) {
+    repFrac = 0;
+    if (!(cadencia > 0)) return;
+    // O loop de redesenho usa performance.now() (tempo real, pra ficar suave
+    // no navegador) mas quem MANDA no fim da espera e um setTimeout(cadencia)
+    // comum — o mesmo mecanismo que o codigo antigo usava sozinho. Assim, um
+    // ambiente que mocka setTimeout (testes_arena/Smoke*.js encurtam pra
+    // acelerar o teste) continua andando rapido: o loop de redesenho para
+    // junto, mesmo sem ter chegado a repFrac=1 "de verdade".
+    let parar = false;
+    const t0 = performance.now();
+    (async () => {
+      while (!parar && emReplay && runId === meuRun && playing) {
+        repFrac = Math.min(1, (performance.now() - t0) / cadencia);
+        draw();
+        if (repFrac >= 1) return;
+        await proximoQuadroDeAnimacao();
+      }
+    })();
+    await new Promise((r) => setTimeout(r, cadencia));
+    parar = true;
+    if (emReplay && runId === meuRun && playing) { repFrac = 1; draw(); }
   }
 
   function sairReplay() {
@@ -3387,6 +3447,29 @@
     ctx.restore();
   }
 
+  // ESTANDARTE do exercito em marcha (23/08, pedido do Lucas): troca o escudo
+  // liso pelo MESMO brasao do placar do topo — e o rei que marcha, nao um
+  // tipo de tropa (um icone de cavaleiro sozinho mentiria se o grupo fosse
+  // misto). A faixinha embaixo, nas mesmas 3 cores do placar (lanceiro/
+  // arqueiro/cavaleiro), mostra a composicao real de relance, sem numero.
+  // Cai pro escudo liso enquanto o brasao ainda nao carregou.
+  function desenharEstandarte(x, y, r, lado, tropas) {
+    const img = SPR["brasao_" + lado.toLowerCase()];
+    if (!img || !img.pronto) { desenharEscudo(x, y, r, COR[lado]); return; }
+    const larg = r * 1.5, alt = larg * img.height / img.width;
+    ctx.drawImage(img, x - larg / 2, y - alt / 2, larg, alt);
+    const L = tropas.lanceiro || 0, Aq = tropas.arqueiro || 0, C = tropas.cavaleiro || 0;
+    const tot = L + Aq + C;
+    if (tot <= 0) return;
+    const fh = Math.max(2, r * 0.22), fy = y + alt / 2 + 1;
+    let fx = x - larg / 2;
+    for (const [n, cor] of [[L, ESP_COR.lanceiro], [Aq, ESP_COR.arqueiro], [C, ESP_COR.cavaleiro]]) {
+      const w = larg * n / tot;
+      if (w > 0.4) { ctx.fillStyle = cor; ctx.fillRect(fx, fy, w, fh); }
+      fx += w;
+    }
+  }
+
   // desenha aldeias do jogo (cor do dono) + exercitos em transito
   // ---- TERRITORIO DE TRANSMISSAO: influencia pintada + CONTORNO ----
   // Direcao do handoff: "bordas de territorio com contorno (nao so
@@ -3628,11 +3711,26 @@
 
       // BANDEIRA do time: a UNICA marca de posse, tanto na capital quanto na
       // aldeia tomada. Na capital ela sobe um pouco mais (o castelo e alto).
+      const alt = alturaSprite(sprB, larg, r);
+      const bFootY = yBase - alt * (ehCapital ? 0.92 : 0.55);
+      const bH = r * (ehCapital ? 1.5 : 1.25);
       if (a.dono !== null) {
-        const alt = alturaSprite(sprB, larg, r);
         // capital: hasteia no alto do castelo (0.92); aldeia: no telhado (0.55)
-        desenharBandeira(sx, yBase - alt * (ehCapital ? 0.92 : 0.55),
-                         r * (ehCapital ? 1.5 : 1.25), col);
+        desenharBandeira(sx, bFootY, bH, col);
+      }
+
+      // GUARNICAO (23/08, pedido do Lucas): numero de tropas NA aldeia, no
+      // topo da bandeira (aldeia neutra usa o mesmo ponto, sem haste — nao ha
+      // bandeira pra hastear). So aparece ao aproximar (cs>8, mesmo limiar do
+      // numero da tropa em marcha): a visao geral do mapa continua limpa.
+      if (cs > 8) {
+        const totG = a.tropas.lanceiro + a.tropas.arqueiro + a.tropas.cavaleiro;
+        const fm = Math.max(14, cs * 0.32);
+        ctx.font = `bold ${fm}px serif`; ctx.textAlign = "center";
+        ctx.lineWidth = Math.max(2, fm * 0.22); ctx.strokeStyle = "rgba(20,12,4,.85)";
+        ctx.strokeText(String(totG), sx, bFootY - bH - 4);
+        ctx.fillStyle = a.dono === null ? "#e8dfc8" : (a.dono === "A" ? "#bcd0ff" : "#ffc4c4");
+        ctx.fillText(String(totG), sx, bFootY - bH - 4);
       }
 
       // NOME DA CIDADE (23/08): so aparece ao aproximar o zoom — mapa limpo por
@@ -3659,7 +3757,11 @@
       const o = game.aldeias.find((a) => a.id === m.origemId);
       const d = game.aldeias.find((a) => a.id === m.destinoId);
       if (!o || !d) continue;
-      const prog = m.turnosTotal ? (m.turnosTotal - m.turnosRestantes) / m.turnosTotal : 1;
+      // repFrac (23/08): 0 no jogo ao vivo (comportamento identico a antes) —
+      // so o replay avanca repFrac de 0 a 1 entre um quadro e o proximo, pra
+      // a tropa ANDAR pela estrada em vez de saltar de turno em turno no
+      // video. Ver animarEntreQuadros().
+      const prog = m.turnosTotal ? Math.min(1, (m.turnosTotal - m.turnosRestantes + repFrac) / m.turnosTotal) : 1;
       const pts = pontosCaminho(m);                       // motor #1: segue a estrada
       const p = pts ? pontoNaRota(pts, prog) : { x: lerp(o.x, d.x, prog), y: lerp(o.y, d.y, prog), seg: 0 };
       const mx = SX(p.x);
@@ -3684,7 +3786,12 @@
 
       // FORCA COMO TAMANHO: area do marcador ~ forca (comparavel de relance)
       const Fm = Engine.forcaDe(m.tropas, game.config);
-      const r = Math.min(cs * 0.45, Math.max(3, cs * 0.14 * Math.sqrt(Fm / 50)));
+      // piso subiu de 3 pra 9 (23/08): o escudo vetorial antigo ainda dava pra
+      // ver com raio 3px, mas o estandarte (imagem PNG) some nesse tamanho —
+      // "o estandarte sumiu" era isso, nao um bug de carregamento.
+      // dobrado de novo (23/08, pedido do Lucas) — desta vez o TETO tambem,
+      // senao ele clampa o piso e o aumento nao aparece de verdade.
+      const r = Math.min(cs * 0.9, Math.max(36, cs * 0.56 * Math.sqrt(Fm / 50)));
 
       // HIERARQUIA DE SETAS (Etapa 1): ataque = traco cheio, peso pela
       // forca, mais firme a 1 turno do impacto; reforco proprio =
@@ -3710,17 +3817,18 @@
       }
       ctx.stroke();
       ctx.restore();
-      desenharEscudo(mx, my, r, col); // E2: a tropa e uma peca, nao um ponto
+      desenharEstandarte(mx, my, r, m.dono, m.tropas); // E2: a tropa e uma peca, nao um ponto
 
-      // rotulo do exercito: icone do tipo sempre que da; NUMERO so de perto
-      // (de longe, o TAMANHO do marcador ja conta a forca)
-      if (cs > 16) {
-        const td = Engine.tipoDominante(game, m.tropas);
-        const rot = (cs > 28 ? Fm + " " : "") + (td ? GLIFO[td] : "");
-        const fm = Math.max(10, cs * 0.26);
+      // rotulo do exercito: so o NUMERO da forca, de perto (de longe o
+      // TAMANHO do marcador ja conta). O glifo do tipo dominante saiu
+      // (23/08, pedido do Lucas) — a faixinha do estandarte ja mostra a
+      // composicao real, sem mentir feito um icone unico numa tropa mista.
+      if (cs > 8) { // limiar bem mais baixo (23/08): aparece com zoom mais afastado
+        const rot = String(Fm);
+        const fm = Math.max(18, cs * 0.42); // metade do tamanho anterior (23/08, pedido do Lucas)
         ctx.font = `bold ${fm}px serif`; ctx.textAlign = "center";
         ctx.lineWidth = Math.max(2, fm * 0.24); ctx.strokeStyle = "rgba(20,12,4,.85)";
-        if (cs > 28) ctx.strokeText(rot, mx, my - r - 4);
+        ctx.strokeText(rot, mx, my - r - 4);
         ctx.fillStyle = col === COR.A ? "#bcd0ff" : "#ffc4c4";
         ctx.fillText(rot, mx, my - r - 4);
       }
@@ -4040,6 +4148,17 @@
   function elTxt(id, txt) { const e = document.getElementById(id); if (e) e.textContent = txt; }
   function elLarg(id, pct) { const e = document.getElementById(id); if (e) e.style.width = pct + "%"; }
 
+  // nome curto do modelo p/ barra do topo: tira "backend:" e "org/" e ":free",
+  // senao a etiqueta crua ("openrouter:nvidia/nemotron-...:free") estoura o
+  // espaco e so aparece "OPENROUTER" cortado (23/08, achado do Lucas).
+  function nomeCurtoBarra(etq) {
+    let n = String(etq || "?");
+    n = n.replace(/^[a-z]+:/i, ""); // backend: (openrouter:, ollama:, ...)
+    n = n.replace(/^[^/]+\//, ""); // org/ (nvidia/, google/, deepseek/, ...)
+    n = n.replace(/:free$/i, "");
+    return n;
+  }
+
   function renderBarraTopo() {
     const el = document.getElementById("bt-turno");
     if (el) el.textContent = game.turno;
@@ -4064,7 +4183,7 @@
         const m = ESP_BRASAO[lado].match(/<svg[^>]*>([\s\S]*)<\/svg>/);
         if (m) bras.innerHTML = m[1];
       }
-      elTxt("bt-mod-" + s, lado === "A" ? etiquetaA : etiquetaB);
+      elTxt("bt-mod-" + s, nomeCurtoBarra(lado === "A" ? etiquetaA : etiquetaB));
       elTxt("bt-ald-" + s, lista.length);
       elTxt("bt-tro-" + s, tot);
       elTxt("bt-mad-" + s, mad);
