@@ -773,14 +773,14 @@
     // Com isso a peninsula pode flutuar num oceano sem fim e o zoom deixa de
     // ser refem do cover: da para afastar ate tirar as cidades de tras dos
     // paineis laterais (320px de cada lado comiam as bordas do mapa).
-    // RETALHO DE AGUA: um pedaco de mar ABERTO da propria arte, espelhado e
-    // repetido para fora. Nao e cor chapada — leva a textura de onda junto,
-    // entao o oceano de fora e o mesmo oceano de dentro.
-    // A faixa e o mar ao sul da peninsula: 1085x146px, 100% agua (conferido
-    // contra a mascara de terra; exclui a rosa dos ventos e as marcas de
-    // pagina da borda esquerda, que viravam listras verticais quando tentei
-    // usar a faixa oeste).
-    IB.retalho = { x: 15, y: 712, w: 1085, h: 146 };
+    // TEXTURA DE AGUA (23/08): o retalho espelhado da propria arte (1085x146px,
+    // repetido) deixava costura visivel e uma mancha da vinheta que virava uma
+    // cruz escura ao repetir — visto no zoom afastado, feedback do Lucas ("agua
+    // toda recortada e colada"). Troca: textura gerada a parte (nano banana),
+    // ja seamless/tileable por design, sem vinheta nem elemento unico (a marca
+    // d'agua foi clonada por cima com Pillow antes de entrar no jogo). Ver
+    // assets/agua-textura.png. Escala independente da arte da ilha — ver
+    // IB.marEscala em montarPadraoMarIB().
     // Desvanecer a beirada da arte para o mar de fora. A arte tem uma vinheta
     // escura nas bordas (papel envelhecido) e era ELA que denunciava o
     // retangulo, mesmo com a agua casando. 16px cabe com folga: a terra mais
@@ -845,13 +845,33 @@
         w: IB.largCels,
         h: IB.largCels * IB.img.naturalHeight / IB.img.naturalWidth,
       };
-      montarPadraoMarIB();
       montarArteEsfumadaIB();
       ajustarZoomMinimoIB();
       enquadrarTeatro();
       draw();
     };
-    IB.img.src = "Generated%20Image%20July%2027,%202026%20-%2012_32AM.png";
+    // Recorte (23/08): a arte original tem agua opaca ate a costa, e so a
+    // borda externa (16px) virava transparente — por isso a agua nova so
+    // aparecia LONGE da ilha, com uma emenda de tom visivel bem perto da
+    // costa (feedback do Lucas). assets/ilha-recortada.png e a MESMA arte,
+    // mesmas dimensoes, so com toda a agua (nao so a borda) marcada
+    // transparente por cor (classificador R/G/B + so mantem agua CONECTADA
+    // a borda da imagem, pra sombra de montanha isolada nao virar buraco).
+    // Ver assets/ilha-recortada.png e o script que gerou (historico do chat).
+    IB.img.src = "assets/ilha-recortada.png";
+
+    // Textura de agua (23/08): ver nota acima. Carrega em paralelo com a arte
+    // da ilha — o padrao so fica pronto quando ELA carregar, independente da
+    // ilha (por isso o proprio draw() de novo aqui, e nao so no IB.img.onload).
+    IB.marTilePx = 900;   // quantos px de tela (no zoom de referencia 1x) um
+                          // ladrilho de 1024px da textura ocupa — ajustavel;
+                          // a escala da onda da textura nao e a mesma da arte.
+    IB.marTex = new Image();
+    IB.marTex.onload = () => {
+      try { IB.padraoMar = ctx.createPattern(IB.marTex, "repeat"); } catch (e) { IB.padraoMar = null; }
+      draw();
+    };
+    IB.marTex.src = "assets/agua-textura.png";
   }
   // tela -> px do viewBox (inverso de SX/SY). So faz sentido no mapa autoral.
   const vbX = (sx) => (sx - panX) / (TILE * scale) * IB.div + IB.ox;
@@ -895,26 +915,8 @@
   // POSICAO DA IMAGEM na tela, entao a agua pintada encosta na agua desenhada
   // com a mesma cor — a emenda some. Alem das pontas o canvas repete a cor da
   // parada extrema, e o oceano segue por quanto for preciso.
-  // Monta o ladrilho de mar: o retalho e as suas 3 imagens espelhadas num
-  // bloco 2x2. Espelhar e o que faz as emendas sumirem — cada borda do bloco
-  // encontra a sua propria reflexao, entao a repeticao nao deixa costura.
-  // So drawImage aqui: o jogo roda em file://, o canvas fica "tainted" e
-  // qualquer getImageData estouraria. Ler pixel nao e preciso.
-  function montarPadraoMarIB() {
-    const P = IB.retalho, lona = document.createElement("canvas");
-    lona.width = P.w * 2; lona.height = P.h * 2;
-    const c = lona.getContext("2d");
-    const por = (dx, dy, fx, fy) => {
-      c.save();
-      c.translate(dx + (fx ? P.w : 0), dy + (fy ? P.h : 0));
-      c.scale(fx ? -1 : 1, fy ? -1 : 1);
-      c.drawImage(IB.img, P.x, P.y, P.w, P.h, 0, 0, P.w, P.h);
-      c.restore();
-    };
-    por(0, 0, false, false);   por(P.w, 0, true, false);
-    por(0, P.h, false, true);  por(P.w, P.h, true, true);
-    try { IB.padraoMar = ctx.createPattern(lona, "repeat"); } catch (e) { IB.padraoMar = null; }
-  }
+  // O padrao de mar (IB.padraoMar) e montado direto no onload de IB.marTex —
+  // a textura ja e seamless/tileable por construcao, sem precisar espelhar.
 
   // Copia da arte com as 4 beiradas desvanecidas (alpha -> 0). Feita UMA vez,
   // no load. destination-out apaga o que o gradiente pinta, entao a borda vira
@@ -944,8 +946,10 @@
   // — ela se move junto com o mapa, como agua de verdade faria.
   function pintarMarIB() {
     const cs = TILE * scale;
-    if (IB.padraoMar) {
-      const k = (IB.imgCels.w * cs) / IB.img.naturalWidth;   // px de tela por px da arte
+    if (IB.padraoMar && IB.marTex.naturalWidth) {
+      // px de tela por px da TEXTURA (escala independente da arte da ilha —
+      // IB.marTilePx e quantos px de tela um ladrilho ocupa no zoom scale=1).
+      const k = (IB.marTilePx / IB.marTex.naturalWidth) * scale;
       ctx.save();
       ctx.translate(panX, panY);
       ctx.scale(k, k);
