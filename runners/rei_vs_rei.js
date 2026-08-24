@@ -48,11 +48,13 @@ async function decidirLado(estado, dono) {
   };
 }
 
+// S/A/K = spearman/archer/knight, os nomes oficiais (24/08). O browser ja usava;
+// o runner ficou para tras e o log da bateria saia com L/A/C.
 function compStrG(t) {
   const p = [];
-  if (t.lanceiro) p.push(t.lanceiro + "L");
+  if (t.lanceiro) p.push(t.lanceiro + "S");
   if (t.arqueiro) p.push(t.arqueiro + "A");
-  if (t.cavaleiro) p.push(t.cavaleiro + "C");
+  if (t.cavaleiro) p.push(t.cavaleiro + "K");
   return p.join("+") || "0";
 }
 const totalTropas = (t) => (t.lanceiro || 0) + (t.arqueiro || 0) + (t.cavaleiro || 0);
