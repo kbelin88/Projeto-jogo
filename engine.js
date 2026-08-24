@@ -1348,12 +1348,21 @@
     const lo = Math.min(p1.aId, p1.bId), hi = Math.max(p1.aId, p1.bId);
     if (lo !== Math.min(p2.aId, p2.bId) || hi !== Math.max(p2.aId, p2.bId)) return false; // trecho diferente
     const dir1 = p1.aId < p1.bId ? 1 : -1, dir2 = p2.aId < p2.bId ? 1 : -1;
-    if (dir1 === dir2) return false; // mesmo sentido: nao tratado (nao se enfrentam de frente)
-    const seg = distancia(aldeiaPorId(estado, lo), aldeiaPorId(estado, hi));
-    const posLo = (p) => (p.aId < p.bId ? p.t : 1 - p.t) * seg; // distancia a partir de lo
-    const posX = dir1 === 1 ? posLo(p1) : posLo(p2); // o que marcha lo->hi
-    const posY = dir1 === 1 ? posLo(p2) : posLo(p1); // o que marcha hi->lo
-    return posX >= posY; // se encontraram (ou passaram) no trecho
+    if (dir1 !== dir2) {
+      // sentidos opostos: so se enfrentam quando as posicoes convergem (podem
+      // ainda estar se aproximando de pontas opostas do trecho).
+      const seg = distancia(aldeiaPorId(estado, lo), aldeiaPorId(estado, hi));
+      const posLo = (p) => (p.aId < p.bId ? p.t : 1 - p.t) * seg; // distancia a partir de lo
+      const posX = dir1 === 1 ? posLo(p1) : posLo(p2); // o que marcha lo->hi
+      const posY = dir1 === 1 ? posLo(p2) : posLo(p1); // o que marcha hi->lo
+      return posX >= posY; // se encontraram (ou passaram) no trecho
+    }
+    // mesmo sentido: dois inimigos no mesmo trecho, ao mesmo tempo, tambem se
+    // enfrentam (23/08, regra do Lucas: qualquer sentido, sempre se enfrentam).
+    // Atras de flag p/ nao mexer na regressao byte-identica do E8.1 (ref-lote-e,
+    // congelada sob o CONFIG_V3_ARQUIVO com flags do LOTE E desligadas).
+    if (estado.config.cruzamentoMesmoSentido === false) return false;
+    return true;
   }
 
   // Combate CAMPO ABERTO entre dois exercitos (sem bonus de terreno). Vencedor

@@ -12,7 +12,7 @@ const path = require("path");
 const E = require("../engine.js");
 
 const REF = path.join(__dirname, "ref-lote-e");
-const FLAGS_OFF = { ordensSimultaneas: false, interceptaChegada: false, desempateEstradaRng: false };
+const FLAGS_OFF = { ordensSimultaneas: false, interceptaChegada: false, desempateEstradaRng: false, cruzamentoMesmoSentido: false };
 let ok = 0;
 const t = (nome, fn) => { fn(); console.log("  ok  " + nome); ok++; };
 
