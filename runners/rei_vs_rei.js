@@ -94,6 +94,9 @@ function coletarDiagRunner(dono, registro, cli) {
     erroApi: registro.erroRede || null,
     ms: (tk && tk.ms != null) ? tk.ms : null,
     vazio: !registro.erroRede && !String(registro.cru || "").trim(),
+    // a voz do rei vai NO replay (24/08): e o que o video usa como narracao
+    depoimento: registro.depoimento || null,
+    plano: registro.plano || null,
   };
 }
 function gravarFrame(estado) {
@@ -263,6 +266,12 @@ async function main() {
       registro.aceito.envios.filter((e) => e.ajustado).forEach((e) =>
         out(`AJUSTADO envio [${e.origemId}]->[${e.destinoId}]: pediu ${compStrG(e.pedido)}, enviado ${compStrG(e.tropas)} (estoque real)`));
       registro.rejeicoes.forEach((r) => out("REJEITADO: " + r));
+      if (registro.plano) out("plano (volta no proximo prompt): " + registro.plano);
+      if (registro.depoimento) out("depoimento (so tela/narracao): " + registro.depoimento);
+      // O plano VOLTA no prompt do turno seguinte (flag resumosDoRei). O browser
+      // ja fazia; o headless nao — entao a bateria jogava sem a memoria que o
+      // proprio rei escreveu, e nao era comparavel com o que se ve na tela.
+      Engine.guardarPlano(estado, dono, registro.plano);
       coletarDiagRunner(dono, registro, cliente[dono]); // replay: o pensamento deste lado
       gravar(); // checkpoint por LADO
     }

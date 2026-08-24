@@ -254,7 +254,7 @@ t("C3 (inc.3+4) sem exemplo: nenhum valor copiavel, os 3 tipos sempre juntos", (
   assert.ok(!/"destinoId":\s*\d/.test(p) && !/"origemId":\s*\d/.test(p));
   assert.ok(!/"aldeiaId":\s*\d/.test(p));
   assert.ok(!/"tipo":\s*"lanceiro"/.test(p), "o tipo do exemplo nao pode estar escolhido por nos");
-  assert.ok(/"lanceiro" \| "arqueiro" \| "cavaleiro"/.test(p), "os tres tipos enumerados juntos");
+  assert.ok(/"spearman" \| "archer" \| "knight"/.test(p), "os tres tipos enumerados juntos");
   assert.ok(/there is no example to copy/.test(p));
 });
 t("C4 (inc.5+6) 'para tomar' saiu do jogo — inclusive para a capital", () => {
@@ -402,7 +402,7 @@ t("D4 CICLO COMPLETO: um 'modelo' que le o P4 joga a partida ate ao fim", () => 
     const secVis = p.split("=== VILLAGES YOU CAN SEE")[1] || "";
     const alvo = (secVis.match(/\[(\d+)\]/) || [])[1];
     // quanto da para enviar: le a linha AVAILABLE TO SEND NOW da 1a aldeia
-    const disp = bloco.match(/AVAILABLE TO SEND NOW: (\d+) lanceiros, (\d+) arqueiros, (\d+) cavaleiros/);
+    const disp = bloco.match(/AVAILABLE TO SEND NOW: (\d+) spearmans?, (\d+) archers?, (\d+) knights?/);
     const cru = JSON.stringify({
       build: undefined, // campo errado de proposito: o parser tem de ignorar
       construir: meus.map((id) => ({ aldeiaId: id, tipo: "spearman", quantidade: 2 })),

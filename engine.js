@@ -963,6 +963,20 @@
     archer: "arqueiro", archers: "arqueiro", bowman: "arqueiro", bowmen: "arqueiro",
     knight: "cavaleiro", knights: "cavaleiro", cavalry: "cavaleiro", horseman: "cavaleiro", horsemen: "cavaleiro",
   };
+  // NOME OFICIAL DO TIPO NO PROTOCOLO (24/08): o P4 passou a falar ingles
+  // INTEIRO \u2014 prosa e tokens. O armazenamento interno segue em PT
+  // (`tropas.lanceiro`), invisivel ao modelo: trocar a chave quebraria todo
+  // replay, log, teste e a tabela do site ja gravados, sem ganho nenhum.
+  const TIPO_NOME = { lanceiro: "spearman", arqueiro: "archer", cavaleiro: "knight" };
+  const en = (t) => TIPO_NOME[t] || t;
+  // Escrever o nome oficial NAO e desvio: nao pode contar como normalizacao,
+  // senao a metrica do benchmark passa a punir quem seguiu o protocolo.
+  function ehTokenOficial(t) {
+    if (typeof t !== "string") return false;
+    const s = t.trim().toLowerCase();
+    for (const k of TIPOS) if (TIPO_NOME[k] === s) return true;
+    return false;
+  }
   function normalizarTipo(t) {
     if (typeof t !== "string") return t;
     let s = t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
@@ -1853,6 +1867,8 @@
         const cont = {};
         let maxT = 0;
         for (const c of a.construindo) { cont[c.tipo] = (cont[c.tipo] || 0) + 1; maxT = Math.max(maxT, c.turnosRestantes); }
+        // LEGADO: prosa em PT e nomes em PT. Nao traduzir — o test_lote_c
+        // congela este texto byte a byte contra o CONFIG_V3_ARQUIVO.
         const desc = TIPOS.filter((t) => cont[t]).map((t) => `${cont[t]} ${t}`).join(", ");
         const quando = maxT > 1 ? `fica pronto em ${maxT} turnos` : `fica pronto no proximo turno`;
         L.push(`    ${quando}: ${desc} (nao pode ser enviado neste turno)`);
@@ -2115,9 +2131,7 @@
   // em ingles). Fora do relatorioTextoP4 porque o eventoTextoEN tambem precisa.
   function compTextoEN(t) {
     const p = [];
-    if (t.lanceiro) p.push(`${t.lanceiro} lanceiro${t.lanceiro > 1 ? "s" : ""}`);
-    if (t.arqueiro) p.push(`${t.arqueiro} arqueiro${t.arqueiro > 1 ? "s" : ""}`);
-    if (t.cavaleiro) p.push(`${t.cavaleiro} cavaleiro${t.cavaleiro > 1 ? "s" : ""}`);
+    for (const k of TIPOS) if (t[k]) p.push(`${t[k]} ${en(k)}${t[k] > 1 ? "s" : ""}`);
     return p.length ? p.join(", ") : "empty (no troops)";
   }
   function eventoTextoEN(ev, me) {
@@ -2233,7 +2247,7 @@
     let marchando = 0;
     for (const m of visao.minhas) for (const t of TIPOS) casa[t] += m.tropas[t];
     if (visao.transito) for (const mv of visao.transito) if (mv.dono === me) marchando += mv.tropas.lanceiro + mv.tropas.arqueiro + mv.tropas.cavaleiro;
-    L.push(`TOTAL: ${casa.lanceiro + casa.arqueiro + casa.cavaleiro} soldiers at home (${casa.lanceiro} lanceiros, ${casa.arqueiro} arqueiros, ${casa.cavaleiro} cavaleiros) + ${marchando} marching`);
+    L.push(`TOTAL: ${casa.lanceiro + casa.arqueiro + casa.cavaleiro} soldiers at home (${casa.lanceiro} ${en("lanceiro")}, ${casa.arqueiro} ${en("arqueiro")}, ${casa.cavaleiro} ${en("cavaleiro")}) + ${marchando} marching`);
     const adj = visao.estradas || {};
     const donoDe = {};
     for (const m of visao.minhas) donoDe[m.id] = me;
@@ -2248,7 +2262,7 @@
       const nome = a.nome ? ` ${a.nome}` : "";
       const cap = a.capital ? " - YOUR CAPITAL" : "";
       L.push(`[${a.id}]${nome}${cap}${fronteiraTag(a)} | wood ${a.recursos.madeira} (+${prod.madeira}/turn) | iron ${a.recursos.ferro} (+${prod.ferro}/turn) | effective defense (location bonus included): ${defefetiva(a)} | troops at home: ${contarTropas(a.tropas)} / ${cfg.limite_tropas_aldeia}`);
-      L.push(`    AVAILABLE TO SEND NOW: ${a.tropas.lanceiro} lanceiros, ${a.tropas.arqueiro} arqueiros, ${a.tropas.cavaleiro} cavaleiros (attack power if all sent: ${ataqueDe(a.tropas, cfg)})`);
+      L.push(`    AVAILABLE TO SEND NOW: ${a.tropas.lanceiro} ${en("lanceiro")}, ${a.tropas.arqueiro} ${en("arqueiro")}, ${a.tropas.cavaleiro} ${en("cavaleiro")} (attack power if all sent: ${ataqueDe(a.tropas, cfg)})`);
       const emMarcha = { lanceiro: 0, arqueiro: 0, cavaleiro: 0 };
       let temMarcha = false;
       if (visao.transito) for (const mv of visao.transito) if (mv.origemId === a.id && mv.dono === me) { for (const t of TIPOS) emMarcha[t] += (mv.tropas[t] || 0); temMarcha = true; }
@@ -2257,7 +2271,7 @@
       if (a.construindo.length) {
         const cont = {}; let maxT = 0;
         for (const c of a.construindo) { cont[c.tipo] = (cont[c.tipo] || 0) + 1; maxT = Math.max(maxT, c.turnosRestantes); }
-        const desc = TIPOS.filter((t) => cont[t]).map((t) => `${cont[t]} ${t}`).join(", ");
+        const desc = TIPOS.filter((t) => cont[t]).map((t) => `${cont[t]} ${en(t)}`).join(", ");
         L.push(`    ${maxT > 1 ? `ready in ${maxT} turns` : "ready next turn"}: ${desc} (cannot be sent this turn)`);
       }
     }
@@ -2373,11 +2387,11 @@
     L.push("Each troop type has its own ATTACK and DEFENSE values (they are not equal):");
     for (const t of TIPOS) {
       const d = cfg.tropas[t];
-      L.push(`  ${t}: attack ${d.atq}, defense ${d.def}, speed ${velEN[d.vel] || d.vel} (costs ${d.custo.madeira} wood + ${d.custo.ferro} iron).`);
+      L.push(`  ${en(t)}: attack ${d.atq}, defense ${d.def}, speed ${velEN[d.vel] || d.vel} (costs ${d.custo.madeira} wood + ${d.custo.ferro} iron).`);
     }
     L.push("When you ATTACK, your troops count their ATTACK; the DEFENDER counts the DEFENSE of theirs.");
-    L.push(`Counter triangle (a BONUS, not an automatic win): ${TIPOS.map((t) => `${t} counters ${contra[t]}`).join("; ")}. Having the counter multiplies your force by ${B}.`);
-    L.push("The MOST NUMEROUS type of each army sets the counter matchup (ties in count break in the order lanceiro, arqueiro, cavaleiro).");
+    L.push(`Counter triangle (a BONUS, not an automatic win): ${TIPOS.map((t) => `${en(t)} counters ${en(contra[t])}`).join("; ")}. Having the counter multiplies your force by ${B}.`);
+    L.push(`The MOST NUMEROUS type of each army sets the counter matchup (ties in count break in the order ${TIPOS.map(en).join(", ")}).`);
     L.push(`Defending is easier: defense counts x${bA} in a village and x${bC} in a castle (capital). In the open field (on a road) there is no bonus.`);
     L.push("The side with the HIGHER effective force wins. A tie favors the DEFENDER.");
     L.push("The winner also takes losses (attrition against the loser's effective force).");
@@ -2386,7 +2400,7 @@
     L.push("=== ECONOMY RULES ===");
     for (const t of TIPOS) {
       const d = cfg.tropas[t];
-      L.push(`${t}: costs ${d.custo.madeira} wood + ${d.custo.ferro} iron, ready in ${d.turnos} turn${d.turnos > 1 ? "s" : ""}.`);
+      L.push(`${en(t)}: costs ${d.custo.madeira} wood + ${d.custo.ferro} iron, ready in ${d.turnos} turn${d.turnos > 1 ? "s" : ""}.`);
     }
     L.push(`Each village you hold produces ${cfg.producao.madeira} wood and ${cfg.producao.ferro} iron per turn. Resources belong to EACH village (there is no shared treasury): a village pays for its own builds from its own stock.`);
     if (cfg.limite_tropas_aldeia)
@@ -2400,7 +2414,7 @@
     L.push("An army STOPS at the first village on its path that is not yours and fights there, even if you ordered a more distant destination. You cannot march past an enemy or neutral village to hit one behind it.");
     L.push("Troops sent from DIFFERENT villages never add up, even when they arrive at the same target on the same turn: each send fights alone, one at a time.");
     L.push("You may also send troops to a village YOU already own: they march the same way and, on arrival, join that village's garrison as reinforcements.");
-    L.push(`Each troop type has a speed: lanceiro (slow), arqueiro (medium), cavaleiro (fast). A MIXED army marches at the speed of its SLOWEST troop. The report shows travel time per speed (e.g. "march from [x]: 5 slow / 3 medium / 2 fast turns").`);
+    L.push(`Each troop type has a speed: ${en("lanceiro")} (slow), ${en("arqueiro")} (medium), ${en("cavaleiro")} (fast). A MIXED army marches at the speed of its SLOWEST troop. The report shows travel time per speed (e.g. "march from [x]: 5 slow / 3 medium / 2 fast turns").`);
     L.push("Marching takes turns, and during those turns the enemy keeps building and moving. The defense you see in the report is TODAY'S defense, not the defense on arrival.");
     return L.join("\n");
   }
@@ -2451,8 +2465,8 @@
     // tres tipos SEMPRE juntos, e nao contem nenhum numero nem alvo copiavel.
     L.push("Field by field - this describes the SHAPE of the reply; it is not a suggested move, and there is no example to copy:");
     L.push("{");
-    L.push('  "construir": [ {"aldeiaId": <id of one of YOUR villages>, "tipo": <"lanceiro" | "arqueiro" | "cavaleiro">, "quantidade": <how many to build, 1 or more>} ],');
-    L.push('  "envios": [ {"origemId": <id of one of YOUR villages>, "destinoId": <id of ANY other village - enemy or neutral to attack it, one of YOURS to reinforce it>, "tropas": {"lanceiro": <n>, "arqueiro": <n>, "cavaleiro": <n>}} ]' + (resumos ? "," : ""));
+    L.push('  "construir": [ {"aldeiaId": <id of one of YOUR villages>, "tipo": <"spearman" | "archer" | "knight">, "quantidade": <how many to build, 1 or more>} ],');
+    L.push('  "envios": [ {"origemId": <id of one of YOUR villages>, "destinoId": <id of ANY other village - enemy or neutral to attack it, one of YOURS to reinforce it>, "tropas": {"spearman": <n>, "archer": <n>, "knight": <n>}} ]' + (resumos ? "," : ""));
     if (resumos) {
       L.push('  "plano": "<your note to your next turn>",');
       L.push('  "depoimento": "<2-4 lines for the audience>"');
@@ -2746,7 +2760,9 @@
       if (!c || typeof c !== "object" || typeof c.tipo !== "string") continue;
       const n = normalizarTipo(c.tipo);
       if (n !== c.tipo) {
-        normalizacoes.push(`construir [${c.aldeiaId}]: tipo "${c.tipo}" -> "${n}"`);
+        // o nome oficial do protocolo e ingles: traduzi-lo p/ a chave interna
+        // e contabilidade nossa, nao desvio do modelo.
+        if (!ehTokenOficial(c.tipo)) normalizacoes.push(`construir [${c.aldeiaId}]: tipo "${c.tipo}" -> "${n}"`);
         c.tipo = n;
       }
     }
@@ -2755,7 +2771,7 @@
       for (const k of Object.keys(e.tropas)) {
         const n = normalizarTipo(k);
         if (n === k) continue;
-        normalizacoes.push(`envio [${e.origemId}]->[${e.destinoId}]: tropa "${k}" -> "${n}"`);
+        if (!ehTokenOficial(k)) normalizacoes.push(`envio [${e.origemId}]->[${e.destinoId}]: tropa "${k}" -> "${n}"`);
         e.tropas[n] = (Number(e.tropas[n]) || 0) + (Number(e.tropas[k]) || 0); // colisao: soma
         delete e.tropas[k];
       }

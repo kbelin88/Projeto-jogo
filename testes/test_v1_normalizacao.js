@@ -26,7 +26,8 @@
 //  1. parsearOrdem normaliza `tipo` em construir e as CHAVES de
 //     `tropas` em envios; devolve `normalizacoes: []` (sempre array).
 //  2. Fora do escopo fica cru (tipo inventado nao vira nada).
-//  2b. (P4) nome ingles vira o canonico PT, COM registro.
+//  2b. (P4) nome OFICIAL ingles vira a chave interna PT, SEM registro;
+//      sinonimo nao-oficial (plural/apelido) segue medido COM registro.
 //  3. diagnosticarOrdem para de MENTIR no envio: chave desconhecida
 //     que zera o envio e nomeada na rejeicao (hoje diz so "zero
 //     tropas" — feedback que nao descreve o erro alimenta o loop de
@@ -67,16 +68,25 @@ r = Engine.parsearOrdem('{"construir":[{"aldeiaId":1,"tipo":"arqueiro"}],"envios
 checa("tipo ja canonico: intocado e SEM registro", r.ordem.construir[0].tipo === "arqueiro" &&
   r.normalizacoes.length === 0, JSON.stringify(r.normalizacoes));
 
-// P4: 'archer' agora e SINONIMO (o prompt do jogo e em ingles), normalizado COM
-// registro — o desvio continua medido, mas nao custa mais a jogada.
+// 24/08: o nome OFICIAL do tipo virou ingles (spearman/archer/knight) — e o que
+// o esquema do P4 declara. Escrever o nome oficial NAO e desvio: mapear para a
+// chave interna PT e contabilidade nossa, e nao pode contar como normalizacao
+// (senao a metrica passa a punir quem seguiu o protocolo).
 r = Engine.parsearOrdem('{"construir":[{"aldeiaId":1,"tipo":"archer"}],"envios":[]}');
-checa("(P4) 'archer' -> 'arqueiro' COM registro (prompt do jogo e ingles)",
-  r.ordem.construir[0].tipo === "arqueiro" && r.normalizacoes.length === 1,
+checa("(P4) 'archer' e o nome OFICIAL: vira 'arqueiro' SEM registro",
+  r.ordem.construir[0].tipo === "arqueiro" && r.normalizacoes.length === 0,
   JSON.stringify(r.ordem.construir[0]) + " " + JSON.stringify(r.normalizacoes));
 
-for (const [en, pt] of [["spearman", "lanceiro"], ["knights", "cavaleiro"], ["cavalry", "cavaleiro"], ["bowmen", "arqueiro"]]) {
+for (const [en, pt] of [["spearman", "lanceiro"], ["knight", "cavaleiro"]]) {
   const rr = Engine.parsearOrdem('{"construir":[{"aldeiaId":1,"tipo":"' + en + '"}],"envios":[]}');
-  checa(`(P4) '${en}' -> '${pt}' COM registro`,
+  checa(`(P4) '${en}' oficial -> '${pt}' SEM registro`,
+    rr.ordem.construir[0].tipo === pt && rr.normalizacoes.length === 0, rr.ordem.construir[0].tipo);
+}
+
+// ...mas SINONIMO nao-oficial (plural, outro nome) continua sendo desvio medido.
+for (const [en, pt] of [["knights", "cavaleiro"], ["cavalry", "cavaleiro"], ["bowmen", "arqueiro"], ["pikeman", "lanceiro"]]) {
+  const rr = Engine.parsearOrdem('{"construir":[{"aldeiaId":1,"tipo":"' + en + '"}],"envios":[]}');
+  checa(`(P4) sinonimo '${en}' -> '${pt}' COM registro`,
     rr.ordem.construir[0].tipo === pt && rr.normalizacoes.length === 1, rr.ordem.construir[0].tipo);
 }
 
@@ -109,9 +119,9 @@ checa("chave 'Lanceiro' (caixa) -> 'lanceiro'", r.ordem.envios[0].tropas.lanceir
 
 // P4: a chave inglesa segue a MESMA regra do `tipo` (um choke point, uma regra).
 r = Engine.parsearOrdem('{"construir":[],"envios":[{"origemId":1,"destinoId":2,"tropas":{"archer":5}}]}');
-checa("(P4) chave 'archer' -> 'arqueiro' COM registro, valor preservado",
+checa("(P4) chave oficial 'archer' -> 'arqueiro' SEM registro, valor preservado",
   r.ordem.envios[0].tropas.arqueiro === 5 && r.ordem.envios[0].tropas.archer === undefined &&
-  r.normalizacoes.length === 1, JSON.stringify(r.ordem.envios[0].tropas));
+  r.normalizacoes.length === 0, JSON.stringify(r.ordem.envios[0].tropas));
 
 // chave INVENTADA continua crua — e e o (C) abaixo que prova que o diagnostico
 // a nomeia em vez de dizer "zero tropas".

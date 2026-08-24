@@ -311,6 +311,11 @@ async function decidirRei(estado, dono, cliente, opcoesPrompt) {
       jsonValido: p.ok, erroParse: p.erro,
       normalizacoes: p.normalizacoes || [], // H3: cru -> canonico, p/ o log contar o desvio
       ordemParseada: p.ordem,
+      // A VOZ DO REI (24/08): o headless nunca capturou plano/depoimento — so o
+      // browser. Sem isto, partida de bateria nao serve p/ video, porque o
+      // depoimento e o roteiro de narracao.
+      plano: p.plano || null,
+      depoimento: p.depoimento || null,
       ids: classificarIds(estado, p.ordem), // ancoragem: ids reais x inexistentes
       aceito: { construir: diag.aceitoConstruir, envios: diag.aceitoEnvios },
       rejeicoes: diag.rejeicoes,

@@ -199,6 +199,30 @@
      aparecia na gravacao. Volta so no ESC (ver alternarCinema/tecla). */
   body.cinema #zoombar, body.cinema #sb-toggle,
   body.cinema #gamebar, body.cinema #replaybar { display: none; }
+  /* o unico controle do cinema: aparece ao mexer o mouse e se apaga sozinho,
+     para nao entrar no video. A transicao e so na opacidade — sem display,
+     que nao anima e faria o botao piscar. */
+  #cinemaCtl { display: none; }
+  body.cinema #cinemaCtl {
+    display: flex; align-items: center; gap: 12px;
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+    z-index: 9; opacity: 0; transition: opacity .3s ease;
+    pointer-events: none;
+  }
+  body.cinema.mexeu #cinemaCtl { opacity: 1; pointer-events: auto; }
+  #cinePlay {
+    width: 46px; height: 46px; font-size: 17px; cursor: pointer;
+    color: #f0e3c0; background: linear-gradient(180deg, rgba(43,32,20,.95), rgba(30,21,9,.95));
+    border: 2px solid #6b4a22; border-radius: 999px;
+    box-shadow: 0 4px 18px rgba(0,0,0,.55);
+  }
+  #cinePlay:hover { background: linear-gradient(180deg, #6b4a22, #4a3115); }
+  #cinePlay:focus-visible { outline: 2px solid #d9a441; outline-offset: 2px; }
+  .cine-dica {
+    font: 11px "Trebuchet MS", Verdana, sans-serif; letter-spacing: .04em;
+    color: #b8ad93; background: rgba(12,10,8,.8); padding: 5px 10px;
+    border-radius: 999px; white-space: nowrap;
+  }
 
   #zoombar { transition: right .25s ease; }
   body:not(.sb-closed) #zoombar { right: 316px; }
@@ -602,6 +626,14 @@
       <div class="bt-cel bt-rec" title="Iron"><svg class="bt-ico fer" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.6 12.9h12.8l-1.28-3.5a1.1 1.1 0 0 0-1.03-.72H3.91a1.1 1.1 0 0 0-1.03.72z" fill="currentColor"/><path d="M4.35 7.5h7.3l-1.02-2.98a1.1 1.1 0 0 0-1.03-.72H6.4a1.1 1.1 0 0 0-1.03.72z" fill="currentColor"/></svg><span class="bt-val p" id="bt-fer-b">0</span></div>
     </div>
   </div>
+</div>
+
+<!-- CONTROLE DO CINEMA (24/08): o cinema esconde TODAS as barras, entao ficava
+     sem play/pause. Este botao so existe no cinema e se apaga sozinho quando o
+     mouse para — assim nao aparece na gravacao. Barra de espaco faz o mesmo. -->
+<div id="cinemaCtl">
+  <button id="cinePlay" title="Play / Pause (barra de espaco)">&#9208;</button>
+  <span class="cine-dica">espaco = play/pause &middot; esc = sair do cinema</span>
 </div>
 
 <!-- ===== TRANSMISSAO v5: DEPOIMENTO NO TOPO =====
@@ -2881,12 +2913,12 @@
     }
   }
 
-  // composicao curta p/ o log (ex.: "10L+5C")
+  // composicao curta p/ o log (ex.: "10S+5K") — S/A/K, nomes oficiais (24/08)
   function compStrG(t) {
     const p = [];
-    if (t.lanceiro) p.push(t.lanceiro + "L");
+    if (t.lanceiro) p.push(t.lanceiro + "S");
     if (t.arqueiro) p.push(t.arqueiro + "A");
-    if (t.cavaleiro) p.push(t.cavaleiro + "C");
+    if (t.cavaleiro) p.push(t.cavaleiro + "K");
     return p.join("+") || "0";
   }
 
@@ -4274,9 +4306,10 @@
       const leg = document.getElementById("bt-leg-" + s);
       if (leg) {
         leg.innerHTML =
-          '<span><em style="background:' + ESP_COR.lanceiro + '"></em><b>' + L + "</b> L</span>" +
+          // S/A/K = spearman / archer / knight, os nomes oficiais (24/08)
+          '<span><em style="background:' + ESP_COR.lanceiro + '"></em><b>' + L + "</b> S</span>" +
           '<span><em style="background:' + ESP_COR.arqueiro + '"></em><b>' + Aq + "</b> A</span>" +
-          '<span><em style="background:' + ESP_COR.cavaleiro + '"></em><b>' + C + "</b> C</span>";
+          '<span><em style="background:' + ESP_COR.cavaleiro + '"></em><b>' + C + "</b> K</span>";
       }
     }
   }
@@ -4495,6 +4528,15 @@
     const ligar = !document.body.classList.contains("cinema");
     document.body.classList.toggle("cinema", ligar);
     document.getElementById("gcinema").classList.toggle("ativo", ligar);
+    if (ligar) {
+      // o botao tem de nascer com o icone certo e se mostrar uma vez, senao o
+      // espectador entra no cinema sem saber que existe controle.
+      const b = document.getElementById("cinePlay");
+      if (b) b.innerHTML = playing ? "&#9208;" : "&#9654;";
+      mostrarControleCinema();
+    } else {
+      document.body.classList.remove("mexeu");
+    }
     // tela cheia deixa o modo obvio e e o que gravacao pede; se o navegador
     // negar (precisa de gesto), o modo segue valendo so com o chrome oculto
     try {
@@ -4506,17 +4548,41 @@
   // sem esta tecla o espectador ficava sem play/pause. Fora do cinema o ESC
   // nao faz nada — nao rouba o Escape de mais ninguem.
   window.addEventListener("keydown", (ev) => {
-    if (ev.key !== "Escape") return;
+    if (!document.body.classList.contains("cinema")) return; // fora do cinema nao roubamos tecla nenhuma
+    if (ev.key === "Escape") { ev.preventDefault(); alternarCinema(); return; }
+    if (ev.key === " " || ev.code === "Space") {
+      ev.preventDefault(); // senao a pagina rola / reativa o botao com foco
+      alternarReproducao();
+      mostrarControleCinema();
+    }
+  });
+  // o controle aparece ao mexer o mouse e se apaga sozinho: assim existe quando
+  // se precisa dele e nao entra no video quando se para de mexer.
+  let sumirCtl = null;
+  function mostrarControleCinema() {
     if (!document.body.classList.contains("cinema")) return;
-    ev.preventDefault();
-    alternarCinema();
-  });
-  document.getElementById("grepPlay").addEventListener("click", () => {
-    if (!rep) return;
-    if (!playing && rep.idx >= rep.dados.frames.length) { rep.idx = 0; limparFeeds(); limparBanners(); }
-    playing = !playing;
-    atualizarProgresso();
-  });
+    document.body.classList.add("mexeu");
+    if (sumirCtl) clearTimeout(sumirCtl);
+    sumirCtl = setTimeout(() => document.body.classList.remove("mexeu"), 2500);
+  }
+  window.addEventListener("mousemove", mostrarControleCinema);
+  // UM SO caminho de play/pause (24/08): a barra de replay, o botao do cinema e
+  // a barra de espaco chamam isto. Antes so o grepPlay sabia reproduzir, e o
+  // cinema — que esconde a barra — ficava sem como pausar.
+  function alternarReproducao() {
+    if (emReplay) {
+      if (!rep) return;
+      if (!playing && rep.idx >= rep.dados.frames.length) { rep.idx = 0; limparFeeds(); limparBanners(); }
+      playing = !playing;
+      atualizarProgresso();
+    } else {
+      if (playing) pause(); else play();
+    }
+    const b = document.getElementById("cinePlay");
+    if (b) b.innerHTML = playing ? "&#9208;" : "&#9654;";
+  }
+  document.getElementById("grepPlay").addEventListener("click", alternarReproducao);
+  document.getElementById("cinePlay").addEventListener("click", alternarReproducao);
   document.getElementById("grepRestart").addEventListener("click", () => {
     if (!rep) return;
     rep.idx = 0; limparFeeds(); limparBanners(); fecharCartao(); efeitos = [];

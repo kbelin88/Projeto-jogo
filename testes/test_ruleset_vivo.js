@@ -115,7 +115,7 @@ t("2e3 o P4 nao tem exemplo com valores nem minimo pre-calculado", () => {
   assert.ok(!/"destinoId":\s*\d/.test(p), "exemplo com ids concretos nao pode voltar");
   assert.ok(!/"aldeiaId":\s*\d/.test(p), "exemplo com ids concretos nao pode voltar");
   assert.ok(!/"lanceiro":\s*\d/.test(p), "exemplo com quantidades nao pode voltar");
-  assert.ok(/"lanceiro" \| "arqueiro" \| "cavaleiro"/.test(p), "o esquema tem de enumerar os TRES tipos juntos");
+  assert.ok(/"spearman" \| "archer" \| "knight"/.test(p), "o esquema tem de enumerar os TRES tipos juntos");
 });
 t("2e4 o P4 diz as regras que o motor EXECUTA (vitoria, simultaneidade, reforco, endurecimento)", () => {
   const p = E.montarPrompt(E.montarVisao(stJogo(), "A", {}), {});
