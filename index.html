@@ -2311,10 +2311,7 @@
         if (de !== undefined && de !== a.dono) {
           trocasDono.set(a.id, { de, t0 });
           // a torre pega fogo agora e fica com a cicatriz para sempre
-          if (!capitalIds.has(a.id)) {
-            aldeiasEmChamas.set(a.id, performance.now());
-            aldeiasQueimadas.add(a.id);
-          }
+          if (!capitalIds.has(a.id)) aldeiasEmChamas.set(a.id, performance.now());
         }
       }
     }
@@ -2642,29 +2639,22 @@
       if (e.tipo !== "combate") continue;
       const a = game.aldeias.find((v) => v.id === e.alvoId);
       if (!a) continue;
-      // COREOGRAFIA DA CONQUISTA (25/08). Antes tudo estourava no mesmo quadro
-      // e lia como um borrao so. Agora cada peca tem a sua batida:
-      //   0 ms   o estandarte PLANTA na aldeia (deixa de sumir, passa a chegar)
-      //   150 ms o anel expande
-      //   300 ms o numero de dano sobe
+      // COREOGRAFIA DA CONQUISTA (25/08), depois da limpeza:
+      //   0 ms   o estandarte PLANTA na aldeia e a torre pega FOGO
       //   400 ms a bandeira derrete para a cor nova (TROCA_ATRASO)
       //   500 ms os numeros do topo rolam (ROLA_ATRASO)
+      //   1.8 s  o fogo apaga e a torre fica queimada
+      //   2.8 s  a torre volta ao estado base
       const agr = performance.now();
+      // 25/08: o ANEL de conquista, o choque de combate e o NUMERO DE BAIXAS
+      // sairam (pedido do Lucas: "circulos piscando e numero de tropas mortas
+      // ... poluem o momento"). O que conta a conquista agora e o estandarte
+      // plantando e a torre pegando fogo — dois sinais, no lugar de cinco.
       if (e.conquista) {
         const ex = chegandoAntes.find((m) => m.dono === e.atacante && m.destinoId === a.id);
         efeitos.push({ plantar: true, aldeiaId: a.id, x: a.x, y: a.y,
           dono: e.atacante, tropas: ex ? ex.tropas : null,
           t0: agr, dur: PLANTA_MS });
-      }
-      efeitos.push({
-        x: a.x, y: a.y, aldeiaId: a.id, t0: agr + (e.conquista ? ANEL_ATRASO : 0), conq: !!e.conquista,
-        dur: e.conquista ? 1600 : undefined, // conquista merece a cena
-        cor: e.conquista ? (COR[a.dono] || COR.neutra) : "#ffd56b",
-      });
-      if (e.baixasForca > 0) { // dano do vencedor: flutua sobre a aldeia
-        const corD = e.vencedor === "atacante" ? COR[e.atacante] : "#f0e3c0";
-        efeitos.push({ x: a.x, y: a.y, aldeiaId: a.id, t0: agr + DANO_ATRASO, dur: 1400,
-          dano: "-" + e.baixasForca, cor: corD });
       }
     }
     if (efeitos.length && !efeitoLoop) { efeitoLoop = true; requestAnimationFrame(tickEfeitos); }
@@ -2768,7 +2758,7 @@
     fecharCartao();
     efeitos = [];
     trocasDono = new Map(); rolagens.clear();
-    aldeiasEmChamas = new Map(); aldeiasQueimadas = new Set();
+    aldeiasEmChamas = new Map();
     emReplay = false;
     rep = null;
     replay = { versaoDiag: 1, frames: [] }; // schema versionado (spec, secao 3)
@@ -3882,16 +3872,19 @@
   //   queimada  -> ja foi tomada alguma vez (cicatriz permanente)
   // Nada disto e estado de jogo: e memoria do DESENHO, reconstruida enquanto se
   // assiste. O motor nao sabe que a torre queimou, e nao precisa saber.
-  const CHAMAS_MS = 1800;
-  let aldeiasEmChamas = new Map();   // id -> t0
-  let aldeiasQueimadas = new Set();  // id (permanente na sessao de exibicao)
+  // 25/08: a cicatriz NAO e mais permanente. Era, e no meio da partida o mapa
+  // inteiro ficava preto — toda torre ja tinha sido tomada alguma vez. O ciclo
+  // agora fecha: base -> chamas -> queimada -> base, e a aldeia volta ao normal.
+  const CHAMAS_MS = 1800, QUEIMADA_MS = 1000;
+  let aldeiasEmChamas = new Map();   // id -> t0 do incendio
   function estadoTorre(a) {
     const t = aldeiasEmChamas.get(a.id);
-    if (t != null) {
-      if (performance.now() - t < CHAMAS_MS) return "torre_chamas";
-      aldeiasEmChamas.delete(a.id);
-    }
-    return aldeiasQueimadas.has(a.id) ? "torre_queimada" : "torre_base";
+    if (t == null) return "torre_base";
+    const dt = performance.now() - t;
+    if (dt < CHAMAS_MS) return "torre_chamas";
+    if (dt < CHAMAS_MS + QUEIMADA_MS) return "torre_queimada";
+    aldeiasEmChamas.delete(a.id);
+    return "torre_base";
   }
   // Sprite e largura da aldeia, num lugar so: baseVisualIB e o desenho TEM de
   // concordar, senao a ancora sai do lugar (o erro que ja mordeu 3x).
@@ -3981,9 +3974,13 @@
         const fm = Math.max(14, cs * 0.32);
         ctx.font = `bold ${fm}px serif`; ctx.textAlign = "center";
         ctx.lineWidth = Math.max(2, fm * 0.22); ctx.strokeStyle = "rgba(20,12,4,.85)";
-        ctx.strokeText(String(totG), sx, bFootY - bH - 4);
+        // 25/08: o numero flutuava longe demais. Na torre ele se prende ao topo
+        // da FLAMULA (que e baixa), nao a altura da bandeira antiga; nos demais,
+        // encosta mais na haste.
+        const yNum = ehTorre ? (bFootY - 5) : (bFootY - bH - 2);
+        ctx.strokeText(String(totG), sx, yNum);
         ctx.fillStyle = a.dono === null ? "#e8dfc8" : (a.dono === "A" ? "#bcd0ff" : "#ffc4c4");
-        ctx.fillText(String(totG), sx, bFootY - bH - 4);
+        ctx.fillText(String(totG), sx, yNum);
       }
 
       // NOME DA CIDADE (23/08): so aparece ao aproximar o zoom — mapa limpo por
@@ -4782,7 +4779,7 @@
     if (!rep) return;
     rep.idx = 0; limparFeeds(); limparBanners(); fecharCartao(); efeitos = [];
     trocasDono = new Map(); rolagens.clear(); // sem transicao herdada do que ja passou
-    aldeiasEmChamas = new Map(); aldeiasQueimadas = new Set();
+    aldeiasEmChamas = new Map();
     camAuto = true; document.getElementById("grepCam").classList.add("ativo");
     playing = false;
     repFrac = 0;
