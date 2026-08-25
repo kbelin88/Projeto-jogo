@@ -3975,19 +3975,10 @@
       // ATACANTE marca o alvo — a ameaca tem dono, o desfecho fica em
       // aberto. Decisao de 16/07: previsao de resultado tira a tensao
       // do espectador (a conta do motor saiu da UI; segue no eval).
-      if (m.turnosRestantes === 1 && d.dono !== m.dono && cs > 13) {
-        // mesma correcao de ancora dos efeitos: o halo mirava a ancora CRUA e
-        // aparecia abaixo do desenho da aldeia. Agora assenta no sprite.
-        const ha = ancoraEfeito({ aldeiaId: d.id, x: d.x, y: d.y });
-        const corH = col;
-        const rh = Math.max(8, cs * 0.52);
-        ctx.save();
-        ctx.shadowColor = corH; ctx.shadowBlur = Math.max(6, cs * 0.35);
-        ctx.lineWidth = Math.max(2, cs * 0.09); ctx.strokeStyle = corH;
-        ctx.globalAlpha = 0.9;
-        ctx.beginPath(); ctx.arc(ha.x, ha.y, rh, 0, Math.PI * 2); ctx.stroke();
-        ctx.restore();
-      }
+      // 25/08: o CIRCULO de alerta de ataque saiu (decisao do Lucas: "nao gosto
+      // dele"). Ele marcava o alvo com um anel na cor do atacante, mas a chegada
+      // ja e contada pelo estandarte marchando e depois plantando — o anel era
+      // ruido a mais no momento mais cheio da tela.
 
       // FORCA COMO TAMANHO: area do marcador ~ forca (comparavel de relance)
       const Fm = Engine.forcaDe(m.tropas, game.config);
