@@ -371,17 +371,18 @@
     width: 0; height: 0; border-left: 3.5px solid transparent; border-right: 3.5px solid transparent; }
   .bt-delta.up::before { border-bottom: 5px solid currentColor; }
   .bt-delta.down::before { border-top: 5px solid currentColor; }
-  /* composicao L/A/C: FORMA, nao digito — monocultura le-se em meio segundo */
-  .bt-comp { display: flex; flex-direction: column; gap: 4px; min-width: 118px; }
-  .bt-compbar { display: flex; height: 11px; width: 118px; border-radius: 999px;
-    overflow: hidden; box-shadow: 0 0 0 1px rgba(232,223,200,.2); }
-  .bt-lado.b .bt-compbar { flex-direction: row-reverse; }
-  .bt-compbar i { display: block; height: 100%; transition: width .5s; }
-  .bt-leg { display: flex; gap: 12px; font-size: 9.5px; color: #8d8571; font-variant-numeric: tabular-nums; }
-  .bt-lado.b .bt-leg { flex-direction: row-reverse; }
-  .bt-leg b { font-weight: 800; color: #e8dfc8; }
-  .bt-leg em { display: inline-block; width: 7px; height: 7px; margin-right: 3px;
-    border-radius: 2px; vertical-align: middle; font-style: normal; }
+  /* COMPOSICAO (25/08): a barra empilhada saiu. Ela pedia que o espectador
+     comparasse tres larguras — leitura lenta demais para video. No lugar,
+     simbolo + numero: lanca, arco e cavalo, na cor que cada tropa ja tem no
+     mapa. O simbolo E o rotulo, entao nao ha legenda a decorar. */
+  .bt-comp { display: flex; align-items: center; gap: 15px; }
+  .bt-lado.b .bt-comp { flex-direction: row-reverse; }
+  .bt-tropa { display: inline-flex; align-items: center; gap: 5px; }
+  .bt-tropa b { font-family: Verdana, sans-serif; font-size: 17px; font-weight: 800;
+    color: #e8dfc8; font-variant-numeric: tabular-nums; line-height: 1; }
+  .bt-ico.lan { color: #c9a227; }
+  .bt-ico.arq { color: #5b9c6b; }
+  .bt-ico.cav { color: #b4c2cb; }
   .bt-turno { flex: none; width: 140px; align-self: center; display: flex;
     flex-direction: column; align-items: center; gap: 1px; padding: 5px 0;
     background: linear-gradient(180deg, #2a241c, #17130e);
@@ -602,8 +603,9 @@
       <div class="bt-cel"><span class="bt-rot">Villages</span><div class="bt-valwrap"><span class="bt-val g" id="bt-ald-a">0</span><span class="bt-delta zero" id="bt-dald-a"></span></div></div>
       <div class="bt-cel"><span class="bt-rot">Troops</span><div class="bt-valwrap"><span class="bt-val m" id="bt-tro-a">0</span><span class="bt-delta zero" id="bt-dtro-a"></span></div></div>
       <div class="bt-comp">
-        <div class="bt-compbar"><i id="bt-cl-a"></i><i id="bt-ca-a"></i><i id="bt-cc-a"></i></div>
-        <div class="bt-leg" id="bt-leg-a"></div>
+        <span class="bt-tropa" title="Spearmen"><svg class="bt-ico lan" viewBox="0 0 16 16" aria-hidden="true"><path d="M12.6 1.6c.4-.35 1.05.05.92.56l-.9 3.5a1.4 1.4 0 0 1-.36.64L6.6 11.95 4.4 9.75l5.66-5.66c.18-.18.4-.3.64-.36z" fill="currentColor"/><rect x="-1.1" y="12.05" width="7.6" height="1.9" rx=".95" transform="rotate(-45 2.7 13)" fill="currentColor"/></svg><b id="bt-cl-a">0</b></span>
+        <span class="bt-tropa" title="Archers"><svg class="bt-ico arq" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.1 1.5a.9.9 0 0 0-.75 1.4 8.9 8.9 0 0 1 0 10.2.9.9 0 0 0 .75 1.4.9.9 0 0 0 .74-.39 10.7 10.7 0 0 0 0-12.22.9.9 0 0 0-.74-.39z" fill="currentColor"/><rect x="3.5" y="7.1" width="10.4" height="1.8" rx=".9" fill="currentColor"/><path d="M11.4 4.9 14.6 8l-3.2 3.1z" fill="currentColor"/></svg><b id="bt-ca-a">0</b></span>
+        <span class="bt-tropa" title="Knights"><svg class="bt-ico cav" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.6 1.4c.15 1 .05 1.7-.3 2.4L3.3 5.9a2.6 2.6 0 0 0-.7 1.8v1.5c0 .5.62.75.96.38l1.5-1.62.72.9-1.5 2.2a3.4 3.4 0 0 0-.58 1.9v1.5h8.4V9.1c0-2.5-1.3-4.8-3.4-6.1z" fill="currentColor"/></svg><b id="bt-cc-a">0</b></span>
       </div>
       <div class="bt-cel bt-rec" title="Wood"><svg class="bt-ico mad" viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="8.7" width="6.3" height="4.3" rx="2.15" fill="currentColor"/><rect x="8.7" y="8.7" width="6.3" height="4.3" rx="2.15" fill="currentColor"/><rect x="4.85" y="3.2" width="6.3" height="4.3" rx="2.15" fill="currentColor"/></svg><span class="bt-val p" id="bt-mad-a">0</span></div>
       <div class="bt-cel bt-rec" title="Iron"><svg class="bt-ico fer" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.6 12.9h12.8l-1.28-3.5a1.1 1.1 0 0 0-1.03-.72H3.91a1.1 1.1 0 0 0-1.03.72z" fill="currentColor"/><path d="M4.35 7.5h7.3l-1.02-2.98a1.1 1.1 0 0 0-1.03-.72H6.4a1.1 1.1 0 0 0-1.03.72z" fill="currentColor"/></svg><span class="bt-val p" id="bt-fer-a">0</span></div>
@@ -622,8 +624,9 @@
       <div class="bt-cel"><span class="bt-rot">Villages</span><div class="bt-valwrap"><span class="bt-val g" id="bt-ald-b">0</span><span class="bt-delta zero" id="bt-dald-b"></span></div></div>
       <div class="bt-cel"><span class="bt-rot">Troops</span><div class="bt-valwrap"><span class="bt-val m" id="bt-tro-b">0</span><span class="bt-delta zero" id="bt-dtro-b"></span></div></div>
       <div class="bt-comp">
-        <div class="bt-compbar"><i id="bt-cl-b"></i><i id="bt-ca-b"></i><i id="bt-cc-b"></i></div>
-        <div class="bt-leg" id="bt-leg-b"></div>
+        <span class="bt-tropa" title="Spearmen"><svg class="bt-ico lan" viewBox="0 0 16 16" aria-hidden="true"><path d="M12.6 1.6c.4-.35 1.05.05.92.56l-.9 3.5a1.4 1.4 0 0 1-.36.64L6.6 11.95 4.4 9.75l5.66-5.66c.18-.18.4-.3.64-.36z" fill="currentColor"/><rect x="-1.1" y="12.05" width="7.6" height="1.9" rx=".95" transform="rotate(-45 2.7 13)" fill="currentColor"/></svg><b id="bt-cl-b">0</b></span>
+        <span class="bt-tropa" title="Archers"><svg class="bt-ico arq" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.1 1.5a.9.9 0 0 0-.75 1.4 8.9 8.9 0 0 1 0 10.2.9.9 0 0 0 .75 1.4.9.9 0 0 0 .74-.39 10.7 10.7 0 0 0 0-12.22.9.9 0 0 0-.74-.39z" fill="currentColor"/><rect x="3.5" y="7.1" width="10.4" height="1.8" rx=".9" fill="currentColor"/><path d="M11.4 4.9 14.6 8l-3.2 3.1z" fill="currentColor"/></svg><b id="bt-ca-b">0</b></span>
+        <span class="bt-tropa" title="Knights"><svg class="bt-ico cav" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.6 1.4c.15 1 .05 1.7-.3 2.4L3.3 5.9a2.6 2.6 0 0 0-.7 1.8v1.5c0 .5.62.75.96.38l1.5-1.62.72.9-1.5 2.2a3.4 3.4 0 0 0-.58 1.9v1.5h8.4V9.1c0-2.5-1.3-4.8-3.4-6.1z" fill="currentColor"/></svg><b id="bt-cc-b">0</b></span>
       </div>
       <div class="bt-cel bt-rec" title="Wood"><svg class="bt-ico mad" viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="8.7" width="6.3" height="4.3" rx="2.15" fill="currentColor"/><rect x="8.7" y="8.7" width="6.3" height="4.3" rx="2.15" fill="currentColor"/><rect x="4.85" y="3.2" width="6.3" height="4.3" rx="2.15" fill="currentColor"/></svg><span class="bt-val p" id="bt-mad-b">0</span></div>
       <div class="bt-cel bt-rec" title="Iron"><svg class="bt-ico fer" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.6 12.9h12.8l-1.28-3.5a1.1 1.1 0 0 0-1.03-.72H3.91a1.1 1.1 0 0 0-1.03.72z" fill="currentColor"/><path d="M4.35 7.5h7.3l-1.02-2.98a1.1 1.1 0 0 0-1.03-.72H6.4a1.1 1.1 0 0 0-1.03.72z" fill="currentColor"/></svg><span class="bt-val p" id="bt-fer-b">0</span></div>
@@ -2059,6 +2062,27 @@
   // ============================================================
   const COR = { A: "#3b6bd8", B: "#d83b3b", neutra: "#d9d2bd" };
 
+  // TROCA DE DONO DERRETENDO (25/08) — peca 2 do escalonamento da virada de
+  // turno. A cor da aldeia lerpa da antiga para a nova em vez de piscar, e so
+  // COMECA depois do combate estourar, para o olho ver causa antes de efeito.
+  // Guarda so id -> {de, para, t0}; nada disto toca o estado do jogo.
+  const TROCA_MS = 420, TROCA_ATRASO = 150;
+  let trocasDono = new Map();
+  function misturarCor(c1, c2, k) {
+    const h = (c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
+    const [r1, g1, b1] = h(c1), [r2, g2, b2] = h(c2);
+    const m = (x, y) => Math.round(x + (y - x) * k);
+    return "rgb(" + m(r1, r2) + "," + m(g1, g2) + "," + m(b1, b2) + ")";
+  }
+  const corBase = (dono) => (dono === null ? COR.neutra : COR[dono]);
+  function corDaAldeia(a) {
+    const t = trocasDono.get(a.id);
+    if (!t) return corBase(a.dono);
+    const k = (performance.now() - t.t0) / TROCA_MS;
+    if (k >= 1) { trocasDono.delete(a.id); return corBase(a.dono); }
+    return misturarCor(corBase(t.de), corBase(a.dono), Math.max(0, k));
+  }
+
   let game = null;        // estado da partida (engine)
   // PELE v2: ids das CAPITAIS (as unicas aldeias que ja comecam com dono).
   // Persistente: na conquista o motor zera o tipo (engine 650), entao tipo
@@ -2276,6 +2300,16 @@
 
   // ===== REPRODUCAO: aplica um frame gravado ao estado visivel =====
   function aplicarFrame(fr) {
+    // quem MUDOU de dono neste quadro: guarda a cor antiga para a aldeia
+    // derreter da cor de quem perdeu para a de quem ganhou (ver corDaAldeia).
+    if (game && game.aldeias && !REDUZ_MOV) {
+      const antes = new Map(game.aldeias.map((a) => [a.id, a.dono]));
+      const t0 = performance.now() + TROCA_ATRASO;
+      for (const a of fr.aldeias) {
+        const de = antes.get(a.id);
+        if (de !== undefined && de !== a.dono) trocasDono.set(a.id, { de, t0 });
+      }
+    }
     game.turno = fr.turno;
     game.aldeias = fr.aldeias;
     game.movimentos = fr.movimentos;
@@ -2701,6 +2735,7 @@
     limparFeeds();
     fecharCartao();
     efeitos = [];
+    trocasDono = new Map(); rolagens.clear();
     emReplay = false;
     rep = null;
     replay = { versaoDiag: 1, frames: [] }; // schema versionado (spec, secao 3)
@@ -3803,7 +3838,7 @@
     for (const a of game.aldeias) {
       let sx = SX(a.x); const sy = SY(a.y);
       if (sx < -60 || sy < -60 || sx > VW + 60 || sy > VH + 60) continue;
-      const col = a.dono === null ? COR.neutra : COR[a.dono];
+      const col = corDaAldeia(a);
       const r = Math.max(20, cs * 0.59);
       const ehCapital = capitalIds.has(a.id); // so a capital inicial e castelo (aldeia tomada nao)
 
@@ -4280,6 +4315,37 @@
   function elTxt(id, txt) { const e = document.getElementById(id); if (e) e.textContent = txt; }
   function elLarg(id, pct) { const e = document.getElementById(id); if (e) e.style.width = pct + "%"; }
 
+  // ROLAGEM DE NUMERO (25/08) — o numero CONTA ate o valor novo em vez de
+  // saltar. E a peca 1 do escalonamento da virada de turno: o combate estoura
+  // primeiro, a posse da aldeia derrete depois, e so entao os numeros correm,
+  // para o olho seguir uma sequencia em vez de levar tudo de uma vez.
+  //
+  // Anda por setTimeout, NAO por requestAnimationFrame: os smokes zeram o rAF
+  // de proposito e a contagem nunca terminaria — o numero ficaria travado no
+  // valor antigo e o teste leria uma tela mentirosa.
+  const ROLA_MS = 520, ROLA_ATRASO = 300;
+  const rolagens = new Map();
+  function elNumRolando(id, valor) {
+    const e = document.getElementById(id);
+    if (!e) return;
+    const alvo = Math.round(Number(valor) || 0);
+    const st = rolagens.get(id);
+    if (st && st.alvo === alvo) return;               // ja indo (ou parado) neste valor
+    const de = st ? st.atual : (parseInt(e.textContent, 10) || 0);
+    if (de === alvo) { rolagens.set(id, { alvo, atual: alvo }); e.textContent = String(alvo); return; }
+    const meu = { alvo, atual: de, de, t0: performance.now() + ROLA_ATRASO };
+    rolagens.set(id, meu);
+    const passo = () => {
+      if (rolagens.get(id) !== meu) return;           // outro alvo assumiu: este morre
+      const p = Math.max(0, Math.min(1, (performance.now() - meu.t0) / ROLA_MS));
+      const k = 1 - Math.pow(1 - p, 3);               // desacelera no fim
+      meu.atual = Math.round(meu.de + (meu.alvo - meu.de) * k);
+      e.textContent = String(meu.atual);
+      if (p < 1) setTimeout(passo, 16);
+    };
+    setTimeout(passo, 16);
+  }
+
   // nome curto do modelo p/ barra do topo: tira "backend:" e "org/" e ":free",
   // senao a etiqueta crua ("openrouter:nvidia/nemotron-...:free") estoura o
   // espaco e so aparece "OPENROUTER" cortado (23/08, achado do Lucas).
@@ -4316,29 +4382,20 @@
         if (m) bras.innerHTML = m[1];
       }
       elTxt("bt-mod-" + s, nomeCurtoBarra(lado === "A" ? etiquetaA : etiquetaB));
+      // ALDEIA nao rola (decisao do Lucas 25/08): e o placar, tem de ser exato
+      // no instante em que se olha. O resto conta ate o valor novo.
       elTxt("bt-ald-" + s, lista.length);
-      elTxt("bt-tro-" + s, tot);
-      elTxt("bt-mad-" + s, mad);
-      elTxt("bt-fer-" + s, fer);
+      elNumRolando("bt-tro-" + s, tot);
+      elNumRolando("bt-mad-" + s, mad);
+      elNumRolando("bt-fer-" + s, fer);
+      elNumRolando("bt-cl-" + s, L);
+      elNumRolando("bt-ca-" + s, Aq);
+      elNumRolando("bt-cc-" + s, C);
       for (const [id, v] of [["bt-dald-" + s, dl.ald], ["bt-dtro-" + s, dl.tropas]]) {
         const e = document.getElementById(id);
         if (!e) continue;
         e.textContent = v > 0 ? "+" + v : (v < 0 ? String(v) : "");
         e.className = "bt-delta " + (v > 0 ? "up" : v < 0 ? "down" : "zero");
-      }
-      const p = (n) => (tot > 0 ? (100 * n / tot) : 0);
-      elLarg("bt-cl-" + s, p(L)); elLarg("bt-ca-" + s, p(Aq)); elLarg("bt-cc-" + s, p(C));
-      const cl = document.getElementById("bt-cl-" + s), ca = document.getElementById("bt-ca-" + s), cc = document.getElementById("bt-cc-" + s);
-      if (cl) cl.style.background = ESP_COR.lanceiro;
-      if (ca) ca.style.background = ESP_COR.arqueiro;
-      if (cc) cc.style.background = ESP_COR.cavaleiro;
-      const leg = document.getElementById("bt-leg-" + s);
-      if (leg) {
-        leg.innerHTML =
-          // S/A/K = spearman / archer / knight, os nomes oficiais (24/08)
-          '<span><em style="background:' + ESP_COR.lanceiro + '"></em><b>' + L + "</b> S</span>" +
-          '<span><em style="background:' + ESP_COR.arqueiro + '"></em><b>' + Aq + "</b> A</span>" +
-          '<span><em style="background:' + ESP_COR.cavaleiro + '"></em><b>' + C + "</b> K</span>";
       }
     }
   }
@@ -4624,6 +4681,7 @@
   function reiniciarReplay() {
     if (!rep) return;
     rep.idx = 0; limparFeeds(); limparBanners(); fecharCartao(); efeitos = [];
+    trocasDono = new Map(); rolagens.clear(); // sem transicao herdada do que ja passou
     camAuto = true; document.getElementById("grepCam").classList.add("ativo");
     playing = false;
     repFrac = 0;
