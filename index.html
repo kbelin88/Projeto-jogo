@@ -1196,7 +1196,8 @@
   (function () {
     if (typeof Image === "undefined") return;
     for (const nome of ["bosque", "serra_grande", "serra_pequena", "castelo", "aldeia_neutra",
-                        "estrada_reta", "estrada_reta2"]) {
+                        "estrada_reta", "estrada_reta2",
+                        "torre_base", "torre_chamas", "torre_queimada"]) {
       const img = new Image();
       img.onload = function () { img.pronto = true; if (typeof draw === "function") draw(); };
       img.src = "assets/sprites/" + nome + ".png";
@@ -2307,7 +2308,14 @@
       const t0 = performance.now() + TROCA_ATRASO;
       for (const a of fr.aldeias) {
         const de = antes.get(a.id);
-        if (de !== undefined && de !== a.dono) trocasDono.set(a.id, { de, t0 });
+        if (de !== undefined && de !== a.dono) {
+          trocasDono.set(a.id, { de, t0 });
+          // a torre pega fogo agora e fica com a cicatriz para sempre
+          if (!capitalIds.has(a.id)) {
+            aldeiasEmChamas.set(a.id, performance.now());
+            aldeiasQueimadas.add(a.id);
+          }
+        }
       }
     }
     // guarda quem estava chegando ANTES de o quadro trocar: o exercito que
@@ -2760,6 +2768,7 @@
     fecharCartao();
     efeitos = [];
     trocasDono = new Map(); rolagens.clear();
+    aldeiasEmChamas = new Map(); aldeiasQueimadas = new Set();
     emReplay = false;
     rep = null;
     replay = { versaoDiag: 1, frames: [] }; // schema versionado (spec, secao 3)
@@ -3582,6 +3591,18 @@
   // bandeira do time fincada sobre a aldeia DOMINADA (pele v2, 18/07):
   // no mapa limpo e o unico sinal de posse. Mastro + flamula triangular.
   // footY = pe do mastro; h = altura; col = cor do time.
+  // FLAMULA sem haste (25/08): a torre nova ja traz o mastro desenhado; repintar
+  // uma haste por cima criava um mastro duplo, torto em relacao ao da arte.
+  function desenharFlamula(x, topo, h, col) {
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.moveTo(x, topo);
+    ctx.lineTo(x + h * 0.95, topo + h * 0.26);
+    ctx.lineTo(x, topo + h * 0.52);
+    ctx.closePath(); ctx.fill();
+    ctx.lineWidth = Math.max(1, h * 0.06); ctx.strokeStyle = "rgba(20,12,4,.65)"; ctx.stroke();
+  }
+
   function desenharBandeira(x, footY, h, col) {
     const topo = footY - h;
     ctx.lineWidth = Math.max(1.5, h * 0.09); ctx.strokeStyle = "rgba(30,20,8,.85)";
@@ -3854,12 +3875,44 @@
     const dl = (IB.desloc[a.slug]) || [0, 0], cs2 = TILE * scale;
     return { x: SX(a.x) + dl[0] / IB2div() * cs2, y: baseVisualIB(a) + dl[1] / IB2div() * cs2 };
   }
+  // ===== ESTADOS DA TORRE (25/08) =====
+  // A aldeia nao-capital passa a ser a torre de madeira, em tres estados:
+  //   base      -> nunca foi tomada
+  //   chamas    -> esta sendo tomada AGORA (janela curta, so no replay/jogo)
+  //   queimada  -> ja foi tomada alguma vez (cicatriz permanente)
+  // Nada disto e estado de jogo: e memoria do DESENHO, reconstruida enquanto se
+  // assiste. O motor nao sabe que a torre queimou, e nao precisa saber.
+  const CHAMAS_MS = 1800;
+  let aldeiasEmChamas = new Map();   // id -> t0
+  let aldeiasQueimadas = new Set();  // id (permanente na sessao de exibicao)
+  function estadoTorre(a) {
+    const t = aldeiasEmChamas.get(a.id);
+    if (t != null) {
+      if (performance.now() - t < CHAMAS_MS) return "torre_chamas";
+      aldeiasEmChamas.delete(a.id);
+    }
+    return aldeiasQueimadas.has(a.id) ? "torre_queimada" : "torre_base";
+  }
+  // Sprite e largura da aldeia, num lugar so: baseVisualIB e o desenho TEM de
+  // concordar, senao a ancora sai do lugar (o erro que ja mordeu 3x).
+  function spriteAldeia(a) {
+    if (capitalIds.has(a.id)) {
+      const c = SPR.castelo && SPR.castelo.pronto ? SPR.castelo : null;
+      return { spr: c, larg: (TILE * scale) * 3.2, torre: false };
+    }
+    const nome = estadoTorre(a);
+    let spr = SPR[nome] && SPR[nome].pronto ? SPR[nome] : null;
+    if (!spr && SPR.torre_base && SPR.torre_base.pronto) spr = SPR.torre_base;
+    if (!spr) { // torre ainda nao carregou: cai na aldeia antiga
+      const v = SPR.aldeia_neutra && SPR.aldeia_neutra.pronto ? SPR.aldeia_neutra : null;
+      return { spr: v, larg: (TILE * scale) * 2.4, torre: false };
+    }
+    return { spr, larg: (TILE * scale) * 2.15, torre: true };
+  }
+
   function baseVisualIB(a) {
     const cs = TILE * scale;
-    const cap = capitalIds.has(a.id);
-    const spr = cap ? (SPR.castelo && SPR.castelo.pronto ? SPR.castelo : null)
-                    : (SPR.aldeia_neutra && SPR.aldeia_neutra.pronto ? SPR.aldeia_neutra : null);
-    const larg = cs * (cap ? 3.2 : 2.4);
+    const { spr, larg } = spriteAldeia(a);
     return SY(a.y) - alturaSprite(spr, larg, Math.max(20, cs * 0.59)) * IB.levanta;
   }
 
@@ -3883,10 +3936,8 @@
       // CAPITAL do rei e castelo (o alvo da partida = tomar o castelo inimigo);
       // aldeia barbara dominada segue aldeia, marcada por BANDEIRA do time.
       // Sprite base-centro; fallback procedural quando ainda nao carregou.
-      const sprB = ehCapital
-        ? (SPR.castelo && SPR.castelo.pronto ? SPR.castelo : null)
-        : (SPR.aldeia_neutra && SPR.aldeia_neutra.pronto ? SPR.aldeia_neutra : null);
-      const larg = cs * (ehCapital ? 3.2 : 2.4);
+      const escolha = spriteAldeia(a);
+      const sprB = escolha.spr, larg = escolha.larg, ehTorre = escolha.torre;
       // Iberia: (x,y) JA e a ancora da base (o ponto marcado na calibracao),
       // entao o sprite assenta exatamente ali. No procedural, (x,y) e o centro
       // da celula e o sprite desce meio raio para "pisar" nela.
@@ -3909,9 +3960,14 @@
       // BANDEIRA do time: a UNICA marca de posse, tanto na capital quanto na
       // aldeia tomada. Na capital ela sobe um pouco mais (o castelo e alto).
       const alt = alturaSprite(sprB, larg, r);
-      const bFootY = yBase - alt * (ehCapital ? 0.92 : 0.55);
+      // A TORRE JA TEM MASTRO no desenho (medido: ponta em 48.4% da largura, no
+      // topo do quadro). Entao ali se hasteia so a FLAMULA, sem repintar haste.
+      // Castelo e o fallback antigo seguem com a bandeira inteira.
+      const bFootY = ehTorre ? (yBase - alt * 0.995) : (yBase - alt * (ehCapital ? 0.92 : 0.55));
       const bH = r * (ehCapital ? 1.5 : 1.25);
-      if (a.dono !== null) {
+      if (ehTorre) {
+        if (a.dono !== null) desenharFlamula(sx - larg * 0.016, bFootY, bH * 0.62, col);
+      } else if (a.dono !== null) {
         // capital: hasteia no alto do castelo (0.92); aldeia: no telhado (0.55)
         desenharBandeira(sx, bFootY, bH, col);
       }
@@ -4726,6 +4782,7 @@
     if (!rep) return;
     rep.idx = 0; limparFeeds(); limparBanners(); fecharCartao(); efeitos = [];
     trocasDono = new Map(); rolagens.clear(); // sem transicao herdada do que ja passou
+    aldeiasEmChamas = new Map(); aldeiasQueimadas = new Set();
     camAuto = true; document.getElementById("grepCam").classList.add("ativo");
     playing = false;
     repFrac = 0;
