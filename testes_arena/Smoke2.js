@@ -54,7 +54,9 @@ eval(html.slice(html.lastIndexOf("<script>") + 8, html.lastIndexOf("</script>"))
   for (let t = 0; t < 15; t++) await listeners["gstep"].click();
   listeners["greplaysave"].click();
   const dados = JSON.parse(global.__blob);
-  if (dados.frames.length !== 15) throw new Error("esperava 15 frames, veio " + dados.frames.length);
+  // 25/08: 15 turnos + o quadro do TURNO 0 (posicao de partida) = 16.
+  if (dados.frames.length !== 16) throw new Error("esperava 16 frames (15 turnos + turno 0), veio " + dados.frames.length);
+  if (dados.frames[0].turno !== 0) throw new Error("o primeiro quadro tem de ser o turno 0, veio " + dados.frames[0].turno);
   console.log("gravacao ok:", dados.frames.length, "frames;",
     "eventos no ultimo:", dados.frames[14].eventos.length);
 

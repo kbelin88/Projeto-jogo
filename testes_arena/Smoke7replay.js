@@ -30,7 +30,11 @@ execFileSync(process.execPath, [path.join(RAIZ, "runners", "rei_vs_rei.js"), "bu
 console.log("\n=== (A) o ficheiro existe e tem a forma do browser ===");
 ok("o runner gravou o .replay.json ao lado do .txt", fs.existsSync(rep));
 const r = JSON.parse(fs.readFileSync(rep, "utf8"));
-ok("um frame por turno", r.frames.length === TURNOS, `${r.frames.length} de ${TURNOS}`);
+// 25/08: passou a existir o quadro do TURNO 0 (tabuleiro antes de qualquer
+// ordem), entao sao TURNOS+1 quadros. Ele e o que deixa o replay abrir na
+// posicao de partida — sem ele o video comeca com o 1o lance ja feito.
+ok("um frame por turno + o turno 0", r.frames.length === TURNOS + 1, `${r.frames.length} de ${TURNOS + 1}`);
+ok("o primeiro quadro e o turno 0", r.frames[0].turno === 0, String(r.frames[0].turno));
 ok("cabecalho v/versaoDiag como no browser", r.v === 1 && r.versaoDiag === 1);
 const f = r.frames[r.frames.length - 1];
 for (const k of ["turno", "etiqueta", "etiquetaA", "etiquetaB", "aldeias", "movimentos", "eventos", "diag"])

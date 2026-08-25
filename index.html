@@ -298,7 +298,9 @@
      antigo continua definido e os smokes seguem encontrando os nos). */
   /* dp/rr sao COLUNAS estreitas e altas nas bordas (24/08): largura curta para
      o mapa ficar com o centro, altura sobrando para o texto e as metricas. */
-  :root { --bt-h: 94px; --dp-h: 140px; --dp-w: 20%; --rr-h: 224px; --rr-w: 10%; }
+  /* 25/08: caixas mais altas e letra maior — em tela cheia a leitura estava
+     ruim e sobrava espaco vertical em ambas. */
+  :root { --bt-h: 94px; --dp-h: 208px; --dp-w: 20%; --rr-h: 322px; --rr-w: 10%; }
   #espA, #espB { display: none !important; }
   /* o placar antigo so mostrava turno + status; o turno mudou-se para a barra
      nova, sobra a linha de status, sem moldura, logo abaixo dela. */
@@ -407,10 +409,10 @@
     box-shadow: 0 4px 18px rgba(0,0,0,.55); }
   .dp-q.a { border-top: 2px solid #5b93c9; }
   .dp-q.b { border-top: 2px solid #c85a5a; text-align: right; }
-  .dp-tit { flex: none; font-size: 8.5px; letter-spacing: .14em; color: #8d8571;
+  .dp-tit { flex: none; font-size: 10px; letter-spacing: .14em; color: #8d8571;
     text-transform: uppercase; white-space: nowrap; }
   .dp-txt { flex: 1; min-height: 0; font-family: Georgia, serif;
-    font-size: 13px; line-height: 1.36; color: #d7cdb4; overflow: hidden; }
+    font-size: 16.5px; line-height: 1.42; color: #ded4ba; overflow: hidden; }
   .dp-txt.vazio { color: #5a5346; font-style: italic; }
 
   /* RODAPE: so o benchmark, faixa comprida e baixa, metricas numa linha unica. */
@@ -430,19 +432,19 @@
     box-shadow: 0 6px 26px rgba(0,0,0,.65); }
   .rr-q.a { border-top: 2px solid #5b93c9; }
   .rr-q.b { border-top: 2px solid #c85a5a; }
-  .rr-tit { display: flex; align-items: center; gap: 8px; font-size: 8.5px;
+  .rr-tit { display: flex; align-items: center; gap: 8px; font-size: 10px;
     letter-spacing: .16em; color: #8d8571; text-transform: uppercase; }
   .rr-tit i { flex: 1; height: 1px; background: rgba(232,223,200,.16); }
   /* UMA metrica por linha (24/08): rotulo a esquerda, valor a direita. */
-  .rr-grade { display: flex; flex-direction: column; gap: 3px; }
+  .rr-grade { display: flex; flex-direction: column; gap: 9px; }
   .rr-met { display: flex; flex-direction: row; align-items: baseline;
     justify-content: space-between; gap: 8px; min-width: 0; }
   .rr-q.b .rr-met { flex-direction: row-reverse; }
-  .rr-met .r { font-size: 7.5px; letter-spacing: .07em; color: #8d8571;
+  .rr-met .r { font-size: 11px; letter-spacing: .05em; color: #a3987f;
     text-transform: uppercase; white-space: nowrap; }
-  .rr-met .v { font-family: Verdana, sans-serif; font-size: 12.5px; font-weight: 700;
+  .rr-met .v { font-family: Verdana, sans-serif; font-size: 18.5px; font-weight: 700;
     font-variant-numeric: tabular-nums; line-height: 1.1; white-space: nowrap; }
-  .rr-met .v small { font-size: 8px; font-weight: 400; color: #8d8571; }
+  .rr-met .v small { font-size: 10.5px; font-weight: 400; color: #8d8571; }
   /* placeholder (jogador local / sem turnos): QUEBRA linha — a coluna e
      estreita e o nowrap das metricas fazia o texto vazar do quadro. */
   .rr-vazio { font-size: 10.5px; font-style: italic; color: #5a5346;
@@ -633,7 +635,7 @@
      mouse para — assim nao aparece na gravacao. Barra de espaco faz o mesmo. -->
 <div id="cinemaCtl">
   <button id="cinePlay" title="Play / Pause (barra de espaco)">&#9208;</button>
-  <span class="cine-dica">espaco = play/pause &middot; esc = sair do cinema</span>
+  <span class="cine-dica">espaco = play/pause &middot; R = voltar ao inicio &middot; esc = sair</span>
 </div>
 
 <!-- ===== TRANSMISSAO v5: DEPOIMENTO NO TOPO =====
@@ -698,6 +700,8 @@
   <button id="grepRestart" title="Recomecar o replay">&#9198;</button>
   <button id="grepPlay" title="Pausar/continuar">&#9208;</button>
   <select id="grepVel" title="Velocidade do replay">
+    <option value="16000">0.125x</option>
+    <option value="8000">0.25x</option>
     <option value="4000">0.5x</option>
     <option value="2000" selected>1x</option>
     <option value="1000">2x</option>
@@ -2350,7 +2354,20 @@
   // (achado do Lucas: no t14 desta partida havia 6 exercitos aterrissando em
   // aldeia nao-sua). Ele para na borda da aldeia e entra junto com a conquista.
   function progTeto(m) {
-    return (m && m.turnosRestantes <= 1) ? 0.86 : 1;
+    // 25/08: era 0.86 e ISSO travava a tela. Quem chega no proximo quadro
+    // batia no teto muito antes do fim da janela e ficava PARADO o resto dela
+    // (numa marcha de 2 turnos, ~28% do tempo congelado). Em 0.97 o exercito
+    // anda praticamente ate a aldeia — a parada some do olho — e ainda assim
+    // nao POUSA nela antes de a posse virar, que era o motivo do teto.
+    return (m && m.turnosRestantes <= 1) ? 0.97 : 1;
+  }
+  // Exercito DESPACHADO neste quadro aparece do nada quando o turno vira. Em
+  // vez de surgir pronto, entra esmaecendo no comeco da janela — foi o pedido
+  // do Lucas: "aparece tudo novo ao mesmo tempo, quebra o ritmo".
+  function alphaEntrada(m) {
+    if (!emReplay || !m || m.turnosTotal == null) return 1;
+    if (m.turnosRestantes !== m.turnosTotal) return 1; // ja estava em marcha
+    return Math.max(0, Math.min(1, repFrac / 0.35));
   }
 
   function atualizarProgresso() {
@@ -2701,6 +2718,11 @@
     // indice celula -> aldeia (posicoes fixas): filtro rapido no render
     game.byCell = new Map(game.aldeias.map((a) => [a.x + "," + a.y, a]));
     capitalIds = new Set(game.aldeias.filter((a) => a.dono !== null).map((a) => a.id));
+    // TURNO 0 no replay (25/08): o tabuleiro ANTES de qualquer ordem. Sem ele,
+    // o replay comeca no turno 1 — que ja e pos-tick — e nao ha como mostrar a
+    // posicao de partida. O estado inicial depende da seed e o replay nao a
+    // guarda, entao reconstruir depois era impossivel: tem de ser gravado aqui.
+    gravarFrame();
     enquadrarTeatro();
     updateGameHUD();
     draw();
@@ -3871,6 +3893,11 @@
       const my = SY(p.y);
       const dx = SX(d.x), dy = SY(d.y);
       const col = COR[m.dono];
+      // tropa recem-despachada entra esmaecendo (ver alphaEntrada)
+      const aEnt = alphaEntrada(m);
+      if (aEnt <= 0.02) continue;
+      ctx.save();
+      ctx.globalAlpha = aEnt;
 
       // ALERTA DE ATAQUE (E2): a 1 turno de chegar, halo na COR DO
       // ATACANTE marca o alvo — a ameaca tem dono, o desfecho fica em
@@ -3935,6 +3962,7 @@
         ctx.fillStyle = col === COR.A ? "#bcd0ff" : "#ffc4c4";
         ctx.fillText(rot, mx, my - r - 4);
       }
+      ctx.restore(); // fecha o save do alphaEntrada
     }
 
     // ===== EFEITOS: anel, pulso de conquista, dano flutuante, fim =====
@@ -4554,6 +4582,14 @@
       ev.preventDefault(); // senao a pagina rola / reativa o botao com foco
       alternarReproducao();
       mostrarControleCinema();
+      return;
+    }
+    // R volta ao inicio PAUSADO, sem tocar no mouse: e a preparacao da
+    // gravacao (entra no cinema -> R -> espaco), pedido do Lucas 25/08.
+    if (ev.key === "r" || ev.key === "R") {
+      ev.preventDefault();
+      reiniciarReplay();
+      mostrarControleCinema();
     }
   });
   // o controle aparece ao mexer o mouse e se apaga sozinho: assim existe quando
@@ -4583,13 +4619,21 @@
   }
   document.getElementById("grepPlay").addEventListener("click", alternarReproducao);
   document.getElementById("cinePlay").addEventListener("click", alternarReproducao);
-  document.getElementById("grepRestart").addEventListener("click", () => {
+  // VOLTAR AO INICIO (25/08): agora para PAUSADO na posicao de partida, em vez
+  // de sair jogando. Para gravar video e preciso enquadrar o tabuleiro parado e
+  // so entao dar o play — antes, ao voltar, a partida ja recomecava sozinha.
+  function reiniciarReplay() {
     if (!rep) return;
     rep.idx = 0; limparFeeds(); limparBanners(); fecharCartao(); efeitos = [];
     camAuto = true; document.getElementById("grepCam").classList.add("ativo");
-    playing = true;
+    playing = false;
+    repFrac = 0;
+    aplicarFrame(rep.dados.frames[rep.idx++]); // pinta o 1o quadro (turno 0 nas gravacoes novas)
     atualizarProgresso();
-  });
+    const b = document.getElementById("cinePlay");
+    if (b) b.innerHTML = "&#9654;";
+  }
+  document.getElementById("grepRestart").addEventListener("click", reiniciarReplay);
   document.getElementById("grepCam").addEventListener("click", () => {
     camAuto = !camAuto;
     document.getElementById("grepCam").classList.toggle("ativo", camAuto);

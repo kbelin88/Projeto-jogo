@@ -224,6 +224,10 @@ function finalizar(estado, venc, motivo) {
 async function main() {
   fs.mkdirSync(path.dirname(outfile), { recursive: true });
   const estado = Engine.criarEstadoInicial(cfg);
+  // TURNO 0 (25/08): o tabuleiro antes de qualquer ordem, p/ o replay abrir na
+  // posicao de partida. O estado inicial depende da seed e o replay nao a
+  // guarda, entao reconstruir depois e impossivel: tem de ser gravado aqui.
+  gravarFrame(estado);
   const t0 = Date.now();
   let venc = null;
   let motivoAbort = null;
