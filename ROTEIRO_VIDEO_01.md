@@ -137,3 +137,74 @@ ponho cartelas e devolvo para revisao.
 - [ ] decidir se ha 3o jogo (so se a serie ficar 1x1)
 - [ ] gerar a tabela final com `analisar-log.js`
 - [ ] gravar a abertura sobre o banner
+
+---
+
+# RESULTADO DA SERIE (25/08) — decidida em 2x0
+
+Nao ha terceiro jogo: `dots-3-note-preview` venceu as duas.
+
+| | seed | turnos | fim | duracao |
+|---|---|---|---|---|
+| **JOGO 1** | 1 | 18 | **vitoria de A, 18x6** | 2h13 |
+| **JOGO 2** | 2 | 39 | **vitoria de A, 18x6** | ~4h |
+
+As duas terminaram por DOMINANCIA, e as duas tem o **turno 0 gravado** — sao as
+primeiras do projeto que abrem no tabuleiro parado, antes de qualquer lance.
+
+## Jogo 1 — a virada limpa (o mais facil de contar)
+
+    t3   B abre vantagem          4-6
+    t7   B no melhor momento      8-11
+    t9   EMPATE                  11-11
+    t10  A assume                13-11
+    t17  A fecha                 18-6
+
+Arco de tres atos, sem gordura. **E o jogo que eu abriria o video.**
+Depoimentos: 15 de A, 14 de B, em 19 quadros.
+
+## Jogo 2 — a vitoria que escapou e voltou
+
+Mais longo e mais tenso. O momento que vale o video:
+
+    t14-t18  cinco turnos travados em 12-12
+    t19      A rompe (+4)                14-10
+    t30      A CHEGA A 18 — toca o limiar de vitoria
+    t31      B retoma e DERRUBA A de 18   16-8
+    t38      A volta a 18
+    t39      A segura os dois turnos e vence
+
+A regra dos 75% por DOIS turnos criou a tensao sozinha: A tocou a vitoria no
+t30 e teve de reconquista-la oito turnos depois. Depoimentos: 32 de A, 36 de B.
+
+> **Cuidado ao editar:** no t30 e no t31 — justamente o pico — o Rei A **nao
+> deixou depoimento** (turno vazio, sem resposta util). A fala de B existe. Se o
+> roteiro depender de os dois falarem ali, o momento nao se sustenta; usar o
+> t19 e o t38, onde os dois falam.
+
+## Os numeros para a tabela final
+
+| | J1 A (dots) | J1 B (120b) | J2 A (dots) | J2 B (120b) |
+|---|---|---|---|---|
+| envios aceites | 64 | 49 | 138 | 133 |
+| conquistas/combates | **19/21 (0.90)** | 12/27 (0.44) | 23/42 (0.55) | 16/51 (0.31) |
+| taxa de counter | **0.71** | 0.56 | 0.48 | 0.47 |
+| construcoes S/A/K | 22/103/61 | **209**/25/12 | 353/386/55 | 398/107/51 |
+| rejeicoes | 0 | 7 | 5 | 3 |
+| mediana de decisao | 158 s | 228 s | 157 s | 146 s |
+| erros de API | 0 | 0 | 0 | 0 |
+
+**A leitura mais forte, e a que eu contaria no fecho:** no Jogo 1 o dots
+converteu **9 de cada 10 ataques** em conquista, contra 4 de cada 10 do 120b.
+Nao atacou mais — atacou melhor. E usou o triangulo em 71% dos ataques.
+
+O 120b construiu **209 lanceiros contra 37 do resto** no Jogo 1 — monocultura
+quase total — e perdeu. Mais um ponto para a pergunta aberta do 7.1 §2, que
+segue sem veredito.
+
+## Momentos com fala dos DOIS (conferidos, servem para legendar)
+
+- **J1 t10** — A anuncia o ataque a Murcia enquanto B fala em reforcar numeros.
+  E o turno exato em que a lideranca troca de mao.
+- **J2 t19** — os dois descrevem ofensivas simultaneas; e a quebra do empate.
+- **J2 t38/t39** — A retomando 18 e fechando; B ainda produzindo lanceiros.
