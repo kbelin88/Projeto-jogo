@@ -2066,7 +2066,7 @@
   // turno. A cor da aldeia lerpa da antiga para a nova em vez de piscar, e so
   // COMECA depois do combate estourar, para o olho ver causa antes de efeito.
   // Guarda so id -> {de, para, t0}; nada disto toca o estado do jogo.
-  const TROCA_MS = 420, TROCA_ATRASO = 150;
+  const TROCA_MS = 420, TROCA_ATRASO = 400;
   let trocasDono = new Map();
   function misturarCor(c1, c2, k) {
     const h = (c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
@@ -2310,6 +2310,9 @@
         if (de !== undefined && de !== a.dono) trocasDono.set(a.id, { de, t0 });
       }
     }
+    // guarda quem estava chegando ANTES de o quadro trocar: o exercito que
+    // conquista some do estado, mas e ele que tem de aparecer plantando.
+    chegandoAntes = (game && game.movimentos) ? game.movimentos.filter((m) => m.turnosRestantes <= 1) : [];
     game.turno = fr.turno;
     game.aldeias = fr.aldeias;
     game.movimentos = fr.movimentos;
@@ -2388,14 +2391,19 @@
   // vira. Sem o teto, quem contava aldeias na tela via 1 a mais que o placar
   // (achado do Lucas: no t14 desta partida havia 6 exercitos aterrissando em
   // aldeia nao-sua). Ele para na borda da aldeia e entra junto com a conquista.
-  function progTeto(m) {
-    // 25/08: era 0.86 e ISSO travava a tela. Quem chega no proximo quadro
-    // batia no teto muito antes do fim da janela e ficava PARADO o resto dela
-    // (numa marcha de 2 turnos, ~28% do tempo congelado). Em 0.97 o exercito
-    // anda praticamente ate a aldeia — a parada some do olho — e ainda assim
-    // nao POUSA nela antes de a posse virar, que era o motivo do teto.
-    return (m && m.turnosRestantes <= 1) ? 0.97 : 1;
-  }
+  // 25/08 (3a e ultima versao): o TETO SAIU. Ele existia para o exercito nao
+  // pousar na aldeia antes de a posse virar, mas custava uma parada visivel —
+  // o exercito batia no teto e ficava imovel ate o quadro trocar. A 0.25x isso
+  // era quase meio segundo de mapa congelado: o "momento de congelamento" que
+  // o Lucas descreveu. Sem teto, a marcha e linear e ele CHEGA exatamente no
+  // instante da virada, sem sobra. A confusao que o teto evitava e resolvida
+  // pela plantada do estandarte (efeito `plantar`), que dura ~320 ms em vez de
+  // um turno inteiro.
+  function progTeto() { return 1; }
+  // Quem estava a 1 turno de chegar no quadro ANTERIOR: e desta lista que sai a
+  // composicao do estandarte que planta na aldeia conquistada (o exercito ja
+  // nao existe no quadro novo — foi consumido pela conquista).
+  let chegandoAntes = [];
   // Exercito DESPACHADO neste quadro aparece do nada quando o turno vira. Em
   // vez de surgir pronto, entra esmaecendo no comeco da janela — foi o pedido
   // do Lucas: "aparece tudo novo ao mesmo tempo, quebra o ritmo".
@@ -2612,6 +2620,8 @@
   let caboAnt = null;      // E2: proporcao anterior do cabo (fantasma da perda)
   let efeitoLoop = false;
   const EFEITO_DUR = 900; // ms
+  // batidas da conquista, em ms depois da virada do quadro (ver registrarEfeitosTurno)
+  const PLANTA_MS = 340, ANEL_ATRASO = 150, DANO_ATRASO = 300;
 
   function registrarEfeitosTurno(tn) {
     if (REDUZ_MOV) return;
@@ -2624,14 +2634,28 @@
       if (e.tipo !== "combate") continue;
       const a = game.aldeias.find((v) => v.id === e.alvoId);
       if (!a) continue;
+      // COREOGRAFIA DA CONQUISTA (25/08). Antes tudo estourava no mesmo quadro
+      // e lia como um borrao so. Agora cada peca tem a sua batida:
+      //   0 ms   o estandarte PLANTA na aldeia (deixa de sumir, passa a chegar)
+      //   150 ms o anel expande
+      //   300 ms o numero de dano sobe
+      //   400 ms a bandeira derrete para a cor nova (TROCA_ATRASO)
+      //   500 ms os numeros do topo rolam (ROLA_ATRASO)
+      const agr = performance.now();
+      if (e.conquista) {
+        const ex = chegandoAntes.find((m) => m.dono === e.atacante && m.destinoId === a.id);
+        efeitos.push({ plantar: true, aldeiaId: a.id, x: a.x, y: a.y,
+          dono: e.atacante, tropas: ex ? ex.tropas : null,
+          t0: agr, dur: PLANTA_MS });
+      }
       efeitos.push({
-        x: a.x, y: a.y, aldeiaId: a.id, t0: performance.now(), conq: !!e.conquista,
+        x: a.x, y: a.y, aldeiaId: a.id, t0: agr + (e.conquista ? ANEL_ATRASO : 0), conq: !!e.conquista,
         dur: e.conquista ? 1600 : undefined, // conquista merece a cena
         cor: e.conquista ? (COR[a.dono] || COR.neutra) : "#ffd56b",
       });
       if (e.baixasForca > 0) { // dano do vencedor: flutua sobre a aldeia
         const corD = e.vencedor === "atacante" ? COR[e.atacante] : "#f0e3c0";
-        efeitos.push({ x: a.x, y: a.y, aldeiaId: a.id, t0: performance.now(), dur: 1400,
+        efeitos.push({ x: a.x, y: a.y, aldeiaId: a.id, t0: agr + DANO_ATRASO, dur: 1400,
           dano: "-" + e.baixasForca, cor: corD });
       }
     }
@@ -3619,6 +3643,7 @@
     if (!img || !img.pronto) { desenharEscudo(x, y, r, COR[lado]); return; }
     const larg = r * 1.5, alt = larg * img.height / img.width;
     ctx.drawImage(img, x - larg / 2, y - alt / 2, larg, alt);
+    if (!tropas) return; // sem composicao (ex.: plantada sem o exercito de origem): so o brasao
     const L = tropas.lanceiro || 0, Aq = tropas.arqueiro || 0, C = tropas.cavaleiro || 0;
     const tot = L + Aq + C;
     if (tot <= 0) return;
@@ -4031,6 +4056,20 @@
         ctx.globalAlpha = 1;
         continue;
       }
+      if (p < 0) continue; // batida atrasada: ainda nao e a vez deste efeito
+
+      if (e.plantar) { // ESTANDARTE PLANTANDO: encolhe e assenta na aldeia
+        const _p = ancoraEfeito(e);
+        const k = p * p * (3 - 2 * p);                 // suaviza nas duas pontas
+        const rBase = Math.max(26, cs * 0.62);
+        const rr = rBase * (1 - 0.55 * k);             // 1.0 -> 0.45
+        ctx.save();
+        ctx.globalAlpha = 1 - k;
+        desenharEstandarte(_p.x, _p.y - rBase * 0.25 * (1 - k), rr, e.dono, e.tropas);
+        ctx.restore();
+        continue;
+      }
+
       if (e.dano) { // numero de dano flutuante: sobe e esmaece
         const _a = ancoraEfeito(e), ex2 = _a.x, ey2 = _a.y;
         const fd = Math.max(11, cs * 0.30);
@@ -4337,7 +4376,7 @@
   // Anda por setTimeout, NAO por requestAnimationFrame: os smokes zeram o rAF
   // de proposito e a contagem nunca terminaria — o numero ficaria travado no
   // valor antigo e o teste leria uma tela mentirosa.
-  const ROLA_MS = 780, ROLA_ATRASO = 300;
+  const ROLA_MS = 780, ROLA_ATRASO = 500;
   const rolagens = new Map();
   function elNumRolando(id, valor) {
     const e = document.getElementById(id);
