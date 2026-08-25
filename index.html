@@ -62,13 +62,9 @@
   .ent .ev { border-left: 3px solid #6b4a22; padding-left: 7px; margin: 2px 0; font-size: 13px; }
   .ent .evA { border-left-color: #5d8cf0; }
   .ent .evB { border-left-color: #ef5d5d; }
-  #sb-toggle {
-    position: fixed; top: 12px; right: 312px; z-index: 7; width: 34px; height: 34px;
-    font-size: 15px; color: #f5e9c8; background: linear-gradient(#7a5226,#523414);
-    border: 2px solid #2b1a0a; border-radius: 8px 0 0 8px; cursor: pointer;
-    transition: right .25s ease;
-  }
-  body.sb-closed #sb-toggle { right: 0; }
+  /* 25/08: o botao #sb-toggle foi REMOVIDO. Ele abria/fechava a cronica
+     lateral, que esta display:none desde a transmissao v5 — entao ele so
+     movia a si mesmo pela tela, sem efeito nenhum. */
   /* ===== BANNER DE EVENTO (replay) ===== */
   #banner {
     position: fixed; top: 64px; left: 50%; transform: translateX(-50%) translateY(-16px);
@@ -197,7 +193,7 @@
   /* ===== MODO CINEMA: esconde o chrome de dev p/ gravar ===== */
   /* CINEMA (24/08): some 100% — nada de fantasma a .12 de opacidade, que
      aparecia na gravacao. Volta so no ESC (ver alternarCinema/tecla). */
-  body.cinema #zoombar, body.cinema #sb-toggle,
+  body.cinema #zoombar,
   body.cinema #gamebar, body.cinema #replaybar { display: none; }
   /* o unico controle do cinema: aparece ao mexer o mouse e se apaga sozinho,
      para nao entrar no video. A transicao e so na opacidade — sem display,
@@ -224,8 +220,9 @@
     border-radius: 999px; white-space: nowrap;
   }
 
+  /* o zoombar era empurrado 316px para desviar da cronica lateral; ela nao
+     renderiza mais, entao ele volta para a margem. */
   #zoombar { transition: right .25s ease; }
-  body:not(.sb-closed) #zoombar { right: 316px; }
   #gamebar {
     position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
     pointer-events: auto; display: flex; align-items: center; gap: 8px;
@@ -466,7 +463,6 @@
   #replaybar { bottom: 14px; }
   #banner { top: calc(var(--bt-h) + var(--dp-h) + 12px); }  /* abaixo da barra E do depoimento */
   body.replay #banner, body.cinema #banner { top: calc(var(--bt-h) + var(--dp-h) + 12px); }
-  #sb-toggle { top: calc(var(--bt-h) + var(--dp-h) + 6px); }
   #zoombar { bottom: calc(var(--rr-h) + 12px); }
   /* MODO CINEMA: a barra e o rodape SAO a transmissao — ficam. O resto some. */
   body.cinema #editorbar, body.cinema #banner { }
@@ -716,7 +712,6 @@
   <button id="grepCinema" title="Modo cinema: esconde TODOS os controles p/ gravar. ESC para voltar.">&#127916; cinema</button>
   <button id="grepSair" title="Sair do replay">&#10005; sair</button>
 </div>
-<button id="sb-toggle" title="Mostrar/esconder a crônica">&#128220;</button>
 
 <div id="gamebar">
   <button id="gplay">▶ Play</button>
@@ -4691,7 +4686,6 @@
   document.getElementById("greset").addEventListener("click", novaPartida);
   const bcf = document.getElementById("cartaoFechar");
   if (bcf && bcf.addEventListener) bcf.addEventListener("click", fecharCartao);
-  document.getElementById("sb-toggle").addEventListener("click", () => document.body.classList.toggle("sb-closed"));
   // FOG (P4): trocar de olhos redesenha na hora. So camara — nao mexe no jogo,
   // logo funciona com a partida pausada, a correr, e dentro de um replay.
   {
