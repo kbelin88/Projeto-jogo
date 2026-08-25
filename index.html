@@ -2625,13 +2625,13 @@
       const a = game.aldeias.find((v) => v.id === e.alvoId);
       if (!a) continue;
       efeitos.push({
-        x: a.x, y: a.y, t0: performance.now(), conq: !!e.conquista,
+        x: a.x, y: a.y, aldeiaId: a.id, t0: performance.now(), conq: !!e.conquista,
         dur: e.conquista ? 1600 : undefined, // conquista merece a cena
         cor: e.conquista ? (COR[a.dono] || COR.neutra) : "#ffd56b",
       });
       if (e.baixasForca > 0) { // dano do vencedor: flutua sobre a aldeia
         const corD = e.vencedor === "atacante" ? COR[e.atacante] : "#f0e3c0";
-        efeitos.push({ x: a.x, y: a.y, t0: performance.now(), dur: 1400,
+        efeitos.push({ x: a.x, y: a.y, aldeiaId: a.id, t0: performance.now(), dur: 1400,
           dano: "-" + e.baixasForca, cor: corD });
       }
     }
@@ -3818,6 +3818,17 @@
   // Onde a cidade ASSENTA na tela, ja contando o levante do sprite (IB.levanta).
   // As estradas tem de terminar exatamente aqui: mirando na ancora crua elas
   // passavam por BAIXO das aldeias (11px numa aldeia, 20px numa capital).
+  // Y VISUAL de um efeito: a aldeia e desenhada LEVANTADA (baseVisualIB + desloc),
+  // mas anel, pulso e dano miravam a ancora CRUA — ficavam ~0.7 tile abaixo do
+  // desenho. Mesmo erro que ja mordeu as estradas e o hover (CLAUDE.md 6).
+  // Efeito de estrada (combate_estrada) nao tem aldeia: fica no ponto cru.
+  function ancoraEfeito(e) {
+    if (e.aldeiaId == null || !IB) return { x: SX(e.x), y: SY(e.y) };
+    const a = game.aldeias.find((v) => v.id === e.aldeiaId);
+    if (!a) return { x: SX(e.x), y: SY(e.y) };
+    const dl = (IB.desloc[a.slug]) || [0, 0], cs2 = TILE * scale;
+    return { x: SX(a.x) + dl[0] / IB2div() * cs2, y: baseVisualIB(a) + dl[1] / IB2div() * cs2 };
+  }
   function baseVisualIB(a) {
     const cs = TILE * scale;
     const cap = capitalIds.has(a.id);
@@ -3940,13 +3951,16 @@
       // aberto. Decisao de 16/07: previsao de resultado tira a tensao
       // do espectador (a conta do motor saiu da UI; segue no eval).
       if (m.turnosRestantes === 1 && d.dono !== m.dono && cs > 13) {
+        // mesma correcao de ancora dos efeitos: o halo mirava a ancora CRUA e
+        // aparecia abaixo do desenho da aldeia. Agora assenta no sprite.
+        const ha = ancoraEfeito({ aldeiaId: d.id, x: d.x, y: d.y });
         const corH = col;
         const rh = Math.max(8, cs * 0.52);
         ctx.save();
         ctx.shadowColor = corH; ctx.shadowBlur = Math.max(6, cs * 0.35);
         ctx.lineWidth = Math.max(2, cs * 0.09); ctx.strokeStyle = corH;
         ctx.globalAlpha = 0.9;
-        ctx.beginPath(); ctx.arc(dx, dy, rh, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(ha.x, ha.y, rh, 0, Math.PI * 2); ctx.stroke();
         ctx.restore();
       }
 
@@ -4018,7 +4032,7 @@
         continue;
       }
       if (e.dano) { // numero de dano flutuante: sobe e esmaece
-        const ex2 = SX(e.x), ey2 = SY(e.y);
+        const _a = ancoraEfeito(e), ex2 = _a.x, ey2 = _a.y;
         const fd = Math.max(11, cs * 0.30);
         ctx.globalAlpha = 1 - p;
         ctx.font = `bold ${fd}px Verdana`; ctx.textAlign = "center";
@@ -4030,7 +4044,7 @@
         ctx.globalAlpha = 1;
         continue;
       }
-      const ex = SX(e.x), ey = SY(e.y);
+      const _ae = ancoraEfeito(e), ex = _ae.x, ey = _ae.y;
       const raio = Math.max(8, cs * 0.45) * (1 + p * 1.6);
       ctx.globalAlpha = (1 - p) * 0.9;
       ctx.lineWidth = Math.max(2, cs * 0.08);
@@ -4323,7 +4337,7 @@
   // Anda por setTimeout, NAO por requestAnimationFrame: os smokes zeram o rAF
   // de proposito e a contagem nunca terminaria — o numero ficaria travado no
   // valor antigo e o teste leria uma tela mentirosa.
-  const ROLA_MS = 520, ROLA_ATRASO = 300;
+  const ROLA_MS = 780, ROLA_ATRASO = 300;
   const rolagens = new Map();
   function elNumRolando(id, valor) {
     const e = document.getElementById(id);
