@@ -28,9 +28,17 @@ const regras = (process.argv[7] || "v3").toLowerCase();
 const cfg = JSON.parse(JSON.stringify(Engine.CONFIG)); // ruleset unico (17/08)
 cfg.layout = "iberia"; cfg.seed = seed;
 const ehBurro = (spec) => spec.toLowerCase() === "burro";
+// TETO DE RESPOSTA (28/08): era 32000 fixo, dentro do rei.js, sem forma de mexer
+// pela linha de comando. Medido na P5, o minimax-m3 bateu nesse teto em 8 de 22
+// turnos e devolveu zero ordens neles — e o teto PROPRIO dele e 943718, ou seja,
+// quem o prendia eramos nos. Sem esta alavanca nao da para saber se um modelo
+// verboso mas competente e salvavel por configuracao.
+// Uso: MAX_TOKENS_RESPOSTA=64000 node runners/rei_vs_rei.js ...
+const maxTokens = process.env.MAX_TOKENS_RESPOSTA ? parseInt(process.env.MAX_TOKENS_RESPOSTA, 10) : null;
+const opcCliente = maxTokens ? { temperatura: 0, maxTokens } : { temperatura: 0 };
 const cliente = {
-  A: ehBurro(modelA) ? null : Rei.criarCliente(modelA, { temperatura: 0 }),
-  B: ehBurro(modelB) ? null : Rei.criarCliente(modelB, { temperatura: 0 }),
+  A: ehBurro(modelA) ? null : Rei.criarCliente(modelA, opcCliente),
+  B: ehBurro(modelB) ? null : Rei.criarCliente(modelB, opcCliente),
 };
 const etiquetaDe = { A: cliente.A ? cliente.A.nome : "burro", B: cliente.B ? cliente.B.nome : "burro" };
 const etiqueta = etiquetaDe.A + " vs " + etiquetaDe.B;
@@ -137,7 +145,9 @@ const regrasTxt = cfg.vitoriaPorDominancia
 out("condicoes: ambiente=" + (cfg.layout || "v1") + " | temp=0 | prompt=" +
   (cfg.promptP4 === true ? "P4 EN (esquema declarado, sem exemplo, sem minimos, vitoria real, reforco, quantidade)" : "P2 (minimo por alvo)") +
   (cfg.fogOfWar === true ? " + FOG OF WAR" : "") +
-  " + combate v3 (atq/def, counter " + cfg.bonus_forca_triangulo + ") + clamp | " + regrasTxt + " | thinking=on");
+  " + combate v3 (atq/def, counter " + cfg.bonus_forca_triangulo + ") + clamp | " + regrasTxt +
+  " | thinking=on | max_tokens_resposta=" + (maxTokens || 32000) +
+  (maxTokens ? " (LEVANTADO por MAX_TOKENS_RESPOSTA)" : " (default)"));
 out("");
 
 function logEventos(estado, turno) {
