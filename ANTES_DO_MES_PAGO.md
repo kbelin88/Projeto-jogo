@@ -27,16 +27,51 @@ número de baixas a subir. Não foi feito assim porque em 25/08 o Lucas tirou an
 e número flutuante da conquista ("círculos piscando e número de tropas mortas
 poluem o momento"). Se ele preferir o desenho do plano, é trocar duas batidas.
 
+## 1b. O runner aborta uma partida por uma falha de MINUTOS — BLOQUEANTE
+
+Descoberto hoje, ao correr a P1. O runner mata a partida ao **2º erro de rede
+consecutivo**, com a mensagem *"provável teto diário/throttle do free tier"*. Essa
+suposição estava errada neste caso: era **HTTP 400 "DEGRADED function cannot be
+invoked"** da Nvidia, e **2 minutos depois o mesmo modelo respondia 200**.
+
+Num free-tier isto custa uma repetição. **Numa partida paga, no turno 25, custa a
+partida inteira e o dinheiro** — foi exatamente assim que se perderam ~$2.25 em
+17/08, por outra razão.
+
+O 429 já é tratado com respeito ao `Retry-After`. O que falta é o caso **sem**
+`Retry-After`: antes de abortar, esperar e sondar uma vez. Mexer aqui é mexer numa
+proteção de custo — foi por isso que não o fiz por conta própria hoje.
+
+**Três modos de falha de fornecedor, todos vistos só hoje**, e nenhum previsível
+pelos metadados do catálogo:
+- **403** gating por app (`inkling`) — nunca responde
+- **429** pool partilhado (`gemma-4-31b`, `lfm-2.5`) — responde noutra hora
+- **400 DEGRADED** (`nemotron-3.5-lightning`) — responde dois minutos depois
+
 ## 2. Decidir a REGRA do exército em trânsito — antes de filmar, não depois
 
 Com a visibilidade feita, o passo 2 do plano de 28/08 fica possível: assistir e
 marcar os turnos. Mas a decisão de fundo continua aberta, e é de REGRA:
 
-> o padrão real dos 22 casos medidos é um exército a chegar a uma aldeia enquanto
-> o inimigo **passa por dentro dela** (passa reto porque a aldeia é dele — o
+> o padrão real é um exército a chegar a uma aldeia enquanto o inimigo
+> **passa por dentro dela** (passa reto porque a aldeia é dele — o
 > motor só para em aldeia que não é sua).
 
 **Exército em trânsito guarnece a aldeia por onde passa? Pode ser interceptado?**
+
+**Medido hoje com n grande.** Os campos novos do evento tornaram a conta direta:
+em **1 809 combates de estrada** de 20 partidas burro × burro,
+
+| padrão | fração |
+|---|---|
+| trecho com **uma ponta de cada** (a linha da frente) | 84,2% |
+| nenhuma ponta pertence a nenhum dos dois | **0%** |
+| **ao menos um exército atravessa aldeia própria** (passa reto) | **89,7%** |
+
+Os 89,7% confirmam por outra via a amostragem da `REVISAO-OPUS` (18 de 20), agora
+com n=1 809 e numa população diferente (burro, não LLM). Duas amostras
+independentes a dar ~90% — a decisão de regra tem base.
+
 
 Porque está na lista: mudar regra **depois** de filmar invalida o material. Se a
 regra vai mudar, muda antes das partidas pagas.
