@@ -1410,11 +1410,29 @@
     const Fwin = atacanteVence ? FatkEf : FdefEf, Flose = atacanteVence ? FdefEf : FatkEf;
     const baixasEf = Math.min(Flose * cfg.combate.atrito_base, Fwin);
     const fracao = Fwin > 0 ? baixasEf / Fwin : 0;
+    // A CENA precisa saber QUEM se encontrou, nao so que houve encontro (28/08).
+    // O evento so trazia donos e forcas: a cronica nao conseguia nomear os dois
+    // exercitos e o .txt do browser nao registava nada. Campos ADITIVOS — quem ja
+    // lia o evento continua a ler igual.
+    // Fotografado ANTES de aplicarBaixas, que muda as tropas do vencedor.
+    const antesVenc = Object.assign({}, vencedor.tropas);
+    const perdidas = Object.assign({}, perdedor.tropas); // o perdedor sai INTEIRO do transito
     aplicarBaixas(estado, vencedor.tropas, fracao);
     const pa = posicaoRota(estado, atk) || { x: 0, y: 0 };
+    const somaT = (t) => TIPOS.reduce((s, k) => s + (t[k] || 0), 0);
     const ev = { tipo: "combate_estrada", turno: estado.turno,
       atacante: atk.dono, defensor: def.dono, vencedorDono: vencedor.dono,
-      Fatk: Fa, Fdef: Fd, vantagem: v, x: pa.x, y: pa.y };
+      Fatk: Fa, Fdef: Fd, vantagem: v, x: pa.x, y: pa.y,
+      FatkEf: Math.round(FatkEf), FdefEf: Math.round(FdefEf),
+      atkOrigemId: atk.origemId, atkDestinoId: atk.destinoId,
+      defOrigemId: def.origemId, defDestinoId: def.destinoId,
+      vencedorOrigemId: vencedor.origemId, vencedorDestinoId: vencedor.destinoId,
+      perdedorDono: perdedor.dono,
+      perdedorOrigemId: perdedor.origemId, perdedorDestinoId: perdedor.destinoId,
+      perdedorTropas: perdidas,
+      aniquilados: somaT(perdidas),
+      baixasVencedor: somaT(antesVenc) - somaT(vencedor.tropas),
+      baixasForca: Math.round(baixasEf) };
     estado.log.push(ev);
     return { vencedor, perdedor, ev };
   }

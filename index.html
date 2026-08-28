@@ -2401,6 +2401,18 @@
     // borda na cor de quem agiu. (O modo analista segue fora do replay.)
     const espPorLado = { A: [], B: [] };
     for (const e of fr.eventos) {
+      if (e.tipo === "combate_estrada") {
+        // sem alvo e sem bonus de local: a frase-icone diz o ENCONTRO, nao um assalto
+        for (const lado of ["A", "B"]) {
+          if (!espPorLado[lado]) continue;
+          const venci = e.vencedorDono === lado;
+          espPorLado[lado].push(`<div class="ev ev${lado}">&#9876; em marcha ` +
+            `<b class="mono">${e.FatkEf} vs ${e.FdefEf}</b> &mdash; ` +
+            (venci ? `&#10003; venceu o campo (&minus;${e.baixasVencedor})`
+                   : `&#10007; exercito perdido (${e.aniquilados})`) + `</div>`);
+        }
+        continue;
+      }
       if (e.tipo !== "combate" || !espPorLado[e.atacante]) continue;
       const gA = e.atkType ? GLIFO[e.atkType] : "";
       const gD = e.defType ? GLIFO[e.defType] : "";
@@ -2419,11 +2431,22 @@
         espPorLado[lado].join("") + linhaPlacar());
     }
 
-    // banners + escolha do alvo da camera
-    let alvoCam = null;
+    // banners + escolha do alvo da camera.
+    // PRIORIDADE (28/08): conquista > combate de estrada > assalto repelido.
+    // Uma aldeia a mudar de dono e a maior cena do turno; a seguir vem o choque
+    // em campo aberto, que apaga um exercito INTEIRO; por ultimo o assalto que
+    // nao passou, onde os dois lados continuam vivos. Antes desta ordem o
+    // combate de estrada nunca era escolhido: o laco saltava tudo o que nao
+    // fosse "combate", e a camera ficava no primeiro assalto que aparecesse.
+    let alvoCam = null, prioCam = -1;
     for (const e of fr.eventos) {
+      if (e.tipo === "combate_estrada") {
+        if (prioCam < 1) { alvoCam = e; prioCam = 1; }
+        continue;
+      }
       if (e.tipo !== "combate") continue;
-      if (!alvoCam) alvoCam = e;
+      const p = e.conquista ? 2 : 0;
+      if (p > prioCam) { alvoCam = e; prioCam = p; }
       if (e.conquista) {
         const dono = e.atacante === "A" ? "Rei A" : "Rei B";
         // Etapa 1: banner de conquista desligado — o pulso+eco NA aldeia
@@ -2435,8 +2458,13 @@
       }
     }
     if (alvoCam) {
-      const a = game.aldeias.find((v) => v.id === alvoCam.alvoId);
-      if (a) apontarCamera(a.x, a.y, 1.9);
+      // o combate de estrada nao tem aldeia: a camera vai ao PONTO da estrada
+      // (x,y do evento), que e onde os dois exercitos se encontraram.
+      if (alvoCam.tipo === "combate_estrada") apontarCamera(alvoCam.x, alvoCam.y, 1.9);
+      else {
+        const a = game.aldeias.find((v) => v.id === alvoCam.alvoId);
+        if (a) apontarCamera(a.x, a.y, 1.9);
+      }
     }
 
     registrarEfeitosTurno(fr.turno);
@@ -2673,6 +2701,19 @@
       } else if (e.tipo === "reforco" && porLado[e.dono]) {
         porLado[e.dono].push(`<div style="color:#8f8468">reforco em [${e.alvoId}] ${esc(e.alvoNome)}: ` +
           `<span class="mono">${compStrG(e.tropas)}</span></div>`);
+      } else if (e.tipo === "combate_estrada") {
+        // Entra nos DOIS paineis: ao contrario do assalto, aqui nao ha atacante
+        // e defensor — ha dois exercitos em marcha que se encontraram. Contar
+        // so para um lado esconderia metade da historia.
+        for (const lado of ["A", "B"]) {
+          if (!porLado[lado]) continue;
+          const venci = e.vencedorDono === lado;
+          porLado[lado].push(`<div style="color:${venci ? "#c8b27a" : "#9a7b7b"}">` +
+            `&#9876; em campo aberto, ${esc(nomeAld(e.atkOrigemId))}&rarr;${esc(nomeAld(e.atkDestinoId))} ` +
+            `<span class="mono">${e.FatkEf} vs ${e.FdefEf} ef</span> &mdash; ` +
+            (venci ? `venceu, perdeu ${e.baixasVencedor}` : `exercito ANIQUILADO (${compStrG(e.perdedorTropas)})`) +
+            `</div>`);
+        }
       }
     }
     for (const lado of ["A", "B"]) {
@@ -2698,8 +2739,25 @@
     if (REDUZ_MOV) return;
     for (const e of game.log) {
       if (e.turno !== tn) continue;
-      if (e.tipo === "combate_estrada") { // #2: choque no meio da estrada, cor do vencedor
-        efeitos.push({ x: e.x, y: e.y, t0: performance.now(), cor: COR[e.vencedorDono] || "#ffd56b" });
+      if (e.tipo === "combate_estrada") {
+        // CENA DO CHOQUE EM CAMPO ABERTO (28/08). Antes era o anel generico de
+        // 900 ms na cor do vencedor — o mesmo efeito de um assalto qualquer,
+        // para o unico evento do jogo que apaga um exercito INTEIRO. Nas duas
+        // partidas do video houve 16 e o Lucas nao viu nenhum.
+        //
+        // Duas batidas, e nenhuma delas e anel ou numero flutuante: em 25/08 o
+        // Lucas tirou os dois da conquista ("circulos piscando e numero de
+        // tropas mortas poluem o momento"). A cena usa o vocabulario que ficou
+        // — objetos no mapa, nao HUD:
+        //   0 ms    CHOQUE: raios curtos nas DUAS cores (houve dois, nao um)
+        //   350 ms  QUEDA: o estandarte do perdedor tomba e afunda
+        // O vencedor nao precisa de efeito: ele ja retoma a marcha menor,
+        // porque o tamanho do estandarte E a forca.
+        const ag = performance.now();
+        efeitos.push({ choqueEstrada: true, x: e.x, y: e.y, t0: ag, dur: 460,
+          corA: COR[e.atacante] || "#ffd56b", corB: COR[e.defensor] || "#ffd56b" });
+        efeitos.push({ quedaEstandarte: true, x: e.x, y: e.y, t0: ag + 350, dur: 1150,
+          dono: e.perdedorDono, tropas: e.perdedorTropas });
         continue;
       }
       if (e.tipo !== "combate") continue;
@@ -3060,6 +3118,15 @@
     }
   }
 
+  // "[7] Toledo" a partir do id. O combate de ESTRADA nao tem alvoNome (nao
+  // acontece numa aldeia), entao a cronica e o .txt nomeiam os dois exercitos
+  // pela rota que cada um fazia.
+  function nomeAld(id) {
+    if (id == null) return "[?]";
+    const a = game.aldeias.find((v) => v.id === id);
+    return "[" + id + "]" + (a && a.nome ? " " + a.nome : "");
+  }
+
   // composicao curta p/ o log (ex.: "10S+5K") — S/A/K, nomes oficiais (24/08)
   function compStrG(t) {
     const p = [];
@@ -3171,6 +3238,18 @@
           (e.conquista ? " (CONQUISTA)" : "") + " | baixas~" + e.baixasForca);
       else if (e.tipo === "reforco")
         L.push("REFORCO [" + e.alvoId + "] " + e.alvoNome + " dono " + e.dono + ": " + compStrG(e.tropas));
+      // COMBATE DE ESTRADA (28/08): o .txt do browser nao registava nenhum. Nas
+      // duas partidas do video houve 16 e o Lucas, a ver em camera lenta, nao viu
+      // um. Sem linha no log, "aqui nao houve luta" era impossivel de conferir —
+      // nao havia contra o que comparar. O runner headless ja registava (ver
+      // runners/rei_vs_rei.js), so o browser e que ficou de fora.
+      else if (e.tipo === "combate_estrada")
+        L.push("COMBATE-ESTRADA " + nomeAld(e.atkOrigemId) + "->" + nomeAld(e.atkDestinoId) +
+          " (" + e.atacante + ") vs " + nomeAld(e.defOrigemId) + "->" + nomeAld(e.defDestinoId) +
+          " (" + e.defensor + "): Fatk=" + e.Fatk + " (ef " + e.FatkEf + ") Fdef=" + e.Fdef +
+          " (ef " + e.FdefEf + ") vant=" + e.vantagem + " -> vence " + e.vencedorDono +
+          " | exercito de " + e.perdedorDono + " ANIQUILADO (" + compStrG(e.perdedorTropas) + ")" +
+          " | vencedor perdeu " + e.baixasVencedor);
     });
     const f = (d) => Engine.aldeiasDe(game, d).reduce((s2, a) => s2 + Engine.forcaDe(a.tropas, game.config), 0);
     // transito por Rei vem do ESTADO do motor (movimentos por dono), nao de parsing.
@@ -4177,6 +4256,38 @@
         ctx.globalAlpha = 1 - k;
         desenharEstandarte(_p.x, _p.y - rBase * 0.25 * (1 - k), rr, e.dono, e.tropas);
         ctx.restore();
+        continue;
+      }
+
+      if (e.choqueEstrada) { // 1a batida: raios curtos, metade em cada cor
+        const _c = ancoraEfeito(e);
+        const raioC = Math.max(10, cs * 0.5) * (1 + p * 1.1);
+        ctx.globalAlpha = (1 - p) * 0.85;
+        ctx.lineWidth = Math.max(2, cs * 0.07);
+        for (let k = 0; k < 8; k++) {
+          const ak = k * Math.PI / 4 + 0.2;
+          ctx.strokeStyle = k % 2 ? e.corB : e.corA;   // alterna: dois exercitos
+          ctx.beginPath();
+          ctx.moveTo(_c.x + Math.cos(ak) * raioC * 0.45, _c.y + Math.sin(ak) * raioC * 0.45);
+          ctx.lineTo(_c.x + Math.cos(ak) * raioC * (0.45 + 0.55 * (1 - p)),
+                     _c.y + Math.sin(ak) * raioC * (0.45 + 0.55 * (1 - p)));
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        continue;
+      }
+
+      if (e.quedaEstandarte) { // 2a batida: o estandarte do perdedor tomba
+        const _q = ancoraEfeito(e);
+        const k = p * p;                                // acelera a queda
+        const rB = Math.max(24, cs * 0.58);
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, 1 - k * 1.15);
+        ctx.translate(_q.x, _q.y + rB * 0.55 * k);      // afunda
+        ctx.rotate(k * 1.15);                            // tomba de lado
+        desenharEstandarte(0, 0, rB * (1 - 0.18 * k), e.dono, e.tropas);
+        ctx.restore();
+        ctx.globalAlpha = 1;
         continue;
       }
 
