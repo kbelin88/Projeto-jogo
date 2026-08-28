@@ -224,12 +224,12 @@
       "motivosInapto": [],
       "apto": true,
       "arena": {
-        "estado": "SONDADO — OK",
-        "partidas": 0,
+        "estado": "TESTADO — nao aguenta partida",
+        "partidas": 1,
         "vitorias": 0,
-        "latenciaMediana": "59-176 s (sonda de 3 turnos)",
-        "formato": "ok — 2 de 2 turnos validos, com ordens nos dois",
-        "nota": "Modelo de financas, joga na mesma. Custo a subir depressa: T1 8953 tok de resposta, T2 29303 (22911 so de raciocinio) e 176 s. Mesmo 'terminated' do minimax-m3 no T3, ao mesmo segundo — rede, nao modelo."
+        "latenciaMediana": "193 s em partida (86-234 s)",
+        "formato": "6 de 15 turnos com alguma ordem; 47% das respostas cortadas por `length`",
+        "nota": "1a partida, 28/08: perdeu 4x19 para o 120b em 15 turnos. A falha e PREVISIVEL e monotona, nao aleatoria: a resposta cresce turno a turno (11k, 16k, 30k) e a partir do T5 bate no teto de 32000 quase sempre, devolvendo finish length e ZERO ordens. Mediana de 30282 tokens de resposta = 95% do teto. Levantar o teto NAO resolve: o teto proprio dele e 32768, so 2% acima do nosso — ele e verboso demais para o seu proprio orcamento de saida. O sinal ja estava na sonda de 3 turnos: T1 8953 -> T2 29303. Nao e a latencia que previa a morte, e a TENDENCIA DOS TOKENS DE RESPOSTA contra o teto."
       }
     },
     {
