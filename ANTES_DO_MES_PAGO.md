@@ -72,7 +72,6 @@ Os 89,7% confirmam por outra via a amostragem da `REVISAO-OPUS` (18 de 20), agor
 com n=1 809 e numa população diferente (burro, não LLM). Duas amostras
 independentes a dar ~90% — a decisão de regra tem base.
 
-
 Porque está na lista: mudar regra **depois** de filmar invalida o material. Se a
 regra vai mudar, muda antes das partidas pagas.
 
@@ -99,12 +98,19 @@ Critério para admitir informação nova, que continua a valer:
 **o Rei consegue chegar a este número sozinho?** Se sim, não entra.
 E a regra de sempre: informar, nunca recomendar.
 
-## 5. Re-sondar dois modelos antes de os excluir
+## 5. ~~Re-sondar dois modelos~~ — FEITO no mesmo dia, e ambos ressuscitaram
 
-`minimax/minimax-m3:free` e `liquid/lfm-2.5-2.6b:free` constam **MORTO** no
-`resultados_arena.json` (404 em 18/08) mas **voltaram ao catálogo** hoje. Uma
-sonda de 3 turnos cada resolve. Constar no catálogo não prova endpoint vivo — por
-isso a etiqueta não foi mexida.
+`minimax/minimax-m3:free` e `liquid/lfm-2.5-2.6b:free` constavam **MORTO** (404 em
+18/08) e **respondem**. O `lfm-2.5-2.6b` fez **11–13 s por turno**, o mais rápido
+já medido na Arena — serve de baseline fraco barato em relógio, quando o pool da
+Liquid não está em 429.
+
+O catálogo free ficou **inteiramente sondado**: os 17 aptos foram todos medidos ao
+menos uma vez. A secção "aptos, ainda não sondados" do `MODELOS_ARENA.md` está
+vazia pela primeira vez.
+
+**A lição que fica para o mês pago:** constar no catálogo não prova endpoint vivo,
+e sair do catálogo não prova endpoint morto. Sondar antes de comprometer saldo.
 
 ## 6. Revogar as 2 chaves expostas em 03/08
 
