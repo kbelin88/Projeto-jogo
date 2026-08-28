@@ -2709,7 +2709,7 @@
           if (!porLado[lado]) continue;
           const venci = e.vencedorDono === lado;
           porLado[lado].push(`<div style="color:${venci ? "#c8b27a" : "#9a7b7b"}">` +
-            `&#9876; em campo aberto, ${esc(nomeAld(e.atkOrigemId))}&rarr;${esc(nomeAld(e.atkDestinoId))} ` +
+            `&#9876; campo aberto entre ${esc(nomeAld(e.trechoDeId))} e ${esc(nomeAld(e.trechoParaId))} ` +
             `<span class="mono">${e.FatkEf} vs ${e.FdefEf} ef</span> &mdash; ` +
             (venci ? `venceu, perdeu ${e.baixasVencedor}` : `exercito ANIQUILADO (${compStrG(e.perdedorTropas)})`) +
             `</div>`);
@@ -3244,9 +3244,10 @@
       // nao havia contra o que comparar. O runner headless ja registava (ver
       // runners/rei_vs_rei.js), so o browser e que ficou de fora.
       else if (e.tipo === "combate_estrada")
-        L.push("COMBATE-ESTRADA " + nomeAld(e.atkOrigemId) + "->" + nomeAld(e.atkDestinoId) +
-          " (" + e.atacante + ") vs " + nomeAld(e.defOrigemId) + "->" + nomeAld(e.defDestinoId) +
-          " (" + e.defensor + "): Fatk=" + e.Fatk + " (ef " + e.FatkEf + ") Fdef=" + e.Fdef +
+        L.push("COMBATE-ESTRADA no trecho " + nomeAld(e.trechoDeId) + "-" + nomeAld(e.trechoParaId) +
+          ": " + e.atacante + " (ia " + nomeAld(e.atkOrigemId) + "->" + nomeAld(e.atkDestinoId) + ")" +
+          " vs " + e.defensor + " (ia " + nomeAld(e.defOrigemId) + "->" + nomeAld(e.defDestinoId) + ")" +
+          ": Fatk=" + e.Fatk + " (ef " + e.FatkEf + ") Fdef=" + e.Fdef +
           " (ef " + e.FdefEf + ") vant=" + e.vantagem + " -> vence " + e.vencedorDono +
           " | exercito de " + e.perdedorDono + " ANIQUILADO (" + compStrG(e.perdedorTropas) + ")" +
           " | vencedor perdeu " + e.baixasVencedor);

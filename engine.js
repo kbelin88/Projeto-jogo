@@ -1419,10 +1419,15 @@
     const perdidas = Object.assign({}, perdedor.tropas); // o perdedor sai INTEIRO do transito
     aplicarBaixas(estado, vencedor.tropas, fracao);
     const pa = posicaoRota(estado, atk) || { x: 0, y: 0 };
+    // O TRECHO em que se encontraram, que nao e a rota de nenhum dos dois: uma
+    // rota de 5 aldeias atravessa varios trechos, e o encontro pode ser longe
+    // das pontas. Dizer "ia de [4] para [23]" como se fosse o lugar do combate
+    // e errado — foi o que a primeira versao desta cena fez, em 28/08.
     const somaT = (t) => TIPOS.reduce((s, k) => s + (t[k] || 0), 0);
     const ev = { tipo: "combate_estrada", turno: estado.turno,
       atacante: atk.dono, defensor: def.dono, vencedorDono: vencedor.dono,
       Fatk: Fa, Fdef: Fd, vantagem: v, x: pa.x, y: pa.y,
+      trechoDeId: pa.aId, trechoParaId: pa.bId,
       FatkEf: Math.round(FatkEf), FdefEf: Math.round(FdefEf),
       atkOrigemId: atk.origemId, atkDestinoId: atk.destinoId,
       defOrigemId: def.origemId, defDestinoId: def.destinoId,

@@ -44,6 +44,7 @@ if (evs.length) {
   // Sem estes campos a cronica so consegue dizer "houve um combate" — nao QUEM,
   // nao ONDE, nao com que custo. Foi o estado ate 28/08.
   for (const campo of ["atkOrigemId", "atkDestinoId", "defOrigemId", "defDestinoId",
+                       "trechoDeId", "trechoParaId",
                        "vencedorDono", "perdedorDono", "perdedorTropas", "aniquilados",
                        "baixasVencedor", "FatkEf", "FdefEf", "x", "y"])
     ok(`evento carrega '${campo}'`, e[campo] !== undefined);
