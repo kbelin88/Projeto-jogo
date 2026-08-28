@@ -24,23 +24,24 @@ não mede latência de partida nem estabilidade ao longo de 30 turnos (ver a leg
 
 | modelo | ctx | saída | racioc. | veredito | latência (sonda) | formato | nota |
 |---|---|---|---|---|---|---|---|
-| `minimax/minimax-m3:free` | 1049k | 944k | opc. | MORTO | ? | ? | 404 'unavailable for free' em 18/08 |
+| `minimax/minimax-m3:free` | 1049k | 944k | opc. | SONDADO — OK | 85-160 s (sonda de 3 turnos) | ok — 2 de 2 turnos validos, com ordens nos dois | RESSUSCITOU: constava MORTO (404 em 18/08) e voltou ao catalogo; re-sondado em 28/08 e responde. O 3o turno caiu com 'terminated' no MESMO segundo que o ling-3.0-flash-fin (fornecedores diferentes) — causa comum de rede, nao do modelo. Raciocinio cresce depressa: 8310 -> 16441 tok entre T1 e T2. |
+| `thinkingmachines/inkling-small:free` | 1049k | 262k | opc. | NAO JOGA — 403 restrito | ? | 0 turnos validos: HTTP 403 nas duas tentativas | OpenRouter devolve 403 'only available on agentic harnesses'. Esta no catalogo free e passa TODOS os criterios estaticos (texto->texto, 1049k ctx, 262k saida) — a regra de aptidao nao consegue apanhar isto, porque e gating por app, nao capacidade. Sondado 28/08. |
+| `thinkingmachines/inkling:free` | 1049k | 262k | opc. | NAO JOGA — 403 restrito | ? | 0 turnos validos: HTTP 403 nas duas tentativas | OpenRouter devolve 403 'only available on agentic harnesses'. Esta no catalogo free e passa TODOS os criterios estaticos (texto->texto, 1049k ctx, 262k saida) — a regra de aptidao nao consegue apanhar isto, porque e gating por app, nao capacidade. Sondado 28/08. |
 | `dots-studio/dots-3-note-preview:free` | 512k | 461k | opc. | SONDADO — OK | 35 s (1 turno) | ok — raciocínio 2620 tok | maior teto de saída do catálogo (512k). Candidato a partida, ainda sem nenhuma |
 | `google/gemma-4-26b-a4b-it:free` | 262k | 33k | opc. | SONDADO — OK (no retry) | 32 s (1 turno) | ok — raciocínio 0 tok (não pensou) | 429 na 1ª sonda (pool compartilhado Google AI Studio → fallback Darkbloom, também 429); passou 10 min depois. Instabilidade de provedor, não de modelo |
-| `google/gemma-4-31b-it:free` | 262k | 33k | opc. | BANIDO (18/08) | — | não chegou a responder | 429 em duas sondas seguidas com 10 min de intervalo, mesmo provedor (Google AI Studio, `upstream_provider_shared_pool`). Vale **uma** re-sonda noutro dia antes de gastar mais cota |
+| `google/gemma-4-31b-it:free` | 262k | 33k | opc. | BANIDO — pool 429 (3 dias) | 120 s no unico turno que passou | ok quando responde: 1 turno valido, com 3 construcoes e 4 envios | 429 em duas sondas seguidas com 10 min de intervalo, mesmo provedor (Google AI Studio, `upstream_provider_shared_pool`). Vale **uma** re-sonda noutro dia antes de gastar mais cota | 28/08: 429 do pool Google AI Studio PELA 3a VEZ, em 3 dias diferentes (18, 18 e 28/08). 1 turno valido em 3, esse com ordens e 120 s. O problema e o pool partilhado, nao o modelo — mas para a Arena o efeito e o mesmo. |
+| `inclusionai/ling-3.0-flash-fin:free` | 262k | 33k | opc. | SONDADO — OK | 59-176 s (sonda de 3 turnos) | ok — 2 de 2 turnos validos, com ordens nos dois | Modelo de financas, joga na mesma. Custo a subir depressa: T1 8953 tok de resposta, T2 29303 (22911 so de raciocinio) e 176 s. Mesmo 'terminated' do minimax-m3 no T3, ao mesmo segundo — rede, nao modelo. |
 | `poolside/laguna-xs-2.1:free` | 262k | 33k | opc. | SONDADO — RESPONDE MAS NÃO JOGA | 1200 s (20 min, 1 turno) | `finish: error`, `construir: []`, **sem** erro de rede | gastou os 12401 tokens de resposta inteiros no raciocínio e nunca fechou o JSON. Achado do dia: dá para falhar sem erro nenhum. Não gaste partida |
 | `cohere/north-mini-code:free` | 256k | 64k | opc. | SONDADO — LENTO DEMAIS | 353 s (1 turno) | ok — JSON válido, 2 lanceiros, raciocínio 9229 tok | acima do teto de 300 s da spec: 30 turnos custariam ~6 h só do lado dele. Não usar em partida longa |
 | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` | 256k | 66k | opc. | SONDADO — OK | 47 s (1 turno) | ok — raciocínio 8059 tok | raciocínio ligado por padrão; ainda sem partida |
-| `liquid/lfm-2.5-2.6b:free` | 66k | 8k | opc. | MORTO | ? | ? | 404 'no endpoints found' em 18/08 |
+| `minimax/minimax-m2.7:free` | 197k | 177k | opc. | SONDADO — INSTAVEL | 84-138 s (sonda de 3 turnos) | 1 de 2 turnos validos com ordens; o outro gastou os 12303 tok de resposta INTEIROS no raciocinio e devolveu construir:[] com finish error | Duas falhas distintas numa sonda so: a do laguna-xs-2.1 (pensa ate estourar o teto sem fechar o JSON) e um HTTP 402 'Insufficient balance' do fornecedor GMICloud. Sondado 28/08. |
+| `liquid/lfm-2.5-2.6b:free` | 66k | 8k | opc. | SONDADO — OK, mas throttled | 11-13 s (sonda de 3 turnos) | ok — 2 de 2 turnos validos, com ordens nos dois | RESSUSCITOU: constava MORTO (404 em 18/08). O MAIS RAPIDO ja medido na Arena (11-13 s/turno) — candidato a baseline fraco barato em relogio. Cai em 429 do pool partilhado da Liquid (retry_after 60 s). 2.6B: esperar degrau baixo. |
 
 ## Aptos, ainda não sondados
 
 | modelo | ctx | saída | racioc. | modalidade | criado | descrição |
 |---|---|---|---|---|---|---|
-| `thinkingmachines/inkling-small:free` | 1049k | 262k | opc. | text+image+audio->text | 2026-07-30 | Inkling Small is an open-weight multimodal mixture-of-experts model from Thinking Machines |
-| `thinkingmachines/inkling:free` | 1049k | 262k | opc. | text+image+audio->text | 2026-07-17 | Inkling is an open-weight multimodal mixture-of-experts model from Thinking Machines Lab,  |
-| `inclusionai/ling-3.0-flash-fin:free` | 262k | 33k | opc. | text->text | 2026-08-27 | Ling 3.0 Flash Fin is a finance-focused mixture-of-experts model from InclusionAI, built o |
-| `minimax/minimax-m2.7:free` | 197k | 177k | opc. | text->text | 2026-03-18 | MiniMax-M2.7 is a next-generation large language model designed for autonomous, real-world |
+| — | | | | | | _nenhum: os aptos do catálogo já foram todos sondados_ |
 
 ## Inaptos e mortos (não gaste cota aqui)
 

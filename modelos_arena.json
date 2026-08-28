@@ -22,8 +22,60 @@
       "motivosInapto": [],
       "apto": true,
       "arena": {
-        "estado": "MORTO",
-        "nota": "404 'unavailable for free' em 18/08"
+        "estado": "SONDADO — OK",
+        "partidas": 0,
+        "vitorias": 0,
+        "latenciaMediana": "85-160 s (sonda de 3 turnos)",
+        "formato": "ok — 2 de 2 turnos validos, com ordens nos dois",
+        "nota": "RESSUSCITOU: constava MORTO (404 em 18/08) e voltou ao catalogo; re-sondado em 28/08 e responde. O 3o turno caiu com 'terminated' no MESMO segundo que o ling-3.0-flash-fin (fornecedores diferentes) — causa comum de rede, nao do modelo. Raciocinio cresce depressa: 8310 -> 16441 tok entre T1 e T2."
+      }
+    },
+    {
+      "id": "thinkingmachines/inkling-small:free",
+      "nome": "Thinking Machines: Inkling Small (free)",
+      "provider": "thinkingmachines",
+      "criado": "2026-07-30",
+      "ctx": 1048576,
+      "maxOut": 262144,
+      "modalidade": "text+image+audio->text",
+      "tokenizer": "Other",
+      "racMandatorio": false,
+      "racPadrao": false,
+      "racSuportado": true,
+      "esforcos": "?",
+      "descricao": "Inkling Small is an open-weight multimodal mixture-of-experts model from Thinking Machines Lab, with 12B active parameters out of 276B total. It is positioned a",
+      "motivosInapto": [],
+      "apto": true,
+      "arena": {
+        "estado": "NAO JOGA — 403 restrito",
+        "partidas": 0,
+        "vitorias": 0,
+        "formato": "0 turnos validos: HTTP 403 nas duas tentativas",
+        "nota": "OpenRouter devolve 403 'only available on agentic harnesses'. Esta no catalogo free e passa TODOS os criterios estaticos (texto->texto, 1049k ctx, 262k saida) — a regra de aptidao nao consegue apanhar isto, porque e gating por app, nao capacidade. Sondado 28/08."
+      }
+    },
+    {
+      "id": "thinkingmachines/inkling:free",
+      "nome": "Thinking Machines: Inkling (free)",
+      "provider": "thinkingmachines",
+      "criado": "2026-07-17",
+      "ctx": 1048576,
+      "maxOut": 262144,
+      "modalidade": "text+image+audio->text",
+      "tokenizer": "Other",
+      "racMandatorio": false,
+      "racPadrao": false,
+      "racSuportado": true,
+      "esforcos": "?",
+      "descricao": "Inkling is an open-weight multimodal mixture-of-experts model from Thinking Machines Lab, with 41B active parameters out of 975B total. It is designed for gener",
+      "motivosInapto": [],
+      "apto": true,
+      "arena": {
+        "estado": "NAO JOGA — 403 restrito",
+        "partidas": 0,
+        "vitorias": 0,
+        "formato": "0 turnos validos: HTTP 403 nas duas tentativas",
+        "nota": "OpenRouter devolve 403 'only available on agentic harnesses'. Esta no catalogo free e passa TODOS os criterios estaticos (texto->texto, 1049k ctx, 262k saida) — a regra de aptidao nao consegue apanhar isto, porque e gating por app, nao capacidade. Sondado 28/08."
       }
     },
     {
@@ -147,12 +199,37 @@
       "motivosInapto": [],
       "apto": true,
       "arena": {
-        "estado": "BANIDO (18/08)",
+        "estado": "BANIDO — pool 429 (3 dias)",
         "partidas": 0,
         "vitorias": 0,
-        "latenciaMediana": "—",
-        "formato": "não chegou a responder",
-        "nota": "429 em duas sondas seguidas com 10 min de intervalo, mesmo provedor (Google AI Studio, `upstream_provider_shared_pool`). Vale **uma** re-sonda noutro dia antes de gastar mais cota"
+        "latenciaMediana": "120 s no unico turno que passou",
+        "formato": "ok quando responde: 1 turno valido, com 3 construcoes e 4 envios",
+        "nota": "429 em duas sondas seguidas com 10 min de intervalo, mesmo provedor (Google AI Studio, `upstream_provider_shared_pool`). Vale **uma** re-sonda noutro dia antes de gastar mais cota | 28/08: 429 do pool Google AI Studio PELA 3a VEZ, em 3 dias diferentes (18, 18 e 28/08). 1 turno valido em 3, esse com ordens e 120 s. O problema e o pool partilhado, nao o modelo — mas para a Arena o efeito e o mesmo."
+      }
+    },
+    {
+      "id": "inclusionai/ling-3.0-flash-fin:free",
+      "nome": "Ling 3.0 Flash Fin (free)",
+      "provider": "inclusionai",
+      "criado": "2026-08-27",
+      "ctx": 262144,
+      "maxOut": 32768,
+      "modalidade": "text->text",
+      "tokenizer": "Other",
+      "racMandatorio": false,
+      "racPadrao": false,
+      "racSuportado": true,
+      "esforcos": "?",
+      "descricao": "Ling 3.0 Flash Fin is a finance-focused mixture-of-experts model from InclusionAI, built on Ling 3.0 Flash with 5.1B active parameters out of 124B total. It is ",
+      "motivosInapto": [],
+      "apto": true,
+      "arena": {
+        "estado": "SONDADO — OK",
+        "partidas": 0,
+        "vitorias": 0,
+        "latenciaMediana": "59-176 s (sonda de 3 turnos)",
+        "formato": "ok — 2 de 2 turnos validos, com ordens nos dois",
+        "nota": "Modelo de financas, joga na mesma. Custo a subir depressa: T1 8953 tok de resposta, T2 29303 (22911 so de raciocinio) e 176 s. Mesmo 'terminated' do minimax-m3 no T3, ao mesmo segundo — rede, nao modelo."
       }
     },
     {
@@ -312,6 +389,31 @@
       }
     },
     {
+      "id": "minimax/minimax-m2.7:free",
+      "nome": "MiniMax: MiniMax M2.7 (free)",
+      "provider": "minimax",
+      "criado": "2026-03-18",
+      "ctx": 196608,
+      "maxOut": 176947,
+      "modalidade": "text->text",
+      "tokenizer": "Other",
+      "racMandatorio": false,
+      "racPadrao": false,
+      "racSuportado": true,
+      "esforcos": "?",
+      "descricao": "MiniMax-M2.7 is a next-generation large language model designed for autonomous, real-world productivity and continuous improvement. Built to actively participat",
+      "motivosInapto": [],
+      "apto": true,
+      "arena": {
+        "estado": "SONDADO — INSTAVEL",
+        "partidas": 0,
+        "vitorias": 0,
+        "latenciaMediana": "84-138 s (sonda de 3 turnos)",
+        "formato": "1 de 2 turnos validos com ordens; o outro gastou os 12303 tok de resposta INTEIROS no raciocinio e devolveu construir:[] com finish error",
+        "nota": "Duas falhas distintas numa sonda so: a do laguna-xs-2.1 (pensa ate estourar o teto sem fechar o JSON) e um HTTP 402 'Insufficient balance' do fornecedor GMICloud. Sondado 28/08."
+      }
+    },
+    {
       "id": "liquid/lfm-2.5-2.6b:free",
       "nome": "LiquidAI: LFM2.5-2.6B (free)",
       "provider": "liquid",
@@ -328,8 +430,12 @@
       "motivosInapto": [],
       "apto": true,
       "arena": {
-        "estado": "MORTO",
-        "nota": "404 'no endpoints found' em 18/08"
+        "estado": "SONDADO — OK, mas throttled",
+        "partidas": 0,
+        "vitorias": 0,
+        "latenciaMediana": "11-13 s (sonda de 3 turnos)",
+        "formato": "ok — 2 de 2 turnos validos, com ordens nos dois",
+        "nota": "RESSUSCITOU: constava MORTO (404 em 18/08). O MAIS RAPIDO ja medido na Arena (11-13 s/turno) — candidato a baseline fraco barato em relogio. Cai em 429 do pool partilhado da Liquid (retry_after 60 s). 2.6B: esperar degrau baixo."
       }
     },
     {
@@ -431,78 +537,6 @@
         "formato": "ok, mas clamp 0.27 e 8 rejeições",
         "nota": "falha o degrau 2/3: razão atq/def mediana **0.64** — ataca com menos força que a defesa"
       }
-    },
-    {
-      "id": "thinkingmachines/inkling-small:free",
-      "nome": "Thinking Machines: Inkling Small (free)",
-      "provider": "thinkingmachines",
-      "criado": "2026-07-30",
-      "ctx": 1048576,
-      "maxOut": 262144,
-      "modalidade": "text+image+audio->text",
-      "tokenizer": "Other",
-      "racMandatorio": false,
-      "racPadrao": false,
-      "racSuportado": true,
-      "esforcos": "?",
-      "descricao": "Inkling Small is an open-weight multimodal mixture-of-experts model from Thinking Machines Lab, with 12B active parameters out of 276B total. It is positioned a",
-      "motivosInapto": [],
-      "apto": true,
-      "arena": null
-    },
-    {
-      "id": "thinkingmachines/inkling:free",
-      "nome": "Thinking Machines: Inkling (free)",
-      "provider": "thinkingmachines",
-      "criado": "2026-07-17",
-      "ctx": 1048576,
-      "maxOut": 262144,
-      "modalidade": "text+image+audio->text",
-      "tokenizer": "Other",
-      "racMandatorio": false,
-      "racPadrao": false,
-      "racSuportado": true,
-      "esforcos": "?",
-      "descricao": "Inkling is an open-weight multimodal mixture-of-experts model from Thinking Machines Lab, with 41B active parameters out of 975B total. It is designed for gener",
-      "motivosInapto": [],
-      "apto": true,
-      "arena": null
-    },
-    {
-      "id": "inclusionai/ling-3.0-flash-fin:free",
-      "nome": "Ling 3.0 Flash Fin (free)",
-      "provider": "inclusionai",
-      "criado": "2026-08-27",
-      "ctx": 262144,
-      "maxOut": 32768,
-      "modalidade": "text->text",
-      "tokenizer": "Other",
-      "racMandatorio": false,
-      "racPadrao": false,
-      "racSuportado": true,
-      "esforcos": "?",
-      "descricao": "Ling 3.0 Flash Fin is a finance-focused mixture-of-experts model from InclusionAI, built on Ling 3.0 Flash with 5.1B active parameters out of 124B total. It is ",
-      "motivosInapto": [],
-      "apto": true,
-      "arena": null
-    },
-    {
-      "id": "minimax/minimax-m2.7:free",
-      "nome": "MiniMax: MiniMax M2.7 (free)",
-      "provider": "minimax",
-      "criado": "2026-03-18",
-      "ctx": 196608,
-      "maxOut": 176947,
-      "modalidade": "text->text",
-      "tokenizer": "Other",
-      "racMandatorio": false,
-      "racPadrao": false,
-      "racSuportado": true,
-      "esforcos": "?",
-      "descricao": "MiniMax-M2.7 is a next-generation large language model designed for autonomous, real-world productivity and continuous improvement. Built to actively participat",
-      "motivosInapto": [],
-      "apto": true,
-      "arena": null
     },
     {
       "id": "google/lyria-3-clip-preview",
