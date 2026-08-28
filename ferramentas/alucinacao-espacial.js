@@ -49,7 +49,7 @@ function lerRaciocinios(caminho) {
 // ---------- DEDUZIR a escala de marcha do REPLAY (nao do cabecalho) ----------
 // Porque isto existe: a metrica de rota depende de `escalaMarcha`, e o cabecalho
 // do .txt JA MENTIU sobre isso — as 3 partidas de 16/08 dizem "dist x0.2" e
-// correram com 1.0 (bug do toggle, HANDOFF_2026-08-17 §2). Julgar a rota de um
+// correram com 1.0 (bug do toggle; o caso esta por extenso no CLAUDE.md secao 6). Julgar a rota de um
 // modelo com a escala errada seria contar como alucinacao do modelo um erro
 // NOSSO. Entao a escala sai do estado do motor: para cada movimento gravado,
 // turnosTotal == ceil(pesoRota * escala * fatorVel), e resolve-se para escala.

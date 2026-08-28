@@ -222,7 +222,17 @@ Funciona com a partida pausada, a correr e dentro de um replay. Trancado por
   porque `testes/test_lote_c.js` congela o texto do relatório contra estados gerados com ele.
   **Nunca crie um segundo ruleset selecionável em tempo de execução** — houve um, ligado por
   checkbox, e três partidas pagas (~$2.25) correram com as regras erradas enquanto o log dizia
-  o contrário. Ver `HANDOFF_2026-08-17.md` §2.
+  o contrário.
+
+  > **O caso, por extenso** (era o §2 do handoff de 17/08, trazido para cá em 28/08 porque os
+  > handoffs saíram do repo): o ruleset era escolhido por um checkbox (`gv4`). O estado da
+  > partida nasce quando a página carrega — **antes** de a caixa ser marcada — mas o cabeçalho
+  > do log lia a caixa **ao vivo**. Marcar e dar Play deixava o jogo em v3 com o log a dizer v4;
+  > só `Reiniciar` depois de marcar é que aplicava, e ninguém sabia. Provado por dois números:
+  > produção observada de **+10 madeira / +6 ferro** (o v4 dá 30/20) e **7 de 7 marchas** a bater
+  > com `escalaMarcha` 1.0 em vez de 0.2.
+  > **A lição não foi "faltou um listener"** — foi que uma regra que *pode* não estar ligada,
+  > mais cedo ou mais tarde, não está.
 - **Não tocar** em: topologia/custos do `world-iberia.js`; encaixe da imagem (escala 1.17613,
   xMidYMin slice).
 - **Marcha nunca por pixel** — sempre custo de rota (`turnosDeCaminho`). Regressão dessa
