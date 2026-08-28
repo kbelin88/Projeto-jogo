@@ -84,6 +84,39 @@ Modelos pagos com raciocínio tendem a ser mais lentos, não menos. Planear a
 sessão de filmagem por **relógio**, não por número de partidas, e ter regra de
 aborto por projeção.
 
+## 3b. O teste de admissão que faltava: FOLGA DE SAÍDA, não latência
+
+Descoberto ao correr as partidas da noite. **A latência enganou três vezes hoje**
+(`dots` 35 s na sonda → 95-204 s em jogo; `nano-omni` 47 s → pico de 12 min). O que
+teria previsto a morte é outra coisa: **os tokens de resposta a subir contra o teto**.
+
+`ferramentas/folga-de-saida.js` (novo) mede isso a partir de qualquer log — sonda de
+3 turnos ou partida inteira, sem gastar cota:
+
+```bash
+node ferramentas/folga-de-saida.js resultados/p4-bateria-0828/sondas/*.txt
+```
+
+| modelo | resposta mediana | teto efetivo | % | veredito |
+|---|---|---|---|---|
+| `lfm-2.5-2.6b` | 8 114 | **8 192** (dele) | **99%** | encostado |
+| `ling-3.0-flash-fin` | 29 303 | 32 000 (nosso) | **92%** | morreu: 43% dos turnos cortados |
+| `dots` | 15 128 | 32 000 | 47% | folgado |
+| `120b` | 13 574 | 32 000 | 42% | folgado |
+
+O `ling` perdeu 4×19 **sem nunca ter jogado mal** — a partir do T5 batia no teto e
+devolvia zero ordens. O sinal já estava na sonda (8 953 → 29 303) e ninguém olhou,
+porque se estava a olhar para o relógio.
+
+⚠️ **O teto que manda é o MENOR** entre o nosso (`max_tokens: 32000`, em
+`rei.js:234` e `index.html:3314`) e o do próprio modelo. O `lfm-2.5-2.6b` parecia
+folgado a 25% do nosso e está a 99% do dele — a primeira versão desta ferramenta
+dizia que ele estava confortável.
+
+**Se o teto que manda for o nosso, levantar `max_tokens` pode salvar o modelo. Se
+for o dele, não há o que fazer.** No caso do `ling` é o dele (32 768, só 2% acima
+do nosso): verboso demais para o orçamento que tem.
+
 ## 4. O prompt já toca 5 935 tokens — pensar qualquer acréscimo no fim, não no início
 
 Máximo real medido hoje (tokenizer, não estimativa): **5 935** tokens, R2 Rei B,
