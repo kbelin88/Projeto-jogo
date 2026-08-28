@@ -240,13 +240,59 @@ Funciona com a partida pausada, a correr e dentro de um replay. Trancado por
 
 ---
 
-## 7. Estado atual (19/08/2026)
+## 7. Estado atual (28/08/2026)
 
-⚠️ **`main` local está DESATUALIZADA** (`1ee5cc2`, 03-04/08, 30 commits atrás). Todo o trabalho
-recente está na branch **`spec-lote-e-fairness`**, último commit `9a41920` (18/08). **Nada
-pushado, e há ~84 ficheiros por commitar** — incluindo as duas baterias em `resultados/` e a
-tabela da Arena. O ponto salvo mais recente é **`HANDOFF_2026-08-17.md`**; o §2 dele (o erro do
-dia) continua a valer.
+✅ **`main` está em dia e sincronizada com `origin/main`.** A `spec-lote-e-fairness` já foi
+mesclada. As 4 branches não mescladas (`exp-cautela-2x2`, `exp-duas-fases`, `exp-exemplo-ancora`,
+`sonda-admissao-8b`) são experimentos antigos e **não devem ser promovidas** — o `exp-duas-fases`
+teve resultado negativo (decompor a saída piora).
+
+### O que o GitHub guarda, a partir de 28/08
+
+**Decisão do Lucas: o repo público é BACKUP DE CÓDIGO E MOTOR, e mais nada.** Ficam de fora, no
+`.gitignore` (continuam no disco, só não são versionados):
+
+| fora do git | porquê |
+|---|---|
+| `resultados/`, `traces/` | 78 MB de partidas; o `.txt` é raciocínio cru de modelo |
+| material de vídeo (`PLANO_VINHETA_*`, `NARRACAO.md`, `FOLHA_DE_TEMPOS.md`, `ferramentas/vinheta/`, `ROTEIRO_VIDEO_01.md`, `PLANO_VIDEO_*`) | plano de canal, não é código |
+| imagens de plano (`IMAGEM-JOGO.png`, `MAPASITE.png`, `mapa.png`, `assets/banner_arena.png`, `assets/Generated Image*`) | mockup, não é asset do jogo |
+| `HANDOFF_*`, `SESSAO_*`, `.claude/` | registro de sessão |
+
+⚠️ **Os assets que o JOGO carrega continuam versionados** — `ilha-recortada.png`,
+`agua-textura.png`, `brasoes/`, `sprites/`. Conferido: o `index.html` só referencia esses quatro
+grupos, e todos estão rastreados. Não mexer nisso sem reconferir.
+
+⚠️ Untrackear não apaga o histórico: o que já foi pushado antes de 28/08 continua nos commits
+antigos do GitHub.
+
+### Correções de 28/08 (motor + interface)
+
+Saíram de uma pesquisa de 4 itens (`pesquisa/2026-08-28/`, com `REVISAO-OPUS.md` corrigindo
+duas conclusões erradas do relatório original). Três implementadas; a quarta ficou para depois.
+
+1. **Prompt: distância da retaguarda à frente** (`engine.js`, secção YOUR VILLAGES). Cada aldeia
+   INTERIOR passa a mostrar `from here to your nearest border village [id]: N slow / N medium /
+   N fast turns`. Medido em 53 replays: **um terço da força de um rei fica parada nas aldeias de
+   partida a partida inteira**, e o relatório nunca dava o custo de mover entre aldeias próprias.
+   ⚠️ **Uma primeira versão pôs o peso em cada ARESTA da rede e foi revertida**: com
+   `escalaMarcha 0.2` quase toda aresta arredonda para "1t", e três "1t" fariam o modelo esperar
+   3 turnos onde a rota leva 2 (o motor soma os custos e arredonda **uma vez só**). Era um número
+   que o decisor lê e o motor não executa — a regressão da secção 6. **Não repor peso por aresta.**
+2. **Layout que se adapta à tela** (`index.html`). `--bt-h/--dp-h/--rr-h` eram px cravados
+   (94+252+286 = 632px de UI fixa em qualquer tela); viraram `clamp(piso, vh, teto)`, com os
+   **tetos iguais aos valores antigos** — em 1920x1080 o layout fica idêntico, e a transmissão do
+   vídeo não muda. Ponto de corte em 900px para tela estreita.
+3. **A barra de controlo desceu** (`index.html`). Tinha 1627px de largura FIXA (estourava
+   qualquer tela abaixo disso, 433% num telemóvel) e era empurrada para o meio do mapa. Agora
+   quebra linha, tem teto de largura que respeita as colunas do rodapé, e fica em `bottom: 14px`
+   — o centro de baixo já estava livre desde 24/08, quando a `#replaybar` desceu.
+4. **Bug pré-existente corrigido:** `#zoombar` não tinha `position: fixed` (dependia da classe
+   `.hud`, que o elemento nunca teve) — os botões de zoom caíam no fluxo normal, **abaixo da
+   dobra e sem clique possível**.
+
+Verificado com `getBoundingClientRect()` em 5 resoluções (375x812, 1280x720, 1366x768,
+1920x1080, 3840x2160): **0 sobreposições, 0 elementos fora da tela**. Suíte verde.
 
 - **LOTES A→D** — instrumentação, prompt P3, visão de mapa, diagnóstico+memória.
 - **LOTE E** — fairness do turno: ordens simultâneas (A1), interceptação na chegada (A3),

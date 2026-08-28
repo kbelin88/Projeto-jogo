@@ -16,6 +16,12 @@
     text-shadow: 1px 1px 2px #000; font-size: 13px; user-select: none;
   }
   #zoombar {
+    /* 28/08: FALTAVA `position: fixed`. As regras de `bottom`/`right` dependiam
+       da classe `.hud` (que traz o position), e o <div id="zoombar"> nunca a
+       teve — entao os botoes de zoom caiam no fluxo normal, no fim do
+       documento, ABAIXO DA DOBRA e sem clique possivel. Achado ao auditar o
+       item 2; e um caso literal do "nao consigo clicar em alguns lugares". */
+    position: fixed;
     bottom: 10px; right: 10px; pointer-events: auto;
     display: flex; flex-direction: column; gap: 6px;
   }
@@ -228,6 +234,16 @@
     pointer-events: auto; display: flex; align-items: center; gap: 8px;
     background: rgba(40,28,14,.82); border: 2px solid #6b4a22; border-radius: 8px;
     padding: 6px 10px; color: #f5e9c8; text-shadow: 1px 1px 2px #000; user-select: none;
+    /* 28/08: os 14 controles numa linha unica somavam 1627px FIXOS — estouravam
+       QUALQUER tela abaixo disso (127% num notebook, 433% num telemovel), e os
+       controles das pontas ficavam fisicamente FORA da tela, sem clique. Com
+       wrap + teto de largura, a barra encolhe em vez de transbordar. */
+    flex-wrap: wrap; justify-content: center;
+    /* O teto de largura respeita as DUAS COLUNAS do rodape (.rr-q, 10% cada
+       com piso de 178px), que ficam nas bordas e na mesma faixa vertical desta
+       barra agora que ela desceu. Sem isto, descer a barra so trocaria um
+       problema de sobreposicao por outro. */
+    max-width: calc(100vw - 2 * max(10vw, 178px) - 30px);
   }
   .selrei { font: 12px 'Trebuchet MS', sans-serif; background: #2b1a0a; color: #f0e3c0;
     border: 1px solid #6b4a22; border-radius: 5px; padding: 2px; }
@@ -297,7 +313,22 @@
      o mapa ficar com o centro, altura sobrando para o texto e as metricas. */
   /* 25/08: caixas mais altas e letra maior — em tela cheia a leitura estava
      ruim e sobrava espaco vertical em ambas. */
-  :root { --bt-h: 94px; --dp-h: 252px; --dp-w: 20%; --rr-h: 286px; --rr-w: 10%; }
+  /* ALTURAS DOS PAINEIS FIXOS (28/08: eram px cravados).
+     Eram 94 + 252 + 286 = 632px de UI fixa, em QUALQUER tela. Num notebook de
+     720-768px de altura isso e 82-88% da tela so de painel, e a #gamebar (que
+     se posicionava a partir de --rr-h) era empurrada para o MEIO do mapa —
+     medido: 5px de sobreposicao real com o #depoTopo em 1280x720, e o ponto de
+     ruptura em 725px de altura de viewport.
+     Agora sao proporcionais, com PISO (nao somem em tela baixa) e TETO (nao
+     incham em TV). Os tetos sao os valores antigos, entao em 1920x1080 — a tela
+     para a qual a transmissao foi desenhada — o layout fica IDENTICO. */
+  :root {
+    --bt-h: clamp(62px, 8.7vh, 94px);
+    --dp-h: clamp(132px, 23.3vh, 252px);
+    --dp-w: 20%;
+    --rr-h: clamp(150px, 26.5vh, 286px);
+    --rr-w: 10%;
+  }
   #espA, #espB { display: none !important; }
   /* o placar antigo so mostrava turno + status; o turno mudou-se para a barra
      nova, sobra a linha de status, sem moldura, logo abaixo dela. */
@@ -455,7 +486,14 @@
      A barra e o rodape sao `fixed` e ocupam as duas faixas onde varios
      controlos moravam. Em vez de os mover no HTML (e arriscar os smokes),
      empurram-se por CSS para fora das faixas novas. */
-  #gamebar { bottom: calc(var(--rr-h) + 12px); }      /* cockpit acima do rodape */
+  /* 28/08: a #gamebar DESCE para o pe da tela (pedido do Lucas: "menor e
+     embaixo"). O empurrao antigo — bottom: calc(var(--rr-h) + 12px) — existia
+     para desviar do rodape, mas o rodape de hoje sao DUAS COLUNAS ESTREITAS nas
+     bordas (.rr-q, 10% cada) com pointer-events:none no meio: o centro de baixo
+     esta livre. E a mesma decisao que a #replaybar ja tinha tomado em 24/08 e
+     que a #gamebar nunca acompanhou. */
+  #gamebar { bottom: 14px; }
+
   #editorbar { bottom: calc(var(--rr-h) + 102px); }    /* acima do cockpit, nao por cima do Play */
   /* 24/08: a barra de replay volta ao pe da tela. O empurrao daqui era para
      desviar do rodape ANTIGO, que atravessava a largura toda; hoje o benchmark
@@ -464,6 +502,38 @@
   #banner { top: calc(var(--bt-h) + var(--dp-h) + 12px); }  /* abaixo da barra E do depoimento */
   body.replay #banner, body.cinema #banner { top: calc(var(--bt-h) + var(--dp-h) + 12px); }
   #zoombar { bottom: calc(var(--rr-h) + 12px); }
+
+  /* TELA ESTREITA (28/08). Abaixo de ~900px de largura as duas colunas do
+     rodape (178px de piso cada) mais a barra nao cabem na mesma faixa: o teto
+     `100vw - 2*178 - 30` fica NEGATIVO e a #gamebar colapsa numa coluna de
+     24px de largura por 627 de altura (medido em 375x812). Nessa faixa o
+     empilhamento volta a ser vertical: o rodape encolhe e a barra sobe para
+     cima dele, usando a largura toda. Vem DEPOIS das regras acima de proposito:
+     mesma especificidade, entao quem decide e a ordem no arquivo.
+     Ninguem RODA uma partida no telemovel — mas o Lucas disse que gente vai
+     ASSISTIR nele, e assistir com a interface quebrada tambem nao serve. */
+  @media (max-width: 900px) {
+    .rr-q { min-width: 0; width: 47%; }
+    .dp-q { min-width: 0; width: 47%; }
+    #gamebar {
+      max-width: calc(100vw - 20px);
+      bottom: calc(var(--rr-h) + 10px);
+      /* com 14 controles quebrando em muitas linhas, a barra chegava a 312px
+         de altura — quase toda a faixa de mapa que sobra num telemovel
+         (338px). Com teto + rolagem ela deixa de engolir a tela; quem
+         precisar dos controles de baixo rola dentro dela. */
+      max-height: 30vh; overflow-y: auto; overflow-x: hidden;
+    }
+    /* a barra ocupa quase toda a faixa central em tela estreita; estes dois
+       saem da frente dela. O editor de mapa e ferramenta de autoria (so faz
+       sentido com rato e tela grande) e some; o zoom continua util para quem
+       assiste, e sobe para debaixo do depoimento. */
+    #editorbar { display: none; }
+    #zoombar {
+      bottom: auto; top: calc(var(--bt-h) + var(--dp-h) + 10px);
+      flex-direction: row;
+    }
+  }
   /* MODO CINEMA: a barra e o rodape SAO a transmissao — ficam. O resto some. */
   body.cinema #editorbar, body.cinema #banner { }
 

@@ -2252,11 +2252,35 @@
     const donoDe = {};
     for (const m of visao.minhas) donoDe[m.id] = me;
     for (const a of visao.alvos) donoDe[a.id] = a.dono;
+    const ehFronteira = (id) => (adj[id] || []).some((v) => donoDe[v] === inimigo);
     const fronteiraTag = (a) => {
       const inimigos = (adj[a.id] || []).filter((v) => donoDe[v] === inimigo);
       if (!inimigos.length) return " | INTERIOR (no enemy border)";
       const lista = inimigos.slice(0, 2).map((v) => `[${v}]`).join(", ");
       return ` | BORDER with ${lista}${inimigos.length > 2 ? ` +${inimigos.length - 2}` : ""} (enemy)`;
+    };
+    // A aldeia PROPRIA de fronteira mais proxima, e o tempo de marcha ate ela
+    // pelos tres passos. null quando a propria aldeia ja e fronteira, quando o
+    // Rei ainda nao tem nenhuma fronteira (reino em expansao, sem contato), ou
+    // quando o mapa nao tem custo autoral.
+    const rotaParaFronteira = (a) => {
+      if (!temRede || !porCusto) return null;
+      if (ehFronteira(a.id)) return null;
+      let melhor = null;
+      for (const m of visao.minhas) {
+        if (m.id === a.id || !ehFronteira(m.id)) continue;
+        const cam = caminhoEntre(shim, a.id, m.id);
+        if (!cam) continue;
+        const peso = pesoRota(shim, cam);
+        if (!melhor || peso < melhor.peso) melhor = { peso, cam, m };
+      }
+      if (!melhor) return null;
+      return {
+        id: melhor.m.id, nome: melhor.m.nome,
+        lento: turnosDeCaminho(shim, melhor.cam, { lanceiro: 1 }),
+        medio: turnosDeCaminho(shim, melhor.cam, { arqueiro: 1 }),
+        rapido: turnosDeCaminho(shim, melhor.cam, { cavaleiro: 1 }),
+      };
     };
     for (const a of minhasOrd) {
       const nome = a.nome ? ` ${a.nome}` : "";
@@ -2268,6 +2292,22 @@
       if (visao.transito) for (const mv of visao.transito) if (mv.origemId === a.id && mv.dono === me) { for (const t of TIPOS) emMarcha[t] += (mv.tropas[t] || 0); temMarcha = true; }
       if (temMarcha && (emMarcha.lanceiro + emMarcha.arqueiro + emMarcha.cavaleiro) > 0)
         L.push(`    already marching out (NOT available): ${compEN(emMarcha)}`);
+      // DISTANCIA DA RETAGUARDA A FRONTE (28/08). O relatorio ja pre-calculava
+      // tempo de marcha para aldeias ALVO, mas NUNCA entre duas aldeias
+      // PROPRIAS — entao um Rei que quisesse mover tropa do interior para a
+      // fronteira nao tinha esse numero em lugar nenhum. Medido em 53 replays:
+      // um terco da forca fica parada nas aldeias de partida a partida inteira,
+      // e nao cai quando a frente se afasta.
+      //
+      // Informa, NAO recomenda: diz quanto CUSTA chegar, nunca que se deva ir.
+      // O numero sai de turnosDeCaminho sobre a rota INTEIRA — a mesma conta do
+      // motor, arredondada uma vez so (por isso nao da para por peso por
+      // aresta na rede: tres arestas de "1t" nao somam 3 turnos).
+      const rota = rotaParaFronteira(a);
+      if (rota) {
+        L.push(`    from here to your nearest border village [${rota.id}]${rota.nome ? " " + rota.nome : ""}: ` +
+          `${rota.lento} slow / ${rota.medio} medium / ${rota.rapido} fast turns`);
+      }
       if (a.construindo.length) {
         const cont = {}; let maxT = 0;
         for (const c of a.construindo) { cont[c.tipo] = (cont[c.tipo] || 0) + 1; maxT = Math.max(maxT, c.turnosRestantes); }
@@ -2336,6 +2376,16 @@
       for (const m of visao.minhas) nomePorId[m.id] = m.nome;
       for (const a of visao.alvos) nomePorId[a.id] = a.nome;
       const ids = Object.keys(adj).map(Number).sort((x, y) => x - y);
+      // A rede fica TOPOLOGIA PURA, de proposito.
+      //
+      // Tentei (28/08) por o tempo de marcha em cada aresta aqui e REVERTI: com
+      // escalaMarcha 0.2 quase toda aresta isolada arredonda para "1 turno", e
+      // tres arestas de "1t" somariam 3 na cabeca do modelo quando a rota
+      // inteira leva 2 (o motor soma os CUSTOS e so entao arredonda, uma vez
+      // so). Seria um numero que o decisor le e o motor nao executa — a
+      // regressao que ja mordeu o projeto tres vezes (CLAUDE.md 6). O tempo de
+      // marcha entre aldeias PROPRIAS entra na secao YOUR VILLAGES, calculado
+      // pelo turnosDeCaminho sobre a rota inteira.
       for (const id of ids) {
         const nm = nomePorId[id] ? " " + nomePorId[id] : "";
         L.push(`[${id}]${nm}${conhecidoDe(id)}: ${(adj[id] || []).map((v) => `[${v}]`).join(", ")}`);
