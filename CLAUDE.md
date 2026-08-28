@@ -250,7 +250,49 @@ Funciona com a partida pausada, a correr e dentro de um replay. Trancado por
 
 ---
 
-## 7. Estado atual (28/08/2026)
+## 7. Estado atual (28/08/2026, fim do dia)
+
+### A pasta foi reorganizada (28/08)
+
+A raiz tinha 31 ficheiros `.md` e 45+ entradas; ficou com **27 entradas** e o que está
+**vivo**. Tudo o resto foi para **`arquivo/`** — nada apagado. Ver `arquivo/LEIA-ME.md`.
+
+⚠️ **Três coisas NÃO saíram da raiz, e mover qualquer uma parte algo:**
+- **`mapa-ajustes.js`** — o `index.html:861` carrega-o por `<script src>` e o editor grava-o de
+  volta na raiz. Chegou a ser movido nesta limpeza. Um `<script>` que dá 404 **falha em
+  silêncio**: o jogo abre na mesma e os ajustes do mapa desaparecem sem uma linha de erro.
+- **`checkpoints/`** — caminho de escrita cravado no `servir.py:87`.
+- **`docs/`** — dois comentários de código apontam para `docs/ACHADO_..._truncamento_ollama.txt`.
+
+Ficheiros vivos na raiz: `CLAUDE.md`, `README.md`, `MODELOS_ARENA.md`, `ANTES_DO_MES_PAGO.md`,
+`PLANO_DIA_*`, `HANDOFF_*`.
+
+### Ferramentas novas (28/08)
+
+- **`ferramentas/dump-modelos-free.js`** — gera `modelos_free_openrouter.txt` do catálogo AO
+  VIVO. Existe porque o dump era manual e por isso ficou 10 dias parado enquanto o catálogo
+  rodava por baixo. Conferir o catálogo é o passo 1 de toda bateria.
+- **`ferramentas/medir-tropa-inicial.js`** — a métrica das aldeias de partida (ver §7 item 1).
+  Validada contra a linha de base antes de ser usada.
+- **`testes_arena/Smoke8estrada.js`** — tranca os quatro canais do combate de estrada e
+  confronta os 19 campos que a UI lê contra um evento real do motor.
+
+### Combate de estrada: o jogo passou a mostrá-lo (28/08)
+
+Acontecia e não aparecia — 16 combates nas duas partidas do vídeo, nenhum visto. Quatro canais
+do `index.html` excluíam o evento pela mesma condição `e.tipo !== "combate"`. Agora todos o
+tratam; o evento do motor ganhou campos aditivos (origem/destino dos dois exércitos, forças
+efetivas, composição aniquilada, baixas do vencedor); a câmera tem prioridade
+**conquista > combate de estrada > assalto repelido** e aponta ao ponto da estrada.
+
+**A cena** são duas batidas: choque em raios de DUAS cores (0 ms) e o estandarte do perdedor a
+tombar (350 ms). **Não usa anel nem número flutuante** — em 25/08 o Lucas tirou os dois da
+conquista ("círculos piscando e número de tropas mortas poluem o momento").
+⚠️ **O aspeto nunca foi visto por ninguém** — é o item 1 do `ANTES_DO_MES_PAGO.md`.
+
+---
+
+## 7.0 Estado anterior (28/08/2026, manhã)
 
 ✅ **`main` está em dia e sincronizada com `origin/main`.** A `spec-lote-e-fairness` já foi
 mesclada. As 4 branches não mescladas (`exp-cautela-2x2`, `exp-duas-fases`, `exp-exemplo-ancora`,
@@ -285,6 +327,16 @@ duas conclusões erradas do relatório original). Três implementadas; a quarta 
    INTERIOR passa a mostrar `from here to your nearest border village [id]: N slow / N medium /
    N fast turns`. Medido em 53 replays: **um terço da força de um rei fica parada nas aldeias de
    partida a partida inteira**, e o relatório nunca dava o custo de mover entre aldeias próprias.
+   ⚠️ **Há DUAS métricas parecidas e elas não são a mesma** — a troca já enganou uma vez:
+   **INICIAIS** (capital + anel 1) = 34.1%, e é esta a afirmação acima, medida por
+   `ferramentas/medir-tropa-inicial.js`; **INTERIOR** (aldeia sem vizinho inimigo) = 53.8%,
+   medida por `pesquisa/2026-08-28/experimentos/medir-retaguarda.js`. Uma aldeia conquistada no
+   meio do mapa é INTERIOR mas não é inicial.
+   **Medida em 28/08** (repetição exata das duas partidas do vídeo, único delta = esta linha):
+   30.3% → **25.2%**, e o ganho está quase todo na ABERTURA (38.6% → 23.5%); o fim de partida
+   praticamente não mexeu. Direção consistente em 2 de 2 seeds, mas **n=2 e as duas referências
+   diferem entre si em 20 pontos** — sugestivo, não estabelecido. Ver
+   `resultados/p4-bateria-0828/DIARIO.md`.
    ⚠️ **Uma primeira versão pôs o peso em cada ARESTA da rede e foi revertida**: com
    `escalaMarcha 0.2` quase toda aresta arredonda para "1t", e três "1t" fariam o modelo esperar
    3 turnos onde a rota leva 2 (o motor soma os custos e arredonda **uma vez só**). Era um número
@@ -376,10 +428,10 @@ em 18/08; o P4 parece ter resolvido, falta confirmar num relatório;
 turnos de um lado do espelho);
 (e) cliente OpenRouter **duplicado** (`rei.js` × `index.html`) — a dívida continua;
 (f) 2 chaves expostas em 03/08 por revogar;
-(g) `main` por consolidar + ~84 ficheiros por commitar;
-(h) **`analisar-log.js` ainda não separa a taxa de counter por tipo de alvo** (neutra vs
-inimigo) — é a recomendação nº 1 do relatório de 18/08 e não foi feita; sem ela, os números de
-counter das baterias novas são agregados e não comparáveis com os de 17/08.
+(g) ~~`main` por consolidar~~ — **feito**: `main` limpa e sincronizada (28/08);
+(h) ~~counter por tipo de alvo no `analisar-log.js`~~ — **estava feito desde 20/08** e a nota é
+que ficou para trás. É `counterPorAlvoDe` (`analisar-log.js:383`); exige o `.replay.json` como
+2º argumento, senão o relatório diz "indisponível: sem replay". Confirmado a correr em 28/08.
 
 **Orçamento OpenRouter pago: ESGOTADO** (HTTP 403 no turno 25 de 17/08; recarrega ~fim de
 agosto). Desde então tudo corre em modelos **`:free`**, com teto de **20 req/min e 1000/dia** —
