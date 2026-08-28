@@ -148,8 +148,16 @@ function logEventos(estado, turno) {
       l2.push(`COMBATE [${e.alvoId}] ${e.alvoNome}: atacante ${e.atacante} Fatk=${e.Fatk} (ef ${e.FatkEf}) Fdef=${e.Fdef} (ef ${e.FdefEf}) vant=${e.vantagem} -> vence ${e.vencedor}${e.conquista ? " (CONQUISTA)" : ""} | baixas~${e.baixasForca}`);
     else if (e.tipo === "reforco")
       l2.push(`REFORCO [${e.alvoId}] ${e.alvoNome} dono ${e.dono}: ${compStrG(e.tropas)}`);
-    else if (e.tipo === "combate_estrada")
-      l2.push(`COMBATE-ESTRADA atacante ${e.atacante} vs ${e.defensor} Fatk=${e.Fatk} Fdef=${e.Fdef} vant=${e.vantagem} -> vence ${e.vencedorDono}`);
+    else if (e.tipo === "combate_estrada") {
+      // 28/08: o evento passou a carregar ONDE foi (o trecho, nao a rota de cada
+      // um) e o que se perdeu. O runner e quem produz os logs das baterias — se
+      // ficar com a linha antiga, o headless mede menos que o browser.
+      const nome = (id) => { const a = Engine.aldeiasDe(estado, "A").concat(Engine.aldeiasDe(estado, "B"), Engine.aldeiasDe(estado, null)).find((v) => v.id === id); return `[${id}]${a && a.nome ? " " + a.nome : ""}`; };
+      const trecho = e.trechoDeId != null ? `no trecho ${nome(e.trechoDeId)}-${nome(e.trechoParaId)}` : "(trecho nao registado)";
+      l2.push(`COMBATE-ESTRADA ${trecho}: ${e.atacante} (ia ${nome(e.atkOrigemId)}->${nome(e.atkDestinoId)}) vs ${e.defensor} (ia ${nome(e.defOrigemId)}->${nome(e.defDestinoId)})` +
+        ` Fatk=${e.Fatk} (ef ${e.FatkEf}) Fdef=${e.Fdef} (ef ${e.FdefEf}) vant=${e.vantagem} -> vence ${e.vencedorDono}` +
+        ` | exercito de ${e.perdedorDono} ANIQUILADO (${compStrG(e.perdedorTropas)}) | vencedor perdeu ${e.baixasVencedor}`);
+    }
   }
   const f = (d) => Engine.aldeiasDe(estado, d).reduce((s, a) => s + Engine.contarTropas(a.tropas), 0);
   const tr = (d) => estado.movimentos.filter((m) => m.dono === d).length;
