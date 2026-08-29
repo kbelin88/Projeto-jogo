@@ -35,7 +35,11 @@ ok("extraiu gerarOpenRouter (com MAX_TENT_OR)", !!src);
 let esperas=[], chamadas=0, plano=[];
 const sandbox={
   espera:(ms)=>{ esperas.push(ms); return Promise.resolve(); },
-  ultimoEnvioOR:0, throttlesUltimaChamada:0, tempLLM:0, maxTokensLLM:32000,
+  ultimoEnvioOR:0, throttlesUltimaChamada:0, tempLLM:0, maxTokensLLM:128000,
+  // 29/08: o teto de resposta passou a ser alto e AUTO-AJUSTAVEL — o cliente
+  // aprende o limite do modelo com o HTTP 400 dele. As duas vivem fora da
+  // funcao extraida, entao o sandbox tem de as fornecer.
+  TETO_ALTO_LLM:128000, tetoPorModelo:{},
   openrouterKey:"k", OPENROUTER_URL:"http://x",
   msUltimaChamada:null, tokensUltimaChamada:null, finishUltimaChamada:null,
   finishNativoUltimaChamada:null, erroUltimaChamada:null, modoRacUltimaChamada:null,
@@ -46,7 +50,7 @@ const sandbox={
   },
 };
 const fab=new Function(...Object.keys(sandbox), src+"; return gerarOpenRouter;");
-const run=async(pl)=>{ chamadas=0; esperas=[]; plano=pl; sandbox.throttlesUltimaChamada=0;
+const run=async(pl)=>{ chamadas=0; esperas=[]; plano=pl; sandbox.throttlesUltimaChamada=0; sandbox.tetoPorModelo={};
   const g=fab(...Object.values(sandbox));
   try { const r=await g("prompt","m"); return {ok:true, r}; } catch(e){ return {ok:false, erro:e.message}; } };
 
@@ -74,6 +78,19 @@ const run=async(pl)=>{ chamadas=0; esperas=[]; plano=pl; sandbox.throttlesUltima
   ok("HTTP 400 falha de imediato (nao e throttle)", !r.ok && chamadas===1, `chamadas=${chamadas}`);
 
   // 6. a retentativa de TURNO existe e nao repete o parse
+  // 29/08 — TETO AUTO-AJUSTAVEL. Pedimos max_tokens alto de proposito; um modelo
+  // de contexto pequeno recusa com HTTP 400 e DIZ o limite dele. O cliente tem de
+  // aprender com o erro e repetir, em vez de matar a partida — foi assim que o
+  // liquid/lfm-2.5-2.6b (contexto 65536) passou a jogar.
+  // ⚠️ NAO pode virar um retry generico de 400: um 400 sem essa mensagem continua
+  // a falhar de imediato (o teste acima guarda isso).
+  const corpo400 = JSON.stringify({error:{message:"This endpoint's maximum context length is 65536 tokens. However, you requested about 128002 tokens (2 of text input, 128000 in the completion)."}});
+  r = await run([{ok:false,status:400,corpo:corpo400},{ok:true}]);
+  ok("HTTP 400 de contexto: aprende o teto e REPETE (nao mata a partida)", r.ok, `chamadas=${chamadas}`);
+  ok("o teto aprendido cabe no contexto do modelo e nao e ridiculo",
+    sandbox.tetoPorModelo.m > 4096 && sandbox.tetoPorModelo.m < 65536,
+    "teto=" + sandbox.tetoPorModelo.m);
+
   ok("existe deliberarComRetentativa", /async function deliberarComRetentativa/.test(html));
   ok("o passoTurnoDuelo usa a versao com retentativa",
      /deliberarComRetentativa\("A"[\s\S]{0,200}deliberarComRetentativa\("B"/.test(html));

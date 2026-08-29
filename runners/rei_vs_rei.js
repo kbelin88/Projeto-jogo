@@ -146,8 +146,8 @@ out("condicoes: ambiente=" + (cfg.layout || "v1") + " | temp=0 | prompt=" +
   (cfg.promptP4 === true ? "P4 EN (esquema declarado, sem exemplo, sem minimos, vitoria real, reforco, quantidade)" : "P2 (minimo por alvo)") +
   (cfg.fogOfWar === true ? " + FOG OF WAR" : "") +
   " + combate v3 (atq/def, counter " + cfg.bonus_forca_triangulo + ") + clamp | " + regrasTxt +
-  " | thinking=on | max_tokens_resposta=" + (maxTokens || 32000) +
-  (maxTokens ? " (LEVANTADO por MAX_TOKENS_RESPOSTA)" : " (default)"));
+  " | thinking=on | max_tokens_resposta=" + (maxTokens || Rei.TETO_ALTO || 128000) +
+  (maxTokens ? " (fixado por MAX_TOKENS_RESPOSTA)" : " (default alto, auto-ajustavel por modelo)"));
 out("");
 
 function logEventos(estado, turno) {

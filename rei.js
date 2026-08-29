@@ -180,8 +180,14 @@ function clienteGemini(opcoes) {
 // ---- BACKEND: cliente OpenRouter (API OpenAI-compativel) — MESMA interface,
 // mesma disciplina do clienteGemini. Traz os modelos :free do OpenRouter p/ os
 // runners de linha de comando (antes so existia no index.html/browser).
+// Teto de resposta pedido por default (29/08). Alto de proposito: ver o bloco de
+// comentario em `tetoAjustado`, abaixo. Modelos que nao o suportam ensinam-nos o
+// deles no proprio erro, e o cliente ajusta-se sozinho.
+const TETO_ALTO = 128000;
+
 function clienteOpenRouter(opcoes) {
   opcoes = opcoes || {};
+  const silencioso = !!opcoes.silencioso;
   const modelo = opcoes.modelo || "nvidia/nemotron-3-super-120b-a12b:free";
   const temperatura = opcoes.temperatura != null ? opcoes.temperatura : 0;
   carregarEnv();
@@ -216,6 +222,23 @@ function clienteOpenRouter(opcoes) {
     nome: `openrouter:${modelo}`,
     ultimosTokens: null, // E3/1b — mesmo canal lateral dos outros clientes
     ultimoFinish: null,  // A1: finish_reason ("length" = truncou no teto de tokens)
+    // TETO DE RESPOSTA (29/08). Era 32000 fixo. Medido na P5 vs P6 de 28/08: o
+    // mesmo modelo, o mesmo adversario e a mesma seed, mudando SO o teto —
+    // 32000 perdeu 6x18 no T23; 64000 segurou os 40 turnos em 10x14 e com mais
+    // tropas. Um modelo estava a ser descartado por uma configuracao NOSSA.
+    //
+    // Decisao do Lucas (29/08): nao perder jogos por causa do teto. Pede-se ALTO.
+    //
+    // Mas alto e FIXO nao serve: 128000 rebenta em modelos de contexto pequeno
+    // (o liquid/lfm-2.5-2.6b tem 65536 de contexto TOTAL e devolve HTTP 400). E
+    // os fornecedores nao sao consistentes — o ling, com teto de saida 32768,
+    // aceita 128000 em silencio.
+    //
+    // A saida e que o proprio erro diz o limite: "This endpoint's maximum
+    // context length is 65536 tokens. However, you requested about 128002".
+    // Pede-se alto e, se recusarem, recalcula-se a partir do que ELES disseram e
+    // repete-se. Auto-corrige, sem depender de catalogo nem de tabela nossa.
+    tetoAjustado: null,  // lembrado por cliente: so se aprende o limite UMA vez
     async gerar(prompt) {
       for (let tentativa = 1; ; tentativa++) {
         await respeitarPiso();
@@ -229,9 +252,9 @@ function clienteOpenRouter(opcoes) {
             temperature: temperatura,
             stream: false,
             reasoning: { enabled: true }, // thinking sempre-ligado
-            // LOTE C, E1: teto explicito e IGUAL p/ os dois lados. Nao e p/ cortar o
-            // raciocinio (32000 > max observado 27764), e p/ tornar o corte visivel.
-            max_tokens: (opcoes.maxTokens != null ? opcoes.maxTokens : 32000),
+            // LOTE C, E1: teto explicito e IGUAL p/ os dois lados, p/ o corte ser
+            // visivel. 29/08: o valor subiu de 32000 para TETO_ALTO (ver acima).
+            max_tokens: this.tetoAjustado || (opcoes.maxTokens != null ? opcoes.maxTokens : TETO_ALTO),
           }),
         });
         if (resp.ok) {
@@ -250,6 +273,20 @@ function clienteOpenRouter(opcoes) {
           return { texto: msg.content || "", raciocinio };
         }
         const corpo = await resp.text().catch(() => "");
+        // O fornecedor recusou o teto e DISSE qual e o dele: aprende e repete.
+        // Nao conta como tentativa de rede — nao houve falha de rede, houve um
+        // pedido mal dimensionado nosso. Aprende-se uma vez por cliente.
+        const lim = /maximum context length is (\d+)/.exec(corpo);
+        if (resp.status === 400 && lim && !this.tetoAjustado) {
+          const ctx = parseInt(lim[1], 10);
+          const pedido = /you requested about (\d+)/.exec(corpo);
+          // o input ja gasto = o que pedimos menos o teto de saida que pedimos
+          const entrada = pedido ? Math.max(0, parseInt(pedido[1], 10) - (opcoes.maxTokens != null ? opcoes.maxTokens : TETO_ALTO)) : 0;
+          this.tetoAjustado = Math.max(4096, ctx - entrada - 2048); // 2048 de folga
+          if (!silencioso) console.error(`  [teto] ${modelo}: contexto ${ctx}; teto de resposta ajustado para ${this.tetoAjustado}`);
+          tentativa--; // este ciclo nao gastou tentativa de rede
+          continue;
+        }
         const recuperavel = resp.status === 429 || resp.status === 503;
         if (!recuperavel || tentativa >= maxTentativas) {
           throw new Error(`OpenRouter HTTP ${resp.status}: ${corpo}`);
@@ -544,4 +581,4 @@ async function rodarPartidaRei(opcoes) {
   };
 }
 
-module.exports = { clienteOllama, clienteGemini, clienteOpenRouter, criarCliente, carregarEnv, criarReiIA, decidirRei, decidirReiComposto, montarPromptValidador, avaliarCounter, rodarPartidaRei };
+module.exports = { TETO_ALTO, clienteOllama, clienteGemini, clienteOpenRouter, criarCliente, carregarEnv, criarReiIA, decidirRei, decidirReiComposto, montarPromptValidador, avaliarCounter, rodarPartidaRei };

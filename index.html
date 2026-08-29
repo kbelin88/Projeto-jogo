@@ -3076,7 +3076,7 @@
       const resp = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + openrouterKey },
-        body: JSON.stringify({ model: modelo, messages: [{ role: "user", content: prompt }], temperature: tempLLM, stream: false, reasoning: { enabled: true }, max_tokens: (typeof maxTokensLLM === "number" ? maxTokensLLM : 32000) }), // LOTE D, D2
+        body: JSON.stringify({ model: modelo, messages: [{ role: "user", content: prompt }], temperature: tempLLM, stream: false, reasoning: { enabled: true }, max_tokens: (tetoPorModelo[modelo] || (typeof maxTokensLLM === "number" ? maxTokensLLM : TETO_ALTO_LLM)) }), // LOTE D, D2; teto auto-ajustavel 29/08
       });
       if (resp.ok) {
         const data = await resp.json();
@@ -3102,6 +3102,21 @@
         return { texto: msg.content || "", raciocinio };
       }
       const corpo = await resp.text().catch(() => "");
+      // TETO RECUSADO (29/08): pedimos alto de proposito (ver maxTokensLLM) e um
+      // modelo de contexto pequeno responde HTTP 400 dizendo qual e o limite dele
+      // — "This endpoint's maximum context length is 65536 tokens. However, you
+      // requested about 128002". Aprende-se com o erro e repete-se; nao gasta
+      // tentativa de rede, porque nao houve falha de rede: o pedido e que estava
+      // mal dimensionado. Aprende-se UMA vez por modelo, na tabela tetoPorModelo.
+      const lim = /maximum context length is (\d+)/.exec(corpo);
+      if (resp.status === 400 && lim && tetoPorModelo[modelo] == null) {
+        const ctx = parseInt(lim[1], 10);
+        const ped = /you requested about (\d+)/.exec(corpo);
+        const entrada = ped ? Math.max(0, parseInt(ped[1], 10) - maxTokensLLM) : 0;
+        tetoPorModelo[modelo] = Math.max(4096, ctx - entrada - 2048); // 2048 de folga
+        tentativa--;
+        continue;
+      }
       if ((resp.status !== 429 && resp.status !== 503) || tentativa >= MAX_TENT_OR) throw new Error("OpenRouter HTTP " + resp.status + ": " + corpo);
       throttlesUltimaChamada++;
       // HONRAR O Retry-After (17/08): o provedor DIZ quanto esperar, no header e no
@@ -3311,7 +3326,17 @@
   // LOTE D, D2: teto de resposta no browser como CONTROLO (nao cura). Acima do max
   // observado (27764) de proposito: raramente dispara; quando disparar, o D1 mostra
   // "finish length". Os 23 vazios da partida NAO eram truncamento (truncamentos 0).
-  let maxTokensLLM = 32000;
+  // TETO DE RESPOSTA (29/08). Era 32000. Medido na P5 vs P6 de 28/08: o MESMO
+  // modelo, adversario e seed, mudando so o teto — 32000 perdeu 6x18 no T23;
+  // 64000 segurou os 40 turnos em 10x14 e com mais tropas. Estavamos a descartar
+  // um modelo por uma configuracao NOSSA. Decisao do Lucas: nao perder jogos por
+  // causa do teto.
+  // Alto e FIXO nao serve: 128000 rebenta em modelos de contexto pequeno. Mas o
+  // erro deles diz o limite, entao o cliente aprende e ajusta-se (ver o 400 mais
+  // abaixo, em gerarOpenRouter).
+  const TETO_ALTO_LLM = 128000;
+  const tetoPorModelo = {};   // modelo -> teto aprendido com o HTTP 400 dele
+  let maxTokensLLM = TETO_ALTO_LLM;
   try {
     const q = new URLSearchParams((window.location && window.location.search) || "");
     if (q.has("temp")) { const v = parseFloat(q.get("temp")); if (isFinite(v) && v >= 0) tempLLM = v; }
