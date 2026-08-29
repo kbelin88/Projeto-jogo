@@ -11,11 +11,19 @@
 // chegou a jogar. O sinal ja estava na sonda de 3 turnos (8953 -> 29303) e
 // ninguem olhou para ele, porque se estava a olhar para o relogio.
 //
-// ⚠️ O TETO E NOSSO, nao do modelo: max_tokens 32000, em rei.js:234 e
-// index.html:3314. Um modelo cujo teto proprio (catalogo) seja maior AINDA ASSIM
-// e cortado nos 32000 — nesse caso levantar o nosso teto pode salva-lo. Se o teto
-// proprio for parecido com o nosso, nao ha o que fazer: e verboso demais para o
-// orcamento que tem.
+// ⚠️ O TETO EFETIVO E O MENOR de dois: o do CLIENTE (default 32000, rei.js:234 e
+// index.html:3314; pode ser levantado com MAX_TOKENS_RESPOSTA) e o do MODELO, do
+// catalogo. Se quem prende for o cliente, levantar salva; se for o modelo, nao.
+//
+// O teto do cliente e lido do CABECALHO de cada log, nao assumido: a P6 de 28/08
+// correu a 64000 e a 1a versao desta ferramenta reportava "107% do teto" contra
+// os 32000 cravados aqui. Um instrumento que assume a sua propria configuracao
+// mente exatamente na experiencia que existe para medir.
+//
+// PROVADO na P5 vs P6 (mesmo confronto, so o teto muda): a 32000 o minimax-m3
+// perdia 6x18 no T23 com 36% dos turnos cortados; a 64000 chegou ao limite dos
+// 40 turnos em 10x14, com 11% cortados e MAIS TROPAS que o adversario.
+// Um modelo pode ser descartado por uma configuracao nossa.
 //
 // USO:
 //   node ferramentas/folga-de-saida.js <log.txt> [<log.txt> ...]
@@ -46,13 +54,20 @@ if (!alvos.length) { console.error("uso: node ferramentas/folga-de-saida.js <log
 const porModelo = {};
 for (const f of alvos) {
   let mod = null;
-  for (const L of fs.readFileSync(f, "utf8").split("\n")) {
+  const texto = fs.readFileSync(f, "utf8");
+  // O TETO DESTA PARTIDA, do cabecalho — nao o default. Sem isto a ferramenta
+  // mente numa partida corrida com MAX_TOKENS_RESPOSTA levantado: a P6 de 28/08
+  // correu a 64000 e ela reportava "107% do teto" contra os 32000 cravados aqui.
+  // O cabecalho passou a registar o valor exatamente para este caso.
+  const tetoDoLog = (/max_tokens_resposta=(\d+)/.exec(texto) || [])[1];
+  const tetoCliente = tetoDoLog ? +tetoDoLog : TETO_NOSSO;
+  for (const L of texto.split("\n")) {
     const h = /^#+ TURNO \d+ — Rei [AB] \(openrouter:([^)]*)\)/.exec(L);
     if (h) { mod = h[1]; continue; }
     const t = /resposta (\d+) \| raciocinio (\d+) \| finish (\w+)/.exec(L);
     if (t && mod) {
-      const d = (porModelo[mod] = porModelo[mod] || { resp: [], cortados: 0, n: 0 });
-      d.resp.push(+t[1]); d.n++;
+      const d = (porModelo[mod] = porModelo[mod] || { resp: [], cortados: 0, n: 0, tetos: new Set() });
+      d.resp.push(+t[1]); d.n++; d.tetos.add(tetoCliente);
       if (t[3] === "length") d.cortados++;
     }
   }
@@ -68,9 +83,15 @@ for (const [m, d] of Object.entries(porModelo)) {
   // limite dele — foi o caso do liquid/lfm-2.5-2.6b (teto 8192, escrevia 8114:
   // 25% do teto nosso, 99% do que realmente tinha). A 1a versao desta ferramenta
   // dizia que ele estava confortavel.
-  const tetoEfetivo = Math.min(TETO_NOSSO, tetoModelo[m] || TETO_NOSSO);
+  // Se os logs deste modelo misturam tetos diferentes (ex.: a P5 a 32k e a P6 a
+  // 64k), usa o MAIOR e avisa — juntar as duas numa percentagem so nao significa
+  // nada. Analisar cada partida a parte e o certo.
+  const tetos = [...(d.tetos || [TETO_NOSSO])];
+  const tetoCliente = Math.max(...tetos);
+  const misturado = tetos.length > 1;
+  const tetoEfetivo = Math.min(tetoCliente, tetoModelo[m] || tetoCliente);
   linhas.push({
-    m, n: d.n, mdn, max: Math.max(...d.resp), tetoEfetivo,
+    m, n: d.n, mdn, max: Math.max(...d.resp), tetoEfetivo, misturado,
     usoTeto: mdn / tetoEfetivo,
     cortados: d.cortados / d.n,
     tetoProprio: tetoModelo[m] || null,
@@ -83,12 +104,13 @@ for (const [m, d] of Object.entries(porModelo)) {
 linhas.sort((a, b) => b.usoTeto - a.usoTeto);
 
 const pc = (x) => (x == null ? "   -" : (100 * x).toFixed(0) + "%");
-console.log(`teto do cliente: ${TETO_NOSSO} tokens de resposta (rei.js:234 / index.html:3314)\n`);
+console.log(`teto do cliente: lido do cabecalho de CADA log (default ${TETO_NOSSO}; MAX_TOKENS_RESPOSTA levanta-o)\n`);
 console.log("modelo".padEnd(48) + "  n  resp.med  teto ef  % teto  cortados  tendencia");
 for (const l of linhas) {
   // com n pequeno a mediana e fragil: avisa, mas nao com a mesma forca
   const forte = l.n >= 3;
-  const alerta = l.usoTeto >= 0.75 ? (forte ? "  <<< VAI MORRER NO TETO" : "  <<< encostado ao teto (n baixo)")
+  const alerta = l.misturado ? "  <<< LOGS COM TETOS DIFERENTES — analise cada partida a parte"
+               : l.usoTeto >= 0.75 ? (forte ? "  <<< VAI MORRER NO TETO" : "  <<< encostado ao teto (n baixo)")
                : (l.usoTeto >= 0.5 ? "  <<< margem curta" : "");
   console.log(
     l.m.padEnd(48) + String(l.n).padStart(3) + String(l.mdn).padStart(10) +

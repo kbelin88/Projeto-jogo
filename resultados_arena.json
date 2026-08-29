@@ -141,12 +141,12 @@
   "nota": "404 'unavailable for free' em 18/08, <24 h depois de verificado"
  },
  "minimax/minimax-m3:free": {
-  "estado": "SONDADO — OK",
-  "partidas": 0,
+  "estado": "TESTADO — salvavel levantando o teto",
+  "partidas": 2,
   "vitorias": 0,
-  "latenciaMediana": "85-160 s (sonda de 3 turnos)",
-  "formato": "ok — 2 de 2 turnos validos, com ordens nos dois",
-  "nota": "RESSUSCITOU: constava MORTO (404 em 18/08) e voltou ao catalogo; re-sondado em 28/08 e responde. O 3o turno caiu com 'terminated' no MESMO segundo que o ling-3.0-flash-fin (fornecedores diferentes) — causa comum de rede, nao do modelo. Raciocinio cresce depressa: 8310 -> 16441 tok entre T1 e T2."
+  "latenciaMediana": "260 s a 32k / 287 s a 64k (pico 565 s)",
+  "formato": "a 32000: 15 de 22 turnos com ordem, 36% cortados. A 64000: 34 de 39 com ordem, 11% cortados",
+  "nota": "O CASO QUE PROVOU que um modelo pode ser descartado por configuracao NOSSA. P5 (teto 32000): perdeu 6x18 no T23 por dominancia. P6 (mesmo confronto, mesma seed, so o teto muda para 64000): chegou ao limite dos 40 turnos em 10x14 e com MAIS TROPAS que o adversario (107 vs 94). O teto proprio dele e 943718 — 29x o nosso default; quem o cortava a meio do raciocinio eramos nos. CONTRAPARTIDA: 4h54 contra 2h12 pela mesma partida. Salvavel, mas caro em relogio. Todo modelo rejeitado por finish length no historico tem de ser re-julgado antes de ser descartado."
  },
  "liquid/lfm-2.5-2.6b:free": {
   "estado": "SONDADO — OK, mas throttled",
