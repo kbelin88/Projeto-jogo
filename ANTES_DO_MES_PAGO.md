@@ -72,7 +72,31 @@ Os 89,7% confirmam por outra via a amostragem da `REVISAO-OPUS` (18 de 20), agor
 com n=1 809 e numa população diferente (burro, não LLM). Duas amostras
 independentes a dar ~90% — a decisão de regra tem base.
 
-Porque está na lista: mudar regra **depois** de filmar invalida o material. Se a
+### Medido na P6 (29/08) — e isto BAIXA a prioridade deste item
+
+O Lucas assistiu à P6 e reparou em tropas a passar sem lutar. Medi as quatro
+explicações possíveis nessa partida:
+
+| o que é | ocorrências na P6 |
+|---|---|
+| exércitos em **estradas diferentes** que passam perto no mapa | **41** (a 150 px) |
+| exército **a sair** da aldeia no mesmo turno em que ela é atacada | **31** |
+| exército a **atravessar por dentro** de aldeia própria sob ataque | **2** |
+| cruzamento real que a amostragem de 1×/turno perdeu | **1 em 834 pares** |
+
+**As duas primeiras não são defeito.** Estradas diferentes nunca se cruzam de
+facto — só parecem, no desenho. E sair no turno em que se é atacado é a regra da
+simultaneidade a funcionar: o Rei deu a ordem sem saber do ataque.
+
+**O caso que motiva a decisão de regra são os 2.** Numa partida de 40 turnos.
+Continua por decidir, mas não é urgente como parecia — não vai estragar o vídeo.
+
+⚠️ **Não confundir com os 89,7%** medidos em 1 809 combates burro × burro: aquilo
+mede ONDE os combates de estrada acontecem (num trecho cuja ponta é aldeia própria
+de alguém, a meio da rota). Não mede "atravessou uma batalha". São coisas
+adjacentes e é fácil trocá-las.
+
+Porque continua na lista: mudar regra **depois** de filmar invalida o material. Se a
 regra vai mudar, muda antes das partidas pagas.
 
 ## 3. Contar com 2-3 h de relógio por partida, e um pico de 17 min num turno
