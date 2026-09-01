@@ -19,14 +19,18 @@ const prompt = (estado, opcoes) => E.montarPrompt(E.montarVisao(estado, "A", {})
 // --- 1. A flag: ligada por default, byte-identica quando desligada ---------
 t("1a default LIGADA: o prompt pede os dois campos", () => {
   const p = prompt(st());
-  assert.ok(/"plano"/.test(p), "prompt tem de pedir plano");
-  assert.ok(/"depoimento"/.test(p), "prompt tem de pedir depoimento");
+  // 01/09: as chaves do protocolo passaram a INGLES (plan/statement). A chave
+  // INTERNA continua plano/depoimento — o que este teste protege e o caminho,
+  // nao o nome: o plano volta, o depoimento nunca volta.
+  assert.ok(/"plan"/.test(p), "prompt tem de pedir plan");
+  assert.ok(/"statement"/.test(p), "prompt tem de pedir statement");
+  assert.ok(!/(plano|depoimento)/i.test(p), "nenhuma chave PT sobrou no prompt");
   assert.ok(/NOTE TO YOUR NEXT TURN/.test(p), "o plano e pedido como nota, nao como resumo (P4, ingles)");
 });
 t("1b flag OFF por opcoes: nenhum vestigio dos dois campos", () => {
   const p = prompt(st(), { resumosDoRei: false });
-  assert.ok(!/plano/i.test(p), "sem 'plano'");
-  assert.ok(!/depoimento/i.test(p), "sem 'depoimento'");
+  assert.ok(!/plano/i.test(p) && !/"plan"/.test(p), "sem 'plano'/'plan'");
+  assert.ok(!/depoimento/i.test(p) && !/statement/i.test(p), "sem 'depoimento'/'statement'");
 });
 t("1c flag OFF por config: o prompt bate BYTE A BYTE com o de opcoes off", () => {
   const porConfig = prompt(st({ resumosDoRei: false }));

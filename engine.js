@@ -2527,9 +2527,9 @@
     L.push(relatorioTextoP4(visao, Object.assign({}, opcoes, { semRejeicoes: rejNoFim })));
     L.push("");
     if (resumos) {
-      L.push("Besides your orders, write two short texts in English:");
-      L.push('- "plano": your NOTE TO YOUR NEXT TURN, 2 to 4 lines (anything past 600 characters is cut off). You will read it next turn. Write what you are trying to do, what you must not forget, and what you decided NOT to do. It is a note to yourself: be useful, not eloquent.');
-      L.push('- "depoimento": 2 to 4 lines telling the audience what you did THIS turn. It may have emotion. This text never comes back to you.');
+      L.push("Besides your orders, write two short texts. Write them in ENGLISH, every turn, even if your note from last turn is in another language:");
+      L.push('- "plan": your NOTE TO YOUR NEXT TURN, 2 to 4 lines (anything past 600 characters is cut off). You will read it next turn. Write what you are trying to do, what you must not forget, and what you decided NOT to do. It is a note to yourself: be useful, not eloquent.');
+      L.push('- "statement": 2 to 4 lines telling the audience what you did THIS turn. It may have emotion. This text never comes back to you.');
       L.push("");
     }
     L.push("Reply with ONE valid JSON object and nothing else - no text before or after it.");
@@ -2538,11 +2538,11 @@
     // tres tipos SEMPRE juntos, e nao contem nenhum numero nem alvo copiavel.
     L.push("Field by field - this describes the SHAPE of the reply; it is not a suggested move, and there is no example to copy:");
     L.push("{");
-    L.push('  "construir": [ {"aldeiaId": <id of one of YOUR villages>, "tipo": <"spearman" | "archer" | "knight">, "quantidade": <how many to build, 1 or more>} ],');
-    L.push('  "envios": [ {"origemId": <id of one of YOUR villages>, "destinoId": <id of ANY other village - enemy or neutral to attack it, one of YOURS to reinforce it>, "tropas": {"spearman": <n>, "archer": <n>, "knight": <n>}} ]' + (resumos ? "," : ""));
+    L.push('  "build": [ {"villageId": <id of one of YOUR villages>, "type": <"spearman" | "archer" | "knight">, "quantity": <how many to build, 1 or more>} ],');
+    L.push('  "movements": [ {"fromId": <id of one of YOUR villages>, "toId": <id of ANY other village - enemy or neutral to attack it, one of YOURS to reinforce it>, "troops": {"spearman": <n>, "archer": <n>, "knight": <n>}} ]' + (resumos ? "," : ""));
     if (resumos) {
-      L.push('  "plano": "<your note to your next turn>",');
-      L.push('  "depoimento": "<2-4 lines for the audience>"');
+      L.push('  "plan": "<your note to your next turn>",');
+      L.push('  "statement": "<2-4 lines for the audience>"');
     }
     L.push("}");
     L.push("Use only ids that appear in the report above. Do not send troops a village does not have. Empty lists are valid orders.");
@@ -2773,6 +2773,42 @@
   // em `normalizacoes` p/ o txt registrar "normalizado:" (mede-se cru E
   // normalizado; a normalizacao nao esconde o desvio, so impede que uma
   // letra mate a partida).
+  // PROTOCOLO EM INGLES (01/09/2026): as chaves do JSON eram as ultimas palavras
+  // em portugues que o modelo via — a prosa do P4 ja era toda inglesa desde 17/08.
+  // Medido nos duelos pagos de 31/08: os DOIS adversarios do Sonnet passaram a
+  // escrever "plano"/"depoimento" em PORTUGUES a meio da partida (gpt-5.6-luna em
+  // 10 turnos, deepseek-v4-pro em 5 seguidos), e o Sonnet — que ganhou e perdeu —
+  // nunca trocou. Dois fornecedores, o mesmo desvio: a causa era nossa.
+  // O prompt passa a declarar as chaves INGLESAS; o parser aceita AS DUAS e
+  // traduz para a chave interna, que continua PT porque o motor, o log, o
+  // analisador e todos os replays de agosto dependem dela.
+  const CHAVES_TOPO = {
+    build: "construir", builds: "construir",
+    movements: "envios", moves: "envios", sends: "envios", attacks: "envios", ataques: "envios",
+    plan: "plano",
+    statement: "depoimento",
+  };
+  const CHAVES_ITEM = {
+    villageId: "aldeiaId", village_id: "aldeiaId",
+    type: "tipo",
+    quantity: "quantidade", count: "quantidade",
+    fromId: "origemId", from_id: "origemId", from: "origemId",
+    toId: "destinoId", to_id: "destinoId", to: "destinoId",
+    troops: "tropas",
+  };
+  // Traduz IN PLACE. A chave PT ganha sempre: se o modelo mandar as duas (ja
+  // aconteceu com "count"/"quantidade"), a PT e a que vale e a EN e descartada.
+  function traduzirChaves(o, mapa) {
+    if (!o || typeof o !== "object" || Array.isArray(o)) return o;
+    for (const k of Object.keys(o)) {
+      const alvo = mapa[k];
+      if (!alvo || alvo === k) continue;
+      if (!(alvo in o)) o[alvo] = o[k];
+      delete o[k];
+    }
+    return o;
+  }
+
   function parsearOrdem(textoCru) {
     const vazia = { construir: [], envios: [] };
     const bloco = extrairBlocoJSON(textoCru);
@@ -2792,18 +2828,24 @@
     // junto com 1 envio quebrado). ok fica FALSE (a resposta FOI invalida — a
     // metrica nao mente), mas as ordens recuperaveis executam.
     if (!obj && erroBase) {
-      const c = extrairArrayDoCampo(textoCru, "construir");
-      const e = extrairArrayDoCampo(textoCru, "envios") || extrairArrayDoCampo(textoCru, "ataques");
+      const c = extrairArrayDoCampo(textoCru, "construir") || extrairArrayDoCampo(textoCru, "build");
+      const e = extrairArrayDoCampo(textoCru, "envios") || extrairArrayDoCampo(textoCru, "movements") || extrairArrayDoCampo(textoCru, "ataques");
       if (c || e) {
         obj = {
           construir: c || [], envios: e || [],
-          plano: extrairStringDoCampo(textoCru, "plano"),
-          depoimento: extrairStringDoCampo(textoCru, "depoimento"),
+          plano: extrairStringDoCampo(textoCru, "plano") || extrairStringDoCampo(textoCru, "plan"),
+          depoimento: extrairStringDoCampo(textoCru, "depoimento") || extrairStringDoCampo(textoCru, "statement"),
         };
         salvamento = true;
       }
     }
     if (!obj) return { ok: false, ordem: vazia, erro: erroBase, bloco, normalizacoes: [] };
+    // Chaves inglesas -> chaves internas. Sem registro em `normalizacoes`: o nome
+    // oficial do protocolo passou a ser o INGLES, entao usa-lo nao e desvio do
+    // modelo (mesma regra do `ehTokenOficial` para lanceiro/spearman).
+    traduzirChaves(obj, CHAVES_TOPO);
+    if (Array.isArray(obj.construir)) for (const it of obj.construir) traduzirChaves(it, CHAVES_ITEM);
+    if (Array.isArray(obj.envios)) for (const it of obj.envios) traduzirChaves(it, CHAVES_ITEM);
     const construirCru = Array.isArray(obj.construir) ? obj.construir : [];
     const envios = Array.isArray(obj.envios) ? obj.envios
       : Array.isArray(obj.ataques) ? obj.ataques : []; // aceita nome antigo
