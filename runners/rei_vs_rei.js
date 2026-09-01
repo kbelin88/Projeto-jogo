@@ -146,7 +146,12 @@ out("condicoes: ambiente=" + (cfg.layout || "v1") + " | temp=0 | prompt=" +
   (cfg.promptP4 === true ? "P4 EN (esquema declarado, sem exemplo, sem minimos, vitoria real, reforco, quantidade)" : "P2 (minimo por alvo)") +
   (cfg.fogOfWar === true ? " + FOG OF WAR" : "") +
   " + combate v3 (atq/def, counter " + cfg.bonus_forca_triangulo + ") + clamp | " + regrasTxt +
-  " | thinking=on | max_tokens_resposta=" + (maxTokens || Rei.TETO_ALTO || 128000) +
+  // O cabecalho tem de descrever a partida que CORREU, nao a intencao.
+  // Estava cravado "thinking=on" e mentiu na P1 de 31/08: a partida corria
+  // em esforco medium e o log dizia que nao havia limite nenhum.
+  " | thinking=" + (process.env.REASONING_MAX_TOKENS ? "orcamento " + process.env.REASONING_MAX_TOKENS + " tokens"
+      : process.env.REASONING_EFFORT ? "esforco " + process.env.REASONING_EFFORT : "on (sem limite)") +
+  " | max_tokens_resposta=" + (maxTokens || Rei.TETO_ALTO || 128000) +
   (maxTokens ? " (fixado por MAX_TOKENS_RESPOSTA)" : " (default alto, auto-ajustavel por modelo)"));
 out("");
 
@@ -204,8 +209,58 @@ function resumoTokens(serie) {
 // LIMPO com marcador, em vez de girar horas. LIM_ERRO_REDE=2 porque erroRede so
 // aparece DEPOIS de 6 retries internos (ja e sinal forte); 2 seguidos = throttle
 // ou queda real, nao fluke. Modelos locais (burro/ollama) nunca disparam isto.
-const LIM_ERRO_REDE = 2;
+// 31/08/2026: deixou de ser fixo. Com credito PAGO a conta inverte-se — uma
+// chamada que falha nao custa nada, mas abortar no turno 30 deita fora tudo o
+// que ja foi pago ate ali. Em bateria free o 2 continua certo (throttle de teto
+// diario gira horas a troco de nada); numa partida paga, subir vale a pena.
+//   LIM_ERRO_REDE=8 node runners/rei_vs_rei.js ...
+const LIM_ERRO_REDE = parseInt(process.env.LIM_ERRO_REDE, 10) || 2;
+
+// ABORT POR TURNO INVALIDO (31/08/2026). Um turno invalido — resposta vazia,
+// cortada no teto, ou JSON quebrado — ate aqui apenas PASSAVA: o rei nao jogava
+// aquele turno e a partida seguia. Para bateria de medicao isso esta certo (o
+// turno perdido E o dado). Para material de canal nao serve: uma partida com
+// turnos mortos nao vai para video, entao continuar so gasta credito.
+//   LIM_TURNO_INVALIDO=1  aborta ao primeiro
+//   0 ou ausente          comportamento de sempre (nao aborta)
+// Duas contagens, decisao do Lucas em 31/08 depois de a P1 morrer 12x12 no
+// turno 13 por UM json partido: dois invalidos SEGUIDOS (o modelo desfez-se)
+// ou quatro no TOTAL (desfez-se devagar). Um solucao isolado ja nao mata a
+// partida — e antes dele o rei tem uma segunda chance de formato (rei.js).
+const LIM_INVALIDO_SEGUIDO = parseInt(process.env.LIM_INVALIDO_SEGUIDO, 10) || 0;
+const LIM_INVALIDO_TOTAL   = parseInt(process.env.LIM_INVALIDO_TOTAL, 10) || 0;
+
+// TETO DE CUSTO (31/08/2026). O runner nao tinha nenhum — so o navegador tinha.
+// Sem teto e sem limite de turnos, uma partida que nunca resolva (os dois lados
+// presos no mesmo placar) corre ate o saldo acabar.
+//   TETO_CUSTO=4  encerra LIMPO ao passar de $4 (log e replay salvos)
+const TETO_CUSTO_RUNNER = parseFloat(process.env.TETO_CUSTO) || 0;
 const erroRedeSeguido = { A: 0, B: 0 };
+const invalidos = { A: 0, B: 0 };
+const invalidosSeguidos = { A: 0, B: 0 };
+const correcoesFormato = { A: 0, B: 0 };
+let custoAcum = 0;
+// Precos por 1M de tokens, conferidos no catalogo ao vivo em 31/08/2026.
+// Modelo fora desta lista conta $0 — o teto de custo simplesmente nao morde.
+const PRECOS_RUNNER = {
+  "anthropic/claude-opus-5":                 { in: 5.00, out: 25.00 },
+  "anthropic/claude-sonnet-5":               { in: 2.00, out: 10.00 },
+  "openai/gpt-5.1":                          { in: 1.25, out: 10.00 },
+  "openai/gpt-5.6-luna":                     { in: 0.20, out:  1.20 },
+  "deepseek/deepseek-v4-pro":                { in: 1.04, out:  2.07 },
+  "deepseek/deepseek-r1":                    { in: 0.70, out:  2.50 },
+  "z-ai/glm-5.3":                            { in: 1.40, out:  4.40 },
+  "z-ai/glm-5.3-flash":                      { in: 0.07, out:  0.25 },
+  "z-ai/glm-5.2":                            { in: 1.19, out:  3.74 },
+  "nvidia/nemotron-3-super-120b-a12b":       { in: 0.08, out:  0.40 },
+  "nvidia/nemotron-3-ultra-550b-a55b":       { in: 0.50, out:  2.20 },
+};
+function somarCusto(etiqueta, tk) {
+  if (!tk) return;
+  const p = PRECOS_RUNNER[String(etiqueta).replace(/^openrouter:/, "")];
+  if (!p) return;
+  custoAcum += ((tk.prompt || 0) * p.in + (tk.resposta || 0) * p.out) / 1e6;
+}
 let jaFinalizou = false;
 // escreve FIM + RESUMO uma unica vez (chamado do fim normal E dos caminhos de
 // erro). motivo != null vira uma linha de marcador antes do bloco FIM.
@@ -242,10 +297,54 @@ function finalizar(estado, venc, motivo) {
 async function main() {
   fs.mkdirSync(path.dirname(outfile), { recursive: true });
   const estado = Engine.criarEstadoInicial(cfg);
-  // TURNO 0 (25/08): o tabuleiro antes de qualquer ordem, p/ o replay abrir na
-  // posicao de partida. O estado inicial depende da seed e o replay nao a
-  // guarda, entao reconstruir depois e impossivel: tem de ser gravado aqui.
-  gravarFrame(estado);
+  // RETOMAR (01/09/2026). A P3 bateu no teto de custo no turno 43 com a partida
+  // ainda indecisa (9x15): $3 gastos e nenhum vencedor — o pior uso possivel do
+  // credito, e a razao de este codigo existir. O replay guarda cada aldeia com a
+  // MESMA forma que o motor usa (recursos, tropas, construindo), entao da para
+  // rehidratar o tabuleiro e continuar de onde parou em vez de rejogar do zero.
+  //
+  //   RETOMAR_DE=<replay.json> node runners/rei_vs_rei.js <A> <B> <seed> ...
+  //
+  // A seed e os dois modelos TEM de ser os mesmos da partida original: a
+  // topologia, os custos de estrada e a config vem do criarEstadoInicial acima
+  // e so o tabuleiro e substituido. Os frames antigos entram no replay novo,
+  // entao o ficheiro final e a partida INTEIRA, boa para gravar.
+  //
+  // O que NAO se recupera (um replay retomado nao e identico a uma partida
+  // corrida de uma vez so, e o log diz isso):
+  //   - `visto` (memoria do fog) e refeito com registrarAvistamentos: o
+  //     "last seen on turn N" das aldeias lembradas volta ao turno da retoma;
+  //   - `histDefesa` (o "was X, N turns ago") e as tentativas por alvo zeram;
+  //   - `dominancia` recomeca — so importa se alguem ja estivesse EM cima do
+  //     limiar no momento do corte, e nesse caso NAO retome.
+  const retomarDe = process.env.RETOMAR_DE || null;
+  let turnoRetoma = 0;
+  if (retomarDe) {
+    const velho = JSON.parse(fs.readFileSync(retomarDe, "utf8"));
+    const ultimo = velho.frames[velho.frames.length - 1];
+    if (ultimo.etiquetaA !== etiquetaDe.A || ultimo.etiquetaB !== etiquetaDe.B) {
+      throw new Error("RETOMAR_DE: os modelos nao batem — replay tem " +
+        ultimo.etiquetaA + " vs " + ultimo.etiquetaB + ", pediu " + etiquetaDe.A + " vs " + etiquetaDe.B);
+    }
+    estado.turno = ultimo.turno;
+    turnoRetoma = ultimo.turno;
+    estado.aldeias = JSON.parse(JSON.stringify(ultimo.aldeias));
+    estado.movimentos = JSON.parse(JSON.stringify(ultimo.movimentos || []));
+    for (const lado of ["A", "B"]) {
+      const d = ultimo.diag && ultimo.diag[lado];
+      if (d && d.plano) Engine.guardarPlano(estado, lado, d.plano);
+    }
+    Engine.registrarAvistamentos(estado);
+    for (const f of velho.frames) replay.frames.push(f);
+    fs.writeFileSync(replayFile, JSON.stringify(replay));
+    out("=== RETOMADA de " + retomarDe + " no turno " + turnoRetoma + " ===");
+    out(">>> memoria de fog, historico de defesa e contagem de dominancia recomecam aqui.");
+  } else {
+    // TURNO 0 (25/08): o tabuleiro antes de qualquer ordem, p/ o replay abrir na
+    // posicao de partida. O estado inicial depende da seed e o replay nao a
+    // guarda, entao reconstruir depois e impossivel: tem de ser gravado aqui.
+    gravarFrame(estado);
+  }
   const t0 = Date.now();
   let venc = null;
   let motivoAbort = null;
@@ -297,19 +396,60 @@ async function main() {
       // proprio rei escreveu, e nao era comparavel com o que se ve na tela.
       Engine.guardarPlano(estado, dono, registro.plano);
       coletarDiagRunner(dono, registro, cliente[dono]); // replay: o pensamento deste lado
+      somarCusto(etiquetaDe[dono], cliente[dono] && cliente[dono].ultimosTokens);
       gravar(); // checkpoint por LADO
     }
     logEventos(estado, turno);
     gravarFrame(estado);   // replay: 1 frame por turno, depois de A e B aplicarem
     gravar();
     const conq = estado.log.filter((l) => l.tipo === "combate" && l.conquista).length;
+    if (custoAcum > 0) out(`custo acumulado: $${custoAcum.toFixed(4)}`);
     console.error(`  T${turno} | A ${Engine.aldeiasDe(estado, "A").length} B ${Engine.aldeiasDe(estado, "B").length} neutras ${Engine.aldeiasDe(estado, null).length} | conquistas ate agora ${conq} | ${((Date.now() - t0) / 1000).toFixed(0)}s`);
     venc = Engine.checarVitoria(estado);
     if (venc) break;
+    // ABORT por turno invalido: pedido para material de canal (ver constante).
+    if (LIM_INVALIDO_SEGUIDO > 0 || LIM_INVALIDO_TOTAL > 0) {
+      for (const L of ["A", "B"]) {
+        const d = (replay.frames[replay.frames.length - 1] || {}).diag;
+        const dd = d && d[L];
+        // So vale para lados que sao MODELO: o `burro` nao produz JSON nenhum e
+        // sem esta guarda o freio matava a partida no turno 1 (apanhado a testar).
+        const ehModelo = /^openrouter:|^gemini|^grok/.test(String(etiquetaDe[L] || ""));
+        if (!ehModelo || !dd) continue;
+        if (dd.correcaoFormato) {
+          correcoesFormato[L]++;
+          out(`>>> CORRECAO DE FORMATO do Rei ${L}: 1a resposta nao era JSON; pedida de novo`);
+        }
+        if (dd.vazio || dd.truncado || dd.formatoOk === false) {
+          invalidos[L]++; invalidosSeguidos[L]++;
+          const q = dd.vazio ? "resposta vazia" : dd.truncado ? "cortada no teto" : "JSON invalido";
+          out(`>>> TURNO INVALIDO do Rei ${L}: ${q} (seguidos ${invalidosSeguidos[L]}, total ${invalidos[L]})`);
+        } else {
+          invalidosSeguidos[L] = 0;
+        }
+      }
+      for (const L of ["A", "B"]) {
+        const seguido = LIM_INVALIDO_SEGUIDO > 0 && invalidosSeguidos[L] >= LIM_INVALIDO_SEGUIDO;
+        const total = LIM_INVALIDO_TOTAL > 0 && invalidos[L] >= LIM_INVALIDO_TOTAL;
+        if (!seguido && !total) continue;
+        motivoAbort = seguido
+          ? `${invalidosSeguidos[L]} turnos invalidos SEGUIDOS do Rei ${L} (${etiquetaDe[L]})`
+          : `${invalidos[L]} turnos invalidos no TOTAL do Rei ${L} (${etiquetaDe[L]})`;
+        console.error("\n!!! ABORTANDO: " + motivoAbort);
+        break;
+      }
+      if (motivoAbort) break;
+    }
+    // ABORT por teto de custo: encerra LIMPO, com log e replay salvos.
+    if (TETO_CUSTO_RUNNER > 0 && custoAcum >= TETO_CUSTO_RUNNER) {
+      motivoAbort = `teto de custo $${TETO_CUSTO_RUNNER.toFixed(2)} atingido ($${custoAcum.toFixed(4)}) — partida salva antes de o credito acabar`;
+      console.error("\n!!! ENCERRANDO: " + motivoAbort);
+      break;
+    }
     // ABORT por throttle sustentado: um lado acumulou erros de rede consecutivos.
     if (erroRedeSeguido.A >= LIM_ERRO_REDE || erroRedeSeguido.B >= LIM_ERRO_REDE) {
       const lado = erroRedeSeguido.A >= LIM_ERRO_REDE ? "A" : "B";
-      motivoAbort = `${LIM_ERRO_REDE}+ erros de rede consecutivos do Rei ${lado} (${etiquetaDe[lado]}) — provavel teto diario/throttle do free tier`;
+      motivoAbort = `${LIM_ERRO_REDE}+ erros de rede consecutivos do Rei ${lado} (${etiquetaDe[lado]}) — provavel teto diario/throttle (limite LIM_ERRO_REDE=${LIM_ERRO_REDE})`;
       console.error("\n!!! ABORTANDO: " + motivoAbort);
       break;
     }
