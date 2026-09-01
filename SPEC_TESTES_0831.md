@@ -185,8 +185,7 @@ Isso dispensa medir aldeia por aldeia como foi preciso em todas as gravações d
 
 ## 7. FIOS ABERTOS QUE NÃO SÃO DESTA SPEC
 
-- **Duas chaves expostas em 03/08 por revogar.** Era um susto com saldo zero; com $13 na conta
-  é dinheiro. A mais urgente da lista.
+- ~~Duas chaves expostas em 03/08 por revogar.~~ **REVOGADAS em 01/09.**
 - Cliente OpenRouter duplicado (`rei.js` × `index.html`) — a mesma mudança teve de ser feita
   duas vezes hoje, outra vez.
 - Um **403 de chave** é reportado como "ERRO DE REDE" e repetido 9 vezes + 2 deliberações.
