@@ -810,6 +810,13 @@
       <option value="openrouter:nvidia/nemotron-3-ultra-550b-a55b:free">Nemotron 3 Ultra 550B ·OR free</option>
       <option value="openrouter:deepseek/deepseek-v4-flash:free">DeepSeek V4 Flash ·OR free</option>
       <option value="openrouter:minimax/minimax-m3:free">MiniMax M3 ·OR free</option>
+      <option value="openrouter:dots-studio/dots-3-note-preview:free">Dots 3 Note &middot;OR free</option>
+      <option value="openrouter:anthropic/claude-sonnet-5">Claude Sonnet 5 &middot;OR PAGO</option>
+      <option value="openrouter:anthropic/claude-opus-5">Claude Opus 5 &middot;OR PAGO</option>
+      <option value="openrouter:z-ai/glm-5.3">GLM 5.3 &middot;OR PAGO</option>
+      <option value="openrouter:z-ai/glm-5.3-flash">GLM 5.3 Flash &middot;OR PAGO</option>
+      <option value="openrouter:deepseek/deepseek-v4-pro">DeepSeek V4 Pro &middot;OR PAGO</option>
+      <option value="openrouter:openai/gpt-5.6-luna">GPT-5.6 Luna &middot;OR PAGO</option>
       <option value="openrouter:nvidia/nemotron-3.5-lightning:free">Nemotron 3.5 Lightning ·OR free</option>
       <option value="openrouter:liquid/lfm-2.5-2.6b:free">LFM 2.5 2.6B ·OR free (baseline fraco)</option>
     </select>
@@ -835,12 +842,26 @@
       <option value="openrouter:nvidia/nemotron-3-ultra-550b-a55b:free">Nemotron 3 Ultra 550B ·OR free</option>
       <option value="openrouter:deepseek/deepseek-v4-flash:free">DeepSeek V4 Flash ·OR free</option>
       <option value="openrouter:minimax/minimax-m3:free">MiniMax M3 ·OR free</option>
+      <option value="openrouter:dots-studio/dots-3-note-preview:free">Dots 3 Note &middot;OR free</option>
+      <option value="openrouter:anthropic/claude-sonnet-5">Claude Sonnet 5 &middot;OR PAGO</option>
+      <option value="openrouter:anthropic/claude-opus-5">Claude Opus 5 &middot;OR PAGO</option>
+      <option value="openrouter:z-ai/glm-5.3">GLM 5.3 &middot;OR PAGO</option>
+      <option value="openrouter:z-ai/glm-5.3-flash">GLM 5.3 Flash &middot;OR PAGO</option>
+      <option value="openrouter:deepseek/deepseek-v4-pro">DeepSeek V4 Pro &middot;OR PAGO</option>
+      <option value="openrouter:openai/gpt-5.6-luna">GPT-5.6 Luna &middot;OR PAGO</option>
       <option value="openrouter:nvidia/nemotron-3.5-lightning:free">Nemotron 3.5 Lightning ·OR free</option>
       <option value="openrouter:liquid/lfm-2.5-2.6b:free">LFM 2.5 2.6B ·OR free (baseline fraco)</option>
     </select>
   </label>
   <label>turnos <input id="gmax" type="number" min="1" max="9999" value="40" style="width:56px"></label>
   <label title="Teto de gasto (US$): a partida encerra LIMPA (salva .txt + replay) ao atingir o valor. 0 ou vazio desliga o freio.">teto $ <input id="gteto" type="number" min="0" step="0.5" value="7" style="width:56px"></label>
+  <label title="Nivel de raciocinio pedido ao fornecedor. (padrao) = como sempre foi. MEDIDO 31/08: no glm-5.3-flash low e medium dao ambos ~140 tokens de raciocinio; sem nivel ele vai aos 128 mil e devolve vazio.">pensar <select id="gesf" class="selrei" style="width:auto">
+    <option value="">(padrao)</option>
+    <option value="low">baixo</option>
+    <option value="medium">medio</option>
+    <option value="high">alto</option>
+  </select></label>
+  <label title="Orcamento de raciocinio em tokens. Se preenchido MANDA sobre o nivel acima. E o controlo mais fino: o raciocinio cresce com a dificuldade em vez de colapsar. 0 ou vazio desliga.">orcam. <input id="gorc" type="number" min="0" step="1000" value="" placeholder="—" style="width:66px"></label>
   <label title="Ignora o limite de turnos: a partida corre ate a vitoria ou o empate por estagnacao (30t sem mudanca). Acompanhe o gasto no titulo da aba.">&#8734; sem limite <input type="checkbox" id="gilim"></label>
   <label title="FOG OF WAR: mostra o mapa como UM Rei o ve. O que ele nao ve fica no escuro; o que ele viu e ja nao ve aparece esmaecido com o turno do ultimo avistamento. NAO muda a partida — e so a camara.">olhos de <select id="gvisao" class="selrei" style="width:auto">
     <option value="">espectador (ve tudo)</option>
@@ -852,6 +873,7 @@
   <button id="greplaysave" title="Baixar o replay .json da partida gravada">&#127909; Salvar replay</button>
   <label class="botao-arquivo" title="Reproduzir um replay .json gravado"><button id="greplayload_visual" onclick="document.getElementById('greplayload').click()">&#9654; Ver replay</button><input type="file" id="greplayload" accept=".json" style="display:none"></label>
   <button id="gcinema" title="Esconde TODOS os controles p/ gravar video. ESC para voltar.">&#127916; Cinema</button>
+  <button id="gchave" title="Trocar a chave da OpenRouter guardada NESTE navegador. Mostra os ultimos 4 caracteres da atual.">&#128273; Chave</button>
 </div>
 
 <script src="world.js"></script>
@@ -2199,6 +2221,15 @@
   // o RESUMO lembre que "CUSTO $0.0000" numa partida free significa "nao ha o que
   // cobrar", e nao "partida barata".
   const PRECOS_OR = {
+    // conferidos no catalogo ao vivo da OpenRouter em 31/08/2026
+    "anthropic/claude-opus-5": { in: 5.00, out: 25.00 },
+    "anthropic/claude-sonnet-5": { in: 2.00, out: 10.00 },
+    "z-ai/glm-5.3": { in: 1.40, out: 4.40 },
+    "z-ai/glm-5.3-flash": { in: 0.07, out: 0.25 },
+    "deepseek/deepseek-v4-pro": { in: 1.04, out: 2.07 },
+    "openai/gpt-5.6-luna": { in: 0.20, out: 1.20 },
+    "nvidia/nemotron-3-super-120b-a12b": { in: 0.08, out: 0.40 },
+    "z-ai/glm-5.2": { in: 1.19, out: 3.74 },
     "deepseek/deepseek-r1": { in: 0.70, out: 2.50 },
     "google/gemini-3.1-flash-lite": { in: 0.25, out: 1.50 },
     "openai/gpt-5.1": { in: 1.25, out: 10.00 },
@@ -3076,7 +3107,21 @@
       const resp = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + openrouterKey },
-        body: JSON.stringify({ model: modelo, messages: [{ role: "user", content: prompt }], temperature: tempLLM, stream: false, reasoning: { enabled: true }, max_tokens: (tetoPorModelo[modelo] || (typeof maxTokensLLM === "number" ? maxTokensLLM : TETO_ALTO_LLM)) }), // LOTE D, D2; teto auto-ajustavel 29/08
+        body: JSON.stringify({ model: modelo, messages: [{ role: "user", content: prompt }], temperature: tempLLM, stream: false, reasoning: (function () {
+              // MEDIDO 31/08: o `effort` nao tem meio termo no glm-5.3-flash —
+              // low e medium dao ~140 tokens; sem nivel vai aos 128 mil e
+              // devolve string vazia. O ORCAMENTO da controlo fino: pensa ate
+              // N e depois responde.
+              // ⚠ effort e max_tokens sao EXCLUSIVOS no OpenRouter; o orcamento
+              // ganha quando os dois estao postos.
+              // o Smoke6rede extrai esta funcao e corre-a SEM DOM: sem esta
+              // guarda, o teste de rede morre com "document is not defined".
+              if (typeof document === "undefined") return { enabled: true };
+              const orc = parseInt((document.getElementById("gorc") || {}).value, 10);
+              if (orc > 0) return { max_tokens: orc };
+              const esf = (document.getElementById("gesf") || {}).value;
+              return esf ? { effort: esf } : { enabled: true };
+            })(), max_tokens: (tetoPorModelo[modelo] || (typeof maxTokensLLM === "number" ? maxTokensLLM : TETO_ALTO_LLM)) }), // LOTE D, D2; teto auto-ajustavel 29/08
       });
       if (resp.ok) {
         const data = await resp.json();
@@ -3679,7 +3724,7 @@
           ", vitoria " + Math.round((_c.vitoriaFracao || 0) * 100) + "%/" + _c.vitoriaTurnos + "t)"
         : "regras=congeladas v3";
       const resumosTxt = (_c.resumosDoRei !== false) ? " | resumos do Rei: plano+depoimento" : "";
-      geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=" + (_c.promptP4 === true ? "P4 EN (esquema declarado, sem exemplo, sem minimos, vitoria real, reforco, quantidade)" : "P2 (minimo por alvo)") + (_c.fogOfWar === true ? " + FOG OF WAR" : "") + " + combate v3 | " + regrasTxt + resumosTxt + " | normalizacao H3 ativa | thinking=on | max_tokens_resposta=" + maxTokensLLM + " | " + (semLimite ? "SEM LIMITE de turnos (empate por estagnacao em 30t)" : "maxTurnos " + maxT) + " | teto=" + (TETO_CUSTO > 0 ? "$" + TETO_CUSTO.toFixed(2) : "desligado") + "\n"); // LOTE E, E6
+      geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=" + (_c.promptP4 === true ? "P4 EN (esquema declarado, sem exemplo, sem minimos, vitoria real, reforco, quantidade)" : "P2 (minimo por alvo)") + (_c.fogOfWar === true ? " + FOG OF WAR" : "") + " + combate v3 | " + regrasTxt + resumosTxt + " | normalizacao H3 ativa | thinking=" + (function(){const o=parseInt((document.getElementById("gorc")||{}).value,10);if(o>0) return "orcamento "+o+" tokens";const e=(document.getElementById("gesf")||{}).value;return e ? "esforco "+e : "on (sem limite)";})() + " | max_tokens_resposta=" + maxTokensLLM + " | " + (semLimite ? "SEM LIMITE de turnos (empate por estagnacao em 30t)" : "maxTurnos " + maxT) + " | teto=" + (TETO_CUSTO > 0 ? "$" + TETO_CUSTO.toFixed(2) : "desligado") + "\n"); // LOTE E, E6
       // AUTO-SAVE: cria o checkpoint .txt no disco com o cabecalho (via servir.py).
       const tsCp = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 16);
       checkpointArquivo = ("partida_" + vA + "_vs_" + vB + "_" + tsCp).replace(/[^a-z0-9._-]/gi, "-") + ".txt";
@@ -4612,6 +4657,42 @@
       : null;
   }
 
+  // AJUSTE DO DEPOIMENTO (31/08/2026): o quadro tem altura FIXA e o texto era
+  // simplesmente cortado (overflow:hidden, sem aviso nenhum). Modelos que
+  // escrevem cinco linhas perdiam a ultima frase — muitas vezes a que fecha o
+  // raciocinio, que e justamente a que interessa ao video.
+  //
+  // A CAIXA NAO PODE CRESCER. O mapa e posicionado abaixo dela (--dp-h), entao
+  // uma caixa elastica moveria o mapa a cada turno — e derrubaria de uma vez o
+  // enquadramento fixo da gravacao E a tabela de posicoes das aldeias
+  // (videos/aldeias_tela.txt), que dependem de o mapa nao se mexer.
+  //
+  // Entao encolhe a LETRA ate caber, com piso. So abaixo do piso e que corta,
+  // e ai marca com reticencias para se ver que cortou.
+  const DP_FONTE_MAX = 18.5, DP_FONTE_MIN = 12;
+  function ajustarDepoimento(el) {
+    if (!el) return;
+    let f = DP_FONTE_MAX;
+    el.style.fontSize = f + "px";
+    while (f > DP_FONTE_MIN && el.scrollHeight > el.clientHeight) {
+      f -= 0.5;
+      el.style.fontSize = f + "px";
+    }
+    if (el.scrollHeight <= el.clientHeight) return;
+    const inteiro = el.textContent;
+    let lo = 0, hi = inteiro.length;
+    while (lo < hi) {                                  // busca binaria do maior corte que cabe
+      const meio = Math.ceil((lo + hi) / 2);
+      el.textContent = inteiro.slice(0, meio) + "…";
+      if (el.scrollHeight > el.clientHeight) hi = meio - 1; else lo = meio;
+    }
+    const corte = inteiro.slice(0, lo);
+    const esp = corte.lastIndexOf(" ");
+    el.textContent = (esp > 20 ? corte.slice(0, esp) : corte) + "…";
+  }
+
+  window.ajustarDepoimento = ajustarDepoimento;   // exposta para poder ser testada de fora
+
   function elTxt(id, txt) { const e = document.getElementById(id); if (e) e.textContent = txt; }
   function elLarg(id, pct) { const e = document.getElementById(id); if (e) e.style.width = pct + "%"; }
 
@@ -4756,8 +4837,8 @@
       const dep = depoimentos[lado];
       const elD = document.getElementById("rr-dep-" + s);
       if (elD) {
-        if (dep) { elD.textContent = dep.texto; elD.className = "dp-txt"; }
-        else { elD.textContent = "— no statement this turn"; elD.className = "dp-txt vazio"; }
+        if (dep) { elD.textContent = dep.texto; elD.className = "dp-txt"; ajustarDepoimento(elD); }
+        else { elD.textContent = "— no statement this turn"; elD.className = "dp-txt vazio"; elD.style.fontSize = ""; }
       }
       elTxt("rr-tit-" + s, "Turn " + (dep ? dep.turno : game.turno));
 
@@ -4905,8 +4986,79 @@
   document.getElementById("greplayload").addEventListener("change", (ev) => {
     if (ev.target.files && ev.target.files[0]) { carregarReplay(ev.target.files[0]); ev.target.value = ""; }
   });
+  // ---------- TROCAR A CHAVE (31/08/2026) ----------
+  // A chave da OpenRouter vive no localStorage e so era pedida quando estava
+  // VAZIA — nao havia como troca-la sem abrir o console. Isso e perigoso a
+  // partir do momento em que ha credito: cria-se uma chave nova, o navegador
+  // continua com a antiga, e a partida paga corre sem aviso na chave errada.
+  //
+  // Mostra os ultimos 4 caracteres para se conferir QUAL esta carregada sem
+  // expor a chave inteira na tela (o jogo e gravado em video).
+  document.getElementById("gchave").addEventListener("click", () => {
+    const atual = lsGet("OPENROUTER_API_KEY") || "";
+    const fim = atual ? "..." + atual.slice(-4) : "(nenhuma)";
+    const k = (window.prompt(
+      "Chave da OpenRouter neste navegador: " + fim +
+      "\n\nCole a nova (sk-or-...), ou deixe vazio para apagar:", "") || "").trim();
+    if (k === "") {
+      if (atual && confirm("Apagar a chave guardada?")) {
+        try { localStorage.removeItem("OPENROUTER_API_KEY"); } catch (_) {}
+        openrouterKey = "";
+        alert("Chave apagada. O jogo vai pedir uma na proxima partida.");
+      }
+      return;
+    }
+    openrouterKey = k;
+    lsSet("OPENROUTER_API_KEY", k);
+    alert("Chave trocada: ..." + k.slice(-4));
+  });
+
   document.getElementById("gcinema").addEventListener("click", alternarCinema);
   document.getElementById("grepCinema").addEventListener("click", alternarCinema);
+  // ---------- ENQUADRAMENTO DE GRAVACAO (31/08/2026) ----------
+  // A camera do modo cinema e FIXA. Sem isto cada gravacao saia com um
+  // enquadramento diferente, e a posicao de cada aldeia na tela tinha de ser
+  // medida de novo video a video — foram TRES medicoes diferentes em tres
+  // gravacoes, duas delas da MESMA partida.
+  //
+  // A escala e presa a LARGURA (nao ao max(largura,altura) do cover): assim a
+  // posicao de cada aldeia e uma fracao fixa de VW, e a tabela de coordenadas
+  // vale em qualquer resolucao.
+  //
+  //   telaX = VW * ( ZOOM_GRAVACAO/imgW * ((mundoX-ox)/div - focoX) + 0.5 )
+  //   telaY = VH/2 + VW * ZOOM_GRAVACAO/imgW * ((mundoY-oy)/div - focoY)
+  //
+  // ⚠ Desliga a camera automatica: se ela seguisse os combates o enquadramento
+  // deixaria de ser fixo, que e todo o ponto.
+  // Os dois numeros que enquadram a gravacao. Mexer neles muda a moldura de
+  // TODOS os videos daqui para a frente — e obriga a refazer a tabela de
+  // posicoes (videos/aldeias_tela.txt), que e lida do proprio SX/SY.
+  const ZOOM_GRAVACAO = 0.75;    // maior = mapa maior na tela
+  const DESCE_GRAVACAO = 0.09;   // fracao da ALTURA: empurra o mapa para baixo
+  function enquadrarGravacao() {
+    if (!IB) return;
+    camAuto = false;
+    const g = document.getElementById("grepCam");
+    if (g) g.classList.remove("ativo");
+    camAlvo = null;
+    scale = (VW / (IB.imgCels.w * TILE)) * ZOOM_GRAVACAO;
+    centerOn(IB.foco.x, IB.foco.y);
+    panY += VH * DESCE_GRAVACAO;   // o foco fica alto de mais sem isto
+    draw();
+    console.log("[gravacao] VW=" + VW + " VH=" + VH + " escala=" + scale.toFixed(6) +
+                " panX=" + panX.toFixed(2) + " panY=" + panY.toFixed(2));
+  }
+  // deixa a conta acessivel de fora (ferramentas de video leem daqui)
+  window.enquadrarGravacao = enquadrarGravacao;
+  window.posAldeiasTela = function () {
+    if (!game) return null;
+    return game.aldeias.map((a) => ({
+      id: a.id, nome: a.nome,
+      x: SX(a.x), y: SY(a.y),
+      fx: SX(a.x) / VW, fy: SY(a.y) / VH,
+    }));
+  };
+
   function alternarCinema() {
     const ligar = !document.body.classList.contains("cinema");
     document.body.classList.toggle("cinema", ligar);
@@ -4917,6 +5069,7 @@
       const b = document.getElementById("cinePlay");
       if (b) b.innerHTML = playing ? "&#9208;" : "&#9654;";
       mostrarControleCinema();
+      enquadrarGravacao();   // camera fixa: ver o comentario acima
     } else {
       document.body.classList.remove("mexeu");
     }

@@ -251,7 +251,26 @@ function clienteOpenRouter(opcoes) {
             messages: [{ role: "user", content: prompt }],
             temperature: temperatura,
             stream: false,
-            reasoning: { enabled: true }, // thinking sempre-ligado
+            // ESFORCO DE RACIOCINIO (31/08/2026). Por omissao continua
+            // sempre-ligado sem nivel — o historico todo foi medido assim.
+            // Com REASONING_EFFORT=low|medium|high pede-se um nivel ao
+            // fornecedor. Existe porque o glm-5.3-flash gastou os 128 mil
+            // tokens INTEIROS a pensar no turno 5 e devolveu string vazia:
+            // o problema nao era o teto ser apertado, era ele nao saber parar.
+            //
+            // ⚠ Baixar o esforco muda O QUE SE MEDE. Uma partida assim nao e
+            // "o modelo X", e "o modelo X em esforco baixo" — tem de ir dito
+            // na tabela e no video, ou a medida e desonesta.
+            // Medido em 31/08: para o glm-5.3-flash o `effort` nao tem meio
+            // termo — low e medium dao ambos ~150 tokens de raciocinio, e sem
+            // nivel nenhum ele vai aos 128 mil e devolve vazio. O que da
+            // controlo fino e o ORCAMENTO: pensa ate N tokens e depois
+            // responde, em vez de pensar ate rebentar.
+            reasoning: process.env.REASONING_MAX_TOKENS
+              ? { max_tokens: parseInt(process.env.REASONING_MAX_TOKENS, 10) }
+              : (process.env.REASONING_EFFORT
+                  ? { effort: process.env.REASONING_EFFORT }
+                  : { enabled: true }),
             // LOTE C, E1: teto explicito e IGUAL p/ os dois lados, p/ o corte ser
             // visivel. 29/08: o valor subiu de 32000 para TETO_ALTO (ver acima).
             max_tokens: this.tetoAjustado || (opcoes.maxTokens != null ? opcoes.maxTokens : TETO_ALTO),
@@ -338,7 +357,36 @@ async function decidirRei(estado, dono, cliente, opcoesPrompt) {
   let cru = "", raciocinio = null, erroRede = null;
   try { const r = await cliente.gerar(prompt); cru = r.texto; raciocinio = r.raciocinio; }
   catch (e) { erroRede = e.message; }
-  const p = Engine.parsearOrdem(cru);
+  let p = Engine.parsearOrdem(cru);
+
+  // SEGUNDA CHANCE DE FORMATO (31/08/2026) — decisao do Lucas, depois de a P1
+  // morrer 12x12 no turno 13 porque a Luna partiu o JSON UMA vez em treze.
+  //
+  // A regra antiga era dura de proposito: repetia-se a chamada em erro de rede,
+  // nunca o parse, porque "JSON quebrado e o degrau 0 do benchmark". Continua
+  // verdade — por isso a correcao e CONTADA, nao escondida: `correcaoFormato`
+  // vai para o registro, para o log e para o replay. Um modelo que precisa de
+  // ser corrigido vale menos que um que nao precisa, e o dado fica la para o
+  // dizer.
+  //
+  // UMA tentativa so. Se errar outra vez, o turno e invalido e ponto.
+  let correcaoFormato = false;
+  if (!erroRede && !p.ok && String(cru || "").trim()) {
+    correcaoFormato = true;
+    const pedido = prompt +
+      "\n\n---\nYOUR PREVIOUS REPLY WAS NOT VALID JSON." +
+      "\nParser error: " + (p.erro || "unparseable") +
+      "\nReply again with ONLY the JSON object described above. " +
+      "No prose, no markdown fences, no explanation before or after it.";
+    try {
+      const r2 = await cliente.gerar(pedido);
+      const p2 = Engine.parsearOrdem(r2.texto);
+      // so troca se a segunda for melhor; senao fica a primeira (o erro original
+      // e o que interessa registar)
+      if (p2.ok) { cru = r2.texto; raciocinio = r2.raciocinio; p = p2; }
+    } catch (e) { /* falhou a rede na correcao: fica o turno invalido */ }
+  }
+
   const diag = Engine.diagnosticarOrdem(estado, dono, p.ordem);
   return {
     ordem: p.ordem,
@@ -346,6 +394,7 @@ async function decidirRei(estado, dono, cliente, opcoesPrompt) {
       turno: estado.turno, dono, prompt, cru, raciocinio,
       erroRede,
       jsonValido: p.ok, erroParse: p.erro,
+      correcaoFormato, // houve segunda chance de formato neste turno
       normalizacoes: p.normalizacoes || [], // H3: cru -> canonico, p/ o log contar o desvio
       ordemParseada: p.ordem,
       // A VOZ DO REI (24/08): o headless nunca capturou plano/depoimento — so o
