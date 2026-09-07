@@ -1,0 +1,244 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sondagem 3D — a mesma aldeia, viva</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #10161a; color: #e8dcc0;
+               font: 13px system-ui, sans-serif; overflow: hidden; }
+  #tela { position: fixed; inset: 0; }
+  #painel { position: fixed; top: 12px; left: 12px; z-index: 5; width: 268px;
+            background: rgba(20,15,8,.88); border: 1px solid #6b5836;
+            border-radius: 8px; padding: 10px 12px; }
+  #painel h1 { font-size: 13px; margin: 0 0 8px; letter-spacing: .06em; }
+  #painel label { display: flex; align-items: center; gap: 7px; margin: 5px 0; }
+  #painel .n { color: #cbbd94; font-style: italic; line-height: 1.45; margin: 8px 0 0; }
+  #medida { position: fixed; top: 12px; right: 12px; z-index: 5;
+            background: rgba(20,15,8,.88); border: 1px solid #6b5836;
+            border-radius: 8px; padding: 9px 12px; text-align: right;
+            font-variant-numeric: tabular-nums; }
+  #medida b { color: #f0d9a0; font-size: 17px; }
+  #lado { position: fixed; right: 12px; bottom: 12px; z-index: 5; width: 340px;
+          border: 1px solid #6b5836; border-radius: 8px; overflow: hidden;
+          background: rgba(20,15,8,.9); }
+  #lado img { display: block; width: 100%; }
+  #lado span { display: block; padding: 5px 9px; color: #cbbd94; }
+  #lado.off { display: none; }
+</style>
+<canvas id="tela"></canvas>
+<div id="painel">
+  <h1>SONDAGEM 3D</h1>
+  <label><input type="checkbox" id="sombras" checked> sombras projetadas</label>
+  <label><input type="checkbox" id="ceu" checked> luz do céu (hemisfério)</label>
+  <label><input type="checkbox" id="ao" checked> oclusão em tempo real (vale ~3%)</label>
+  <label><input type="checkbox" id="tom" checked> curva de tom (AgX, a do Blender)</label>
+  <label><input type="checkbox" id="iso"> pousar na câmara do sprite</label>
+  <label><input type="checkbox" id="comparar" checked> mostrar o sprite assado</label>
+  <p class="n">Arrasta para girar · roda para aproximar ·
+     botão direito para arrastar o alvo. Baixa até à horizontal e sobe até
+     à vertical — é a pergunta do caminho C.</p>
+</div>
+<div id="medida"></div>
+<div id="lado"><img src="../assets/sprites/aldeia_toledo.png" alt="sprite assado">
+  <span>o mesmo sítio, assado no Cycles</span></div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three.module.js",
+  "three/addons/": "./vendor/"
+} }
+</script>
+<script type="module">
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { SSAOPass } from "three/addons/postprocessing/SSAOPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+
+const cfg = await (await fetch("cena.json")).json();
+const tela = document.getElementById("tela");
+const rend = new THREE.WebGLRenderer({ canvas: tela, antialias: true });
+rend.setPixelRatio(Math.min(devicePixelRatio, 2));
+rend.shadowMap.enabled = true;
+rend.shadowMap.type = THREE.PCFSoftShadowMap;
+// A MESMA CURVA DO BLENDER. O `three` r160 traz AgX, que e exatamente o que
+// o `cozer.py` usa (`view_transform = "AgX"`). Estava aqui ACES "por ser o mais
+// parecido" — nao ha razao para aproximar o que se pode igualar.
+rend.toneMapping = THREE.AgXToneMapping;
+rend.toneMappingExposure = 1.05;
+
+const cena = new THREE.Scene();
+cena.background = new THREE.Color(0x8fb2c4);
+
+// ── A LUZ ────────────────────────────────────────────────────────────────
+// O MESMO sol dos sprites, lido do `cena.json` que o exportador escreveu. Se
+// aqui se inventasse uma luz, a comparação não valia nada — metade do que faz
+// as peças parecerem bem é esta direção e esta cor.
+const sol = new THREE.DirectionalLight(
+  new THREE.Color(...cfg.sol.cor), cfg.sol.forca * 0.62);
+const d = cfg.sol.direcao_yup;
+sol.position.set(-d[0] * 140, -d[1] * 140, -d[2] * 140);
+sol.castShadow = true;
+sol.shadow.mapSize.set(4096, 4096);
+const R = cfg.quadro_m * 1.1;
+Object.assign(sol.shadow.camera, { left: -R, right: R, top: R, bottom: -R,
+                                   near: 1, far: 420 });
+sol.shadow.bias = -0.0006;
+sol.shadow.normalBias = 0.35;
+cena.add(sol);
+
+// O CÉU FAZ MAIS DO QUE PARECE. No Cycles a abóbada ilumina tudo o que a
+// sombra não apanha; sem um equivalente, a sombra fica preta e a peça fica
+// recortada. Este hemisfério é o substituto barato — e é a diferença entre
+// "3D de jogo" e "3D de exercício".
+const ceu = new THREE.HemisphereLight(0xbcd8ef, 0x5c6340, 1.15);
+cena.add(ceu);
+
+// ── O `near` E O `far` NAO SAO DETALHE ──────────────────────────────────
+// Estavam em 0,5 e 2000 — os valores que se poem sem pensar. A oclusao ambiente
+// LE A PROFUNDIDADE, e um intervalo de 4000:1 gasta quase toda a precisao do
+// buffer no primeiro metro: o AO ficava a medir ruido e o efeito nao passava de
+// 2 em 255, por muito que se subisse o raio. Apertados a cena (2 m a 600 m), a
+// mesma passagem passa a ter com que trabalhar.
+const cam = new THREE.PerspectiveCamera(38, 1, 2, 600);
+cam.position.set(cfg.quadro_m * 0.85, cfg.quadro_m * 0.72, cfg.quadro_m * 0.85);
+const ctrl = new OrbitControls(cam, tela);
+ctrl.target.set(0, 4, 0);
+ctrl.enableDamping = true;
+ctrl.maxPolarAngle = Math.PI * 0.499;   // não deixa passar por baixo do chão
+ctrl.minDistance = 12;
+ctrl.maxDistance = cfg.quadro_m * 3;
+
+// declarados ACIMA de quem os usa: ja levamos dois ecras castanhos
+// neste projeto por um `const` lido antes da linha onde nasce.
+let tris = 0, malhas = 0;
+new GLTFLoader().load("aldeia.glb", (g) => {
+  g.scene.traverse((o) => {
+    if (!o.isMesh) return;
+    malhas++;
+    tris += o.geometry.index ? o.geometry.index.count / 3
+                             : o.geometry.attributes.position.count / 3;
+    o.castShadow = true;
+    o.receiveShadow = true;
+  });
+  cena.add(g.scene);
+});
+
+// ── os interruptores ─────────────────────────────────────────────────────
+const liga = (id, fn) => {
+  const el = document.getElementById(id);
+  el.onchange = () => fn(el.checked);
+};
+liga("sombras", (v) => { rend.shadowMap.enabled = v; cena.traverse((o) => {
+  if (o.isMesh) o.material.needsUpdate = true; }); });
+liga("ceu", (v) => { ceu.intensity = v ? 1.15 : 0.06; });
+// UM SO SITIO manda na curva de tom. O `OutputPass` LE o `renderer.toneMapping`
+// e o `RenderPass` desenha para um alvo linear onde ela nao e aplicada — ou
+// seja, os dois caminhos (com e sem AO) ja concordam sozinhos. A primeira
+// versao trocava a curva a mao conforme o caminho e teria feito o botao do AO
+// mudar tambem o brilho, com a comparacao a nao dizer nada sobre a oclusao.
+liga("tom", (v) => { rend.toneMapping = v ? THREE.AgXToneMapping
+                                          : THREE.NoToneMapping; });
+liga("ao", (v) => { usarAO = v; });
+liga("comparar", (v) => document.getElementById("lado").classList.toggle("off", !v));
+liga("iso", (v) => {
+  // POUSAR NA CAMARA DO SPRITE: 60 graus do zenite, 45 de giro, ortografica.
+  // E o unico angulo em que a comparacao com o sprite e justa.
+  if (!v) return;
+  const inc = THREE.MathUtils.degToRad(60), giro = THREE.MathUtils.degToRad(45);
+  const D = cfg.quadro_m * 2.2;
+  cam.position.set(D * Math.sin(inc) * Math.sin(giro),
+                   D * Math.cos(inc),
+                   D * Math.sin(inc) * Math.cos(giro));
+  ctrl.target.set(0, 4, 0);
+});
+
+// ── A OCLUSAO AMBIENTE ───────────────────────────────────────────────────
+// E o que faltava e o que mais se nota. Uma luz direcional acende o que ve e
+// deixa o resto a uma cor chapada; no Cycles, cada canto, cada encosto de
+// parede ao chao e cada copa contra o tronco fica mais escuro porque a luz do
+// ceu nao la chega. Sem isso as pecas ficam a PAIRAR mesmo com sombra
+// projetada — que e, palavra por palavra, a queixa que abriu esta conversa.
+//
+// O raio esta em METROS da cena, e nao em pixeis: 2,4 m e a escala a que uma
+// esquina de muralha ou o assento de uma casa se lem. Um raio grande escurece
+// vales inteiros e da um aspeto sujo; um raio pequeno so risca as arestas.
+const comp = new EffectComposer(rend);
+comp.addPass(new RenderPass(cena, cam));
+const ssao = new SSAOPass(cena, cam, innerWidth, innerHeight);
+// VARRIDO E MEDIDO (08/09), nao escolhido: 2,4 -> 5 -> 8 -> 14 -> 22 metros de
+// raio dao 2,9 / 4,6 / 5,7 / 6,8 / 7,3 de escurecimento nas sombras (em 255).
+// Satura a partir dos 20. E POUCO: ~3% no total. E por isso que a oclusao a
+// serio tem de vir ASSADA (ver `assar_pecas.py`) e nao calculada aqui.
+ssao.kernelRadius = 20;
+ssao.minDistance = 0.0015;
+ssao.maxDistance = 0.12;
+comp.addPass(ssao);
+comp.addPass(new OutputPass());
+let usarAO = true;
+// expostos para se poder VARRER parametros e MEDIR cada um, em vez de opinar
+Object.assign(window, { ssao, cam, ctrl, cena, rend, THREE });
+
+function tamanho() {
+  const w = innerWidth, h = innerHeight;
+  rend.setSize(w, h, false);
+  comp.setSize(w, h);
+  cam.aspect = w / h; cam.updateProjectionMatrix();
+}
+addEventListener("resize", tamanho); tamanho();
+
+// ── A MEDIDA ─────────────────────────────────────────────────────────────
+// O contador vive num `setInterval` e nao dentro do laco de desenho. Parece
+// rebuscado e nao e: um navegador que nao esta a compor a pagina (uma janela
+// tapada, um painel escondido) ESTRANGULA o requestAnimationFrame, e um
+// contador que so avanca la dentro fica em branco e nao se percebe porque.
+// Assim, o numero ou aparece de verdade ou aparece baixo — nunca desaparece.
+let quadros = 0;
+const med = document.getElementById("medida");
+function laco() {
+  requestAnimationFrame(laco);
+  quadros++;
+  ctrl.update();
+  // o `OutputPass` faz a curva de tom no fim da cadeia; o renderizador direto
+  // fa-la sozinho. Sem esta troca, ligar o AO mudava tambem o brilho e a
+  // comparacao nao dizia nada sobre a oclusao.
+  if (usarAO) comp.render(); else rend.render(cena, cam);
+}
+setInterval(() => {
+  const fps = quadros * 2; quadros = 0;
+  const alt = Math.round(90 - THREE.MathUtils.radToDeg(
+    Math.acos(cam.position.clone().sub(ctrl.target).normalize().y)));
+  med.innerHTML = "<b>" + fps + "</b> fps<br>" + malhas + " malhas &middot; "
+    + (tris / 1000).toFixed(0) + "k triangulos<br>"
+    + "camara a " + alt + "&deg; do horizonte<br>"
+    + "descarregado: 10,2 MB";
+}, 500);
+// ── MEDIR O QUE O AO FAZ, em vez de opinar ───────────────────────────────
+// Desenha o mesmo quadro das duas maneiras e devolve a luminancia media e a
+// dos 15% de pixeis mais escuros — que e onde a oclusao trabalha. Sem isto
+// so se pode dizer "acho que ficou melhor".
+window.medirAO = function () {
+  const gl = rend.getContext();
+  const ler = () => {
+    const w = rend.domElement.width, h = rend.domElement.height;
+    const buf = new Uint8Array(w * h * 4);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+    const lum = [];
+    for (let i = 0; i < buf.length; i += 4 * 7) {          // amostra 1 em 7
+      lum.push(0.2126 * buf[i] + 0.7152 * buf[i + 1] + 0.0722 * buf[i + 2]);
+    }
+    lum.sort((a, b) => a - b);
+    const media = lum.reduce((a, b) => a + b, 0) / lum.length;
+    const escuros = lum.slice(0, Math.floor(lum.length * 0.15));
+    return { media: +media.toFixed(1),
+             sombra: +(escuros.reduce((a, b) => a + b, 0) / escuros.length).toFixed(1) };
+  };
+  rend.render(cena, cam);            const sem = ler();
+  comp.render();                     const com = ler();
+  return { sem_ao: sem, com_ao: com,
+           media_mais_escura: +(sem.media - com.media).toFixed(1),
+           sombra_mais_escura: +(sem.sombra - com.sombra).toFixed(1) };
+};
+
+laco();
+</script>
