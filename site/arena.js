@@ -16,7 +16,7 @@ const DIC = {
     leg_sturno:"s / turno — quanto tempo o modelo leva para decidir um turno (mediana).",
     leg_tok:"tokens entrada / saída — tamanho médio do que o modelo lê e do que escreve por turno.",
     leg_rac:"% raciocínio — quanto da saída foi pensar antes de responder. Vem do contador do provedor; — quer dizer que ele não informa.",
-    leg_custo:"custo / turno (est.) — todas as partidas correram no free tier — o custo real foi US$ 0,00. Esta coluna estima o que o mesmo modelo custaria a preço de tabela da OpenRouter, para dar uma base de comparação.",
+    leg_custo:"custo / turno (est.) — a maioria das partidas correu no free tier, com custo real US$ 0,00; os três duelos de 31/08–01/09 foram pagos e custaram US$ 8,97 no total. Esta coluna estima, a preço de tabela da OpenRouter, quanto custaria um turno daquele modelo — é base de comparação, não a fatura. Um traço quer dizer que não há preço de tabela registrado para o modelo.",
     leg_lac:"lanceiro / arqueiro / cavaleiro — de que o modelo montou o exército. Lanceiro é barato e fraco, cavaleiro é caro e forte, arqueiro fica no meio.",
     leg_atkvenc:"ataques vencidos — de cada 100 ataques, quantos tomaram a aldeia.",
     leg_aldpart:"aldeias / partida — quantas aldeias o modelo conquista, em média, por partida.",
@@ -74,7 +74,7 @@ const DIC = {
     leg_sturno:"s / turn — how long the model takes to decide a turn (median).",
     leg_tok:"input / output tokens — the typical size of what the model reads and writes per turn.",
     leg_rac:"% reasoning — how much of the output was thinking before answering. Comes from the provider's own counter; — means it doesn't report one.",
-    leg_custo:"cost / turn (est.) — every match ran on the free tier — the real cost was US$ 0.00. This column estimates what the same model would cost at OpenRouter's list price, as a basis for comparison.",
+    leg_custo:"cost / turn (est.) — most matches ran on the free tier, at a real cost of US$ 0.00; the three duels of 31/08–01/09 were paid and cost US$ 8.97 in total. This column estimates what one turn of that model would cost at OpenRouter's list price — a basis for comparison, not the invoice. A dash means no list price is on record for that model.",
     leg_lac:"spearman / archer / knight — what the model built its army from. Spearmen are cheap and weak, knights are expensive and strong, archers sit in between.",
     leg_atkvenc:"attacks won — out of every 100 attacks, how many took the village.",
     leg_aldpart:"villages / match — how many villages the model captures, on average, per match.",
@@ -144,7 +144,15 @@ function cabecalho(ativo){
       </div>
     </nav></div></header>`;
 }
-function curto(m){ return String(m).replace(/^openrouter:/,'').replace(/:free$/,'').replace(/^nvidia\//,'').replace(/^dots-studio\//,'').replace(/^poolside\//,'').replace(/^openai\//,''); }
+// Tira o fornecedor do nome exibido. Era uma lista fixa de prefixos e por isso
+// ficava para tras a cada fornecedor novo (anthropic/ e deepseek/ apareceram em
+// 31/08 e saiam com prefixo enquanto os outros saiam sem). Agora e generico.
+// EXCECAO: 'stealth/' fica, porque nao e fornecedor — e a convencao da OpenRouter
+// para modelo anonimo, e isso e informacao sobre o modelo.
+function curto(m){
+  const s = String(m).replace(/^openrouter:/,'').replace(/:free$/,'');
+  return s.startsWith('stealth/') ? s : s.replace(/^[^/]+\//,'');
+}
 function pct(x){ return x==null?'—':Math.round(x*100)+'%'; }
 function num(x,d){ return x==null?'—':(d?Number(x).toFixed(d):x); }
 function seg(s){ if(s==null) return '—'; return s>=60? Math.floor(s/60)+'m'+String(Math.round(s%60)).padStart(2,'0')+'s' : Math.round(s)+'s'; }
