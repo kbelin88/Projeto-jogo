@@ -21,9 +21,11 @@
 #
 # 3. Sem modificador de bisel por objeto. Dez mil modificadores são mais lentos
 #    que a geometria toda; o bisel é aplicado UMA VEZ no protótipo.
+import json
 import math
 import os
 import random
+import re
 
 import bpy
 
@@ -771,6 +773,25 @@ def proto_penedo(raio=1.6):
 CENA = None
 
 
+# ── O REGISTO DE COLOCACOES ──────────────────────────────────────────────────
+# Toda a peça que entra numa cena passa por `onde`. Isso faz desta função o
+# único sítio de onde se pode saber, sem adivinhar, ONDE ficou tudo — e é o que
+# permite exportar o mapa como uma BIBLIOTECA DE PEÇAS mais uma lista de cópias,
+# em vez de um bloco de geometria com a mesma casa repetida trezentas vezes.
+#
+# O navegador faz o mesmo que o Cycles faz aqui: uma malha na memória, milhares
+# de matrizes. Sem isto, o mapa inteiro seriam milhões de triângulos únicos.
+#
+# Está desligado por omissão: os fornos que já existem não pagam nada por ele.
+REGISTO = None                # None = não registar; [] = registar
+
+
+def registar(ligado=True):
+    global REGISTO
+    REGISTO = [] if ligado else None
+    return REGISTO
+
+
 def onde(proto, x, y, z=0.0, rz=0.0, escala=1.0, alvo=None):
     """uma cópia do protótipo, a partilhar a MESMA malha.
 
@@ -778,6 +799,14 @@ def onde(proto, x, y, z=0.0, rz=0.0, escala=1.0, alvo=None):
     malha é partilhada, o Cycles trata as cópias como instâncias — mil árvores
     custam a memória de uma.
     """
+    if REGISTO is not None:
+        # o Blender junta ".001" a um nome repetido dentro do mesmo ficheiro —
+        # e as duas folhas de um portão SÃO o mesmo objeto, pedido duas vezes.
+        # Como o nome carrega a receita, dois nomes com a mesma base têm a mesma
+        # geometria por construção, e o sufixo só atrapalharia a biblioteca.
+        base = re.sub(r"\.\d{3}$", "", proto.name)
+        REGISTO.append({"peca": base, "p": [round(x, 3), round(y, 3), round(z, 3)],
+                        "rz": round(rz, 4), "e": round(escala, 4)})
     o = proto.copy()                     # cópia do OBJETO, não da malha
     o.location = (x, y, z)
     o.rotation_euler = (0, 0, rz)
@@ -1353,3 +1382,52 @@ def muralha(muro, torre, portoes, raio, ang_torres,
         print("  muralha fechada: %d panos, %d portao(oes), %d torre(s)"
               % (panos, len(portoes), len(ang_torres)))
     return panos, bocas
+
+
+# ── CADA PROTOTIPO PASSA A SABER O QUE E ─────────────────────────────────────
+# Os nomes vinham do Blender: "Cube.005", "Cylinder.001". Servem enquanto tudo
+# vive numa cena só — e deixam de servir no minuto em que se quer uma
+# BIBLIOTECA de peças partilhada por vinte e duas aldeias. O nome é atribuído
+# por ordem de criação, portanto o "Cube.005" de Toledo e o de Madrid podem ser
+# peças diferentes, e nada avisa: a muralha de uma aldeia apareceria com as
+# casas da outra.
+#
+# Aqui cada fábrica passa a carimbar o que produziu — o nome da função e os
+# argumentos com que foi chamada. Duas consequências, e as duas fazem falta:
+#   * o nome é ESTÁVEL: a mesma peça tem o mesmo nome em qualquer cena;
+#   * a peça leva a sua RECEITA, portanto pode ser reconstruída sozinha, sem se
+#     saber que aldeia a pediu.
+#
+# Feito por embrulho e não à mão em cada fábrica: são vinte e tal funções, e uma
+# que se esquecesse voltaria a dar o bug silencioso que isto veio resolver.
+def _carimbar_prototipos():
+    import functools
+    import hashlib
+    for nome, fn in list(globals().items()):
+        if not nome.startswith("proto_") or not callable(fn):
+            continue
+
+        def embrulho(fn=fn, nome=nome):
+            @functools.wraps(fn)
+            def dentro(*a, **k):
+                ob = fn(*a, **k)
+                if ob is not None and hasattr(ob, "name"):
+                    partes = [repr(x) for x in a] + \
+                             ["%s=%r" % (c, v) for c, v in sorted(k.items())]
+                    assinatura = ",".join(partes)
+                    # O NOME TEM DE SER UM IDENTIFICADOR. A primeira versao punha
+                    # os argumentos no nome -- "casa2(7.6,5.8,2.9,'colmo')" -- que
+                    # se le muito bem e NAO sobrevive a exportacao: o glTF saneia
+                    # parenteses, virgulas, plicas e pontos, e do lado do
+                    # navegador so 1 das 22 pecas voltou a ser encontrada.
+                    # Fica o nome curto e estavel; a receita legivel vai a parte.
+                    ob.name = nome[6:] + ("_" + hashlib.md5(
+                        assinatura.encode("utf-8")).hexdigest()[:6] if partes else "")
+                    ob["receita"] = json.dumps([nome, list(a), k])
+                    ob["assinatura"] = nome[6:] + "(" + assinatura + ")"
+                return ob
+            return dentro
+        globals()[nome] = embrulho()
+
+
+_carimbar_prototipos()

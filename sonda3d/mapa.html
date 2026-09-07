@@ -1,0 +1,220 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>A Iberia em 3D</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0d1418; color: #e8dcc0;
+               font: 13px system-ui, sans-serif; overflow: hidden; }
+  #tela { position: fixed; inset: 0; }
+  #hud { position: fixed; top: 12px; left: 12px; z-index: 5; width: 250px;
+         background: rgba(20,15,8,.88); border: 1px solid #6b5836;
+         border-radius: 8px; padding: 10px 12px; }
+  #hud h1 { font-size: 13px; margin: 0 0 8px; letter-spacing: .06em; }
+  #hud label { display: flex; align-items: center; gap: 7px; margin: 5px 0; }
+  #hud p { color: #cbbd94; font-style: italic; line-height: 1.45; margin: 8px 0 0; }
+  #med { position: fixed; top: 12px; right: 12px; z-index: 5; text-align: right;
+         background: rgba(20,15,8,.88); border: 1px solid #6b5836;
+         border-radius: 8px; padding: 9px 12px; font-variant-numeric: tabular-nums; }
+  #med b { color: #f0d9a0; font-size: 17px; }
+  #carga { position: fixed; inset: 0; display: flex; align-items: center;
+           justify-content: center; background: #0d1418; z-index: 9;
+           font-size: 15px; color: #cbbd94; }
+</style>
+<canvas id="tela"></canvas>
+<div id="carga">a montar a Iberia...</div>
+<div id="hud">
+  <h1>A IBERIA EM 3D</h1>
+  <label><input type="checkbox" id="sombras" checked> sombras</label>
+  <label><input type="checkbox" id="mata" checked> mata</label>
+  <label><input type="checkbox" id="alto"> vista de cima</label>
+  <p>Arrasta para girar &middot; roda para aproximar &middot; botao direito
+     para deslocar. Desce ate ao chao e passeia entre as aldeias.</p>
+</div>
+<div id="med"></div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/" } }
+</script>
+<script type="module">
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+const cfgSol = await (await fetch("cena.json")).json();
+const MAPA = await (await fetch("mapa3d.json")).json();
+const [LX, LY] = MAPA.mapa_m;
+
+const tela = document.getElementById("tela");
+const rend = new THREE.WebGLRenderer({ canvas: tela, antialias: true });
+rend.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+rend.shadowMap.enabled = true;
+rend.shadowMap.type = THREE.PCFSoftShadowMap;
+rend.toneMapping = THREE.AgXToneMapping;      // a mesma curva do forno
+rend.toneMappingExposure = 1.05;
+
+const cena = new THREE.Scene();
+cena.background = new THREE.Color(0x7ea3b8);
+
+// O MAR e um plano por baixo de tudo. A ilha e uma malha com a forma do alfa
+// da arte, portanto a costa passa a ser uma BORDA de geometria e nao um
+// esbatido de 16 pixeis por cima de um PNG -- que era a queixa de origem.
+const mar = new THREE.Mesh(
+  new THREE.PlaneGeometry(LX * 4, LY * 4),
+  new THREE.MeshStandardMaterial({ color: 0x27596b, roughness: 0.42, metalness: 0.05 }));
+mar.rotation.x = -Math.PI / 2;
+mar.position.y = -6;
+mar.receiveShadow = true;
+cena.add(mar);
+cena.fog = new THREE.Fog(0x7ea3b8, LX * 0.55, LX * 1.5);
+
+const sol = new THREE.DirectionalLight(new THREE.Color(...cfgSol.sol.cor), 3.2);
+const d = cfgSol.sol.direcao_yup;
+sol.castShadow = true;
+sol.shadow.mapSize.set(4096, 4096);
+cena.add(sol, sol.target);
+const ceu = new THREE.HemisphereLight(0xbcd8ef, 0x5c6340, 1.2);
+cena.add(ceu);
+
+const cam = new THREE.PerspectiveCamera(42, 1, 2, LX * 2.2);
+cam.position.set(0, LY * 0.62, LY * 0.78);
+const ctrl = new OrbitControls(cam, tela);
+ctrl.enableDamping = true;
+ctrl.maxPolarAngle = Math.PI * 0.497;
+ctrl.minDistance = 12;
+ctrl.maxDistance = LX * 1.3;
+
+// ---- juntar a biblioteca as copias ---------------------------------------
+// O ficheiro traz cada peca UMA vez; aqui cria-se um InstancedMesh por peca e
+// enchem-se as matrizes. E o mesmo que o Cycles faz no forno -- uma malha,
+// milhares de posicoes -- so que quem instancia agora e o WebGL. Exportar o
+// mapa como geometria daria a mesma casa repetida trezentas vezes.
+let nInst = 0, nTri = 0;
+new GLTFLoader().load("pecas.glb", (g) => {
+  // indexado pelo nome DA MALHA e pelo DO NO. O glTF guarda os dois, e quem
+  // tem `.isMesh` e a malha -- mas conforme o exportador, o nome que se
+  // reconhece pode estar em qualquer um deles. Aceitar os dois custa uma linha
+  // e evita a falha silenciosa em que a peca simplesmente nao aparece.
+  const banco = {};
+  g.scene.traverse((o) => {
+    if (!o.isMesh) return;
+    banco[o.name] = o;
+    if (o.parent && o.parent.name) banco[o.parent.name] = o;
+  });
+
+  const chao = banco["chao"];
+  if (chao) {
+    chao.receiveShadow = true;
+    chao.castShadow = false;
+    cena.add(chao);
+    nTri += chao.geometry.index ? chao.geometry.index.count / 3
+                                : chao.geometry.attributes.position.count / 3;
+  }
+
+  // CONTAR ANTES DE CRIAR: um InstancedMesh nasce com a contagem fixa e nao
+  // cresce depois. Contar primeiro e mais barato do que adivinhar por cima.
+  const quantas = {};
+  const soma = (n) => { quantas[n] = (quantas[n] || 0) + 1; };
+  for (const c of MAPA.copias) soma(c.peca);
+  for (const m of MAPA.manchas) for (const t of MAPA.arranjos[m.b]) soma(t.peca);
+
+  const inst = {};
+  for (const [nome, n] of Object.entries(quantas)) {
+    const base = banco[nome];
+    if (!base) continue;
+    const im = new THREE.InstancedMesh(base.geometry, base.material, n);
+    im.castShadow = true; im.receiveShadow = true;
+    im.frustumCulled = false;
+    im.count = 0;                       // preenche-se a seguir
+    inst[nome] = im;
+    cena.add(im);
+    nTri += (base.geometry.index ? base.geometry.index.count / 3
+                                 : base.geometry.attributes.position.count / 3) * n;
+  }
+
+  const M = new THREE.Matrix4(), Q = new THREE.Quaternion();
+  const V = new THREE.Vector3(), E = new THREE.Vector3(), R = new THREE.Euler();
+  // O BLENDER E Z-PARA-CIMA e o exportador virou a cena para Y-para-cima. As
+  // colocacoes foram gravadas em coordenadas do Blender, portanto tem de ser
+  // viradas aqui tambem: (x, y, z) -> (x, z, -y). Sem isto o mapa aparece de
+  // pe, como uma parede, e demora a perceber porque.
+  const por = (im, x, y, z, rz, e) => {
+    V.set(x, z, -y);
+    R.set(0, rz, 0);
+    Q.setFromEuler(R);
+    E.set(e, e, e);
+    M.compose(V, Q, E);
+    im.setMatrixAt(im.count++, M);
+  };
+
+  for (const c of MAPA.copias) {
+    const im = inst[c.peca]; if (!im) continue;
+    por(im, c.p[0], c.p[1], c.p[2], c.rz, c.e);
+    nInst++;
+  }
+  for (const m of MAPA.manchas) {
+    for (const t of MAPA.arranjos[m.b]) {
+      const im = inst[t.peca]; if (!im) continue;
+      por(im, m.p[0] + t.p[0] * m.e, m.p[1] + t.p[1] * m.e, t.p[2] * m.e,
+          t.rz, t.e * m.e);
+      nInst++;
+    }
+  }
+  for (const im of Object.values(inst)) im.instanceMatrix.needsUpdate = true;
+
+  // expostos de proposito: e assim que se confere de fora quantas pecas
+  // chegaram, e que se leva a camara a um sitio exato sem a arrastar a mao.
+  Object.assign(window, { inst, cam, ctrl, cena, rend, MAPA, THREE });
+  window.__inst = inst;
+  window.__mata = new Set(MAPA.arranjos.flat().map((t) => t.peca));
+  const el = document.getElementById("carga");
+  if (el) el.remove();
+});
+
+const liga = (id, fn) => { const e = document.getElementById(id);
+                           e.onchange = () => fn(e.checked); };
+liga("sombras", (v) => { rend.shadowMap.enabled = v;
+  cena.traverse((o) => { if (o.material) o.material.needsUpdate = true; }); });
+liga("mata", (v) => {
+  for (const [n, im] of Object.entries(window.__inst || {}))
+    if (window.__mata.has(n)) im.visible = v;
+});
+liga("alto", (v) => {
+  if (v) { cam.position.set(0, LY * 1.15, LY * 0.35); ctrl.target.set(0, 0, 0); }
+});
+
+function tamanho() {
+  rend.setSize(innerWidth, innerHeight, false);
+  cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix();
+}
+addEventListener("resize", tamanho); tamanho();
+
+let quadros = 0;
+const med = document.getElementById("med");
+function laco() {
+  requestAnimationFrame(laco);
+  quadros++;
+  ctrl.update();
+  // A SOMBRA SEGUE A CAMARA, e nao o mapa. Um mapa de sombra unico a cobrir
+  // 2,8 km daria menos de um pixel por metro e as sombras sairiam em degraus.
+  // Assim, a caixa aperta-se ao que se esta a ver: resolucao onde estao os
+  // olhos, e o resto do mapa nao paga por isso.
+  const RS = Math.min(Math.max(ctrl.getDistance() * 0.75, 60), 700);
+  sol.target.position.copy(ctrl.target);
+  sol.position.copy(ctrl.target).add(
+    new THREE.Vector3(-d[0], -d[1], -d[2]).multiplyScalar(RS * 2.2));
+  const c = sol.shadow.camera;
+  c.left = -RS; c.right = RS; c.top = RS; c.bottom = -RS;
+  c.near = 1; c.far = RS * 5; c.updateProjectionMatrix();
+  rend.render(cena, cam);
+}
+setInterval(() => {
+  const alt = Math.round(90 - THREE.MathUtils.radToDeg(
+    Math.acos(cam.position.clone().sub(ctrl.target).normalize().y)));
+  med.innerHTML = "<b>" + quadros * 2 + "</b> fps<br>"
+    + nInst.toLocaleString("pt") + " pecas &middot; "
+    + (nTri / 1e6).toFixed(1) + "M triangulos<br>"
+    + "camara a " + alt + "&deg; &middot; " + Math.round(ctrl.getDistance()) + " m<br>"
+    + "ilha de " + (LX / 1000).toFixed(1) + " x " + (LY / 1000).toFixed(1) + " km";
+  quadros = 0;
+}, 500);
+laco();
+</script>
