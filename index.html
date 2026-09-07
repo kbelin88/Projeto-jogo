@@ -15,6 +15,28 @@
     position: fixed; pointer-events: none; color: #f5e9c8;
     text-shadow: 1px 1px 2px #000; font-size: 13px; user-select: none;
   }
+
+  /* ── CADERNO DE MARCAS ───────────────────────────────────────────────────
+     A barra fica escondida ate se ligar o modo (tecla M ou ?marcar). Vive por
+     cima de tudo e com `pointer-events` proprio, para nao roubar cliques ao
+     mapa quando esta fechada. */
+  #barraMarcas {
+    position: fixed; left: 50%; transform: translateX(-50%); top: 96px;
+    display: none; gap: 8px; align-items: center; z-index: 60;
+    background: rgba(24,18,10,.92); border: 1px solid #6b5836;
+    border-radius: 8px; padding: 7px 10px; pointer-events: auto;
+    font: 13px/1.3 system-ui, sans-serif; color: #e8dcc0;
+  }
+  #barraMarcas .cor {
+    width: 24px; height: 24px; border-radius: 5px; border: 2px solid #0006;
+    cursor: pointer;
+  }
+  #barraMarcas .cor.sel { border-color: #fff; box-shadow: 0 0 0 2px #0008; }
+  #barraMarcas input { background: #1a1409; color: #e8dcc0; border: 1px solid #6b5836;
+    border-radius: 4px; padding: 4px 6px; width: 260px; font: inherit; }
+  #barraMarcas #marcasRecado { color: #cbbd94; font-size: 12px; font-style: italic; }
+  #barraMarcas button { background: #3a2e18; color: #e8dcc0; border: 1px solid #6b5836;
+    border-radius: 5px; padding: 5px 10px; cursor: pointer; font: inherit; }
   #zoombar {
     /* 28/08: FALTAVA `position: fixed`. As regras de `bottom`/`right` dependiam
        da classe `.hud` (que traz o position), e o <div id="zoombar"> nunca a
@@ -196,6 +218,23 @@
   }
   body.replay #gamebar { display: none; }  /* no replay, o cockpit e o replaybar */
 
+  /* ===== TELA LIMPA: so o mapa ============================================
+     Um interruptor SO SEU, no canto do zoom. Chegou a estar preso ao M do
+     marcar e estava errado: para arrastar o mapa desliga-se o lapis, e com os
+     dois na mesma tecla desligar o lapis trazia o rodape de volta. Uma tecla,
+     uma coisa.
+     E `display:none` e nao opacidade: um fantasma continua a tapar o clique —
+     riscar-se-ia por cima dele e o risco nao saia (a licao do cinema, 24/08).
+     O zoom fica SEMPRE de pe: e por ele que se volta atras. */
+  body.limpo #barraTopo, body.limpo #depoTopo, body.limpo #rodapeReis,
+  body.limpo #placarTop, body.limpo #espA, body.limpo #espB,
+  body.limpo #sidebar, body.limpo #sidebarA, body.limpo #banner,
+  body.limpo #gamebar, body.limpo #replaybar, body.limpo #editorbar,
+  body.limpo #cinemaCtl, body.limpo #hoverTip, body.limpo #cartaoFinal {
+    display: none !important;
+  }
+  #zlimpo.on { background: linear-gradient(#c08a3e, #7a5220); }
+
   /* ===== MODO CINEMA: esconde o chrome de dev p/ gravar ===== */
   /* CINEMA (24/08): some 100% — nada de fantasma a .12 de opacidade, que
      aparecia na gravacao. Volta so no ESC (ver alternarCinema/tecla). */
@@ -228,6 +267,7 @@
 
   /* o zoombar era empurrado 316px para desviar da cronica lateral; ela nao
      renderiza mais, entao ele volta para a margem. */
+
   #zoombar { transition: right .25s ease; }
   #gamebar {
     position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
@@ -501,6 +541,7 @@
   #replaybar { bottom: 14px; }
   #banner { top: calc(var(--bt-h) + var(--dp-h) + 12px); }  /* abaixo da barra E do depoimento */
   body.replay #banner, body.cinema #banner { top: calc(var(--bt-h) + var(--dp-h) + 12px); }
+
   #zoombar { bottom: calc(var(--rr-h) + 12px); }
 
   /* TELA ESTREITA (28/08). Abaixo de ~900px de largura as duas colunas do
@@ -529,7 +570,8 @@
        sentido com rato e tela grande) e some; o zoom continua util para quem
        assiste, e sobe para debaixo do depoimento. */
     #editorbar { display: none; }
-    #zoombar {
+  
+  #zoombar {
       bottom: auto; top: calc(var(--bt-h) + var(--dp-h) + 10px);
       flex-direction: row;
     }
@@ -626,9 +668,20 @@
 <canvas id="map"></canvas>
 
 
+<div id="barraMarcas">
+  <span id="marcasLegenda">marcar:</span>
+  <input id="notaMarcas" placeholder="uma nota, se quiser">
+  <button id="marcasDesfazer">desfazer</button>
+  <button id="marcasLimpar">limpar</button>
+  <button id="marcasGuardar">guardar</button>
+  <button id="marcasFechar">fechar (M)</button>
+  <span id="marcasRecado"></span>
+</div>
+
 <div id="zoombar">
   <button id="zin" title="Aproximar">+</button>
   <button id="zout" title="Afastar">−</button>
+  <button id="zlimpo" title="Esconder/mostrar tudo o resto (H)">👁</button>
 </div>
 
 <div id="sidebarA" class="painel">
@@ -894,7 +947,11 @@
   // ---------- Configuração de render ----------
   const TILE = 32;          // pixels de mundo por coordenada
   let MIN_SCALE = 0.55;     // zoom máximo afastado (folga p/ ver todo o teatro)
-  const MAX_SCALE = 4.0;    // zoom máximo aproximado (vilas detalhadas)
+  // ZOOM (07/09): subiu de 4.0 para 9.0. E aqui que esta a sensacao de tamanho
+  // que o Lucas pediu — na vista de mapa inteiro uma aldeia nao pode crescer
+  // muito (ver `largCels` abaixo), mas aproximar passou a ir ao dobro. As pecas
+  // aguentam: a ilha e 2430 px e um sprite de aldeia tem uns 700.
+  const MAX_SCALE = 9.0;    // zoom máximo aproximado (vilas detalhadas)
 
   // ---------- Canvas ----------
   const canvas = document.getElementById("map");
@@ -915,6 +972,15 @@
   window.addEventListener("resize", resize);
 
   // ---------- Câmera ----------
+  // ===== PELE v4 =========================================================
+  // Ligada por ?aldeia=v4 no endereco. Sem o parametro o jogo corre como sempre.
+  // A DECLARACAO VIVE AQUI, NO TOPO, e nao junto do codigo que a usa mais: a
+  // ilha e carregada por volta da linha 1040 e o `const` so existe a partir da
+  // linha onde e declarado — declarada la em baixo, o jogo estourava com
+  // "Cannot access 'ALDEIA_V4' before initialization" e a tela ficava marrom.
+  const ALDEIA_V4 = (typeof location !== "undefined" &&
+                     /(\?|&)aldeia=v4(&|$)/.test(location.search));
+
   // worldX -> screenX:  sx = wx * scale + panX
   let scale = 1.6;
   let panX = 0, panY = 0;
@@ -935,11 +1001,17 @@
   // x,y calibradas: qualquer outro encaixe desloca as cidades.
   const IB = (Engine.CONFIG.layout === "iberia" && typeof Iberia !== "undefined") ? {
     ox: 130, oy: 144, larg: 1429, alt: 886,
-    // Quantas CELULAS o mapa ocupa. Nao e arbitrario: o sprite de capital tem
-    // 3.2 celulas de largura e o de aldeia 2.4, entao as duas cidades mais
-    // proximas (Lisboa-Santarem, 65.6px de viewBox) precisam ficar a mais de
-    // 2.8 celulas uma da outra. 90 celulas -> 4.1, com folga.
-    largCels: 90,
+    // Quantas CELULAS o mapa ocupa. Nao e arbitrario: e o que decide se duas
+    // aldeias vizinhas se tocam. O par mais proximo e Lisboa-Evora, a 78.6 px de
+    // viewBox; com 90 celulas isso dava 4.95 celulas de folga, e a peca v4 da
+    // aldeia ocupa 3.8. Subiu para 108 (folga 5.94) para as pecas poderem
+    // crescer sem encostarem.
+    // CUIDADO: isto NAO muda o encaixe da imagem (que e por proporcao) nem as
+    // coordenadas das cidades — muda so em quantas celulas o mesmo mapa e
+    // medido. Mas mexe na RELACAO entre o tamanho das pecas e o do mapa, porque
+    // uma peca e medida em celulas: subir `largCels` sem subir os fatores das
+    // pecas encolhe tudo.
+    largCels: 108,
     img: null, pronto: false,
   } : null;
   if (IB) {
@@ -1037,7 +1109,20 @@
     // transparente por cor (classificador R/G/B + so mantem agua CONECTADA
     // a borda da imagem, pra sombra de montanha isolada nao virar buraco).
     // Ver assets/ilha-recortada.png e o script que gerou (historico do chat).
-    IB.img.src = "assets/ilha-recortada.png";
+    // A ILHA v4 e a MESMA proporcao (2430x1728 contra 1215x864), portanto o
+    // encaixe — escala 1.17613 ancorada no topo — nao muda em nada: o `imgCels`
+    // acima e calculado por PROPORCAO, nao por pixeis. O dobro da resolucao so
+    // serve para nao virar papa quando se aproxima.
+    // CHAO LISO (07/09, decisao do Lucas): o terreno renderizado competia com
+    // as pecas e nao havia como saber se um bosque estava mal ou se era o chao.
+    // Despido a uma cor so, cada peca passa a ser julgavel sozinha. A SILHUETA e
+    // a mesma — a costa vem do alfa da arte original — portanto o encaixe e as
+    // 24 ancoras nao se mexem.
+    //   ?aldeia=v4          -> chao liso
+    //   ?aldeia=v4&terreno  -> a ilha renderizada, para comparar
+    const _terrenoRico = /(\?|&)terreno(&|=|$)/.test(location.search || "");
+    IB.img.src = !ALDEIA_V4 ? "assets/ilha-recortada.png"
+               : (_terrenoRico ? "assets/ilha-v4.png" : "assets/ilha-chao.png");
 
     // Textura de agua (23/08): ver nota acima. Carrega em paralelo com a arte
     // da ilha — o padrao so fica pronto quando ELA carregar, independente da
@@ -1101,7 +1186,10 @@
   // no load. destination-out apaga o que o gradiente pinta, entao a borda vira
   // transparente e deixa passar o oceano ladrilhado de tras.
   function montarArteEsfumadaIB() {
-    const n = IB.esfumar, w = IB.img.naturalWidth, h = IB.img.naturalHeight;
+    const w = IB.img.naturalWidth, h = IB.img.naturalHeight;
+    // a faixa esfumada e proporcional a imagem, nao um numero de pixeis: com a
+    // ilha ao dobro, 16 px viravam metade da borda de antes
+    const n = IB.esfumar * (w / 1215);
     const lona = document.createElement("canvas");
     lona.width = w; lona.height = h;
     const c = lona.getContext("2d");
@@ -1285,7 +1373,8 @@
     if (typeof Image === "undefined") return;
     for (const nome of ["bosque", "serra_grande", "serra_pequena", "castelo", "aldeia_neutra",
                         "estrada_reta", "estrada_reta2",
-                        "torre_base", "torre_chamas", "torre_queimada"]) {
+                        "torre_base", "torre_chamas", "torre_queimada",
+                        "leito"]) {
       const img = new Image();
       img.onload = function () { img.pronto = true; if (typeof draw === "function") draw(); };
       img.src = "assets/sprites/" + nome + ".png";
@@ -1479,8 +1568,12 @@
         ctx.drawImage(IB.arte || IB.img, panX, panY, IB.imgCels.w * cs0, IB.imgCels.h * cs0);
       }
       desenharEstradasIberia();
+      // A MATA VEM DEPOIS DAS ESTRADAS e antes das aldeias: as arvores estao em
+      // pe, as estradas estao no chao, e a aldeia e o que interessa ver.
+      if (typeof desenharMataV4 === "function") desenharMataV4();
       drawGame();
       if (ED.ativo) desenharAlcasEditor();
+      desenharMarcas();
       return;
     }
 
@@ -1985,6 +2078,7 @@
   });
 
   canvas.addEventListener("mousedown", (e) => {
+    if (MARC.ligado && e.button === 0 && marcarInicio(e)) { e.preventDefault(); return; }
     if (ED.ativo && IB && e.button === 0) {
       const cid = edSobreCidade(e.clientX, e.clientY);
       if (cid) {
@@ -2023,10 +2117,12 @@
     canvas.classList.add("dragging");
   });
   window.addEventListener("mouseup", () => {
+    if (marcarFim()) return;
     if (ED.pegou) { ED.pegou = null; edSalvarRascunho(); }
     dragging = false; canvas.classList.remove("dragging");
   });
   window.addEventListener("mousemove", (e) => {
+    if (MARC.a_riscar && marcarMover(e)) return;
     mouseSX = e.clientX; mouseSY = e.clientY;
     if (ED.pegou) {
       const vx = vbX(e.clientX + ED.offX), vy = vbY(e.clientY + ED.offY);
@@ -3982,6 +4078,563 @@
   // Cada estrada e LADRILHADA com o sprite do kit, peca a peca, girado para
   // acompanhar a direcao do trecho. Via de contorno sai menor e mais apagada
   // (caminho secundario). Em zoom muito afastado o ladrilho vira sujeira:
+  // ===== ESTRADAS v4 =====================================================
+  // O jogo empilha sprites de pedra ao longo do traco; ao longe eles viram uma
+  // corrente de contas, e ao perto repetem-se. Aqui a estrada e DESENHADA, em
+  // quatro passadas, e cada uma faz uma coisa:
+  //
+  //   1. SOMBRA deslocada para baixo — e o que assenta a estrada no chao em vez
+  //      de a deixar colada por cima dele;
+  //   2. ENCAIXE escuro — a valeta, a beira gasta; da espessura ao leito;
+  //   3. LEITO de terra batida;
+  //   4. VEIO claro ao meio — onde as rodas passam, o chao fica mais pisado e
+  //      mais claro. E este risco fino que faz o olho ler "caminho" em vez de
+  //      "faixa castanha".
+  //
+  // Cada passada e desenhada para TODAS as estradas antes da seguinte comecar.
+  // Se fosse estrada a estrada, o encaixe de uma passaria por cima do leito da
+  // vizinha e cada cruzamento ficaria com uma cicatriz escura.
+  const _V4_CACHE = new Map();          // traco suavizado, por par de cidades
+
+  function _catmull(pts, n) {
+    // O traco passa PELOS pontos e nao corta as esquinas. Ligar os pontos com
+    // retas deixa um canto visivel em cada no, e o canto e o que mais denuncia
+    // que aquilo foi desenhado por um computador.
+    if (pts.length < 3) return pts;
+    const ext = [pts[0]].concat(pts, [pts[pts.length - 1]]);
+    const out = [];
+    for (let i = 0; i + 3 < ext.length; i++) {
+      const [p0, p1, p2, p3] = [ext[i], ext[i + 1], ext[i + 2], ext[i + 3]];
+      for (let k = 0; k < n; k++) {
+        const t = k / n, t2 = t * t, t3 = t2 * t;
+        out.push([
+          0.5 * (2 * p1[0] + (-p0[0] + p2[0]) * t
+                 + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2
+                 + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3),
+          0.5 * (2 * p1[1] + (-p0[1] + p2[1]) * t
+                 + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2
+                 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3)]);
+      }
+    }
+    out.push(pts[pts.length - 1]);
+    return out;
+  }
+
+  function _serpentear(pts, amp) {
+    // Uma estrada medieval contorna o que lhe aparece a frente. Reta perfeita
+    // entre duas aldeias e a marca mais visivel de traco automatico.
+    // As PONTAS ficam quietas: se a curva chegasse ate ao fim, a estrada nascia
+    // ao lado da porta da aldeia.
+    if (pts.length < 4) return pts;
+    let sAcum = 0;
+    return pts.map((pt, i) => {
+      if (i) sAcum += Math.hypot(pt[0] - pts[i - 1][0], pt[1] - pts[i - 1][1]);
+      const j0 = Math.max(0, i - 1), j1 = Math.min(pts.length - 1, i + 1);
+      const dx = pts[j1][0] - pts[j0][0], dy = pts[j1][1] - pts[j0][1];
+      const L = Math.max(Math.hypot(dx, dy), 1e-6);
+      const k = Math.min(1, Math.min(i, pts.length - 1 - i) / (pts.length * 0.22));
+      const d = (Math.sin(sAcum * 0.020) * 0.7 + Math.sin(sAcum * 0.047 + 1.1) * 0.3) * amp * k;
+      return [pt[0] - dy / L * d, pt[1] + dx / L * d];
+    });
+  }
+
+  function _fita(pts, meia, ondula, semente) {
+    // A ESTRADA E UM POLIGONO, NAO UM TRACO.
+    // Um `stroke` tem largura constante, e duas bordas perfeitamente paralelas
+    // leem-se como fita adesiva por melhor que seja a cor — foi exatamente o que
+    // aconteceu na primeira versao. Aqui a meia-largura varia ao longo do
+    // caminho, portanto as beiras ficam irregulares, que e como uma estrada de
+    // terra e: mais larga onde as carrocas se cruzam, mais estreita onde a mata
+    // aperta.
+    const esq = [], dir = [];
+    for (let i = 0; i < pts.length; i++) {
+      const j0 = Math.max(0, i - 1), j1 = Math.min(pts.length - 1, i + 1);
+      const dx = pts[j1][0] - pts[j0][0], dy = pts[j1][1] - pts[j0][1];
+      const L = Math.max(Math.hypot(dx, dy), 1e-6);
+      const nx = -dy / L, ny = dx / L;
+      const w = meia * (1 + ondula * (Math.sin(i * 0.63 + semente) * 0.6
+                                      + Math.sin(i * 1.71 + semente * 2.3) * 0.4));
+      esq.push([pts[i][0] + nx * w, pts[i][1] + ny * w]);
+      dir.push([pts[i][0] - nx * w, pts[i][1] - ny * w]);
+    }
+    return esq.concat(dir.reverse());
+  }
+
+  function _preencher(poli, dy) {
+    ctx.beginPath();
+    ctx.moveTo(poli[0][0], poli[0][1] + dy);
+    for (let i = 1; i < poli.length; i++) ctx.lineTo(poli[i][0], poli[i][1] + dy);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // ── ONDE UMA ESTRADA ACABA ────────────────────────────────────────────
+  // Acabava no CENTRO da aldeia, e por isso desaparecia por baixo da peca sem
+  // se ligar a nada — era esse o "nao parece encaixado". Agora acaba na BOCA do
+  // portao que aponta para o rumo dela. O cozedor grava as bocas com o rumo que
+  // tem NO MAPA, portanto aqui e so escolher a mais alinhada; se nenhuma servir
+  // (uma aldeia com seis estradas so tem tres portoes), cai no centro, como
+  // antes.
+  function bocaV4(a, rumoGraus) {
+    const man = V4_MAN && V4_MAN[a.slug];
+    if (!man || !man.bocas || !man.bocas.length) return null;
+    const img = spriteV4(a);
+    if (!img) return null;
+    let melhor = null, dif = 999;
+    for (const b of man.bocas) {
+      let d = Math.abs(((b.rumo - rumoGraus + 540) % 360) - 180);
+      if (d < dif) { dif = d; melhor = b; }
+    }
+    if (dif > 42) return null;              // nenhum portao serve este rumo
+    const k = capitalIds.has(a.id) ? 4.6 : 3.8;
+    const larg = (TILE * scale) * k;
+    const alt = larg * img.height / img.width;
+    const dl = (IB && IB.desloc[a.slug]) || [0, 0];
+    const cs = TILE * scale;
+    const x0 = SX(a.x) + dl[0] / IB2div() * cs - larg / 2;
+    const y0 = SY(a.y) + dl[1] / IB2div() * cs + man.ancora_y * alt - alt;
+    return [x0 + melhor.x * larg, y0 + melhor.y * alt];
+  }
+
+  function desenharEstradasV4(porSlug, contorno, cs) {
+    const tracos = [];
+    let n = 0;
+    for (const e of Iberia.ESTRADAS) {
+      const a = porSlug[e.de], b = porSlug[e.para];
+      if (!a || !b) continue;
+      const chave = e.de + "|" + e.para + "|" + Math.round(scale * 1000) + "|"
+                  + Math.round(panX) + "|" + Math.round(panY);
+      let pts = _V4_CACHE.get(chave);
+      if (!pts) {
+        const rumo = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+        const ini = bocaV4(a, (rumo + 360) % 360) || [SX(a.x), baseVisualIB(a)];
+        const fim = bocaV4(b, (rumo + 540) % 360) || [SX(b.x), baseVisualIB(b)];
+        const cru = [ini];
+        for (const w of pontosVia(a.slug, b.slug)) cru.push([SX(w[0]), SY(w[1])]);
+        cru.push(fim);
+        pts = _serpentear(_catmull(cru, 10), Math.max(2, cs * 0.22));
+        if (_V4_CACHE.size > 400) _V4_CACHE.clear();
+        _V4_CACHE.set(chave, pts);
+      }
+      tracos.push({ pts, sec: contorno.has([e.de, e.para].slice().sort().join("|")),
+                    sem: (n++) * 1.7 });
+    }
+
+    ctx.save();
+    // MAIS LARGAS (07/09). A largura "certa" de uma estrada de 6 m, na escala a
+    // que as aldeias sao desenhadas, dava uma linha de dois pixeis — correta e
+    // ilegivel. Um mapa de jogo exagera as estradas de proposito, porque elas
+    // sao INFORMACAO: e por elas que as tropas andam. Passou de 0.30 para 0.70.
+    const base = Math.max(6.0, cs * 0.70);
+    // O LEITO E PREENCHIDO COM UMA FOTOGRAFIA DE GRAVILHA, nao com uma cor.
+    // Uma faixa de cor chapada le-se como fita adesiva por melhor que seja o
+    // tom — foi o que a primeira versao fez. `createPattern` repete um ladrilho
+    // de 192 px de graca; o `setTransform` prende-o ao MAPA em vez do ecra,
+    // senao a gravilha desliza por baixo das estradas quando se arrasta a vista.
+    let leito = "rgba(176,150,104,1)";
+    if (SPR.leito && SPR.leito.pronto) {
+      const pat = ctx.createPattern(SPR.leito, "repeat");
+      if (pat && pat.setTransform && typeof DOMMatrix === "function") {
+        const k = Math.max(0.25, Math.min(2.0, cs / 46));
+        pat.setTransform(new DOMMatrix().translate(panX, panY).scale(k));
+      }
+      if (pat) leito = pat;
+    }
+    // (cor, meia-largura relativa, ondulacao da beira, deslocamento vertical)
+    const PASSADAS = [
+      ["rgba(24,18,10,.30)", 0.78, 0.16, Math.max(1.2, cs * 0.075)],  // sombra
+      ["rgba(48,36,22,.85)", 0.62, 0.20, 0],                          // encaixe
+      [leito, 0.44, 0.24, 0],                                         // leito
+      ["rgba(226,206,164,.42)", 0.15, 0.44, 0],                       // veio do meio
+    ];
+    // CADA PASSADA PERCORRE TODAS AS ESTRADAS ANTES DA SEGUINTE COMECAR. Se
+    // fosse estrada a estrada, o encaixe escuro de uma passaria por cima do
+    // leito claro da vizinha e cada cruzamento ficaria com uma cicatriz.
+    for (const [cor, k, ond, dy] of PASSADAS) {
+      ctx.fillStyle = cor;
+      for (const t of tracos) {
+        const meia = Math.max(0.6, base * k * (t.sec ? 0.70 : 1));
+        _preencher(_fita(t.pts, meia, ond, t.sem), dy);
+      }
+    }
+    ctx.restore();
+  }
+
+  // ===== MATA v4 ==========================================================
+  // Bosques espalhados por `ferramentas/cena/espalhar_mata.py`, a partir do
+  // MESMO campo de densidade que decidiu onde o render da ilha pos floresta.
+  // As posicoes sao decididas UMA VEZ, fora do jogo: sortear por rejeicao e
+  // barato uma vez e caro sessenta vezes por segundo, e sorteado a cada
+  // carregamento a mata mudava de sitio entre partidas e entre o jogo e o video.
+  let MATA = null;
+  const MATA_SPR = {};
+  if (ALDEIA_V4 && typeof fetch === "function") {
+    fetch("assets/sprites/mata.json").then((r) => r.json())
+      .then((m) => { MATA = m; if (typeof draw === "function") draw(); })
+      .catch(() => { MATA = []; });
+    if (typeof Image !== "undefined") {
+      for (let i = 1; i <= 6; i++) {
+        const img = new Image();
+        img.onload = function () { img.pronto = true; if (typeof draw === "function") draw(); };
+        img.src = "assets/sprites/mata_" + i + ".png";
+        MATA_SPR[i - 1] = img;
+      }
+    }
+  }
+
+  function desenharMataV4() {
+    if (!MATA || !IB) return;
+    const cs = TILE * scale;
+    if (cs < 3) return;                 // ao longe a mata so faria sujeira
+    // A LISTA JA VEM ORDENADA DE NORTE PARA SUL. Quem esta mais a sul desenha-se
+    // por cima; sem isso um bosque do fundo tapa outro da frente e a mata perde
+    // a profundidade toda.
+    for (const m of MATA) {
+      const img = MATA_SPR[m.s];
+      if (!img || !img.pronto) continue;
+      const x = SX(m.x), y = SY(m.y);
+      if (x < -80 || y < -80 || x > VW + 80 || y > VH + 80) continue;
+      const larg = cs * 1.95 * m.e;
+      const alt = larg * img.height / img.width;
+      // as pecas sao assentes pelo CENTRO da mancha, nao pelo fundo da imagem —
+      // e por isso a ancora vale ~0,35 e nao 0
+      ctx.drawImage(img, x - larg / 2, y - alt * 0.65, larg, alt);
+    }
+  }
+
+  // ===== CADERNO DE MARCAS =================================================
+  // Ligado por ?marcar no endereco, ou pela tecla M.
+  //
+  // ── POR QUE ISTO EXISTE ────────────────────────────────────────────────
+  // Chegou-se ao ponto em que descrever um defeito por escrito custa mais do
+  // que o corrigir: "a estrada de Toledo esta mal encaixada do lado direito" e
+  // lento, ambiguo, e obriga-me a procurar. Apontar no mapa nao e. Foi a mesma
+  // razao que criou o editor de mapa (o botao "editar mapa") — quando a
+  // conversa fica mais cara que o trabalho, faz-se uma ferramenta.
+  //
+  // ── O QUE SAI DAQUI ────────────────────────────────────────────────────
+  // Duas coisas, e nenhuma chega sozinha:
+  //   * as marcas em COORDENADAS DO MAPA (viewBox), para eu saber a QUE aldeia
+  //     ou a que troco de estrada cada uma pertence, seja qual for o zoom;
+  //   * uma imagem do ecra com os riscos por cima, para eu VER o que o Lucas viu.
+  // Vao as duas para `marcas/marcas-<data>.json` e `.png`.
+  const MARC = {
+    ligado: false, cor: 0, a_riscar: null, marcas: [],
+    // A LEGENDA E EDITAVEL porque o significado de cada cor muda com o que se
+    // esta a arrumar. Hoje sao encaixes; amanha podem ser cores de terreno.
+    legenda: ["estrada mal encaixada", "arvore em cima da estrada",
+              "portao desalinhado", "tamanho errado", "cor errada", "outra coisa"],
+  };
+  const MARC_COR = ["#e8443a", "#3a7ae8", "#e8c53a", "#4ac96a", "#c463e8", "#f2f2f2"];
+  // exposto de proposito: o script inteiro corre dentro de um `<script>` fechado,
+  // e sem isto nao ha como conferir de fora se uma marca ficou registada.
+  if (typeof window !== "undefined") window.MARC = MARC;
+
+  function marcarLigar(v) {
+    MARC.ligado = v === undefined ? !MARC.ligado : v;
+    const b = document.getElementById("barraMarcas");
+    if (b) b.style.display = MARC.ligado ? "flex" : "none";
+    canvas.style.cursor = MARC.ligado ? "crosshair" : "";
+    if (typeof draw === "function") draw();
+  }
+
+  // tela -> viewBox do mapa. E o inverso exato de SX/SY, e e o que torna uma
+  // marca independente do zoom e do arrasto: gravada em coordenadas do MAPA,
+  // ela fica onde foi posta mesmo que a camera mude.
+  //
+  // ── O RISCO SAIA LONGE DO RATO ────────────────────────────────────────
+  // Havia aqui um `* (canvas.width / r.width)` — converter para pixeis do
+  // BUFFER. Parece a coisa certa a fazer e e a coisa errada: o `draw` comeca
+  // com `ctx.setTransform(DPR,0,0,DPR,0,0)`, portanto tudo o que se desenha
+  // esta em pixeis de CSS, e o `panX`/`panY` tambem (nascem de `VW/2`). Num
+  // ecra com DPR 2 a marca caia ao DOBRO da distancia do canto — perto do
+  // canto superior esquerdo quase acertava, e piorava a medida que o rato se
+  // afastava. Aqui em teste o DPR era 1 e o defeito nao aparecia.
+  // A regra: converter para o espaco em que se DESENHA, nao para o buffer.
+  function marcarPonto(ev) {
+    const r = canvas.getBoundingClientRect();
+    const tx = ev.clientX - r.left;
+    const ty = ev.clientY - r.top;
+    const cs = TILE * scale;
+    return [((tx - panX) / cs) * IB2div() + IB.ox,
+            ((ty - panY) / cs) * IB2div() + IB.oy];
+  }
+
+  // CONFERIR SEM O RATO. Leva um ponto do ecra a coordenadas do mapa e traz de
+  // volta; se o erro nao for ~0, a marca vai sair longe do ponteiro. Existe
+  // porque o defeito do DPR so aparecia em ecras com DPR != 1 — e o meu, aqui,
+  // e 1: sem esta funcao eu so posso RACIOCINAR sobre o bug, nao medi-lo.
+  function marcarConferir(sx, sy) {
+    const r = canvas.getBoundingClientRect();
+    const p = marcarPonto({ clientX: r.left + sx, clientY: r.top + sy });
+    return [SX(p[0]) - sx, SY(p[1]) - sy];
+  }
+  if (typeof window !== "undefined") window.MARC.conferir = marcarConferir;
+
+  function marcarInicio(ev) {
+    if (!MARC.ligado || !IB) return false;
+    MARC.a_riscar = { cor: MARC.cor, pts: [marcarPonto(ev)] };
+    return true;
+  }
+
+  function marcarMover(ev) {
+    if (!MARC.a_riscar) return false;
+    const p = marcarPonto(ev);
+    const u = MARC.a_riscar.pts[MARC.a_riscar.pts.length - 1];
+    if (Math.hypot(p[0] - u[0], p[1] - u[1]) > 2) MARC.a_riscar.pts.push(p);
+    draw();
+    return true;
+  }
+
+  // ── UMA FOTOGRAFIA POR MARCA ────────────────────────────────────────
+  // O caderno guardava UM print do ecra inteiro. Mas marcar e um trabalho de
+  // aproximar: o Lucas fez tres marcas em tres sitios e tres zooms diferentes,
+  // e o print so mostrava a ultima — as outras duas chegavam-me como
+  // coordenadas cegas. Agora cada risco leva o seu proprio recorte, tirado no
+  // momento em que e fechado, com o zoom que ele escolheu para o ver.
+  // Mede ~40 KB em vez de 1,5 MB, e vale mais: e a vista que ELE julgou certa
+  // para mostrar o defeito.
+  function fotoDoRisco(pts) {
+    const cs = TILE * scale;
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    for (const q of pts) {
+      const ex = panX + celX(q[0]) * cs, ey = panY + celY(q[1]) * cs;
+      x0 = Math.min(x0, ex); y0 = Math.min(y0, ey);
+      x1 = Math.max(x1, ex); y1 = Math.max(y1, ey);
+    }
+    const folga = Math.max(70, ((x1 - x0) + (y1 - y0)) * 0.30);
+    x0 -= folga; y0 -= folga; x1 += folga; y1 += folga;
+    // o recorte sai do BUFFER, que esta em pixeis de dispositivo — daqui o DPR
+    const sx = Math.max(0, Math.round(x0 * DPR)), sy = Math.max(0, Math.round(y0 * DPR));
+    const sw = Math.min(canvas.width - sx, Math.round((x1 - x0) * DPR));
+    const sh = Math.min(canvas.height - sy, Math.round((y1 - y0) * DPR));
+    if (sw < 8 || sh < 8) return "";
+    const k = Math.min(1, 720 / sw);
+    const c = document.createElement("canvas");
+    c.width = Math.round(sw * k); c.height = Math.round(sh * k);
+    c.getContext("2d").drawImage(canvas, sx, sy, sw, sh, 0, 0, c.width, c.height);
+    return c.toDataURL("image/png");
+  }
+
+  // A NOTA E DE CADA RISCO, nao do caderno.
+  // Medido no primeiro uso a serio (07/09): as tres marcas sairam todas da
+  // mesma cor e cada uma era um problema diferente — "arvore na estrada",
+  // "torre de frente para a estrada", outra arvore. A cor da uma GAVETA; o que
+  // esta errado ali so a frase diz. Com uma caixa de nota so para o caderno, a
+  // terceira frase ficava colada as tres marcas e duas ficavam mal descritas.
+  // A caixa NAO se limpa: escreve-se uma vez e risca-se tudo o que for daquilo.
+  function marcarFim() {
+    if (!MARC.a_riscar) return false;
+    const nt = document.getElementById("notaMarcas");
+    MARC.a_riscar.nota = nt ? nt.value.trim() : "";
+    const m = MARC.a_riscar;
+    MARC.marcas.push(m);
+    MARC.a_riscar = null;
+    draw();                       // primeiro desenhar: a foto tem de LEVAR o risco
+    try { m.foto = fotoDoRisco(m.pts); } catch (e) { m.foto = ""; }
+    return true;
+  }
+
+  function desenharMarcas() {
+    if (!MARC.marcas.length && !MARC.a_riscar) return;
+    const cs = TILE * scale;
+    const px = (p) => [panX + celX(p[0]) * cs, panY + celY(p[1]) * cs];
+    ctx.save();
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    for (const m of MARC.marcas.concat(MARC.a_riscar ? [MARC.a_riscar] : [])) {
+      const pts = m.pts.map(px);
+      ctx.lineWidth = Math.max(3, cs * 0.10);
+      ctx.strokeStyle = "rgba(0,0,0,.45)";       // contorno: legivel sobre tudo
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (const q of pts.slice(1)) ctx.lineTo(q[0], q[1]);
+      if (pts.length === 1) ctx.arc(pts[0][0], pts[0][1], Math.max(4, cs * 0.16), 0, 6.284);
+      ctx.stroke();
+      ctx.lineWidth = Math.max(2, cs * 0.065);
+      ctx.strokeStyle = MARC_COR[m.cor];
+      ctx.stroke();
+      if (pts.length === 1) {
+        ctx.fillStyle = MARC_COR[m.cor];
+        ctx.beginPath();
+        ctx.arc(pts[0][0], pts[0][1], Math.max(3, cs * 0.12), 0, 6.284);
+        ctx.fill();
+      }
+      // o NUMERO. E o que permite dizer "o 2 esta resolvido" em vez de
+      // descrever outra vez o sitio — a mesma razao de existir do caderno.
+      const idx = MARC.marcas.indexOf(m);
+      if (idx >= 0) {
+        let mx = 0, my = 0;
+        for (const q of pts) { mx += q[0]; my += q[1]; }
+        mx /= pts.length; my /= pts.length;
+        const r = Math.max(...pts.map((q) => Math.hypot(q[0] - mx, q[1] - my)));
+        ctx.font = "700 " + Math.max(13, cs * 0.30) + "px system-ui, sans-serif";
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.7)";
+        ctx.strokeText(String(idx + 1), mx + r + 12, my - r - 4);
+        ctx.fillStyle = MARC_COR[m.cor];
+        ctx.fillText(String(idx + 1), mx + r + 12, my - r - 4);
+      }
+    }
+    ctx.restore();
+  }
+
+  // A QUE PECA PERTENCE UMA MARCA. E isto que transforma "um risco em (812,533)"
+  // em "a estrada Madrid-Toledo": sem esta linha eu teria de ir procurar no mapa
+  // o que ha naquele ponto, que e exatamente o trabalho que a ferramenta existe
+  // para poupar.
+  // O CENTRO DE UM RISCO E O CENTROIDE, nao o ponto do meio da lista.
+  // O Lucas nao rabisca: CIRCUNDA. Num traco fechado o ponto do meio da lista e
+  // o lado OPOSTO ao inicio — fica na borda do circulo, nunca no que ele
+  // circundou. Medido: as duas arvores davam 13 e 30 px de distancia a estrada
+  // com o ponto do meio, e a marca do centro cai em cima do que interessa.
+  function centroDoRisco(pts) {
+    let sx = 0, sy = 0;
+    for (const q of pts) { sx += q[0]; sy += q[1]; }
+    return [sx / pts.length, sy / pts.length];
+  }
+
+  // O QUE ESTA DENTRO DO CIRCULO.
+  // Antes eu perguntava "qual a peca MAIS PROXIMA do centro" e ficava com uma
+  // so. Mas quase todos os defeitos que ele aponta sao um ENCONTRO de duas
+  // pecas — uma arvore EM CIMA de uma estrada, uma torre DE FRENTE para uma
+  // estrada. Com uma peca so, a mais interessante e justamente a que fica de
+  // fora. Por isso o raio do circulo passa a ser usado: devolve-se tudo o que
+  // ele apanha — aldeias, estradas e moitas — e o defeito nomeia-se sozinho.
+  function oQueEstaAqui(c, raio) {
+    if (!game || !IB) return null;
+    // AS FOLGAS SAO PEQUENAS DE PROPOSITO. Medido: um circulo de raio 82 em
+    // cima de Cordoba apanhava 5 estradas e 6 moitas — verdade, e inutil. O
+    // circulo que ele desenha JA DIZ o tamanho do problema; alargar por cima
+    // disso so acrescenta ruido. A folga da aldeia e maior porque a peca e
+    // grande: o centro fica longe da muralha que ele circundou.
+    const r = Math.max(raio, 12);
+    const dentro = (d, folga) => d <= r + folga;
+    const aldeias = [], estradas = [], moitas = [];
+
+    for (const a of game.aldeias) {
+      const d = Math.hypot(c[0] - a.x, c[1] - a.y);
+      if (dentro(d, 55)) aldeias.push({ id: a.slug, dist: Math.round(d) });
+    }
+    for (const e of (Iberia.ESTRADAS || [])) {
+      const a = (game.aldeias || []).find((v) => v.slug === e.de);
+      const b = (game.aldeias || []).find((v) => v.slug === e.para);
+      if (!a || !b) continue;
+      const vx = b.x - a.x, vy = b.y - a.y;
+      const L2 = Math.max(vx * vx + vy * vy, 1e-6);
+      const t = Math.max(0, Math.min(1, ((c[0] - a.x) * vx + (c[1] - a.y) * vy) / L2));
+      const d = Math.hypot(c[0] - (a.x + t * vx), c[1] - (a.y + t * vy));
+      if (dentro(d, 8)) estradas.push({ id: e.de + "-" + e.para, dist: Math.round(d) });
+    }
+    // as MOITAS sao o que faltava: "arvore em cima da estrada" era um defeito
+    // que eu tinha de ir procurar a olho no mapa. Agora vem com o indice da
+    // moita, que e a linha exata do `assets/sprites/mata.json` a corrigir.
+    for (let i = 0; i < (MATA || []).length; i++) {
+      const m = MATA[i];
+      const d = Math.hypot(c[0] - m.x, c[1] - m.y);
+      if (dentro(d, 16)) moitas.push({ i: i, dist: Math.round(d), sprite: m.s });
+    }
+    const ord = (L) => L.sort((x, y) => x.dist - y.dist).slice(0, 6);
+    return { aldeias: ord(aldeias), estradas: ord(estradas), moitas: ord(moitas) };
+  }
+
+  // O RECADO NAO E UM `alert`. Um alert bloqueia a pagina inteira ate alguem
+  // carregar em OK — e quem esta a marcar o mapa quer continuar a marcar, nao
+  // quer despachar caixas. (Tambem me travava a mim: um alert por abrir deixa o
+  // navegador sem responder a mais nada.)
+  function marcarRecado(txt) {
+    const el = document.getElementById("marcasRecado");
+    if (el) { el.textContent = txt; clearTimeout(marcarRecado._t);
+              marcarRecado._t = setTimeout(() => { el.textContent = ""; }, 6000); }
+  }
+
+  async function marcarGuardar() {
+    if (!MARC.marcas.length) { marcarRecado("nada marcado ainda"); return; }
+    const nota = document.getElementById("notaMarcas");
+    // REDE DE SEGURANCA: quem circunda primeiro e escreve depois nao devia
+    // perder a frase. Aconteceu logo na primeira ronda a serio — a marca [1]
+    // chegou sem nota nenhuma e a [2] com a frase que descrevia as duas. Um
+    // risco sem nota fica com o que estiver na caixa na hora de gravar.
+    const tardia = nota ? nota.value.trim() : "";
+    for (const m of MARC.marcas) if (!m.nota) m.nota = tardia;
+    const corpo = {
+      quando: new Date().toISOString(),
+      nota: nota ? nota.value : "",
+      legenda: MARC.legenda,
+      marcas: MARC.marcas.map((m, i) => {
+        const c = centroDoRisco(m.pts);
+        return {
+          n: i + 1, cor: m.cor, gaveta: MARC.legenda[m.cor], nota: m.nota || "",
+          centro: [Math.round(c[0]), Math.round(c[1])],
+          raio: Math.round(Math.max(...m.pts.map((q) => Math.hypot(q[0] - c[0], q[1] - c[1])))),
+          pts: m.pts.map((q) => [Math.round(q[0]), Math.round(q[1])]),
+          aqui: oQueEstaAqui(c, Math.max(...m.pts.map((q) => Math.hypot(q[0] - c[0], q[1] - c[1])))),
+          foto: m.foto || "",
+        };
+      }),
+      imagem: canvas.toDataURL("image/png"),
+    };
+    try {
+      const r = await fetch("/marcas", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(corpo),
+      });
+      const j = await r.json();
+      // O LOTE FECHA-SE AO GRAVAR. Sem isto as marcas acumulavam e cada
+      // gravacao reenviava as anteriores: tres gravacoes deram 1, 2 e 3 marcas
+      // e so a ultima servia. Um lote por gravacao, um relatorio por lote.
+      const n = MARC.marcas.length;
+      MARC.marcas = [];
+      draw();
+      marcarRecado("gravadas " + n + " marca(s) em marcas/" + j.ficheiro + " - a mesa esta limpa");
+    } catch (e) {
+      marcarRecado("nao consegui gravar - o jogo esta a correr por python servir.py?");
+    }
+  }
+
+
+  // ── a barra do caderno de marcas ────────────────────────────────────────
+  (function montarBarraMarcas() {
+    const b = document.getElementById("barraMarcas");
+    if (!b) return;
+    const leg = document.getElementById("marcasLegenda");
+    MARC.legenda.forEach((txt, i) => {
+      const d = document.createElement("div");
+      d.className = "cor" + (i === 0 ? " sel" : "");
+      d.style.background = MARC_COR[i];
+      d.title = txt;
+      d.onclick = () => {
+        MARC.cor = i;
+        b.querySelectorAll(".cor").forEach((x, k) => x.classList.toggle("sel", k === i));
+        leg.textContent = txt;
+      };
+      leg.after(d);
+    });
+    leg.textContent = MARC.legenda[0];
+    document.getElementById("marcasDesfazer").onclick = () => { MARC.marcas.pop(); draw(); };
+    document.getElementById("marcasLimpar").onclick = () => { MARC.marcas = []; draw(); };
+    document.getElementById("marcasGuardar").onclick = marcarGuardar;
+    document.getElementById("marcasFechar").onclick = () => marcarLigar(false);
+
+    // ── o interruptor da tela limpa ───────────────────────────────────
+    function limparTela(v) {
+      const on = v === undefined ? !document.body.classList.contains("limpo") : v;
+      document.body.classList.toggle("limpo", on);
+      const bt = document.getElementById("zlimpo");
+      if (bt) {
+        bt.classList.toggle("on", on);
+        bt.title = on ? "Mostrar tudo outra vez (H)" : "Esconder tudo o resto (H)";
+      }
+    }
+    const zl = document.getElementById("zlimpo");
+    if (zl) zl.onclick = () => limparTela();
+
+    window.addEventListener("keydown", (e) => {
+      if (document.activeElement && document.activeElement.tagName === "INPUT") return;
+      if (e.key === "m" || e.key === "M") marcarLigar();
+      if (e.key === "h" || e.key === "H") limparTela();
+    });
+    if (/(\?|&)marcar(&|=|$)/.test(location.search || "")) marcarLigar(true);
+  })();
   // abaixo de 8px por celula cai no traco simples.
   function desenharEstradasIberia() {
     if (!IB || !game) return;
@@ -3990,6 +4643,7 @@
     for (const a of game.aldeias) porSlug[a.slug] = a;
     const contorno = new Set((Iberia.MAPA.viasDeContorno || [])
       .map((par) => par.slice().sort().join("|")));
+    if (ALDEIA_V4) { desenharEstradasV4(porSlug, contorno, cs); return; }
     const pecas = ["estrada_reta", "estrada_reta2"].filter((n) => SPR[n] && SPR[n].pronto);
     if (!pecas.length || cs < 8) { desenharEstradasTraco(porSlug, contorno, cs); return; }
 
@@ -4104,7 +4758,74 @@
   }
   // Sprite e largura da aldeia, num lugar so: baseVisualIB e o desenho TEM de
   // concordar, senao a ancora sai do lugar (o erro que ja mordeu 3x).
+  // ===== POVOACOES v4 (cozidas no Blender, ferramentas/cena/cozer.py) =====
+  // Ligado por ?aldeia=v4 no endereco. Sem o parametro o jogo corre como sempre
+  // — isto e um estudo, nao uma mudanca.
+  //
+  // UMA PECA POR CIDADE, e nao uma por tamanho. A razao e o PORTAO: ele tem de
+  // dar para a estrada, e cada cidade tem as suas (de duas a seis). Como efeito
+  // secundario as 24 povoacoes ficam todas diferentes, o que resolve sozinho o
+  // problema de vinte e quatro copias iguais.
+  //
+  // A COR e a do Rei que a possui, e muda quando a aldeia troca de maos: as tres
+  // versoes (neutra / azul / vermelha) sao o MESMO desenho com outro pano nos
+  // mastros. Trocar de sprite e trocar de dono, sem repintar nada.
+  const V4 = {};                       // cache de <img>, carregadas sob pedido
+  // A ANCORA VEM DO MANIFESTO, NAO DE UM PALPITE.
+  // O jogo assenta um sprite pelo FUNDO da imagem. O chao da aldeia nao esta no
+  // fundo — o disco isometrico continua para baixo dele — portanto o ponto que
+  // tem de cair na posicao da cidade esta a uns 40% da altura, e varia de peca
+  // para peca (medido: de 0,366 a 0,514). Sem este numero a aldeia flutua acima
+  // do cruzamento das estradas, que foi o que aconteceu no primeiro teste.
+  // Um ficheiro para as 24: as tres cores partilham o mesmo desenho.
+  let V4_MAN = null;
+  if (ALDEIA_V4 && typeof fetch === "function") {
+    fetch("assets/sprites/aldeias_v4.json")
+      .then((r) => r.json())
+      .then((m) => { V4_MAN = m; if (typeof draw === "function") draw(); })
+      .catch(() => { V4_MAN = {}; });
+  }
+
+  // o motor guarda o dono como null / "A" / "B" — as mesmas chaves do COR
+  const V4_COR = { A: "azul", B: "vermelha" };
+
+  function corDoDono(a) {
+    return V4_COR[a.dono] || "neutra";
+  }
+
+  function spriteV4(a) {
+    if (typeof Image === "undefined") return null;
+    // o sprite e NEUTRO: a cor vem da flamula que o jogo desenha por cima
+    const nome = "aldeia_" + a.slug;
+    let img = V4[nome];
+    if (img === undefined) {
+      img = new Image();
+      img.onload = function () { img.pronto = true; if (typeof draw === "function") draw(); };
+      img.onerror = function () { img.falhou = true; };
+      img.src = "assets/sprites/" + nome + ".png";
+      V4[nome] = img;
+    }
+    return img.pronto ? img : null;
+  }
+
+  // Sprite e largura da aldeia, num lugar so: baseVisualIB e o desenho TEM de
+  // concordar, senao a ancora sai do lugar (o erro que ja mordeu 3x).
   function spriteAldeia(a) {
+    if (ALDEIA_V4) {
+      const v = spriteV4(a);
+      const man = V4_MAN && V4_MAN[a.slug];
+      if (v && man) {
+        // as capitais sao maiores no mapa porque sao maiores na peca
+        const k = capitalIds.has(a.id) ? 4.6 : 3.8;
+        // `assento`: quanto da ALTURA do sprite fica ABAIXO do ponto que assenta
+        // na cidade. O desenho soma-o ao y; as estradas ignoram-no e miram no
+        // chao, que e onde elas de facto chegam.
+        return { spr: v, larg: (TILE * scale) * k, torre: false,
+                 assento: man.ancora_y };
+      }
+      // se a imagem ainda nao chegou, cai no desenho antigo: o mapa nunca fica
+      // sem peca enquanto o PNG viaja
+    }
     if (capitalIds.has(a.id)) {
       const c = SPR.castelo && SPR.castelo.pronto ? SPR.castelo : null;
       return { spr: c, larg: (TILE * scale) * 3.2, torre: false };
@@ -4121,8 +4842,13 @@
 
   function baseVisualIB(a) {
     const cs = TILE * scale;
-    const { spr, larg } = spriteAldeia(a);
-    return SY(a.y) - alturaSprite(spr, larg, Math.max(20, cs * 0.59)) * IB.levanta;
+    const e = spriteAldeia(a);
+    // Nas pecas v4 o ponto que assenta na cidade E a posicao da cidade: nao ha
+    // levante nenhum a aplicar, porque a peca ja traz a sua ancora. As estradas
+    // passam a terminar no CHAO da povoacao em vez do fundo da imagem — que e
+    // onde elas de facto chegam.
+    if (e.assento != null) return SY(a.y);
+    return SY(a.y) - alturaSprite(e.spr, e.larg, Math.max(20, cs * 0.59)) * IB.levanta;
   }
 
   function drawGame() {
@@ -4156,11 +4882,17 @@
       const dl = (IB && IB.desloc[a.slug]) || [0, 0];
       const yBase = (IB ? baseVisualIB(a) : sy + r * 0.5) + dl[1] / IB2div() * (TILE * scale);
       sx += IB ? dl[0] / IB2div() * (TILE * scale) : 0;
+      // ASSENTO: quanto da altura do sprite fica ABAIXO do ponto que assenta na
+      // cidade. Vive AQUI, fora do `if`, porque o bloco da bandeira mais abaixo
+      // tambem precisa dele — declarar dentro do ramo e usar fora foi o erro que
+      // deixou o mapa sem aldeias duas vezes seguidas.
+      const _assento = (escolha.assento != null && sprB)
+        ? alturaSprite(sprB, larg, r) * escolha.assento : 0;
       if (sprB) {
         // Sprite CRU, sempre: quem marca a posse e a BANDEIRA, nao a tinta.
         // (feedback Lucas 03/08: a capital tingida virava um bloco azul ou
         // vermelho e comia o desenho do castelo.)
-        desenharSprite(sprB, sx, yBase, larg);
+        desenharSprite(sprB, sx, yBase + _assento, larg);
       } else if (r >= 15) {                          // fallback procedural
         if (ehCapital) desenharTorreao(sx, sy, r, col);
         else desenharCabana(sx, sy, r);
@@ -4169,12 +4901,34 @@
       // BANDEIRA do time: a UNICA marca de posse, tanto na capital quanto na
       // aldeia tomada. Na capital ela sobe um pouco mais (o castelo e alto).
       const alt = alturaSprite(sprB, larg, r);
+
+      // ── AS PECAS v4 TRAZEM OS MASTROS NO MANIFESTO ──────────────────────
+      // O pano NAO e assado no sprite: sao 24 povoacoes e o pano e o unico eixo
+      // que multiplica por numero de Reis (24 x 7 = 168 renders numa expansao,
+      // todos iguais menos um trapo). O cozedor grava onde ficaram os mastros,
+      // em fracao do sprite, e a flamula e desenhada aqui — como sempre foi.
+      // A ESCALA DO PANO NAO E A REAL: um estandarte de 1,7 m num sprite que
+      // vale 79 m dava 2 px no zoom de jogo. Desenha-se maior de proposito,
+      // porque a bandeira nao esta ali para ser realista, esta para dizer de
+      // quem e a aldeia.
       // A TORRE JA TEM MASTRO no desenho (medido: ponta em 48.4% da largura, no
       // topo do quadro). Entao ali se hasteia so a FLAMULA, sem repintar haste.
       // Castelo e o fallback antigo seguem com a bandeira inteira.
-      const bFootY = ehTorre ? (yBase - alt * 0.995) : (yBase - alt * (ehCapital ? 0.92 : 0.55));
-      const bH = r * (ehCapital ? 1.5 : 1.25);
-      if (ehTorre) {
+      // `bFootY` e `bH` sao usados MAIS ABAIXO (o numero da guarnicao assenta na
+      // ponta da bandeira), portanto vivem fora dos ramos.
+      let bFootY = ehTorre ? (yBase - alt * 0.995) : (yBase - alt * (ehCapital ? 0.92 : 0.55));
+      let bH = r * (ehCapital ? 1.5 : 1.25);
+      if (escolha.assento != null) {
+        const man = V4_MAN && V4_MAN[a.slug];
+        const x0 = sx - larg / 2, y0 = yBase + _assento - alt;
+        bFootY = y0 + alt * 0.10;              // a guarnicao fica sobre a peca
+        if (man && a.dono !== null && man.mastros) {
+          const h = Math.max(5, larg * 0.085);
+          for (const m of man.mastros) {
+            desenharFlamula(x0 + m.x * larg, y0 + m.y * alt - h * 0.52, h, col);
+          }
+        }
+      } else if (ehTorre) {
         if (a.dono !== null) desenharFlamula(sx - larg * 0.016, bFootY, bH * 0.62, col);
       } else if (a.dono !== null) {
         // capital: hasteia no alto do castelo (0.92); aldeia: no telhado (0.55)

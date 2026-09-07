@@ -93,6 +93,47 @@ class Manipulador(http.server.SimpleHTTPRequestHandler):
                 if modo == "w":
                     print("  checkpoint iniciado: checkpoints/" + nome)
                 return
+            if self.path == "/marcas":
+                # ── O CADERNO DE MARCAS ──────────────────────────────────
+                # Dizer por escrito "a estrada de Toledo esta mal encaixada do
+                # lado direito" e lento e ambiguo; apontar no mapa nao e. Aqui
+                # chega o que o Lucas rabiscou por cima do jogo: as marcas em
+                # COORDENADAS DO MAPA (para eu saber a que aldeia ou estrada
+                # pertencem) e uma imagem do ecra (para eu VER o que ele viu).
+                # Os dois juntos, porque nenhum dos dois chega sozinho.
+                pasta = os.path.join(RAIZ, "marcas")
+                os.makedirs(pasta, exist_ok=True)
+                sel = dados.get("marcas") or []
+                carimbo = re.sub(r"[^0-9]", "", str(dados.get("quando", "")))[:14] or "sem-data"
+                base = os.path.join(pasta, "marcas-" + carimbo)
+                import base64
+
+                def gravar_png(caminho, url):
+                    if not str(url).startswith("data:image/png;base64,"):
+                        return None
+                    with open(caminho, "wb") as g:
+                        g.write(base64.b64decode(url.split(",", 1)[1]))
+                    return os.path.basename(caminho)
+
+                # UM RECORTE POR MARCA, e nao so o print do ecra. O ecra mostra
+                # o ultimo sitio onde ele esteve; o recorte mostra CADA defeito
+                # com o zoom que ele escolheu para o ver. O `foto` sai do JSON
+                # depois de gravado — sao ~40 KB de base64 cada e o ficheiro de
+                # texto tem de continuar legivel.
+                for i, m in enumerate(sel):
+                    nome = gravar_png(base + "-%d.png" % (i + 1), m.pop("foto", ""))
+                    if nome:
+                        m["recorte"] = nome
+                with open(base + ".json", "w", encoding="utf-8", newline=chr(10)) as f:
+                    json.dump({"quando": dados.get("quando"),
+                               "nota": dados.get("nota", ""),
+                               "legenda": dados.get("legenda", {}),
+                               "marcas": sel}, f, ensure_ascii=False, indent=1)
+                gravar_png(base + ".png", dados.get("imagem") or "")
+                self._ok_json({"ok": True, "ficheiro": os.path.basename(base)})
+                print("  marcas gravadas: marcas/%s.json (%d marca(s))"
+                      % (os.path.basename(base), len(sel)))
+                return
             self.send_error(404, "rota desconhecida")
         except Exception as e:                      # noqa: BLE001
             self.send_error(500, str(e))
