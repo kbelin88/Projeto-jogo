@@ -25,6 +25,8 @@
   <h1>A IBERIA EM 3D</h1>
   <label><input type="checkbox" id="sombras" checked> sombras</label>
   <label><input type="checkbox" id="mata" checked> mata</label>
+  <label><input type="checkbox" id="tropas" checked> tropas em marcha</label>
+  <label><input type="checkbox" id="parar"> parar o tempo</label>
   <label><input type="checkbox" id="alto"> vista de cima</label>
   <p>Arrasta para girar &middot; roda para aproximar &middot; botao direito
      para deslocar. Desce ate ao chao e passeia entre as aldeias.</p>
@@ -137,9 +139,13 @@ new GLTFLoader().load("pecas.glb", (g) => {
   for (const [nome, n] of Object.entries(quantas)) {
     const partes = banco[nome];
     if (!partes || !partes.length) continue;
+    // OS ARBUSTOS NAO LANCAM SOMBRA. Sao 10.600 e medem meio metro: a sombra
+    // deles nao se ve e paga-se em cada quadro, porque cada objeto que lanca
+    // sombra e desenhado outra vez para o mapa do sol.
+    const arbusto = /^arbusto/.test(MAPA.pecas[nome] || nome);
     inst[nome] = partes.map((base) => {
       const im = new THREE.InstancedMesh(base.geometry, base.material, n);
-      im.castShadow = true; im.receiveShadow = true;
+      im.castShadow = !arbusto; im.receiveShadow = true;
       im.frustumCulled = false;
       im.count = 0;                     // preenche-se a seguir
       cena.add(im);
@@ -171,7 +177,9 @@ new GLTFLoader().load("pecas.glb", (g) => {
   for (const m of MAPA.manchas) {
     for (const t of MAPA.arranjos[m.b]) {
       const l = inst[t.peca]; if (!l) continue;
-      por(l, m.p[0] + t.p[0] * m.e, m.p[1] + t.p[1] * m.e, t.p[2] * m.e,
+      // `m.z` e a altura do terreno naquele ponto: sem ela a mata ficava toda
+      // ao nivel do mar e metade dela desaparecia dentro das serras.
+      por(l, m.p[0] + t.p[0] * m.e, m.p[1] + t.p[1] * m.e, (m.z || 0) + t.p[2] * m.e,
           t.rz, t.e * m.e);
       nInst++;
     }
@@ -182,6 +190,129 @@ new GLTFLoader().load("pecas.glb", (g) => {
   // expostos de proposito: e assim que se confere de fora quantas pecas
   // chegaram, e que se leva a camara a um sitio exato sem a arrastar a mao.
   Object.assign(window, { inst, cam, ctrl, cena, rend, MAPA, THREE });
+  // ═══ AS TROPAS EM MARCHA ═════════════════════════════════════════════
+  // Isto ainda NAO e o jogo: e uma demonstracao de que a peca, a estrada e o
+  // relevo ja concordam o suficiente para uma coluna andar de uma aldeia a
+  // outra sem sair do caminho nem enterrar-se no chao. Quando o motor mandar,
+  // troca-se a fonte das colunas e o resto fica igual.
+  //
+  // A COLUNA ANDA EM FILA, com os homens espacados e a passo constante. Duas
+  // coisas fazem-na parecer uma coluna e nao uma fila de bonecos: cada um sai
+  // um pouco para o lado (nao ha estrada tao estreita que se ande em fila
+  // indiana), e a velocidade e a do TIPO -- o cavaleiro anda o dobro do
+  // lanceiro, que e a regra do proprio motor.
+  const VEL = { lanceiro: 5.5, arqueiro: 7.0, cavaleiro: 11.0 };  // m/s
+  const colunas = [];
+  if (MAPA.estradas && MAPA.tropas) {
+    let semente = 7;
+    const sorte = () => (semente = (semente * 1103515245 + 12345) & 0x7fffffff)
+                        / 0x7fffffff;
+    for (const e of MAPA.estradas) {
+      if (sorte() > 0.55) continue;                 // nem toda a estrada tem tropa
+      const tipo = MAPA.tropas[Math.floor(sorte() * MAPA.tropas.length)];
+      // vem do BANCO e nao de `inst`: uma tropa nao esta em `copias` -- nao ha
+      // nenhuma colocada no mapa, porque quem as coloca e o jogo, a cada turno.
+      if (!banco[tipo]) continue;
+      const n = 3 + Math.floor(sorte() * 6);
+      // o comprimento do caminho, para a marcha ser a passo e nao por troco
+      const pts = e.pts, acum = [0];
+      for (let i = 1; i < pts.length; i++)
+        acum.push(acum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0],
+                                           pts[i][1] - pts[i - 1][1]));
+      colunas.push({ tipo, pts, acum, comp: acum[acum.length - 1], n,
+                     t0: sorte() * 400, sentido: sorte() < 0.5 ? 1 : -1,
+                     lado: () => 0 });
+    }
+  }
+  // uma so lista de instancias por tipo, partilhada por todas as colunas
+  const tropaInst = {};
+  for (const tipo of (MAPA.tropas || [])) {
+    if (!banco[tipo]) continue;
+    const total = colunas.filter((c) => c.tipo === tipo)
+                         .reduce((a, c) => a + c.n, 0);
+    if (!total) continue;
+    tropaInst[tipo] = banco[tipo].map((base) => {
+      const im = new THREE.InstancedMesh(base.geometry, base.material, total);
+      im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false;
+      im.count = total;
+      cena.add(im);
+      return im;
+    });
+  }
+  window.__tropas = { colunas, tropaInst, VEL };
+
+  // ═══ AS BANDEIRAS ════════════════════════════════════════════════════
+  // A unica coisa da aldeia que muda quando ela troca de dono. Por isso nao e
+  // assada: o forno grava ONDE fica o mastro e a cor e de quem for dono --
+  // 22 aldeias vezes N Reis seriam N vezes mais renders, e um setimo Rei
+  // custaria outro forno inteiro. Assim custa zero.
+  //
+  // O PANO ONDULA NO SHADER, e nao no laco de desenho. Sessenta bandeiras a
+  // recalcular vertices em JavaScript sessenta vezes por segundo seriam 60x60
+  // multiplicacoes por quadro por nada: a placa faz isto de graca, e cada
+  // bandeira ondula com a fase da sua posicao, para nao baterem todas ao mesmo
+  // tempo como um coro.
+  const REIS = [0xc23b2e, 0x2f6fb5];        // vermelho e azul, por agora
+  const mastroG = new THREE.CylinderGeometry(0.22, 0.26, 1, 6);
+  const panoG = new THREE.PlaneGeometry(1, 1, 12, 1);
+  panoG.translate(0.5, 0, 0);               // ancorado na tralha, nao no meio
+  const mastros = [];
+  for (const [cid, lista] of Object.entries(MAPA.mastros || {}))
+    for (const m of lista) mastros.push({ cid, p: m });
+  if (mastros.length) {
+    const matMastro = new THREE.MeshStandardMaterial({ color: 0x3a2a18,
+                                                       roughness: 0.9 });
+    const imM = new THREE.InstancedMesh(mastroG, matMastro, mastros.length);
+    imM.castShadow = true;
+    cena.add(imM);
+    const M2 = new THREE.Matrix4(), V2 = new THREE.Vector3();
+    const Q2 = new THREE.Quaternion(), S2 = new THREE.Vector3();
+    const ALT = 9.0;                        // altura do mastro, em metros
+    mastros.forEach((m, i) => {
+      V2.set(m.p[0], m.p[2] + ALT / 2, -m.p[1]);
+      S2.set(1, ALT, 1);
+      M2.compose(V2, Q2, S2);
+      imM.setMatrixAt(i, M2);
+    });
+    imM.instanceMatrix.needsUpdate = true;
+
+    // um pano por Rei, para a cor vir do material e nao de um atributo
+    window.__bandeiras = [];
+    for (let rei = 0; rei < REIS.length; rei++) {
+      const desses = mastros.filter((_, i) => i % REIS.length === rei);
+      if (!desses.length) continue;
+      const mat = new THREE.MeshStandardMaterial({
+        color: REIS[rei], roughness: 0.85, side: THREE.DoubleSide });
+      mat.onBeforeCompile = (sh) => {
+        sh.uniforms.tempo = { value: 0 };
+        mat.userData.sh = sh;
+        // escrito em template literal, com quebras de linha a serio: o GLSL
+        // precisa delas, e uma barra-n escapada ja se perdeu duas vezes entre
+        // o gerador e o ficheiro (uma delas dentro deste proprio comentario).
+        sh.vertexShader = `uniform float tempo;
+` + sh.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
+float fase = float(gl_InstanceID) * 1.7;
+float onda = sin(transformed.x * 5.0 - tempo * 7.0 + fase);
+transformed.z += onda * transformed.x * 0.16;
+transformed.y += onda * transformed.x * 0.05;`);
+      };
+      const im = new THREE.InstancedMesh(panoG, mat, desses.length);
+      im.castShadow = true;
+      im.frustumCulled = false;
+      cena.add(im);
+      desses.forEach((m, i) => {
+        const larg = 3.4, alt = 2.2;
+        V2.set(m.p[0], m.p[2] + ALT - alt * 0.75, -m.p[1]);
+        Q2.setFromEuler(new THREE.Euler(0, (i * 2.3) % 6.28, 0));
+        S2.set(larg, alt, 1);
+        M2.compose(V2, Q2, S2);
+        im.setMatrixAt(i, M2);
+      });
+      im.instanceMatrix.needsUpdate = true;
+      window.__bandeiras.push(mat);
+    }
+  }
+
   window.__inst = inst;
   window.__mata = new Set(MAPA.arranjos.flat().map((t) => t.peca));
   const el = document.getElementById("carga");
@@ -196,6 +327,12 @@ liga("mata", (v) => {
   for (const [n, l] of Object.entries(window.__inst || {}))
     if (window.__mata.has(n)) for (const im of l) im.visible = v;
 });
+liga("parar", (v) => { parado = v; });
+liga("tropas", (v) => {
+  mostrarTropas = v;
+  for (const l of Object.values((window.__tropas || {}).tropaInst || {}))
+    for (const im of l) im.visible = v;
+});
 liga("alto", (v) => {
   if (v) { cam.position.set(0, LY * 1.15, LY * 0.35); ctrl.target.set(0, 0, 0); }
 });
@@ -208,9 +345,78 @@ addEventListener("resize", tamanho); tamanho();
 
 let quadros = 0;
 const med = document.getElementById("med");
+// ── mover as colunas ──────────────────────────────────────────────────────
+// Um ponto no caminho, dado o metro andado. Interpola entre os dois vertices
+// do eixo, portanto a tropa segue as curvas da estrada e sobe com o relevo --
+// as duas coisas de graca, porque o eixo ja foi gravado com a altura la dentro.
+const _p = new THREE.Vector3(), _q = new THREE.Quaternion();
+const _e = new THREE.Euler(), _s = new THREE.Vector3(1, 1, 1);
+const _m = new THREE.Matrix4();
+function noCaminho(col, metros, saida) {
+  const { pts, acum } = col;
+  const d = Math.max(0, Math.min(col.comp - 0.01, metros));
+  let i = 1;
+  while (i < acum.length - 1 && acum[i] < d) i++;
+  const t = (d - acum[i - 1]) / Math.max(acum[i] - acum[i - 1], 1e-6);
+  const a = pts[i - 1], b = pts[i];
+  saida.set(a[0] + (b[0] - a[0]) * t, a[2] + (b[2] - a[2]) * t,
+            -(a[1] + (b[1] - a[1]) * t));
+  return Math.atan2(-(b[1] - a[1]), b[0] - a[0]);   // rumo, ja em Y-para-cima
+}
+
+let mostrarTropas = true;
+// O RELOGIO E DA PAGINA, e nao o do sistema. Parece um detalhe e nao e: com
+// um relogio proprio, "parar o tempo" e uma linha, e conferir uma posicao
+// deixa de ser uma corrida contra o proximo quadro.
+let relogio = 0, parado = false, ultimo = performance.now();
+function marchar(agora) {
+  const T = window.__tropas;
+  if (!T || !mostrarTropas) return;
+  const contas = {};
+  for (const col of T.colunas) {
+    const lista = T.tropaInst[col.tipo];
+    if (!lista) continue;
+    const k = (contas[col.tipo] = contas[col.tipo] || { i: 0 });
+    const vel = T.VEL[col.tipo] || 6;
+    for (let j = 0; j < col.n; j++) {
+      // vai e vem: chegado ao fim, a coluna volta. Nao e o jogo -- e so para
+      // haver sempre movimento no mapa enquanto se olha para ele.
+      const bruto = (agora * 0.001 * vel + col.t0 - j * 7.0);
+      const volta = col.comp * 2;
+      let d = ((bruto % volta) + volta) % volta;
+      let sentido = 1;
+      if (d > col.comp) { d = volta - d; sentido = -1; }
+      const rumo = noCaminho(col, d, _p) + (sentido < 0 ? Math.PI : 0);
+      // afastado do eixo, alternando de lado: uma coluna nao anda em fila
+      const lat = ((j % 2) * 2 - 1) * 2.6;
+      _p.x += Math.cos(rumo + Math.PI / 2) * lat;
+      _p.z += Math.sin(rumo + Math.PI / 2) * lat;
+      // o balanco do passo: meio metro para cima e para baixo, desfasado por
+      // homem. E o que separa "tropas a andar" de "tropas a deslizar".
+      _p.y += Math.abs(Math.sin(agora * 0.006 * vel + j * 1.7)) * 0.22;
+      _e.set(0, -rumo, 0);
+      _q.setFromEuler(_e);
+      _m.compose(_p, _q, _s);
+      for (const im of lista) im.setMatrixAt(k.i, _m);
+      k.i++;
+    }
+  }
+  for (const lista of Object.values(T.tropaInst))
+    for (const im of lista) im.instanceMatrix.needsUpdate = true;
+}
+
 function laco() {
   requestAnimationFrame(laco);
   quadros++;
+  const agora = performance.now();
+  // o passo e LIMITADO a 100 ms: quando a pagina fica escondida o navegador
+  // estrangula o requestAnimationFrame, e sem este teto as tropas
+  // teleportavam-se meio mapa ao voltar
+  if (!parado) relogio += Math.min(agora - ultimo, 100);
+  ultimo = agora;
+  marchar(relogio);
+  for (const mat of (window.__bandeiras || []))
+    if (mat.userData.sh) mat.userData.sh.uniforms.tempo.value = relogio * 0.001;
   ctrl.update();
   // A SOMBRA SEGUE A CAMARA, e nao o mapa. Um mapa de sombra unico a cobrir
   // 2,8 km daria menos de um pixel por metro e as sombras sairiam em degraus.

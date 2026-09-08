@@ -66,18 +66,23 @@ MATA = json.load(open(os.path.join(os.getcwd(), "assets/sprites/mata.json"), enc
 copias = []
 protos = {}          # nome curto -> receita (para reconstruir)
 legiveis = {}        # nome curto -> assinatura legivel (so para se ler o JSON)
-bocas, centros = {}, {}
+bocas, centros, mastros = {}, {}, {}
 
 
-def juntar(reg, dx, dy, giro=0.0):
-    """passa um registo de colocacoes de coordenadas da PECA para as do MAPA"""
+def juntar(reg, dx, dy, cid=None, giro=0.0):
+    """passa um registo de colocacoes de coordenadas da PECA para as do MAPA.
+
+    Guarda tambem a que aldeia pertence cada copia: e por isso que, mais
+    abaixo, se pode levantar uma povoacao inteira ate a altura do seu patamar
+    sem ter de adivinhar quais das 1128 pecas sao dela.
+    """
     c, s = math.cos(giro), math.sin(giro)
     for r in reg:
         x, y, z = r["p"]
         copias.append({"peca": r["peca"], "p": [round(dx + x * c - y * s, 2),
                                                 round(dy + x * s + y * c, 2),
                                                 round(z, 2)],
-                       "rz": round(r["rz"] + giro, 4), "e": r["e"]})
+                       "rz": round(r["rz"] + giro, 4), "e": r["e"], "_cid": cid})
 
 
 # ── as aldeias ──────────────────────────────────────────────────────────────
@@ -98,7 +103,7 @@ for cid in cidades:
             legiveis[nome] = ob.get("assinatura", nome)
     vx, vy = REDE["c"][cid]["x"], REDE["c"][cid]["y"]
     mx, my = em_metros(vx, vy)
-    juntar(reg, mx, my)
+    juntar(reg, mx, my, cid)
     # AS BOCAS, ja em metros do mapa. Sao elas que dizem onde uma estrada
     # encosta -- e a mesma correcao que o mapa 2D levou: acabar na PORTA, e nao
     # a desaparecer por baixo da peca.
@@ -106,6 +111,12 @@ for cid in cidades:
                    "rumo": round(rumo, 4)}
                   for bx, by, _bz, rumo in P.PORTOES_CENA]
     centros[cid] = [round(mx, 2), round(my, 2)]
+    # OS MASTROS. A bandeira nao e assada -- e a unica coisa da aldeia que muda
+    # quando ela troca de dono, e assar 22 aldeias x N Reis era o que este
+    # projeto ja tinha decidido nao fazer. O forno grava ONDE fica o mastro; a
+    # cor e de quem for dono, e um setimo Rei custa zero.
+    mastros[cid] = [[round(mx + a, 2), round(my + b, 2), round(zz, 2), round(h, 2)]
+                    for a, b, zz, h in P.MASTROS_CENA]
     print("SONDA %-11s %-8s %3d pecas" % (cid, perfil, len(reg)), flush=True)
 
 print("SONDA %d aldeias, %d copias, %d prototipos distintos"
@@ -153,6 +164,12 @@ usadas_mata = {r["peca"] for b in bosques for r in b}
 bpy.ops.wm.read_factory_settings(use_empty=True)
 P._mats.clear(); P.LIXO = None
 cena = bpy.context.scene.collection
+# AS TROPAS entram na biblioteca sem estarem em `copias`: nao ha nenhuma
+# COLOCADA no mapa, porque quem as coloca e o jogo, a cada turno. O que sai
+# daqui e so a peca; onde ela vai parar e assunto do motor.
+TROPAS = {"lanceiro": (P.proto_lanceiro, ()),
+          "arqueiro": (P.proto_arqueiro, ()),
+          "cavaleiro": (P.proto_cavaleiro, ())}
 usadas = sorted({c["peca"] for c in copias} | usadas_mata)
 feitas, faltam = [], []
 for nome in usadas:
@@ -172,90 +189,17 @@ for nome in usadas:
     ob.data.name = nome
     cena.objects.link(ob)
     feitas.append(nome)
+for nome, (fn, args) in TROPAS.items():
+    ob = fn(*args)
+    for col in list(ob.users_collection):
+        col.objects.unlink(ob)
+    ob.name = ob.data.name = nome
+    cena.objects.link(ob)
+    feitas.append(nome)
+print("SONDA tropas: %s" % ", ".join(TROPAS))
 if faltam:
     print("SONDA AVISO: sem receita para %s" % faltam)
 
-# ── AS ESTRADAS ─────────────────────────────────────────────────────────────
-# Uma fita de geometria por troco, pousada um palmo acima do chao. Duas coisas
-# que o mapa 2D aprendeu a duras penas e que se herdam aqui de graca:
-#
-#   * a estrada acaba na BOCA do portao que aponta para o rumo dela, e nao no
-#     centro da aldeia -- senao desaparece por baixo da peca sem se ligar a nada;
-#   * a meia-largura VARIA ao longo do caminho. Uma faixa de largura constante
-#     le-se como fita adesiva por melhor que seja a cor.
-#
-# O rumo das bocas foi gravado em graus do MAPA, portanto aqui e so escolher a
-# mais alinhada -- a mesma conta que o canvas ja faz.
-def boca_para(cid, rumo_alvo):
-    melhor, dif = None, 999.0
-    for b in bocas.get(cid, []):
-        d = abs(((math.degrees(b["rumo"]) - rumo_alvo + 540) % 360) - 180)
-        if d < dif:
-            dif, melhor = d, b
-    return melhor["p"] if melhor and dif <= 46 else None
-
-
-# A LARGURA NAO E A DO MAPA 2D. La a estrada tem 0,70 de celula porque e
-# INFORMACAO num quadro visto de cima, e um mapa de jogo exagera as estradas de
-# proposito. Convertido a escala, isso davam 36 m -- uma auto-estrada ao lado de
-# casas de 7 m. Aqui manda o chao: 18 m de ponta a ponta, larga o suficiente
-# para se ver de cima e estreita o suficiente para nao ser ridicula ao pe de uma
-# porta. E a primeira vez que as duas coisas tem de bater certo ao mesmo tempo.
-LARG_ESTRADA = 9.0                            # meia-largura, em metros
-verts, faces = [], []
-trocos = 0
-LIGACOES = []
-for a, viz in REDE["v"].items():
-    for b in viz:
-        if a < b and a in centros and b in centros:
-            LIGACOES.append((a, b))
-for a, b in LIGACOES:
-    ax, ay = centros[a]
-    bx, by = centros[b]
-    rumo = math.degrees(math.atan2(by - ay, bx - ax))
-    p0 = boca_para(a, rumo) or [ax, ay]
-    p1 = boca_para(b, (rumo + 180) % 360) or [bx, by]
-    comp = math.hypot(p1[0] - p0[0], p1[1] - p0[1])
-    if comp < 1:
-        continue
-    N = max(8, int(comp / 18))
-    base = len(verts)
-    for i in range(N + 1):
-        t = i / N
-        # SERPENTEIA, com as PONTAS QUIETAS: se a curva chegasse ate ao fim, a
-        # estrada nascia ao lado da porta em vez de nela.
-        k = min(1.0, min(i, N - i) / (N * 0.24))
-        desvio = (math.sin(t * comp * 0.010) * 0.7
-                  + math.sin(t * comp * 0.023 + 1.1) * 0.3) * comp * 0.020 * k
-        cx = p0[0] + (p1[0] - p0[0]) * t
-        cy = p0[1] + (p1[1] - p0[1]) * t
-        nx, ny = -(p1[1] - p0[1]) / comp, (p1[0] - p0[0]) / comp
-        cx += nx * desvio
-        cy += ny * desvio
-        w = LARG_ESTRADA * (0.5 + 0.09 * math.sin(t * 21 + comp)
-                            + 0.06 * math.sin(t * 47))
-        verts.append((cx + nx * w, cy + ny * w, 0.10))
-        verts.append((cx - nx * w, cy - ny * w, 0.10))
-    for i in range(N):
-        faces.append((base + 2 * i, base + 2 * i + 1,
-                      base + 2 * i + 3, base + 2 * i + 2))
-    trocos += 1
-estradas = P._novo(P._malha("estradas", verts, faces, "caminho", bisel=0), "caminho")
-for col in list(estradas.users_collection):
-    col.objects.unlink(estradas)
-cena.objects.link(estradas)
-estradas.name = estradas.data.name = "estradas"
-print("SONDA estradas: %d trocos, %d faces, %.1f m de largura"
-      % (trocos, len(faces), LARG_ESTRADA * 2))
-
-# ── O CHAO, COM A FORMA DA ILHA ─────────────────────────────────────────────
-# Uma grelha sobre o retangulo do mapa, da qual se apagam as faces que caem na
-# agua. E a primeira vez que a terra tem BORDA em vez de um desfoque de alfa:
-# a fronteira entre a agua e a terra passa a ser geometria, e nao um esbatido
-# de 16 pixeis por cima de um PNG.
-#
-# A mascara vem do alfa da propria ilha (`_terra.npy`), portanto a costa e
-# EXATAMENTE a que o jogo ja usa — nao ha duas ilhas com formas diferentes.
 terra = np.load(os.path.join(os.getcwd(), "ferramentas/cena/_terra.npy"))
 FUNDO = 18.0          # quanto a margem desce abaixo do nivel da terra
 th, tw = terra.shape
@@ -311,6 +255,223 @@ antes_mata = len(manchas)
 manchas = [m for m in manchas if em_terra(*m["p"])]
 print("SONDA mata: %d manchas, %d fora de terra removidas"
       % (len(manchas), antes_mata - len(manchas)))
+
+
+# ── O RELEVO ────────────────────────────────────────────────────────────────
+# O `terreno.py` ja desenhava um campo de alturas para o render da ilha: nove
+# serras ancoradas a cidades reais, cinco rios, uma meseta. Ate agora o jogo
+# so via a COR que saia dele. Aqui usa-se a altura ela propria.
+#
+# ── DUAS DECISOES, E AS DUAS FORAM MEDIDAS ──────────────────────────────────
+# 1. O CAMPO TEM DE SER BORRADO. Foi desenhado para COLORIR uma imagem, onde o
+#    declive vira sombra e o grao fino e detalhe. Como geometria, esse mesmo
+#    grao vira falesia: medido em cru, o declive no percentil 95 era de 77
+#    graus e a ilha parecia papel amarrotado. Com um borrao de caixa de 18
+#    celulas (90 m) desce a 34 graus -- que e serra, e ja se anda la.
+#
+#      raio   p50    p95    max
+#         0   21,7   72,7   86,2
+#         4   21,0   63,3   79,5
+#        10   19,5   54,5   67,8
+#        18   17,1   45,1   58,0   <- escolhido, com 150 m
+#        30   16,8   33,9   48,9
+#
+# 2. 150 m DE AMPLITUDE NUM MAPA DE 2,8 KM e exagero de proposito, como a
+#    largura das estradas: a Ibéria a serio tem 3400 m em 900 km, e a essa
+#    escala nao se via nada. O que se quer e que a serra LEIA como serra.
+ALTURA_MAX = 150.0
+RAIO_BORRAO = 18
+
+
+def _caixa(a, r):
+    """borrao de caixa separavel, por somas acumuladas: O(1) por pixel.
+
+    Feito a mao porque o Blender nao traz PIL nem scipy, e porque um borrao de
+    90 m com um estencil de 5 pontos levaria milhares de passagens.
+    """
+    if r < 1:
+        return a
+    for eixo in (0, 1):
+        a = np.swapaxes(a, 0, eixo)
+        pad = np.pad(a, ((r + 1, r), (0, 0)), mode="edge")
+        acum = np.cumsum(pad, axis=0)
+        a = (acum[2 * r + 1:] - acum[:-(2 * r + 1)]) / (2 * r + 1)
+        a = np.swapaxes(a, 0, eixo)
+    return a
+# o campo vem ja na grelha do chao (o preparador guarda-o assim, de proposito):
+# reamostrar aqui obrigaria a arrastar o PIL para dentro do Blender, que nao o
+# tem, e a ter DUAS reamostragens da mesma coisa a discordarem na beira -- que
+# foi exatamente o bug das aldeias na agua.
+relevo = np.load(os.path.join(os.getcwd(), "ferramentas/cena/_altura.npy"))
+assert relevo.shape == terra.shape, (
+    "o relevo e a mascara de terra tem de vir na MESMA grelha: %s vs %s"
+    % (relevo.shape, terra.shape))
+relevo = _caixa(relevo.astype(np.float32), RAIO_BORRAO)
+relevo = relevo / max(float(relevo[terra].max()), 1e-6) * ALTURA_MAX
+
+
+def altura_em(mx, my):
+    """a altura do terreno num ponto, em metros, com interpolacao bilinear.
+
+    Bilinear e nao "a celula mais proxima": com 5 m de grelha, uma tropa a
+    andar saltaria degraus de 5 m em 5 m, e uma aldeia assentaria num patamar
+    visivelmente desalinhado do chao a volta.
+    """
+    fi = (mx + LX / 2) / px - 0.5
+    fj = (LY / 2 - my) / py - 0.5
+    i0 = max(0, min(tw - 2, int(math.floor(fi))))
+    j0 = max(0, min(th - 2, int(math.floor(fj))))
+    u, v = min(max(fi - i0, 0.0), 1.0), min(max(fj - j0, 0.0), 1.0)
+    return float((relevo[j0, i0] * (1 - u) + relevo[j0, i0 + 1] * u) * (1 - v)
+                 + (relevo[j0 + 1, i0] * (1 - u) + relevo[j0 + 1, i0 + 1] * u) * v)
+
+
+# ── O PATAMAR DE CADA ALDEIA ────────────────────────────────────────────────
+# Uma aldeia numa encosta fica com metade da muralha enterrada e a outra metade
+# no ar: as pecas sao rigidas e o chao nao e. Entao o chao cede. Aplana-se um
+# disco a altura do centro, com uma RAMPA a volta para nao ficar um patamar
+# recortado -- e a mesma ideia do `patamar()` que o `relevo.py` ja fazia na
+# peca, agora feita no mapa.
+patamares = {}
+for cid, c in centros.items():
+    h = altura_em(c[0], c[1])
+    patamares[cid] = h
+    raio = C.PERFIS[REDE["c"][cid]["t"]]["raio"] + 20.0
+    # A RAMPA E LARGA de proposito. Com 1,9 raios via-se um DISCO a volta de
+    # cada aldeia, como se ela estivesse pousada num prato. Com 3,6 a
+    # transicao dilui-se na encosta e a aldeia parece ter sido construida
+    # onde o terreno ja era plano -- que e como se constroi uma aldeia.
+    rampa = raio * 3.6
+    i0 = max(0, int((c[0] + LX / 2 - rampa) / px))
+    i1 = min(tw - 1, int((c[0] + LX / 2 + rampa) / px))
+    j0 = max(0, int((LY / 2 - c[1] - rampa) / py))
+    j1 = min(th - 1, int((LY / 2 - c[1] + rampa) / py))
+    for j in range(j0, j1 + 1):
+        for i in range(i0, i1 + 1):
+            dx = (i + 0.5) * px - LX / 2 - c[0]
+            dy = LY / 2 - (j + 0.5) * py - c[1]
+            d = math.hypot(dx, dy)
+            if d > rampa:
+                continue
+            k = 1.0 if d <= raio else (rampa - d) / (rampa - raio)
+            k = k * k * (3 - 2 * k)                    # suaviza as pontas
+            relevo[j, i] = relevo[j, i] * (1 - k) + h * k
+_gy, _gx = np.gradient(relevo, px)
+_d = np.degrees(np.arctan(np.hypot(_gx, _gy)))[terra]
+print("SONDA relevo: %.0f m de amplitude, declive p50 %.1f / p95 %.1f graus, "
+      "%d patamares de aldeia" % (relevo[terra].max() - relevo[terra].min(),
+                                  np.percentile(_d, 50), np.percentile(_d, 95),
+                                  len(patamares)))
+
+# ── e agora tudo assenta ────────────────────────────────────────────────────
+for c in copias:
+    c["p"][2] = round(c["p"][2] + patamares.get(c.get("_cid", ""), 0.0), 2)
+for m in manchas:
+    m["z"] = round(altura_em(m["p"][0], m["p"][1]), 2)
+
+# ── AS ESTRADAS ─────────────────────────────────────────────────────────────
+# Uma fita de geometria por troco, pousada um palmo acima do chao. Duas coisas
+# que o mapa 2D aprendeu a duras penas e que se herdam aqui de graca:
+#
+#   * a estrada acaba na BOCA do portao que aponta para o rumo dela, e nao no
+#     centro da aldeia -- senao desaparece por baixo da peca sem se ligar a nada;
+#   * a meia-largura VARIA ao longo do caminho. Uma faixa de largura constante
+#     le-se como fita adesiva por melhor que seja a cor.
+#
+# O rumo das bocas foi gravado em graus do MAPA, portanto aqui e so escolher a
+# mais alinhada -- a mesma conta que o canvas ja faz.
+def boca_para(cid, rumo_alvo):
+    melhor, dif = None, 999.0
+    for b in bocas.get(cid, []):
+        d = abs(((math.degrees(b["rumo"]) - rumo_alvo + 540) % 360) - 180)
+        if d < dif:
+            dif, melhor = d, b
+    return melhor["p"] if melhor and dif <= 46 else None
+
+
+# A LARGURA NAO E A DO MAPA 2D. La a estrada tem 0,70 de celula porque e
+# INFORMACAO num quadro visto de cima, e um mapa de jogo exagera as estradas de
+# proposito. Convertido a escala, isso davam 36 m -- uma auto-estrada ao lado de
+# casas de 7 m. Aqui manda o chao: 18 m de ponta a ponta, larga o suficiente
+# para se ver de cima e estreita o suficiente para nao ser ridicula ao pe de uma
+# porta. E a primeira vez que as duas coisas tem de bater certo ao mesmo tempo.
+LARG_ESTRADA = 9.0                            # meia-largura, em metros
+verts, faces = [], []
+trocos = 0
+eixos = []            # o CAMINHO de cada troco, para as tropas o seguirem
+LIGACOES = []
+for a, viz in REDE["v"].items():
+    for b in viz:
+        if a < b and a in centros and b in centros:
+            LIGACOES.append((a, b))
+for a, b in LIGACOES:
+    ax, ay = centros[a]
+    bx, by = centros[b]
+    rumo = math.degrees(math.atan2(by - ay, bx - ax))
+    p0 = boca_para(a, rumo) or [ax, ay]
+    p1 = boca_para(b, (rumo + 180) % 360) or [bx, by]
+    # e ENTRA 6 m para dentro da boca. Acabar exatamente na porta deixa uma
+    # costura visivel entre a fita e a peca; entrando um pouco, a estrada passa
+    # por baixo do portao e a juncao desaparece.
+    dx0, dy0 = p1[0] - p0[0], p1[1] - p0[1]
+    L0 = math.hypot(dx0, dy0) or 1.0
+    p0 = [p0[0] - dx0 / L0 * 6.0, p0[1] - dy0 / L0 * 6.0]
+    p1 = [p1[0] + dx0 / L0 * 6.0, p1[1] + dy0 / L0 * 6.0]
+    comp = math.hypot(p1[0] - p0[0], p1[1] - p0[1])
+    if comp < 1:
+        continue
+    N = max(8, int(comp / 18))
+    base = len(verts)
+    eixo = []
+    for i in range(N + 1):
+        t = i / N
+        # SERPENTEIA, com as PONTAS QUIETAS: se a curva chegasse ate ao fim, a
+        # estrada nascia ao lado da porta em vez de nela.
+        k = min(1.0, min(i, N - i) / (N * 0.24))
+        desvio = (math.sin(t * comp * 0.010) * 0.7
+                  + math.sin(t * comp * 0.023 + 1.1) * 0.3) * comp * 0.020 * k
+        cx = p0[0] + (p1[0] - p0[0]) * t
+        cy = p0[1] + (p1[1] - p0[1]) * t
+        nx, ny = -(p1[1] - p0[1]) / comp, (p1[0] - p0[0]) / comp
+        cx += nx * desvio
+        cy += ny * desvio
+        # ── O ADRO ───────────────────────────────────────────────────────
+        # A estrada ALARGA nos ultimos 30 m antes do portao. Uma fita de largura
+        # constante a encostar a uma muralha corta a direito e fica com ar de
+        # fita colada -- e era isso o "nao esta bem encaixado". Um caminho a
+        # serio abre-se onde as carrocas manobram para entrar, e e essa abertura
+        # que faz a estrada PERTENCER a aldeia em vez de lhe tocar.
+        borda = min(t * comp, (1 - t) * comp)
+        adro = 1.0 + 0.85 * max(0.0, 1.0 - borda / 30.0) ** 1.6
+        w = LARG_ESTRADA * adro * (0.5 + 0.09 * math.sin(t * 21 + comp)
+                                   + 0.06 * math.sin(t * 47))
+        # a estrada ACOMPANHA o terreno, meio metro acima: pousada num plano
+        # ela enterrava-se nas subidas e voava nas descidas
+        hz = altura_em(cx, cy) + 0.5
+        verts.append((cx + nx * w, cy + ny * w, hz))
+        verts.append((cx - nx * w, cy - ny * w, hz))
+        eixo.append([round(cx, 1), round(cy, 1), round(hz, 1)])
+    for i in range(N):
+        faces.append((base + 2 * i, base + 2 * i + 1,
+                      base + 2 * i + 3, base + 2 * i + 2))
+    eixos.append({"de": a, "para": b, "pts": eixo})
+    trocos += 1
+estradas = P._novo(P._malha("estradas", verts, faces, "caminho", bisel=0), "caminho")
+for col in list(estradas.users_collection):
+    col.objects.unlink(estradas)
+cena.objects.link(estradas)
+estradas.name = estradas.data.name = "estradas"
+print("SONDA estradas: %d trocos, %d faces, %.1f m de largura"
+      % (trocos, len(faces), LARG_ESTRADA * 2))
+
+# ── O CHAO, COM A FORMA DA ILHA ─────────────────────────────────────────────
+# Uma grelha sobre o retangulo do mapa, da qual se apagam as faces que caem na
+# agua. E a primeira vez que a terra tem BORDA em vez de um desfoque de alfa:
+# a fronteira entre a agua e a terra passa a ser geometria, e nao um esbatido
+# de 16 pixeis por cima de um PNG.
+#
+# A mascara vem do alfa da propria ilha (`_terra.npy`), portanto a costa e
+# EXATAMENTE a que o jogo ja usa — nao ha duas ilhas com formas diferentes.
 verts, faces = [], []
 indice = {}
 for j in range(th):
@@ -322,7 +483,8 @@ for j in range(th):
             ch = (i + di, j + dj)
             if ch not in indice:
                 indice[ch] = len(verts)
-                verts.append(((i + di) * px - LX / 2, LY / 2 - (j + dj) * py, 0.0))
+                verts.append(((i + di) * px - LX / 2, LY / 2 - (j + dj) * py,
+                              float(relevo[min(j + dj, th - 1), min(i + di, tw - 1)])))
             canto.append(indice[ch])
         faces.append(tuple(canto))
         # ── A MARGEM ────────────────────────────────────────────────────────
@@ -343,7 +505,9 @@ for j in range(th):
                 if ch not in indice:
                     indice[ch] = len(verts)
                     verts.append(((i + ddi) * px - LX / 2,
-                                  LY / 2 - (j + ddj) * py, 0.0))
+                                  LY / 2 - (j + ddj) * py,
+                                  float(relevo[min(j + ddj, th - 1),
+                                               min(i + ddi, tw - 1)])))
                 topo.append(indice[ch])
             fundo = []
             for ddi, ddj in (b, a):
@@ -514,6 +678,10 @@ with open(os.path.join(SAIDA, "mapa3d.json"), "w", encoding="utf-8") as f:
     json.dump({"m_por_vb": round(M_POR_VB, 4),
                "mapa_m": [round(IB_LARG * M_POR_VB), round(IB_ALT * M_POR_VB)],
                "pecas": {n: legiveis.get(n, n) for n in feitas}, "copias": copias,
-               "arranjos": bosques, "manchas": manchas}, f, separators=(",", ":"))
+               "arranjos": bosques, "manchas": manchas,
+               "estradas": eixos, "tropas": list(TROPAS),
+               "mastros": {c: [[m[0], m[1], round(m[2] + patamares.get(c, 0.0), 2),
+                                m[3]] for m in ms]
+                           for c, ms in mastros.items()}}, f, separators=(",", ":"))
 print("SONDA -> sonda3d/mapa3d.json  (%.0f KB)  em %.1f s"
       % (os.path.getsize(os.path.join(SAIDA, "mapa3d.json")) / 1024, time.time() - t0))

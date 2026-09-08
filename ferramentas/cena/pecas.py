@@ -57,6 +57,17 @@ COR = {
     "feno":       (0.330, 0.240, 0.072, 1),
     "horta":      (0.052, 0.112, 0.026, 1),
     "la":         (0.400, 0.380, 0.330, 1),
+    # ---- as tropas (08/09) --------------------------------------------------
+    # Cores para figuras de 2,4 m vistas de 100 m ou mais. Sao MAIS CLARAS do
+    # que a verdade: um soldado com a cor real de couro e aco desaparece contra
+    # a relva, e um jogo de estrategia so funciona se as tropas se contarem a
+    # olho. E a mesma razao que faz as estradas terem 18 m e as serras 150.
+    "aco":        (0.300, 0.318, 0.345, 1),
+    "couro":      (0.190, 0.118, 0.058, 1),
+    "carne":      (0.470, 0.330, 0.245, 1),
+    "pano":       (0.360, 0.330, 0.290, 1),   # a sobreveste, que leva a cor do Rei
+    "cavalo":     (0.145, 0.098, 0.062, 1),
+    "cavalo2":    (0.250, 0.210, 0.170, 1),
     # A FOLHADA E MAIS ESCURA QUE A RELVA, nunca mais clara. Com o chao liso
     # verde, o disco de "terra" que estava por baixo de cada bosque virava um
     # halo pálido e cada mancha lia-se como uma clareira em vez de mata cerrada.
@@ -1382,6 +1393,101 @@ def muralha(muro, torre, portoes, raio, ang_torres,
         print("  muralha fechada: %d panos, %d portao(oes), %d torre(s)"
               % (panos, len(portoes), len(ang_torres)))
     return panos, bocas
+
+
+# ═══ AS TROPAS ═══════════════════════════════════════════════════════════════
+# Um homem tem 1,80 m. A 100 m de distancia, num mapa de 2,8 km, isso e menos de
+# um pixel — e um jogo de estrategia onde nao se contam as tropas a olho nao e
+# um jogo de estrategia. Por isso a figura mede 2,4 m e e ROBUSTA: ombros
+# largos, arma comprida, silhueta que se le antes de se ver o detalhe.
+#
+# A LEITURA E PELA SILHUETA, e nao pela cor: a lanca sobe a direito, o arco
+# abre uma curva, o cavalo e comprido e baixo. Mesmo a cinquenta metros, e mesmo
+# em contraluz, sabe-se qual e qual — que e o que um Rei precisa de saber.
+#
+# TODAS OLHAM PARA +X. O mapa roda-as com o rumo da marcha, e uma peca que
+# aponte para outro lado obriga a somar um angulo em cada sitio que a use.
+
+def _figura(alt=2.4, cor_pano="pano"):
+    """o corpo comum: pernas, tronco, sobreveste, cabeca. Devolve a lista."""
+    a = alt
+    return [
+        _cil(-0.10, -0.13, 0.0, a * 0.055, a * 0.42, "couro", 6),   # pernas
+        _cil(-0.10, 0.13, 0.0, a * 0.055, a * 0.42, "couro", 6),
+        _caixa(0, 0, a * 0.40, a * 0.20, a * 0.34, a * 0.30, cor_pano),  # tronco
+        _caixa(0, 0, a * 0.68, a * 0.17, a * 0.30, a * 0.06, "aco"),     # ombreiras
+        _cil(0, 0, a * 0.74, a * 0.105, a * 0.13, "carne", 7),           # pescoco+cabeca
+        _caixa(0, 0, a * 0.83, a * 0.16, a * 0.17, a * 0.09, "aco"),     # elmo
+    ]
+
+
+def proto_lanceiro(alt=2.4):
+    """lanca a prumo e escudo ao lado: a silhueta mais alta das tres"""
+    p = _figura(alt)
+    p.append(_cil(alt * 0.16, -alt * 0.20, -alt * 0.05, alt * 0.018,
+                  alt * 1.30, "madeira2", 5))                  # a haste
+    ponta = _cil(alt * 0.16, -alt * 0.20, alt * 1.25, alt * 0.030,
+                 alt * 0.16, "aco", 5)
+    p.append(ponta)
+    p.append(_caixa(alt * 0.05, alt * 0.22, alt * 0.34, alt * 0.05,
+                    alt * 0.26, alt * 0.34, "madeira"))        # escudo
+    return _guardar(_juntar(p))
+
+
+def proto_arqueiro(alt=2.4):
+    """o arco desenha uma curva a frente do corpo — le-se de perfil"""
+    p = _figura(alt, "couro")
+    # o arco: tres troços a fazer o arco, que a esta escala chega e sobra
+    for k, (dz, dy, ang) in enumerate(((0.30, 0.30, 0.5), (0.55, 0.38, 0.0),
+                                       (0.80, 0.30, -0.5))):
+        seg = _cil(alt * 0.18, alt * dy, alt * dz, alt * 0.016, alt * 0.30,
+                   "madeira2", 5)
+        seg.rotation_euler = (ang, 0, 0)
+        p.append(seg)
+    p.append(_caixa(-alt * 0.10, -alt * 0.16, alt * 0.42, alt * 0.07,
+                    alt * 0.07, alt * 0.34, "couro"))          # aljava
+    return _guardar(_juntar(p))
+
+
+def proto_cavaleiro(alt=2.4):
+    """comprido e baixo: a silhueta que se distingue das outras duas de longe"""
+    c = alt * 0.86                       # altura do cavalo ao garrote
+    p = [
+        _caixa(0, 0, c * 0.52, c * 1.10, c * 0.34, c * 0.40, "cavalo"),   # tronco
+        _caixa(c * 0.62, 0, c * 0.72, c * 0.30, c * 0.24, c * 0.22, "cavalo"),  # pescoco
+        _caixa(c * 0.80, 0, c * 0.86, c * 0.26, c * 0.18, c * 0.14, "cavalo2"),  # cabeca
+    ]
+    for dx in (c * 0.42, -c * 0.42):
+        for dy in (c * 0.13, -c * 0.13):
+            p.append(_cil(dx, dy, 0.0, c * 0.045, c * 0.54, "cavalo2", 6))
+    p.append(_caixa(-c * 0.60, 0, c * 0.60, c * 0.08, c * 0.06, c * 0.30, "cavalo2"))
+    # ── O CAVALEIRO SENTA-SE ────────────────────────────────────────────
+    # A primeira versao pegou na figura de pe e subiu-a: os pes ficavam a 1,77 m
+    # e o dorso do cavalo a 1,48 m, portanto o homem FLUTUAVA um palmo acima da
+    # sela. Uma figura sentada nao e a mesma figura mais alta -- as pernas caem
+    # dos lados, e o tronco assenta no dorso.
+    r = alt * 0.80
+    dorso = c * 0.72
+    p += [
+        _caixa(0, 0, dorso - r * 0.06, r * 0.20, r * 0.34, r * 0.30, "pano"),
+        _caixa(0, 0, dorso + r * 0.22, r * 0.17, r * 0.30, r * 0.06, "aco"),
+        _cil(0, 0, dorso + r * 0.28, r * 0.105, r * 0.13, "carne", 7),
+        _caixa(0, 0, dorso + r * 0.37, r * 0.16, r * 0.17, r * 0.09, "aco"),
+    ]
+    for lado in (1, -1):
+        coxa = _caixa(-r * 0.02, lado * r * 0.17, dorso - r * 0.30,
+                      r * 0.10, r * 0.10, r * 0.34, "couro")
+        p.append(coxa)
+    # A LANCA EM RISTE, e nao a prumo. `_cil` nasce sempre vertical, portanto a
+    # deitar-se: sem esta rotacao o cavaleiro media 5,44 m de alto (a lanca
+    # apontada ao ceu) contra os 3,38 do lanceiro, e as tres silhuetas deixavam
+    # de se comparar. Deitada, e ela que da ao cavaleiro a leitura COMPRIDA que
+    # o distingue de longe.
+    lanca = _cil(0, -alt * 0.24, 0, alt * 0.018, alt * 1.25, "madeira2", 5)
+    lanca.rotation_euler = (0, math.radians(88), 0)
+    lanca.location = (alt * 0.42, -alt * 0.24, dorso + alt * 0.12)
+    p.append(lanca)
+    return _guardar(_juntar(p))
 
 
 # ── CADA PROTOTIPO PASSA A SABER O QUE E ─────────────────────────────────────
