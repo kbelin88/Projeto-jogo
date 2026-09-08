@@ -106,6 +106,34 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
   // espera.
   ctrl.zoomToCursor = true;
   ctrl.zoomSpeed = 1.15;
+  ctrl.rotateSpeed = 0.62;    // a rotacao era nervosa: meio ecra dava meia volta
+  ctrl.panSpeed = 0.9;
+
+  // ── O PIVO DA CAMARA ANDA NO CHAO ───────────────────────────────────────
+  // Era este o "gira sempre no zoom afastado". O alvo da orbita e um ponto
+  // solto no espaco: arrasta-se o mapa, aproxima-se, e ele fica para tras -- a
+  // dois quilometros do que se esta a ver. Girar passa a descrever um arco
+  // enorme a volta de nada.
+  //
+  // Um mapa de estrategia gira a volta do SITIO QUE SE ESTA A OLHAR. Entao,
+  // sempre que a mao larga o rato, lanca-se um raio do centro do ecra ate ao
+  // chao e o alvo vai para onde ele bate. Custa um raio por gesto, e nao por
+  // quadro -- o chao tem 105 mil faces e um raio por quadro seria caro por uma
+  // coisa que so muda quando alguem mexe.
+  const raio = new THREE.Raycaster();
+  const centroEcra = new THREE.Vector2(0, 0);
+  function ancorarAlvo() {
+    if (!malhaChao) return;
+    raio.setFromCamera(centroEcra, cam);
+    const bate = raio.intersectObject(malhaChao, false);
+    if (!bate.length) return;
+    const p = bate[0].point;
+    const d = cam.position.distanceTo(p);
+    // se o chao ficou longe de mais (a olhar para o horizonte) nao se ancora:
+    // puxar o pivo para 3 km daqui seria trocar um problema por outro
+    if (d < ctrl.minDistance * 0.9 || d > LX * 0.9) return;
+    ctrl.target.copy(p);
+  }
 
   const g = await new Promise((ok, mal) =>
     new GLTFLoader().load(BASE + "pecas.glb", ok, undefined, mal));
@@ -122,8 +150,10 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
                                             : m.geometry.attributes.position.count) / 3;
 
   let nTri = 0, nInst = 0;
+  let malhaChao = null;
   for (const nome of ["chao", "estradas"])
     for (const ch of (banco[nome] || [])) {
+      if (nome === "chao") malhaChao = ch;
       ch.receiveShadow = true;
       ch.castShadow = false;
       if (nome === "estradas") {
@@ -155,6 +185,10 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
       return im;
     });
   }
+
+  // so agora: o `ancorarAlvo` precisa do chao, e o chao so existe depois do glTF
+  ctrl.addEventListener("end", ancorarAlvo);
+  ancorarAlvo();
 
   const M = new THREE.Matrix4(), Q = new THREE.Quaternion();
   const V = new THREE.Vector3(), E = new THREE.Vector3(), R = new THREE.Euler();

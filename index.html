@@ -1924,6 +1924,45 @@
         Object.assign(window, { M3D: mapa, empurrarPara3D,
                                 get erro3D() { return erro3D; } });
         draw();
+        // ── O CONTADOR, VISIVEL ──────────────────────────────────────────
+        // A ferramenta de diagnostico existia so como API de consola, e uma
+        // ferramenta que e preciso saber invocar nao serve a quem esta a jogar.
+        // Canto inferior esquerdo, so com ?mapa=3d, e desliga-se com a tecla F.
+        const cx = document.createElement("div");
+        cx.id = "fps3d";
+        // z-index alto e POR CIMA da caixa de benchmark de proposito: a
+        // interface do jogo esta cheia e qualquer canto que eu escolha tapa
+        // alguma coisa. Como e um mostrador de afinacao e nao de partida,
+        // tapar o benchmark durante uns segundos e o mal menor -- e a tecla F
+        // tira-o do caminho.
+        cx.style.cssText = "position:fixed;left:12px;bottom:12px;z-index:60;"
+          + "background:rgba(20,15,8,.86);border:1px solid #6b5836;border-radius:7px;"
+          + "padding:6px 10px;color:#cbbd94;font:12px/1.5 system-ui,sans-serif;"
+          + "font-variant-numeric:tabular-nums;pointer-events:none";
+        document.body.appendChild(cx);
+        setInterval(() => {
+          if (!M3D) return;
+          const d = M3D.diagnostico;
+          const t = M3D.contagemTropas;
+          const alt = Math.round(M3D.ctrl.getDistance());
+          cx.innerHTML = "<b style='color:#f0d9a0;font-size:15px'>" + M3D.fps
+            + "</b> fps &nbsp; camara a " + alt + " m<br>"
+            + M3D.pecas.toLocaleString("pt") + " pecas &middot; "
+            + (M3D.triangulos / 1e6).toFixed(1) + "M triangulos<br>"
+            + d.marchas + " marcha(s) &middot; "
+            + (t.lanceiro + t.arqueiro + t.cavaleiro) + " figuras no ecra"
+            // vermelho SO para o que e defeito. "sem marchas" no turno 0 e a
+            // verdade, nao um alarme -- e um mostrador que grita por tudo
+            // ensina a ignora-lo.
+            + (d.ultimoMotivo && d.ultimoMotivo !== "sem marchas"
+               ? "<br><span style='color:#d8756a'>" + d.ultimoMotivo + "</span>"
+               : "");
+        }, 500);
+        addEventListener("keydown", (ev) => {
+          if ((ev.key === "f" || ev.key === "F") &&
+              !(document.activeElement && document.activeElement.tagName === "INPUT"))
+            cx.style.display = cx.style.display === "none" ? "" : "none";
+        });
         // ── O MAPA 3D TEM RITMO PROPRIO ──────────────────────────────────
         // O `draw` do 2D e chamado quando o 2D precisa: numa mudanca de
         // estado, num arrasto, num zoom. O 3D tem o seu proprio laco a correr
