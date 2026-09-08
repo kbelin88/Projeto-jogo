@@ -350,6 +350,37 @@ transformed.y += onda * transformed.x * 0.05;`);
   cena.add(imFumo);
 
   // ── as tropas ───────────────────────────────────────────────────────────
+  // ── QUE TAMANHO TEM UM SOLDADO ──────────────────────────────────────────
+  // A peca nasce com 2,4 m de homem; 2,2x da 5,3 m. E exagero, e e de
+  // proposito: um jogo de estrategia aumenta as unidades face aos edificios
+  // porque so se comanda o que se ve. Escolhido a olho na `tamanhos.html`,
+  // com a muralha de 4,2 m no mesmo quadro.
+  const ESCALA_TROPA = 2.2;
+  const ALT_FIGURA = 2.4 * ESCALA_TROPA;
+
+  // ── E QUANDO E QUE ELE DEIXA DE SER UM HOMEM ────────────────────────────
+  // Abaixo de uns dez pixeis de altura uma figura deixa de se ler: fica um
+  // ponto escuro. E o que os jogos de estrategia resolvem ha trinta anos
+  // trocando a unidade por um SIMBOLO -- e o simbolo diz mais do que a figura
+  // conseguiria dizer a essa distancia: de quem e, quantos sao, de que tipo.
+  //
+  // O limiar e em PIXEIS APARENTES e nao em metros de camara. "A partir de
+  // 400 m" parece natural e e fragil: muda com a resolucao, com o campo de
+  // visao, com o monitor de quem abrir o link. Dez pixeis sao dez pixeis em
+  // qualquer ecra.
+  //
+  // E ha uma BANDA DE SOBREPOSICAO: o estandarte acende-se entre os 20 e os 12
+  // pixeis, as figuras so se apagam abaixo dos 10. Ha uma faixa em que se veem
+  // os dois, e e ela que esconde a troca. Cortar e acender no mesmo instante
+  // da um salto que se ve.
+  const PX_FIGURA_MORRE = 10;
+  const PX_BANDEIRA_CHEIA = 12;
+  const PX_BANDEIRA_NASCE = 20;
+  function pxPorMetro(dist) {
+    const h = rend.domElement.clientHeight || 720;
+    return (h / (2 * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2))) / Math.max(dist, 1);
+  }
+
   const TIPOS = MAPA.tropas || [];
   const VEL_DEMO = { lanceiro: 5.5, arqueiro: 7.0, cavaleiro: 11.0 };
   const TETO_TROPA = 400;               // instancias reservadas por tipo
@@ -375,7 +406,8 @@ transformed.y += onda * transformed.x * 0.05;`);
     eixoDe[e.para + ">" + e.de] = { pts, acum, comp: acum[acum.length - 1], inv: true };
   }
 
-  const _p = new THREE.Vector3(), _q = new THREE.Quaternion();
+  const _p = new THREE.Vector3(), _pAux = new THREE.Vector3();
+  const _q = new THREE.Quaternion();
   const _e = new THREE.Euler(), _s = new THREE.Vector3(1, 1, 1);
   const _m = new THREE.Matrix4();
   function noCaminho(via, metros, saida) {
@@ -415,10 +447,29 @@ transformed.y += onda * transformed.x * 0.05;`);
   // chegar. O que o motor executa continua a ser a verdade; isto e so a
   // maneira de a mostrar.
   const suave = new Map();
+  // ── E O TEMPO E O DO TURNO, e nao um segundo fixo ───────────────────────
+  // A primeira versao fechava a distancia em ~1 s e depois PARAVA ate ao turno
+  // seguinte: andar-parar-andar-parar. Um turno pode levar cinco segundos com
+  // um jogador burro e tres minutos com um raciocinador -- se o movimento nao
+  // acompanhar, ou fica aos solavancos ou fica sempre adiantado.
+  // Entao mede-se: quanto tempo levou o ultimo turno? E a marcha espalha-se
+  // por esse tempo. Ninguem tem de configurar nada.
+  let msPorTurno = 4000, turnoAnterior = null, marcadoEm = 0;
+  function relogioDoTurno(turno) {
+    if (turno === turnoAnterior) return;
+    const agora = performance.now();
+    if (turnoAnterior !== null && marcadoEm)
+      msPorTurno = Math.max(400, Math.min(60000, agora - marcadoEm));
+    turnoAnterior = turno;
+    marcadoEm = agora;
+  }
   function tSuave(chave, alvo, dt) {
     const a = suave.get(chave);
+    // um salto grande e uma marcha NOVA, nao um avanco: nao se interpola de
+    // uma ponta do mapa para a outra
     if (a === undefined || Math.abs(alvo - a) > 0.6) { suave.set(chave, alvo); return alvo; }
-    const k = 1 - Math.pow(0.0015, dt / 1000);   // ~1 s para fechar a distancia
+    // 0.02 restante ao fim de um turno: chega la, sem parar pelo caminho
+    const k = 1 - Math.pow(0.02, dt / Math.max(msPorTurno * 0.9, 300));
     const n = a + (alvo - a) * k;
     suave.set(chave, n);
     return n;
@@ -435,9 +486,13 @@ transformed.y += onda * transformed.x * 0.05;`);
       const lat = ((j % 2) * 2 - 1) * 2.6;
       _p.x += Math.cos(rumo + Math.PI / 2) * lat;
       _p.z += Math.sin(rumo + Math.PI / 2) * lat;
-      _p.y += Math.abs(Math.sin(t * 0.006 * 7 + j * 1.7)) * 0.22;
+      // O BALANCO DO PASSO, mais lento. Estava a 6,7 Hz, que nao se le como
+      // passo -- le-se como vibracao, e era metade do "andam picando". Um
+      // homem a marchar bate o pe duas vezes por segundo.
+      _p.y += Math.abs(Math.sin(t * 0.010 + j * 1.7)) * 0.22 * ESCALA_TROPA;
       _e.set(0, -rumo, 0);
       _q.setFromEuler(_e);
+      _s.set(ESCALA_TROPA, ESCALA_TROPA, ESCALA_TROPA);
       _m.compose(_p, _q, _s);
       for (const im of lista) im.setMatrixAt(conta[tipo], _m);
       conta[tipo]++;
@@ -464,40 +519,58 @@ transformed.y += onda * transformed.x * 0.05;`);
         const bruto = via.inv ? (1 - tt) * via.comp : tt * via.comp;
         const rumoExtra = via.inv ? Math.PI : 0;
         // a coluna estica-se ATRAS da cabeca: quem vai a frente chegou primeiro
-        const quantos = Math.max(1, Math.min(12, Math.round(Math.sqrt(m.tropas || 1))));
-        for (let j = 0; j < quantos; j++) {
-          const atras = j * 7.0 * (via.inv ? -1 : 1);
-          meter(m.tipo || "lanceiro", via,
-                Math.max(0, Math.min(via.comp, bruto - atras)), rumoExtra, j);
+        // ── AS FIGURAS SO EXISTEM ENQUANTO SE LEEM ──────────────────────
+        // Abaixo dos dez pixeis nao se desenham: nao e economia, e que um
+        // ponto escuro de dois pixeis nao informa ninguem -- e o estandarte
+        // ja esta aceso por cima. De caminho, na vista de mapa inteiro
+        // deixam de se desenhar centenas de figuras, que e onde o quadro
+        // estava mais carregado.
+        noCaminho(via, bruto, _pAux);
+        const px = ALT_FIGURA * pxPorMetro(cam.position.distanceTo(_pAux));
+        if (px >= PX_FIGURA_MORRE) {
+          const quantos = Math.max(1, Math.min(12, Math.round(Math.sqrt(m.tropas || 1))));
+          for (let j = 0; j < quantos; j++) {
+            const atras = j * 7.0 * ESCALA_TROPA * (via.inv ? -1 : 1);
+            meter(m.tipo || "lanceiro", via,
+                  Math.max(0, Math.min(via.comp, bruto - atras)), rumoExtra, j);
+          }
         }
       }
-      // e os galhardetes, um por coluna, acima da cabeca
-      for (const rei of Object.keys(galhardetes)) galhardetes[rei].count = 0;
+      // ── OS ESTANDARTES ─────────────────────────────────────────────────
+      // Um por coluna, com tamanho fixo no ecra, e a opacidade a subir a
+      // medida que as figuras se tornam ilegiveis. Entre os 20 e os 12 pixeis
+      // veem-se os dois; e essa faixa que esconde a troca.
+      let nb = 0;
       for (const m of marchas) {
         const via = eixoDe[m.de + ">" + m.para];
-        const im = galhardetes[m.dono];
-        if (!via || !im || im.count >= 64) continue;
+        if (!via || nb >= estandartes.length) continue;
         const chave = m.dono + "|" + m.de + ">" + m.para + "|" + (m.tipo || "");
         const tt = suave.has(chave) ? suave.get(chave) : m.t;
         const bruto = via.inv ? (1 - tt) * via.comp : tt * via.comp;
         noCaminho(via, bruto, _p);
-        // o tamanho vem da DISTANCIA a camara: fica com o mesmo tamanho no
-        // ecra, perto ou longe, como as chapas dos nomes
-        const d = cam.position.distanceTo(_p);
-        const k = Math.max(2.5, d * 0.022);
-        _p.y += 5.5 + k * 0.9;
-        _fs.set(k, k, k);
-        _fm.compose(_p, cam.quaternion, _fs);
-        im.setMatrixAt(im.count++, _fm);
+        const px = ALT_FIGURA * pxPorMetro(cam.position.distanceTo(_p));
+        const op = px <= PX_BANDEIRA_CHEIA ? 1
+                 : px >= PX_BANDEIRA_NASCE ? 0.30
+                 : 1 - 0.70 * (px - PX_BANDEIRA_CHEIA)
+                       / (PX_BANDEIRA_NASCE - PX_BANDEIRA_CHEIA);
+        const sp = estandartes[nb++];
+        sp.visible = true;
+        sp.material.map = texturaEstandarte(m.dono, m.tipo || "lanceiro",
+                                            m.tropas || 1);
+        sp.material.opacity = op;
+        sp.material.needsUpdate = true;
+        // acima da cabeca da coluna, nunca por cima dela
+        _p.y += ALT_FIGURA * 1.25;
+        sp.position.copy(_p);
+        sp.scale.set(72 * 0.00052, 92 * 0.00052, 1);
       }
-      for (const rei of Object.keys(galhardetes))
-        galhardetes[rei].instanceMatrix.needsUpdate = true;
+      for (let i = nb; i < estandartes.length; i++) estandartes[i].visible = false;
 
       // marchas que acabaram deixam de ter memoria: senao a proxima com a
       // mesma chave herdava o `t` da anterior e comecava a meio do caminho
       for (const k of [...suave.keys()]) if (!vistas.has(k)) suave.delete(k);
     } else {
-      for (const rei of Object.keys(galhardetes)) galhardetes[rei].count = 0;
+      for (const sp of estandartes) sp.visible = false;
       for (const col of colunas) {
         if (!col.via) continue;
         const vel = VEL_DEMO[col.tipo] || 6;
@@ -514,29 +587,53 @@ transformed.y += onda * transformed.x * 0.05;`);
       for (const im of lista) { im.count = conta[tipo]; im.instanceMatrix.needsUpdate = true; }
   }
 
-  // ── O GALHARDETE ────────────────────────────────────────────────────────
-  // Um lanceiro tem 3,4 m num mapa de 2,8 km: na vista geral e menos de um
-  // pixel. Um jogo de estrategia onde nao se VE por onde anda um exercito nao
-  // se pode jogar -- e ninguem esperaria ver o homem, espera ver a BANDEIRA
-  // dele. Um triangulo sempre virado para a camara, na cor do Rei, por cima da
-  // cabeca da coluna, e o tamanho e em unidades de ecra: le-se de longe e nao
-  // tapa nada de perto.
-  const galG = new THREE.BufferGeometry();
-  galG.setAttribute("position", new THREE.Float32BufferAttribute(
-    [-0.5, -0.4, 0, 0.5, -0.4, 0, 0, 0.75, 0], 3));
-  const galhardetes = {};
-  for (const rei of ["A", "B"]) {
-    const im = new THREE.InstancedMesh(
-      galG,
-      new THREE.MeshBasicMaterial({ color: COR_REI[rei], toneMapped: false,
-                                    side: THREE.DoubleSide, depthTest: false,
-                                    transparent: true, opacity: 0.92 }),
-      64);
-    im.frustumCulled = false;
-    im.renderOrder = 900;
-    im.count = 0;
-    cena.add(im);
-    galhardetes[rei] = im;
+  // ── O ESTANDARTE ────────────────────────────────────────────────────────
+  // Desenhado num canvas e guardado em cache por (Rei, tipo, numero): sao
+  // poucas combinacoes e cada uma so se desenha uma vez. Um por coluna, com
+  // tamanho fixo no ECRA -- e o que faz dele um simbolo de mapa e nao um
+  // objeto do mundo.
+  const SINAL = { lanceiro: "↑", arqueiro: "›", cavaleiro: "♦" };
+  const cacheBand = new Map();
+  function texturaEstandarte(rei, tipo, n) {
+    const chave = rei + "|" + tipo + "|" + n;
+    if (cacheBand.has(chave)) return cacheBand.get(chave);
+    const c = document.createElement("canvas");
+    c.width = 72; c.height = 92;
+    const g = c.getContext("2d");
+    const cor = "#" + new THREE.Color(COR_REI[rei] || COR_REI.null).getHexString();
+    // o pano: retangulo com a ponta em bico, como um pendao
+    g.beginPath();
+    g.moveTo(6, 4); g.lineTo(66, 4); g.lineTo(66, 62);
+    g.lineTo(36, 78); g.lineTo(6, 62); g.closePath();
+    g.fillStyle = cor; g.fill();
+    g.lineWidth = 5; g.strokeStyle = "rgba(12,8,3,.85)"; g.stroke();
+    g.fillStyle = "#fff6e0";
+    g.textAlign = "center"; g.textBaseline = "middle";
+    g.font = "700 34px system-ui, sans-serif";
+    g.fillText(String(n), 36, 32);
+    g.font = "700 22px system-ui, sans-serif";
+    g.fillText(SINAL[tipo] || "", 36, 58);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    if (cacheBand.size > 240) {                 // nao cresce sem fim
+      const velha = cacheBand.keys().next().value;
+      cacheBand.get(velha).dispose();
+      cacheBand.delete(velha);
+    }
+    cacheBand.set(chave, t);
+    return t;
+  }
+  // um lote de sprites reaproveitados: 64 chegam e sobram, e criar/destruir
+  // sprites a cada quadro seria lixo para o coletor
+  const estandartes = [];
+  for (let i = 0; i < 64; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+      sizeAttenuation: false, depthTest: false, transparent: true,
+      toneMapped: false }));
+    sp.renderOrder = 950;
+    sp.visible = false;
+    cena.add(sp);
+    estandartes.push(sp);
   }
 
   const _fp = new THREE.Vector3(), _fs = new THREE.Vector3(), _fm = new THREE.Matrix4();
@@ -637,6 +734,7 @@ transformed.y += onda * transformed.x * 0.05;`);
     atualizar(estado) {
       ligadoAoJogo = true;
       marchas = estado.marchas || [];
+      relogioDoTurno(estado.turno);
 
       // as bandeiras: cada aldeia entra na lista do seu dono
       const conta = { A: 0, B: 0, null: 0 };
