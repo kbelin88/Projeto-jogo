@@ -344,8 +344,19 @@ def altura_em(mx, my):
     andar saltaria degraus de 5 m em 5 m, e uma aldeia assentaria num patamar
     visivelmente desalinhado do chao a volta.
     """
-    fi = (mx + LX / 2) / px - 0.5
-    fj = (LY / 2 - my) / py - 0.5
+    # ── SEM O MEIO ────────────────────────────────────────────────────────
+    # Estava aqui um `- 0.5`, que trata `relevo[j][i]` como a altura do CENTRO
+    # da celula. Mas a malha do chao poe o vertice (i,j) no CANTO, com essa
+    # mesma altura -- as duas leituras estavam desencontradas meia celula na
+    # diagonal, 3,5 m no chao, que numa encosta de 33 graus da mais de 2 m de
+    # erro. A estrada ficava enterrada por baixo da colina e reaparecia do
+    # outro lado.
+    #
+    # A analise numerica nao apanhou isto porque REPETIA o mesmo erro: media
+    # com a mesma funcao que o produzia. Foi levantar a fita 3 m no navegador,
+    # ver as falhas fecharem-se todas, e so entao procurar onde estavam os 3 m.
+    fi = (mx + LX / 2) / px
+    fj = (LY / 2 - my) / py
     i0 = max(0, min(tw - 2, int(math.floor(fi))))
     j0 = max(0, min(th - 2, int(math.floor(fj))))
     u, v = min(max(fi - i0, 0.0), 1.0), min(max(fj - j0, 0.0), 1.0)
@@ -375,14 +386,22 @@ for cid, c in centros.items():
     j1 = min(th - 1, int((LY / 2 - c[1] + rampa) / py))
     for j in range(j0, j1 + 1):
         for i in range(i0, i1 + 1):
-            dx = (i + 0.5) * px - LX / 2 - c[0]
-            dy = LY / 2 - (j + 0.5) * py - c[1]
+            # o canto, pela mesma razao: e onde a malha poe o vertice
+            dx = i * px - LX / 2 - c[0]
+            dy = LY / 2 - j * py - c[1]
             d = math.hypot(dx, dy)
             if d > rampa:
                 continue
             k = 1.0 if d <= raio else (rampa - d) / (rampa - raio)
             k = k * k * (3 - 2 * k)                    # suaviza as pontas
             relevo[j, i] = relevo[j, i] * (1 - k) + h * k
+# O RELEVO FINAL VAI PARA DISCO. Nao e para o jogo: e para se poder medir
+# contra ele. Ao investigar a estrada tapada eu reconstrui o campo de alturas
+# fora daqui e esqueci-me dos patamares das aldeias -- e a analise acusou 59 m
+# de erro que nao existiam. Quem quiser medir, mede contra o que SAIU, nao
+# contra uma reconstrucao.
+np.save(os.path.join(os.getcwd(), "ferramentas/cena/_relevo_final.npy"), relevo)
+
 _gy, _gx = np.gradient(relevo, px)
 _d = np.degrees(np.arctan(np.hypot(_gx, _gy)))[terra]
 print("SONDA relevo: %.0f m de amplitude, declive p50 %.1f / p95 %.1f graus, "
@@ -447,7 +466,16 @@ for a, b in LIGACOES:
     comp = math.hypot(p1[0] - p0[0], p1[1] - p0[1])
     if comp < 1:
         continue
-    N = max(8, int(comp / 18))
+    # ── UM PONTO A CADA 5 M, e nao a cada 18 ────────────────────────────
+    # A fita e reta entre vertices. Com 18 m de passo, ao passar uma crista ela
+    # corta o cabeco em linha reta e o terreno sai POR CIMA dela -- medido, ate
+    # 0,56 m, em 1,2% do percurso. Nao se via como um erro de altura: via-se
+    # como a estrada a desaparecer nas subidas e a voltar depois, que foi
+    # exatamente como o Lucas o descreveu.
+    #
+    # 5 m e o passo da propria grelha do terreno: abaixo disso nao ha o que
+    # seguir. Custa 3x as faces de uma malha que tinha 857 -- nada.
+    N = max(8, int(comp / 5))
     base = len(verts)
     eixo = []
     for i in range(N + 1):
@@ -479,11 +507,11 @@ for a, b in LIGACOES:
         # Cada canto pergunta a sua propria altura.
         ex1, ey1 = cx + nx * w, cy + ny * w
         ex2, ey2 = cx - nx * w, cy - ny * w
-        verts.append((ex1, ey1, altura_em(ex1, ey1) + 0.25))
-        verts.append((ex2, ey2, altura_em(ex2, ey2) + 0.25))
+        verts.append((ex1, ey1, altura_em(ex1, ey1) + 0.45))
+        verts.append((ex2, ey2, altura_em(ex2, ey2) + 0.45))
         # o EIXO leva a altura do centro, que e por onde as tropas andam --
         # nao a de nenhuma das beiras
-        eixo.append([round(cx, 1), round(cy, 1), round(altura_em(cx, cy) + 0.4, 1)])
+        eixo.append([round(cx, 1), round(cy, 1), round(altura_em(cx, cy) + 0.5, 1)])
     for i in range(N):
         faces.append((base + 2 * i, base + 2 * i + 1,
                       base + 2 * i + 3, base + 2 * i + 2))
