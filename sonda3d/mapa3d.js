@@ -613,6 +613,11 @@ transformed.y += onda * transformed.x * 0.05;`);
     // tropas" tem duas causas muito diferentes -- nao ha nenhuma, ou ha e estao
     // escondidas -- e sem este numero as duas parecem iguais.
     // o interior, para quando "nao aparece" precisar de virar um numero
+    // a BIBLIOTECA de pecas, para quem quiser montar uma cena de comparacao.
+    // E o que permite a `tamanhos.html` existir sem duplicar o carregamento do
+    // glTF nem a montagem da cena -- a mesma luz, o mesmo chao, as mesmas
+    // pecas, que e a unica maneira de uma comparacao valer alguma coisa.
+    get banco() { return banco; },
     get diagnostico() {
       return { ligadoAoJogo, marchas: marchas.length,
                tiposComMalha: Object.keys(tropaInst),

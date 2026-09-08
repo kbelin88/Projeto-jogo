@@ -1,0 +1,158 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Que tamanho tem um soldado</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0d1418; color: #e8dcc0;
+               font: 13px system-ui, sans-serif; overflow: hidden; }
+  #palco { position: fixed; inset: 0; }
+  #hud { position: fixed; top: 12px; left: 12px; z-index: 5; width: 300px;
+         background: rgba(20,15,8,.9); border: 1px solid #6b5836;
+         border-radius: 8px; padding: 11px 13px; }
+  #hud h1 { font-size: 13px; margin: 0 0 8px; letter-spacing: .06em; }
+  #hud p { color: #cbbd94; line-height: 1.5; margin: 7px 0 0; }
+  #hud b { color: #f0d9a0; }
+  #hud button { background: #3a2e18; color: #e8dcc0; border: 1px solid #6b5836;
+                border-radius: 5px; padding: 5px 9px; margin: 3px 4px 0 0;
+                cursor: pointer; font: inherit; }
+  #hud button:hover { background: #55401f; }
+  #med { position: fixed; top: 12px; right: 12px; z-index: 5; text-align: right;
+         background: rgba(20,15,8,.9); border: 1px solid #6b5836;
+         border-radius: 8px; padding: 9px 12px; font-variant-numeric: tabular-nums; }
+  #carga { position: fixed; inset: 0; display: flex; align-items: center;
+           justify-content: center; background: #0d1418; z-index: 9; color: #cbbd94; }
+</style>
+<div id="palco"></div>
+<div id="carga">a montar...</div>
+<div id="hud">
+  <h1>QUE TAMANHO TEM UM SOLDADO</h1>
+  <p>Tres tamanhos da mesma peca, a porta de Toledo. A muralha tem
+     <b>4,2 m</b> de altura e as casas <b>3 m</b> ao beiral &mdash; sao elas a
+     regua.</p>
+  <p>Ve de longe e de perto: a distancia a que se joga e a que decide.</p>
+  <div>
+    <button data-d="120">a 120 m</button>
+    <button data-d="245">a 245 m</button>
+    <button data-d="500">a 500 m</button>
+    <button data-d="60">de perto (60 m)</button>
+  </div>
+</div>
+<div id="med"></div>
+
+<script type="module">
+import { iniciar } from "./mapa3d.js";
+
+const mapa = await iniciar(document.getElementById("palco"));
+const { cena, cam, ctrl, THREE, MAPA, banco } = mapa;
+document.getElementById("carga").remove();
+Object.assign(window, { mapa, cena, cam, ctrl, THREE, MAPA });
+
+// ── AS TROPAS EM TRES TAMANHOS ────────────────────────────────────────────
+// A peca nasce com 2,4 m de homem. Aqui poem-se ao lado 1x, 1.6x e 2.2x, o
+// que da homens de 2,4 / 3,8 / 5,3 m. Nao ha aqui nenhuma verdade historica a
+// defender: um jogo de estrategia exagera as unidades face aos edificios por
+// necessidade, senao nao se ve o que se esta a comandar. A pergunta nao e
+// "qual e o certo", e "qual e o que se LE".
+const ESCALAS = [
+  { k: 1.00, rot: "1x  (2,4 m)" },
+  { k: 1.60, rot: "1,6x  (3,8 m)" },
+  { k: 2.20, rot: "2,2x  (5,3 m)" },
+];
+const TIPOS = ["lanceiro", "arqueiro", "cavaleiro"];
+
+const ald = MAPA.aldeias["toledo"];
+const CX = ald.p[0], CZ = -ald.p[1], CY = ald.z;
+
+function chapa(texto, cor) {
+  const c = document.createElement("canvas");
+  const g = c.getContext("2d");
+  g.font = "700 34px system-ui, sans-serif";
+  c.width = Math.ceil(g.measureText(texto).width) + 26;
+  c.height = 52;
+  const g2 = c.getContext("2d");
+  g2.fillStyle = "rgba(18,13,6,.82)";
+  g2.beginPath(); g2.roundRect(0, 0, c.width, c.height, 7); g2.fill();
+  g2.strokeStyle = cor; g2.lineWidth = 3; g2.stroke();
+  g2.fillStyle = "#f0e3c0";
+  g2.font = "700 34px system-ui, sans-serif";
+  g2.textAlign = "center"; g2.textBaseline = "middle";
+  g2.fillText(texto, c.width / 2, 27);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return { tex: t, w: c.width, h: c.height };
+}
+
+// ── ONDE SE POE O GRUPO ──────────────────────────────────────────────────
+// Encostado a muralha e num sitio LIMPO. A primeira versao deixou-os a 78 m da
+// aldeia, no meio dos bosques: metade ficava atras de uma arvore e a
+// comparacao nao valia nada. Uma comparacao precisa de todos no mesmo
+// enquadramento e da regua ao lado.
+const PASSO_X = 13, PASSO_Z = 15, AFAST = 46;
+ESCALAS.forEach((esc, fi) => {
+  TIPOS.forEach((tipo, ci) => {
+    const partes = banco[tipo];
+    if (!partes) return;
+    const x = CX + (ci - 1) * PASSO_X;
+    const z = CZ + AFAST + fi * PASSO_Z;
+    for (const base of partes) {
+      const m = new THREE.Mesh(base.geometry, base.material);
+      m.castShadow = m.receiveShadow = true;
+      m.position.set(x, CY, z);
+      m.scale.setScalar(esc.k);
+      m.rotation.y = Math.PI;               // de frente para a aldeia
+      cena.add(m);
+    }
+  });
+  const pl = chapa(esc.rot, "#c9a24a");
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: pl.tex, sizeAttenuation: false, depthTest: false,
+    transparent: true, toneMapped: false }));
+  sp.position.set(CX - PASSO_X * 2.4, CY + 5, CZ + AFAST + fi * PASSO_Z);
+  sp.scale.set(pl.w * 0.00034, pl.h * 0.00034, 1);
+  sp.renderOrder = 999;
+  cena.add(sp);
+});
+
+// ── A REGUA ───────────────────────────────────────────────────────────────
+// Um poste de 4,2 m, a altura exata da muralha. Sem uma medida conhecida no
+// mesmo enquadramento, "grande" e "pequeno" nao querem dizer nada.
+const poste = new THREE.Mesh(
+  new THREE.BoxGeometry(0.5, 4.2, 0.5),
+  new THREE.MeshStandardMaterial({ color: 0xc9a24a, roughness: 0.7 }));
+poste.position.set(CX + PASSO_X * 2.2, CY + 2.1, CZ + AFAST + PASSO_Z);
+poste.castShadow = true;
+cena.add(poste);
+{
+  const pl = chapa("4,2 m = a muralha", "#c9a24a");
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: pl.tex, sizeAttenuation: false, depthTest: false,
+    transparent: true, toneMapped: false }));
+  sp.position.set(CX + PASSO_X * 2.2, CY + 6.5, CZ + AFAST + PASSO_Z);
+  sp.scale.set(pl.w * 0.00034, pl.h * 0.00034, 1);
+  sp.renderOrder = 999;
+  cena.add(sp);
+}
+
+function olhar(d) {
+  // A CAMARA OLHA DO LADO DA ALDEIA para o grupo, com a muralha ao fundo: e
+  // com ela que se esta a comparar, portanto ela tem de estar no mesmo quadro.
+  const alvo = new THREE.Vector3(CX, CY + 4, CZ + AFAST + PASSO_Z);
+  ctrl.target.copy(alvo);
+  const el = THREE.MathUtils.degToRad(26);
+  cam.position.set(CX - d * 0.28, CY + 4 + Math.sin(el) * d,
+                   CZ + AFAST + PASSO_Z + Math.cos(el) * d);
+  ctrl.update();
+}
+olhar(120);
+for (const b of document.querySelectorAll("#hud button"))
+  b.onclick = () => olhar(+b.dataset.d);
+
+const med = document.getElementById("med");
+setInterval(() => {
+  const d = ctrl.getDistance();
+  const pxPorMetro = (innerHeight / (42 * Math.PI / 180)) / d;
+  med.innerHTML = "<b>" + mapa.fps + "</b> fps &nbsp; a "
+    + Math.round(d) + " m<br>"
+    + ESCALAS.map((e) => (2.4 * e.k).toFixed(1) + " m = "
+        + Math.round(2.4 * e.k * pxPorMetro) + " px").join(" &middot; ");
+}, 400);
+</script>
