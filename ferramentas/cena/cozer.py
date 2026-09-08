@@ -58,7 +58,7 @@ REDE = json.loads(subprocess.run(
      "for(const e of W.ESTRADAS){if(g[e.de])g[e.de].push(e.para);"
      "if(g[e.para])g[e.para].push(e.de);}"
      "console.log(JSON.stringify({c:Object.fromEntries(W.CIDADES.map("
-     "c=>[c.id,{x:c.x,y:c.y,t:c.tamanho}])),v:g}))"],
+     "c=>[c.id,{x:c.x,y:c.y,t:c.tamanho,nome:c.nome,papel:c.papel}])),v:g}))"],
     capture_output=True, text=True, check=True, cwd=os.getcwd()).stdout)
 
 ARGS = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []

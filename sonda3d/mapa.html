@@ -26,6 +26,7 @@
   <label><input type="checkbox" id="sombras" checked> sombras</label>
   <label><input type="checkbox" id="mata" checked> mata</label>
   <label><input type="checkbox" id="tropas" checked> tropas em marcha</label>
+  <label><input type="checkbox" id="nomes" checked> nomes das aldeias</label>
   <label><input type="checkbox" id="parar"> parar o tempo</label>
   <label><input type="checkbox" id="alto"> vista de cima</label>
   <p>Arrasta para girar &middot; roda para aproximar &middot; botao direito
@@ -46,7 +47,17 @@ const MAPA = await (await fetch("mapa3d.json")).json();
 const [LX, LY] = MAPA.mapa_m;
 
 const tela = document.getElementById("tela");
-const rend = new THREE.WebGLRenderer({ canvas: tela, antialias: true });
+// ── PROFUNDIDADE LOGARITMICA ──────────────────────────────────────────────
+// A cena vai de uma tropa de 2 m a uma ilha de 2,8 km, e a camara passeia dos
+// 12 m aos 3 km. Com um buffer de profundidade normal (near 2, far 6184) a
+// precisao a 2400 m cai para ~0,17 m -- e a estrada esta 0,25 m acima do chao.
+// Resultado: vista de cima, o chao COMIA pedacos da estrada e a rede parecia
+// cortada. Escondendo o chao, a rede aparecia inteira -- foi assim que se
+// apanhou.
+// O buffer logaritmico distribui a precisao por ordens de grandeza em vez de
+// linearmente, e e para isto que ele existe.
+const rend = new THREE.WebGLRenderer({ canvas: tela, antialias: true,
+                                       logarithmicDepthBuffer: true });
 rend.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 rend.shadowMap.enabled = true;
 rend.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -159,6 +170,15 @@ new GLTFLoader().load("pecas.glb", (g) => {
     for (const ch of (banco[nome] || [])) {
       ch.receiveShadow = true;
       ch.castShadow = false;
+      if (nome === "estradas") {
+        // e o cinto de seguranca: mesmo com profundidade logaritmica, duas
+        // superficies a 25 cm uma da outra sao um convite ao cintilar. O
+        // polygonOffset empurra a estrada na PROFUNDIDADE sem lhe mexer na
+        // posicao -- ela continua onde esta, so ganha prioridade.
+        ch.material.polygonOffset = true;
+        ch.material.polygonOffsetFactor = -4;
+        ch.material.polygonOffsetUnits = -8;
+      }
       cena.add(ch);
       nTri += contaTri(ch);
     }
@@ -395,6 +415,58 @@ transformed.y += onda * transformed.x * 0.05;`);
     window.__fumo = { im, fogos, POR_FOGO };
   }
 
+  // ═══ OS NOMES ════════════════════════════════════════════════════════
+  // Um mapa de estrategia sem nomes nao e um mapa: e uma paisagem. O Rei
+  // precisa de saber que aquilo e Toledo antes de decidir marchar para la.
+  //
+  // Sao SPRITES SEM ATENUACAO: mantem o mesmo tamanho no ecra, perto ou longe,
+  // como as etiquetas de qualquer mapa. Uma etiqueta que encolhe com a
+  // distancia deixa de se ler exatamente quando e mais precisa -- na vista
+  // geral, que e onde se decide.
+  function placa(texto, tipo) {
+    const c = document.createElement("canvas");
+    const g = c.getContext("2d");
+    const F = tipo === "capital" ? 40 : 34;
+    g.font = "700 " + F + "px system-ui, sans-serif";
+    const larg = Math.ceil(g.measureText(texto).width) + 28;
+    c.width = larg; c.height = F + 22;
+    const g2 = c.getContext("2d");
+    g2.font = "700 " + F + "px system-ui, sans-serif";
+    g2.textAlign = "center"; g2.textBaseline = "middle";
+    // a mesma chapa escura do jogo 2D, para as duas vistas se reconhecerem
+    g2.fillStyle = "rgba(18,13,6,.80)";
+    g2.beginPath();
+    g2.roundRect(0, 0, c.width, c.height, 7);
+    g2.fill();
+    g2.strokeStyle = tipo === "capital" ? "#c9a24a" : "#6b5836";
+    g2.lineWidth = 3;
+    g2.stroke();
+    g2.fillStyle = tipo === "capital" ? "#f2dfa8" : "#e8dcc0";
+    g2.fillText(texto, c.width / 2, c.height / 2 + 1);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return { tex: t, w: c.width, h: c.height };
+  }
+
+  window.__nomes = [];
+  for (const [cid, a] of Object.entries(MAPA.aldeias || {})) {
+    // o nome PROPRIO, com maiuscula. Se faltar, capitaliza-se o id em vez de o
+    // mostrar em minusculas -- uma etiqueta que diz "toledo" parece um erro.
+    const nome = a.nome || (cid.charAt(0).toUpperCase() + cid.slice(1));
+    const pl = placa(nome, a.t);
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: pl.tex, sizeAttenuation: false, depthTest: false,
+      transparent: true, toneMapped: false }));
+    // ACIMA da muralha e do mastro: a etiqueta nunca deve tapar a peca que
+    // esta a nomear
+    sp.position.set(a.p[0], a.z + (a.t === "capital" ? 30 : 24), -a.p[1]);
+    const k = 0.00042;
+    sp.scale.set(pl.w * k, pl.h * k, 1);
+    sp.renderOrder = 999;
+    cena.add(sp);
+    window.__nomes.push(sp);
+  }
+
   window.__inst = inst;
   window.__mata = new Set(MAPA.arranjos.flat().map((t) => t.peca));
   const el = document.getElementById("carga");
@@ -409,6 +481,7 @@ liga("mata", (v) => {
   for (const [n, l] of Object.entries(window.__inst || {}))
     if (window.__mata.has(n)) for (const im of l) im.visible = v;
 });
+liga("nomes", (v) => { for (const sp of (window.__nomes || [])) sp.visible = v; });
 liga("parar", (v) => { parado = v; });
 liga("tropas", (v) => {
   mostrarTropas = v;

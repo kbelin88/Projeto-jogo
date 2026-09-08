@@ -105,7 +105,15 @@ def juntar(reg, dx, dy, cid=None, giro=0.0):
 
 
 # ── as aldeias ──────────────────────────────────────────────────────────────
-cidades = [c for c in REDE["c"] if c not in C.DE_FORA]
+# ── LISBOA E BARCELONA ENTRAM ───────────────────────────────────────────────
+# Ficaram de fora da fornada 2D em 07/09 porque a peca da capital nao
+# convencia como sprite. Aqui isso custa QUATRO ESTRADAS: lisboa-santarem,
+# evora-lisboa, barcelona-tarragona e barcelona-girona simplesmente nao
+# existiam, e uma rede com buracos e pior do que uma peca imperfeita -- ainda
+# mais quando e por ela que as tropas andam.
+# Se a capital continuar a nao convencer em 3D, troca-se a PECA. Nao se apaga
+# a cidade.
+cidades = list(REDE["c"])
 for cid in cidades:
     perfil = REDE["c"][cid]["t"]
     P.registar(True)
@@ -739,6 +747,13 @@ with open(os.path.join(SAIDA, "mapa3d.json"), "w", encoding="utf-8") as f:
                "pecas": {n: legiveis.get(n, n) for n in feitas}, "copias": copias,
                "arranjos": bosques, "manchas": manchas,
                "estradas": eixos, "tropas": list(TROPAS),
+               # o NOME e o TAMANHO de cada povoacao, para o mapa poder
+               # rotula-las sem ter de ir buscar o world-iberia outra vez
+               "aldeias": {c: {"p": centros[c],
+                               "z": round(patamares.get(c, 0.0), 2),
+                               "t": REDE["c"][c]["t"],
+                               "nome": REDE["c"][c].get("nome", c)}
+                           for c in centros},
                "mastros": {c: [[m[0], m[1], round(m[2] + patamares.get(c, 0.0), 2),
                                 m[3]] for m in ms]
                            for c, ms in mastros.items()}}, f, separators=(",", ":"))
