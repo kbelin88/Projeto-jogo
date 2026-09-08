@@ -148,7 +148,10 @@ def montar(tipo, mats, corpo, arm):
     # a pele e as botas do pacote passam a ser as nossas
     for i, m in enumerate(corpo.data.materials):
         corpo.data.materials[i] = mats.get(
-            {"Armor": "aco", "Boots": "couro", "Skin": "carne"}.get(m.name, "pano"),
+            # a "Armor" deles vira COTA DE MALHA e nao aco: um lanceiro nao
+            # anda de placas, anda de malha -- e e a malha, com o seu ladrilho
+            # de 12 cm, que da a superficie granulada que se le como armadura.
+            {"Armor": "malha", "Boots": "couro", "Skin": "carne"}.get(m.name, "pano"),
             mats["pano"])
 
     pecas = []

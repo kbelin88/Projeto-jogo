@@ -68,6 +68,7 @@ COR = {
     "pano":       (0.360, 0.330, 0.290, 1),   # a sobreveste, que leva a cor do Rei
     "cavalo":     (0.145, 0.098, 0.062, 1),
     "cavalo2":    (0.250, 0.210, 0.170, 1),
+    "malha":      (0.225, 0.235, 0.255, 1),   # a cota, mais escura que o aco
     # A FOLHADA E MAIS ESCURA QUE A RELVA, nunca mais clara. Com o chao liso
     # verde, o disco de "terra" que estava por baixo de cada bosque virava um
     # halo pálido e cada mancha lia-se como uma clareira em vez de mata cerrada.
@@ -192,6 +193,16 @@ FICHEIRO = {
     "terra":      ("terra", 3.0, 0.7),
     "caminho":    ("caminho", 2.4, 0.7),
     "lavrado":    ("terra", 2.2, 0.7),
+    # ── OS SOLDADOS (08/09) ──────────────────────────────────────────────
+    # O LADRILHO E MINUSCULO, e e isso que faz a diferenca. Um anel de cota de
+    # malha tem um centimetro; a mesma imagem esticada por um metro de peito da
+    # uma malha de aros do tamanho de um punho, que le como rede de pesca. Aqui
+    # vale 0,12 m -- e o soldado e desenhado a 2,2x, portanto na pratica ainda
+    # mais fino.
+    "aco":        ("aco_martelado", 0.55, 0.8),
+    "malha":      ("malha", 0.12, 1.0),
+    "couro":      ("couro_gasto", 0.40, 0.9),
+    "pano":       ("linho", 0.35, 0.7),
     # o colmo pede um ladrilho PEQUENO: a palha tem uns centimetros, e esticada
     # por um telhado de 8 m viram-se molhos de palha do tamanho de uma porta
     "colmo":      ("colmo", 1.1, 1.2),
