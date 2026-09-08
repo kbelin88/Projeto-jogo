@@ -59,9 +59,42 @@ cena.background = new THREE.Color(0x7ea3b8);
 // O MAR e um plano por baixo de tudo. A ilha e uma malha com a forma do alfa
 // da arte, portanto a costa passa a ser uma BORDA de geometria e nao um
 // esbatido de 16 pixeis por cima de um PNG -- que era a queixa de origem.
-const mar = new THREE.Mesh(
-  new THREE.PlaneGeometry(LX * 4, LY * 4),
-  new THREE.MeshStandardMaterial({ color: 0x27596b, roughness: 0.42, metalness: 0.05 }));
+// ── A AGUA ────────────────────────────────────────────────────────────────
+// Um plano de cor chapada le-se como cartolina azul, e o mar e a segunda maior
+// superficie do quadro. Mas nao e preciso ondular a GEOMETRIA: o que faz a
+// agua parecer agua e o brilho a mexer, e o brilho vem da NORMAL. Perturba-se
+// a normal por pixel com tres ondas cruzadas e a superficie fica viva sem um
+// unico vertice a mais -- num plano que cobre 11 km, isso conta.
+//
+// Tres ondas e nao uma: com uma so ve-se o padrao e conta-se o compasso. Com
+// tres, de comprimentos que nao sao multiplos uns dos outros, o olho desiste.
+// AFINADO CONTRA O NEVOEIRO. Com rugosidade 0,22 o mar refletia o hemisferio
+// inteiro, ficava palido, e o nevoeiro acabava de o apagar: a agua e o ceu
+// tinham a mesma cor e a ilha flutuava no nada. Mais rugoso e mais escuro, o
+// mar volta a ser um plano com peso por baixo da terra.
+const matMar = new THREE.MeshStandardMaterial({
+  color: 0x1d4657, roughness: 0.40, metalness: 0.06 });
+matMar.onBeforeCompile = (sh) => {
+  sh.uniforms.tempo = { value: 0 };
+  matMar.userData.sh = sh;
+  // A VARIAVEL E DECLARADA AQUI. Contei com um `vWorldPosition` que o `three`
+  // ja nao tem -- o nevoeiro passou a usar so a profundidade -- e o resultado
+  // nao foi um erro visivel: foi o shader nao compilar, o mar deixar de ser
+  // desenhado, e a ilha a flutuar num ceu sem agua. Quem depende de uma
+  // variavel de outra pessoa, declara a sua.
+  sh.vertexShader = `varying vec3 vMar;
+` + sh.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
+vMar = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
+  sh.fragmentShader = `uniform float tempo;
+varying vec3 vMar;
+` + sh.fragmentShader.replace("#include <normal_fragment_begin>", `#include <normal_fragment_begin>
+vec2 mp = vMar.xz;
+float o1 = sin(mp.x * 0.055 + mp.y * 0.021 + tempo * 1.10);
+float o2 = sin(mp.x * -0.017 + mp.y * 0.049 + tempo * 0.83);
+float o3 = sin(mp.x * 0.031 + mp.y * -0.037 + tempo * 1.47);
+normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 0.024));`);
+};
+const mar = new THREE.Mesh(new THREE.PlaneGeometry(LX * 4, LY * 4), matMar);
 mar.rotation.x = -Math.PI / 2;
 // O MAR fica ABAIXO da terra, e nao a rasar. Estava a -6 m num mapa de 2,8 km:
 // visto de cima, terra e agua liam-se coplanares e a costa era so uma mudanca
@@ -70,7 +103,9 @@ mar.rotation.x = -Math.PI / 2;
 mar.position.y = -11;
 mar.receiveShadow = true;
 cena.add(mar);
-cena.fog = new THREE.Fog(0x7ea3b8, LX * 0.55, LX * 1.5);
+// o nevoeiro comeca MAIS LONGE: a 0,55 do mapa ele engolia a costa oposta e
+// a ilha perdia os limites. E a cor e a do horizonte, nao a do ceu a pino.
+cena.fog = new THREE.Fog(0x8fb0c2, LX * 0.95, LX * 2.6);
 
 const sol = new THREE.DirectionalLight(new THREE.Color(...cfgSol.sol.cor), 3.2);
 const d = cfgSol.sol.direcao_yup;
@@ -493,6 +528,7 @@ function laco() {
   ultimo = agora;
   marchar(relogio);
   fumegar(relogio, cam);
+  if (matMar.userData.sh) matMar.userData.sh.uniforms.tempo.value = relogio * 0.001;
   for (const mat of (window.__bandeiras || []))
     if (mat.userData.sh) mat.userData.sh.uniforms.tempo.value = relogio * 0.001;
   ctrl.update();

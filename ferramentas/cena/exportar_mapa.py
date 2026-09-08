@@ -46,11 +46,30 @@ SAIDA = os.path.join(os.getcwd(), "sonda3d")
 # 3,8 celulas de 13,23 unidades. Um numero so, e o mapa inteiro obedece-lhe.
 DIV = 1429.0 / 108.0
 M_POR_VB = 98.9 / (3.8 * DIV)
-IB_OX, IB_OY, IB_LARG, IB_ALT = 130.0, 144.0, 1429.0, 886.0
+# ── ONDE A ILHA COMECA E ACABA, E PORQUE NAO E O RETANGULO DO VIEWBOX ───────
+# O viewBox do mapa mede 1429 x 886. A ARTE da ilha nao: com a escala do jogo
+# (1,17613, ancorada no topo, `xMidYMin slice`), os 1215 x 864 pixeis da imagem
+# dao 1429 x 1016 unidades -- e mais ALTA que a caixa, e o excesso e cortado em
+# baixo. E o que "slice" quer dizer.
+#
+# Eu tinha esticado a mascara de terra para caber nos 886, o que a COMPRIMIU
+# 13% na vertical e arrastou todo o sul para norte. O resultado: Faro, Cordoba,
+# Murcia e Girona caiam na agua -- e eu tinha diagnosticado isso como um
+# desacordo de LIMIARES entre duas leituras do alfa. Era falso. O limiar nao
+# tinha nada a ver: a mascara estava na proporcao errada.
+#
+# A licao e a de sempre neste projeto: quando duas coisas nao batem certo, o
+# suspeito nao e o valor, e o SISTEMA DE COORDENADAS.
+IB_OX, IB_OY, IB_LARG = 130.0, 144.0, 1429.0
+IB_ALT = 864.0 * 1.17613                     # a altura da ARTE, nao da caixa
 
 
 def em_metros(vx, vy):
-    """viewBox do jogo -> metros da cena. O y do ecra desce; o da cena sobe."""
+    """viewBox do jogo -> metros da cena. O y do ecra desce; o da cena sobe.
+
+    A origem e o CENTRO DA IMAGEM, e nao o centro do viewBox: o que tem de
+    coincidir e a mascara de terra com as cidades, e a mascara vem da imagem.
+    """
     return ((vx - IB_OX - IB_LARG / 2) * M_POR_VB,
             -(vy - IB_OY - IB_ALT / 2) * M_POR_VB)
 
