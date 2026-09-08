@@ -1490,6 +1490,62 @@ def proto_cavaleiro(alt=2.4):
     return _guardar(_juntar(p))
 
 
+# ═══ OS GUERREIROS DE CARNE ══════════════════════════════════════════════════
+# O corpo vem do `guerreiros.py` — carne à volta de um esqueleto de varetas. O
+# EQUIPAMENTO continua a ser feito de primitivas, e de propósito: um elmo É uma
+# calote, um escudo É uma prancha. Carne para o que é orgânico, caixas para o
+# que é fabricado — é essa a divisão, e não "novo contra velho".
+import guerreiros as GUE                                   # noqa: E402
+
+
+def _vestir(alt, cor_pano="pano"):
+    """o corpo nu mais o que se lhe põe em cima. Devolve a lista de partes."""
+    k = alt / GUE.ALT                       # tudo escala com a altura pedida
+    C = GUE.CAB * k
+    corpo = GUE.corpo("carne", GUE.esqueleto_homem(passo=13, braco=8),
+                      "carne", subdiv=1)
+    corpo.scale = (k, k, k)
+    _aplicar_escala()
+    _novo(corpo, "carne", 0)
+
+    z_bacia, z_ombro = alt * 0.50, alt * 0.78
+    partes = [corpo]
+    # a TÚNICA: um tronco de cone da anca ao peito. Dá cor de Rei ao soldado e
+    # tapa a junta entre as pernas e o tronco, que é onde a pele se nota mais.
+    bpy.ops.mesh.primitive_cone_add(vertices=12, radius1=C * 0.72, radius2=C * 0.60,
+                                    depth=alt * 0.34,
+                                    location=(0, 0, z_bacia + alt * 0.06))
+    partes.append(_novo(bpy.context.object, cor_pano, 0.02))
+    # o CINTO, que dá cintura onde a pele não dá
+    partes.append(_cil(0, 0, z_bacia + alt * 0.02, C * 0.66, alt * 0.035, "couro", 12))
+    # o ELMO: calote sobre a cabeça, e uma aba que faz sombra na cara
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=14, ring_count=8, radius=C * 0.46,
+                                         location=(0, 0, alt * 0.955))
+    o = bpy.context.object
+    o.scale = (1.0, 1.0, 0.86)
+    _aplicar_escala()
+    bpy.ops.object.shade_smooth()
+    partes.append(_novo(o, "aco", 0))
+    partes.append(_cil(0, 0, alt * 0.915, C * 0.50, alt * 0.018, "aco", 14))
+    # BOTAS
+    for lado in (1, -1):
+        partes.append(_cil(C * 0.30, lado * C * 0.46, 0.0, C * 0.22, alt * 0.075,
+                           "couro", 8))
+    return partes, C
+
+
+def proto_lanceiro2(alt=2.0):
+    """lança a prumo e escudo ao lado — a silhueta mais alta das três"""
+    partes, C = _vestir(alt)
+    z_ombro = alt * 0.78
+    partes.append(_cil(C * 1.7, -C * 0.62, -alt * 0.03, C * 0.075, alt * 1.30,
+                       "madeira2", 6))
+    partes.append(_cil(C * 1.7, -C * 0.62, alt * 1.25, C * 0.12, alt * 0.16, "aco", 6))
+    partes.append(_caixa(-C * 0.10, C * 0.86, z_ombro - alt * 0.40,
+                         C * 0.22, C * 1.05, alt * 0.34, "madeira"))
+    return _guardar(_juntar(partes))
+
+
 # ── CADA PROTOTIPO PASSA A SABER O QUE E ─────────────────────────────────────
 # Os nomes vinham do Blender: "Cube.005", "Cylinder.001". Servem enquanto tudo
 # vive numa cena só — e deixam de servir no minuto em que se quer uma
