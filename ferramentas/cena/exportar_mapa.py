@@ -472,6 +472,39 @@ print("SONDA estradas: %d trocos, %d faces, %.1f m de largura"
 #
 # A mascara vem do alfa da propria ilha (`_terra.npy`), portanto a costa e
 # EXATAMENTE a que o jogo ja usa — nao ha duas ilhas com formas diferentes.
+# ── A COSTA DEIXA DE SER UMA ESCADA ─────────────────────────────────────────
+# A malha e uma grelha, portanto a linha de agua sai aos degraus de 5 m. Subir
+# a resolucao resolveria e quadruplicaria as faces por uma coisa que so se ve
+# na beira.
+#
+# Em vez disso EMPURRAM-SE os vertices da beira para a linha verdadeira. O alfa
+# da arte e continuo -- entre 0 e 1, nao so terra ou agua -- e a fronteira e
+# onde ele vale 0,43. Para cada vertice perto dessa fronteira, anda-se ao longo
+# do gradiente ate la chegar. A topologia nao muda, o numero de faces nao muda,
+# e o degrau desaparece.
+LIMIAR = 110 / 255.0
+alfa_c = np.load(os.path.join(os.getcwd(), "ferramentas/cena/_alfa.npy"))
+ga_y, ga_x = np.gradient(alfa_c)
+
+
+def encostar(vi, vj):
+    """(x, y) do vertice (vi, vj) da grelha, puxado para a linha de agua"""
+    x = vi * px - LX / 2
+    y = LY / 2 - vj * py
+    i = min(max(vi, 0), tw - 1)
+    j = min(max(vj, 0), th - 1)
+    a = float(alfa_c[j, i])
+    if not (LIMIAR - 0.34 < a < LIMIAR + 0.34):
+        return x, y                       # longe da agua: fica onde esta
+    gx, gy = float(ga_x[j, i]), float(ga_y[j, i])
+    g2 = gx * gx + gy * gy
+    if g2 < 1e-9:
+        return x, y
+    passo = (LIMIAR - a) / g2             # em celulas, ao longo do gradiente
+    passo = max(-1.4, min(1.4, passo))    # nunca mais de uma celula e meia
+    return x + gx * passo * px, y - gy * passo * py
+
+
 verts, faces = [], []
 indice = {}
 for j in range(th):
@@ -483,7 +516,8 @@ for j in range(th):
             ch = (i + di, j + dj)
             if ch not in indice:
                 indice[ch] = len(verts)
-                verts.append(((i + di) * px - LX / 2, LY / 2 - (j + dj) * py,
+                ex, ey = encostar(i + di, j + dj)
+                verts.append((ex, ey,
                               float(relevo[min(j + dj, th - 1), min(i + di, tw - 1)])))
             canto.append(indice[ch])
         faces.append(tuple(canto))
@@ -504,15 +538,15 @@ for j in range(th):
                 ch = (i + ddi, j + ddj)
                 if ch not in indice:
                     indice[ch] = len(verts)
-                    verts.append(((i + ddi) * px - LX / 2,
-                                  LY / 2 - (j + ddj) * py,
+                    ex, ey = encostar(i + ddi, j + ddj)
+                    verts.append((ex, ey,
                                   float(relevo[min(j + ddj, th - 1),
                                                min(i + ddi, tw - 1)])))
                 topo.append(indice[ch])
             fundo = []
             for ddi, ddj in (b, a):
-                verts.append(((i + ddi) * px - LX / 2,
-                              LY / 2 - (j + ddj) * py, -FUNDO))
+                ex, ey = encostar(i + ddi, j + ddj)
+                verts.append((ex, ey, -FUNDO))
                 fundo.append(len(verts) - 1)
             faces.append((topo[0], topo[1], fundo[0], fundo[1]))
 chao = P._novo(P._malha("chao", verts, faces, "relva", bisel=0), "relva")

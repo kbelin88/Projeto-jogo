@@ -313,6 +313,53 @@ transformed.y += onda * transformed.x * 0.05;`);
     }
   }
 
+  // ═══ AS CHAMINES ═════════════════════════════════════════════════════
+  // Uma aldeia sem fumo esta abandonada. E o sinal mais barato que existe de
+  // que ali dentro vive alguem -- mais barato que gente a andar, e le-se de
+  // muito mais longe, porque sobe acima dos telhados.
+  //
+  // Sao QUADRADOS VIRADOS PARA A CAMARA, com a textura desenhada aqui num
+  // canvas: uma nuvem redonda e esbatida. Nao ha ficheiro a descarregar, e
+  // muda-se a receita numa linha.
+  const fumoTex = (() => {
+    const c = document.createElement("canvas");
+    c.width = c.height = 64;
+    const g = c.getContext("2d");
+    const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, "rgba(236,232,226,.85)");
+    grad.addColorStop(0.5, "rgba(214,208,200,.38)");
+    grad.addColorStop(1, "rgba(200,196,190,0)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  })();
+
+  // uma chamine por CASA, e nao uma por aldeia: e a dispersao que faz aquilo
+  // parecer um povoado e nao uma fogueira
+  const chamines = [];
+  for (const c of MAPA.copias) {
+    if (!/^casa2/.test(MAPA.pecas[c.peca] || c.peca)) continue;
+    if (chamines.length % 3) { chamines.push(null); continue; }
+    chamines.push({ p: c.p, fase: chamines.length * 0.37 });
+  }
+  const fogos = chamines.filter(Boolean);
+  const POR_FOGO = 5;
+  if (fogos.length) {
+    const mat = new THREE.MeshBasicMaterial({
+      map: fumoTex, transparent: true, depthWrite: false,
+      // FORA DA CURVA DE TOM. O fumo nao e uma superficie iluminada: e uma
+      // cor pintada. Passado pela AgX ficava cinzento-chumbo, como fuligem.
+      toneMapped: false,
+      blending: THREE.NormalBlending });
+    const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), mat,
+                                       fogos.length * POR_FOGO);
+    im.frustumCulled = false;
+    cena.add(im);
+    window.__fumo = { im, fogos, POR_FOGO };
+  }
+
   window.__inst = inst;
   window.__mata = new Set(MAPA.arranjos.flat().map((t) => t.peca));
   const el = document.getElementById("carga");
@@ -362,6 +409,36 @@ function noCaminho(col, metros, saida) {
   saida.set(a[0] + (b[0] - a[0]) * t, a[2] + (b[2] - a[2]) * t,
             -(a[1] + (b[1] - a[1]) * t));
   return Math.atan2(-(b[1] - a[1]), b[0] - a[0]);   // rumo, ja em Y-para-cima
+}
+
+// ── o fumo sobe ───────────────────────────────────────────────────────────
+// Cada baforada nasce na chamine, sobe, engorda e desaparece; a seguinte sai
+// um quinto de ciclo depois. Viradas para a camara SEMPRE -- um quadrado
+// plano visto de lado desaparece, e o fumo desapareceria de cada vez que se
+// rodasse a vista.
+const _fp = new THREE.Vector3(), _fs = new THREE.Vector3(), _fm = new THREE.Matrix4();
+function fumegar(t, cam) {
+  const F = window.__fumo;
+  if (!F) return;
+  const q = cam.quaternion;
+  let i = 0;
+  for (const f of F.fogos) {
+    for (let k = 0; k < F.POR_FOGO; k++) {
+      const ciclo = ((t * 0.00022 + f.fase + k / F.POR_FOGO) % 1);
+      const sobe = ciclo * 16.0;
+      const tam = 1.6 + ciclo * 7.0;
+      _fp.set(f.p[0] + Math.sin(ciclo * 3.1 + f.fase) * ciclo * 3.0,
+              f.p[2] + 5.0 + sobe,
+              -f.p[1] + Math.cos(ciclo * 2.3 + f.fase) * ciclo * 2.0);
+      // a baforada MORRE a encolher, e nao a desaparecer de repente: sem isto
+      // via-se o momento exato em que cada uma era reciclada
+      _fs.set(tam * (1 - ciclo * 0.15), tam * (1 - ciclo * 0.15), 1);
+      _fm.compose(_fp, q, _fs);
+      F.im.setMatrixAt(i++, _fm);
+    }
+  }
+  F.im.instanceMatrix.needsUpdate = true;
+  F.im.material.opacity = 0.55;
 }
 
 let mostrarTropas = true;
@@ -415,6 +492,7 @@ function laco() {
   if (!parado) relogio += Math.min(agora - ultimo, 100);
   ultimo = agora;
   marchar(relogio);
+  fumegar(relogio, cam);
   for (const mat of (window.__bandeiras || []))
     if (mat.userData.sh) mat.userData.sh.uniforms.tempo.value = relogio * 0.001;
   ctrl.update();
