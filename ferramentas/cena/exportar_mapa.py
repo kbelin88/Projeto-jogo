@@ -464,12 +464,18 @@ for a, b in LIGACOES:
         adro = 1.0 + 0.85 * max(0.0, 1.0 - borda / 30.0) ** 1.6
         w = LARG_ESTRADA * adro * (0.5 + 0.09 * math.sin(t * 21 + comp)
                                    + 0.06 * math.sin(t * 47))
-        # a estrada ACOMPANHA o terreno, meio metro acima: pousada num plano
-        # ela enterrava-se nas subidas e voava nas descidas
-        hz = altura_em(cx, cy) + 0.5
-        verts.append((cx + nx * w, cy + ny * w, hz))
-        verts.append((cx - nx * w, cy - ny * w, hz))
-        eixo.append([round(cx, 1), round(cy, 1), round(hz, 1)])
+        # ── CADA BEIRA COM A SUA ALTURA ─────────────────────────────────
+        # A estrada acompanha o terreno, mas a altura do EIXO nao serve para as
+        # duas beiras: numa encosta de traves uma delas voa e a outra
+        # enterra-se, e num adro de 33 m de largo isso da um degrau que se ve.
+        # Cada canto pergunta a sua propria altura.
+        ex1, ey1 = cx + nx * w, cy + ny * w
+        ex2, ey2 = cx - nx * w, cy - ny * w
+        verts.append((ex1, ey1, altura_em(ex1, ey1) + 0.25))
+        verts.append((ex2, ey2, altura_em(ex2, ey2) + 0.25))
+        # o EIXO leva a altura do centro, que e por onde as tropas andam --
+        # nao a de nenhuma das beiras
+        eixo.append([round(cx, 1), round(cy, 1), round(altura_em(cx, cy) + 0.4, 1)])
     for i in range(N):
         faces.append((base + 2 * i, base + 2 * i + 1,
                       base + 2 * i + 3, base + 2 * i + 2))
