@@ -176,6 +176,7 @@ if faltam:
 # A mascara vem do alfa da propria ilha (`_terra.npy`), portanto a costa e
 # EXATAMENTE a que o jogo ja usa — nao ha duas ilhas com formas diferentes.
 terra = np.load(os.path.join(os.getcwd(), "ferramentas/cena/_terra.npy"))
+FUNDO = 18.0          # quanto a margem desce abaixo do nivel da terra
 th, tw = terra.shape
 LX, LY = IB_LARG * M_POR_VB, IB_ALT * M_POR_VB
 px, py = LX / tw, LY / th
@@ -193,6 +194,32 @@ for j in range(th):
                 verts.append(((i + di) * px - LX / 2, LY / 2 - (j + dj) * py, 0.0))
             canto.append(indice[ch])
         faces.append(tuple(canto))
+        # ── A MARGEM ────────────────────────────────────────────────────────
+        # Sem isto a ilha e uma FOLHA: a terra e o mar encontram-se no mesmo
+        # plano e a costa nao se le como costa, le-se como uma mudanca de cor.
+        # Onde a celula ao lado e agua, desce-se uma parede ate abaixo do mar.
+        # E a diferenca entre um mapa pintado e uma ilha que tem margem.
+        for (di, dj), (a, b) in (((-1, 0), ((0, 0), (0, 1))),
+                                 ((1, 0), ((1, 1), (1, 0))),
+                                 ((0, -1), ((1, 0), (0, 0))),
+                                 ((0, 1), ((0, 1), (1, 1)))):
+            vi, vj = i + di, j + dj
+            if 0 <= vi < tw and 0 <= vj < th and terra[vj, vi]:
+                continue                                   # tem terra ao lado
+            topo = []
+            for ddi, ddj in (a, b):
+                ch = (i + ddi, j + ddj)
+                if ch not in indice:
+                    indice[ch] = len(verts)
+                    verts.append(((i + ddi) * px - LX / 2,
+                                  LY / 2 - (j + ddj) * py, 0.0))
+                topo.append(indice[ch])
+            fundo = []
+            for ddi, ddj in (b, a):
+                verts.append(((i + ddi) * px - LX / 2,
+                              LY / 2 - (j + ddj) * py, -FUNDO))
+                fundo.append(len(verts) - 1)
+            faces.append((topo[0], topo[1], fundo[0], fundo[1]))
 chao = P._novo(P._malha("chao", verts, faces, "relva", bisel=0), "relva")
 for col in list(chao.users_collection):
     col.objects.unlink(col.objects.get(chao.name) or chao)
