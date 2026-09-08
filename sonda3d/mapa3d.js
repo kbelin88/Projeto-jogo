@@ -83,7 +83,11 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
   const sol = new THREE.DirectionalLight(new THREE.Color(...cfgSol.sol.cor), 3.2);
   const dSol = cfgSol.sol.direcao_yup;
   sol.castShadow = true;
-  sol.shadow.mapSize.set(4096, 4096);
+  // 2048 e nao 4096: a caixa da sombra acompanha a camara e aperta-se ao que
+  // se esta a ver, portanto os 2048 caem sobre uma area pequena e chegam. Os
+  // 4096 custavam quatro vezes mais memoria e quatro vezes mais escrita por
+  // quadro para a mesma nitidez.
+  sol.shadow.mapSize.set(2048, 2048);
   cena.add(sol, sol.target);
   cena.add(new THREE.HemisphereLight(0xbcd8ef, 0x5c6340, 1.2));
 
@@ -94,6 +98,14 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
   ctrl.maxPolarAngle = Math.PI * 0.497;
   ctrl.minDistance = 12;
   ctrl.maxDistance = LX * 1.3;
+  // ── APROXIMAR PARA O CURSOR, e nao para o centro do mapa ────────────────
+  // Sem isto o alvo da orbita fica cravado no meio da ilha: aproxima-se de uma
+  // aldeia no canto, e ao girar a camara descreve um arco de dois quilometros
+  // a volta do centro e a aldeia desaparece. Com `zoomToCursor`, o alvo VEM
+  // COM a roda -- gira-se a volta do que se esta a olhar, que e o que a mao
+  // espera.
+  ctrl.zoomToCursor = true;
+  ctrl.zoomSpeed = 1.15;
 
   const g = await new Promise((ok, mal) =>
     new GLTFLoader().load(BASE + "pecas.glb", ok, undefined, mal));
@@ -357,7 +369,28 @@ transformed.y += onda * transformed.x * 0.05;`);
 
   let ligadoAoJogo = false;
   let marchas = [];
+  let motivo = "ainda nao correu";
+  // ── O `t` DO MOTOR E EM DEGRAUS; O DO MAPA E CONTINUO ──────────────────
+  // O motor so mexe na marcha uma vez por turno: entre turnos, `t` fica
+  // parado. Desenhado tal e qual, um exercito nao ANDA -- salta. E como a
+  // maioria das marchas esta a t=0 ou t=1, passa a partida quase toda parada a
+  // porta de uma aldeia, onde a muralha a esconde.
+  //
+  // Aqui guarda-se um `t` proprio que PERSEGUE o do motor. Nao inventa
+  // posicao nenhuma -- chega sempre ao mesmo sitio, so demora um segundo a la
+  // chegar. O que o motor executa continua a ser a verdade; isto e so a
+  // maneira de a mostrar.
+  const suave = new Map();
+  function tSuave(chave, alvo, dt) {
+    const a = suave.get(chave);
+    if (a === undefined || Math.abs(alvo - a) > 0.6) { suave.set(chave, alvo); return alvo; }
+    const k = 1 - Math.pow(0.0015, dt / 1000);   // ~1 s para fechar a distancia
+    const n = a + (alvo - a) * k;
+    suave.set(chave, n);
+    return n;
+  }
 
+  let dtQuadro = 16;
   function porTropas(t) {
     const conta = {};
     for (const tipo of Object.keys(tropaInst)) conta[tipo] = 0;
@@ -377,15 +410,24 @@ transformed.y += onda * transformed.x * 0.05;`);
     };
 
     if (ligadoAoJogo) {
+      motivo = marchas.length ? "" : "sem marchas";
       // ── AS MARCHAS VERDADEIRAS ──────────────────────────────────────────
       // A fracao vem do motor (`posicaoRota`), medida no MESMO peso que conta
       // os turnos. Se aqui se andasse por pixel, o exercito atravessaria a
       // serra depressa demais no ecra e o que se ve deixaria de ser o que o
       // motor executa.
+      const vistas = new Set();
       for (const m of marchas) {
         const via = eixoDe[m.de + ">" + m.para];
-        if (!via) continue;
-        const bruto = via.inv ? (1 - m.t) * via.comp : m.t * via.comp;
+        if (!via) { motivo = "sem via para " + m.de + ">" + m.para; continue; }
+        if (!tropaInst[m.tipo || "lanceiro"]) {
+          motivo = "sem malha para o tipo " + m.tipo;
+          continue;
+        }
+        const chave = m.dono + "|" + m.de + ">" + m.para + "|" + (m.tipo || "");
+        vistas.add(chave);
+        const tt = tSuave(chave, m.t, dtQuadro);
+        const bruto = via.inv ? (1 - tt) * via.comp : tt * via.comp;
         const rumoExtra = via.inv ? Math.PI : 0;
         // a coluna estica-se ATRAS da cabeca: quem vai a frente chegou primeiro
         const quantos = Math.max(1, Math.min(12, Math.round(Math.sqrt(m.tropas || 1))));
@@ -395,7 +437,33 @@ transformed.y += onda * transformed.x * 0.05;`);
                 Math.max(0, Math.min(via.comp, bruto - atras)), rumoExtra, j);
         }
       }
+      // e os galhardetes, um por coluna, acima da cabeca
+      for (const rei of Object.keys(galhardetes)) galhardetes[rei].count = 0;
+      for (const m of marchas) {
+        const via = eixoDe[m.de + ">" + m.para];
+        const im = galhardetes[m.dono];
+        if (!via || !im || im.count >= 64) continue;
+        const chave = m.dono + "|" + m.de + ">" + m.para + "|" + (m.tipo || "");
+        const tt = suave.has(chave) ? suave.get(chave) : m.t;
+        const bruto = via.inv ? (1 - tt) * via.comp : tt * via.comp;
+        noCaminho(via, bruto, _p);
+        // o tamanho vem da DISTANCIA a camara: fica com o mesmo tamanho no
+        // ecra, perto ou longe, como as chapas dos nomes
+        const d = cam.position.distanceTo(_p);
+        const k = Math.max(2.5, d * 0.022);
+        _p.y += 5.5 + k * 0.9;
+        _fs.set(k, k, k);
+        _fm.compose(_p, cam.quaternion, _fs);
+        im.setMatrixAt(im.count++, _fm);
+      }
+      for (const rei of Object.keys(galhardetes))
+        galhardetes[rei].instanceMatrix.needsUpdate = true;
+
+      // marchas que acabaram deixam de ter memoria: senao a proxima com a
+      // mesma chave herdava o `t` da anterior e comecava a meio do caminho
+      for (const k of [...suave.keys()]) if (!vistas.has(k)) suave.delete(k);
     } else {
+      for (const rei of Object.keys(galhardetes)) galhardetes[rei].count = 0;
       for (const col of colunas) {
         if (!col.via) continue;
         const vel = VEL_DEMO[col.tipo] || 6;
@@ -410,6 +478,31 @@ transformed.y += onda * transformed.x * 0.05;`);
     }
     for (const [tipo, lista] of Object.entries(tropaInst))
       for (const im of lista) { im.count = conta[tipo]; im.instanceMatrix.needsUpdate = true; }
+  }
+
+  // ── O GALHARDETE ────────────────────────────────────────────────────────
+  // Um lanceiro tem 3,4 m num mapa de 2,8 km: na vista geral e menos de um
+  // pixel. Um jogo de estrategia onde nao se VE por onde anda um exercito nao
+  // se pode jogar -- e ninguem esperaria ver o homem, espera ver a BANDEIRA
+  // dele. Um triangulo sempre virado para a camara, na cor do Rei, por cima da
+  // cabeca da coluna, e o tamanho e em unidades de ecra: le-se de longe e nao
+  // tapa nada de perto.
+  const galG = new THREE.BufferGeometry();
+  galG.setAttribute("position", new THREE.Float32BufferAttribute(
+    [-0.5, -0.4, 0, 0.5, -0.4, 0, 0, 0.75, 0], 3));
+  const galhardetes = {};
+  for (const rei of ["A", "B"]) {
+    const im = new THREE.InstancedMesh(
+      galG,
+      new THREE.MeshBasicMaterial({ color: COR_REI[rei], toneMapped: false,
+                                    side: THREE.DoubleSide, depthTest: false,
+                                    transparent: true, opacity: 0.92 }),
+      64);
+    im.frustumCulled = false;
+    im.renderOrder = 900;
+    im.count = 0;
+    cena.add(im);
+    galhardetes[rei] = im;
   }
 
   const _fp = new THREE.Vector3(), _fs = new THREE.Vector3(), _fm = new THREE.Matrix4();
@@ -449,7 +542,8 @@ transformed.y += onda * transformed.x * 0.05;`);
     const agora = performance.now();
     // teto de 100 ms: com a pagina escondida o navegador estrangula o rAF, e
     // sem isto as tropas teleportavam-se meio mapa ao voltar
-    if (!parado) relogio += Math.min(agora - ultimo, 100);
+    dtQuadro = Math.min(agora - ultimo, 100);
+    if (!parado) relogio += dtQuadro;
     ultimo = agora;
     ctrl.update();
     porTropas(relogio);
@@ -481,6 +575,21 @@ transformed.y += onda * transformed.x * 0.05;`);
     get fps() { return fps; },
     get pecas() { return nInst; },
     get triangulos() { return nTri; },
+    // quantas figuras estao de facto no ecra, por tipo. Existe porque "nao vejo
+    // tropas" tem duas causas muito diferentes -- nao ha nenhuma, ou ha e estao
+    // escondidas -- e sem este numero as duas parecem iguais.
+    // o interior, para quando "nao aparece" precisar de virar um numero
+    get diagnostico() {
+      return { ligadoAoJogo, marchas: marchas.length,
+               tiposComMalha: Object.keys(tropaInst),
+               viasConhecidas: Object.keys(eixoDe).length,
+               ultimoMotivo: motivo };
+    },
+    get contagemTropas() {
+      const r = {};
+      for (const [tipo, l] of Object.entries(tropaInst)) r[tipo] = l[0] ? l[0].count : 0;
+      return r;
+    },
     parar(v) { parado = !!v; },
     redimensionar: tamanho,
     destruir() { vivo = false; rend.dispose(); hospedeiro.removeChild(tela); },

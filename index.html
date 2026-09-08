@@ -1554,6 +1554,18 @@
   const GLIFO = { lanceiro: "\uD83D\uDEE1", arqueiro: "\uD83C\uDFF9", cavaleiro: "\uD83D\uDC0E" }; // escudo/arco/cavalo
 
   function draw() {
+    // ── COM O 3D LIGADO, O 2D NAO PINTA ──────────────────────────────────
+    // O canvas estava so ESCONDIDO -- e um canvas escondido continua a
+    // desenhar. Cada quadro pintava a ilha, o mar, as estradas, 380 bosques e
+    // 24 aldeias para ninguem ver, ao lado de uma cena 3D de 8 milhoes de
+    // triangulos. Era esse o peso ao mexer a camara.
+    // O HUD e a ponte continuam: um e DOM, a outra e dados.
+    if (M3D) {
+      updateHUD();
+      try { empurrarPara3D(); }
+      catch (e) { if (!erro3D) { erro3D = e; console.error("ponte 3D:", e); } }
+      return;
+    }
     clampPan();
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     ctx.clearRect(0, 0, VW, VH);
@@ -1832,14 +1844,6 @@
 
     drawGame();   // camada do motor por cima do mapa
     updateHUD();
-    if (M3D) {
-      try { empurrarPara3D(); }
-      catch (e) {
-        // UMA VEZ, e depois cala-se: um erro por quadro enche a consola e
-        // esconde-se a si proprio.
-        if (!erro3D) { erro3D = e; console.error("ponte 3D:", e); }
-      }
-    }
   }
 
   // ===== O MAPA 3D ==========================================================
