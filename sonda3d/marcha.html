@@ -1,0 +1,178 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>O lanceiro a marchar</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0d1418; color: #e8dcc0;
+               font: 13px system-ui, sans-serif; overflow: hidden; }
+  #palco { position: fixed; inset: 0; }
+  #hud { position: fixed; top: 12px; left: 12px; z-index: 5; width: 280px;
+         background: rgba(20,15,8,.9); border: 1px solid #6b5836;
+         border-radius: 8px; padding: 11px 13px; }
+  #hud h1 { font-size: 13px; margin: 0 0 8px; letter-spacing: .06em; }
+  #hud p { color: #cbbd94; line-height: 1.5; margin: 7px 0 0; }
+  #hud b { color: #f0d9a0; }
+  #hud button { background: #3a2e18; color: #e8dcc0; border: 1px solid #6b5836;
+                border-radius: 5px; padding: 5px 9px; margin: 4px 4px 0 0;
+                cursor: pointer; font: inherit; }
+  #hud button:hover { background: #55401f; }
+  #med { position: fixed; top: 12px; right: 12px; z-index: 5; text-align: right;
+         background: rgba(20,15,8,.9); border: 1px solid #6b5836;
+         border-radius: 8px; padding: 9px 12px; font-variant-numeric: tabular-nums; }
+  #med b { color: #f0d9a0; font-size: 16px; }
+  #carga { position: fixed; inset: 0; display: flex; align-items: center;
+           justify-content: center; background: #0d1418; z-index: 9; color: #cbbd94; }
+</style>
+<div id="palco"></div>
+<div id="carga">a montar a marcha...</div>
+<div id="hud">
+  <h1>O LANCEIRO A MARCHAR</h1>
+  <p>Uma coluna vai e vem entre <b>Madrid</b> e <b>Toledo</b>, na estrada a
+     sério, sobre o relevo a sério.</p>
+  <div>
+    <button data-c="seguir">seguir a coluna</button>
+    <button data-c="lado">ver de lado</button>
+    <button data-c="alto">ver de cima</button>
+    <button data-c="parar">parar / andar</button>
+  </div>
+  <p>Arrasta para girar &middot; roda para aproximar.</p>
+</div>
+<div id="med"></div>
+
+<script type="module">
+import { iniciar } from "./mapa3d.js";
+import * as THREE from "./vendor/three.module.js";
+import { GLTFLoader } from "./vendor/loaders/GLTFLoader.js";
+import { clone as clonarComOssos } from "./vendor/utils/SkeletonUtils.js";
+
+const mapa = await iniciar(document.getElementById("palco"));
+const { cena, cam, ctrl, MAPA } = mapa;
+Object.assign(window, { mapa, cena, cam, ctrl, MAPA, THREE });
+
+// o mapa em modo demonstração inventa colunas; aqui as tropas são estas
+mapa.atualizar({ turno: 0, aldeias: [], marchas: [] });
+
+const g = await new Promise((ok, mal) =>
+  new GLTFLoader().load("./lanceiro.glb", ok, undefined, mal));
+
+// ── A COLUNA ───────────────────────────────────────────────────────────────
+// Uma malha com ossos NÃO se instancia: cada soldado é uma cópia sua, com o
+// seu esqueleto e o seu tocador de animação. É o preço da animação a sério, e
+// só se paga porque nunca há mais do que algumas dezenas à vista.
+//
+// `clone` do SkeletonUtils e não `.clone()`: um clone normal partilha o
+// esqueleto, e a coluna inteira andaria em uníssono, com todos os homens a
+// pisar no mesmo instante -- que é o aspeto de uma máquina, não de um exército.
+const QUANTOS = 6;
+const acaoAndar = g.animations.find((a) => /idle_walk/i.test(a.name)) || g.animations[0];
+console.log("animações:", g.animations.map((a) => a.name).join(", "));
+
+const soldados = [];
+for (let i = 0; i < QUANTOS; i++) {
+  const raiz = clonarComOssos(g.scene);
+  raiz.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true;
+                                         o.frustumCulled = false; } });
+  raiz.scale.setScalar(2.2);                 // o tamanho escolhido na tamanhos.html
+  const mix = new THREE.AnimationMixer(raiz);
+  const act = mix.clipAction(acaoAndar);
+  act.play();
+  // CADA UM COM A SUA FASE. Sem isto seriam seis cópias do mesmo instante.
+  act.time = (i * 0.37) % acaoAndar.duration;
+  cena.add(raiz);
+  soldados.push({ raiz, mix, atraso: i * 7.5 });
+}
+
+// ── O CAMINHO ──────────────────────────────────────────────────────────────
+const via = MAPA.estradas.find((e) => (e.de === "madrid" && e.para === "toledo")
+                                   || (e.de === "toledo" && e.para === "madrid"));
+const pts = via.pts;
+const acum = [0];
+for (let i = 1; i < pts.length; i++)
+  acum.push(acum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+const COMP = acum[acum.length - 1];
+const VEL = 9.0;                              // metros por segundo
+
+const _p = new THREE.Vector3();
+function noCaminho(metros, saida) {
+  const d = Math.max(0, Math.min(COMP - 0.01, metros));
+  let i = 1;
+  while (i < acum.length - 1 && acum[i] < d) i++;
+  const t = (d - acum[i - 1]) / Math.max(acum[i] - acum[i - 1], 1e-6);
+  const a = pts[i - 1], b = pts[i];
+  saida.set(a[0] + (b[0] - a[0]) * t, a[2] + (b[2] - a[2]) * t,
+            -(a[1] + (b[1] - a[1]) * t));
+  return Math.atan2(-(b[1] - a[1]), b[0] - a[0]);
+}
+
+let relogio = 0, parado = false, ultimo = performance.now();
+let modo = "seguir";
+const alvoCam = new THREE.Vector3();
+
+function passo() {
+  requestAnimationFrame(passo);
+  const agora = performance.now();
+  const dt = Math.min((agora - ultimo) / 1000, 0.1);
+  ultimo = agora;
+  avancar(dt);
+}
+
+// O passo separado do rAF: com o painel do navegador escondido o rAF nao dispara
+// nem uma vez, e sem isto nao ha como conferir a marcha sem um humano a olhar.
+function avancar(dt) {
+  if (!parado) relogio += dt;
+
+  soldados.forEach((s, i) => {
+    if (!parado) s.mix.update(dt);
+    // vai e vem: ao chegar, roda e volta
+    const volta = COMP * 2;
+    let d = ((relogio * VEL - s.atraso) % volta + volta) % volta;
+    let sentido = 1;
+    if (d > COMP) { d = volta - d; sentido = -1; }
+    const rumo = noCaminho(d, _p) + (sentido < 0 ? Math.PI : 0);
+    // ao lado do eixo, alternando: uma coluna não anda em fila indiana
+    // 1,8 m e nao 2,8: a estrada tem cerca de dez metros e a 2,8 os homens de
+    // fora iam com um pe na relva
+    const lat = ((i % 2) * 2 - 1) * 1.8;
+    _p.x += Math.cos(rumo + Math.PI / 2) * lat;
+    _p.z += Math.sin(rumo + Math.PI / 2) * lat;
+    s.raiz.position.copy(_p);
+    // a peça olha para +X; o mapa roda-a com o rumo da marcha
+    s.raiz.rotation.y = -rumo;
+    if (i === 0) alvoCam.copy(_p);
+  });
+
+  if (modo === "seguir" && !parado) {
+    ctrl.target.lerp(alvoCam, 0.08);
+    const q = alvoCam.clone().add(new THREE.Vector3(22, 13, 22));
+    cam.position.lerp(q, 0.05);
+  }
+}
+document.getElementById("carga").remove();
+window.avancar = avancar;   // para conferir sem rAF
+passo();
+
+for (const b of document.querySelectorAll("#hud button")) {
+  b.onclick = () => {
+    const c = b.dataset.c;
+    if (c === "parar") { parado = !parado; return; }
+    modo = c;
+    if (c === "lado") {
+      const m = pts[Math.floor(pts.length / 2)];
+      ctrl.target.set(m[0], m[2] + 3, -m[1]);
+      cam.position.set(m[0] + 34, m[2] + 12, -m[1] + 34);
+    } else if (c === "alto") {
+      const m = pts[Math.floor(pts.length / 2)];
+      ctrl.target.set(m[0], m[2], -m[1]);
+      cam.position.set(m[0], m[2] + 420, -m[1] + 120);
+    }
+    ctrl.update();
+  };
+}
+
+const med = document.getElementById("med");
+setInterval(() => {
+  med.innerHTML = "<b>" + mapa.fps + "</b> fps<br>"
+    + QUANTOS + " lanceiros animados<br>"
+    + "estrada de " + Math.round(COMP) + " m<br>"
+    + "camara a " + Math.round(ctrl.getDistance()) + " m";
+}, 500);
+</script>

@@ -277,6 +277,24 @@ def abrir_soldado():
         if not im or not im.size[0] or not m.use_nodes:
             continue
         nt = m.node_tree
+        # ── DOIS SAIDAS, E A ATIVA ERA A ERRADA ─────────────────────────────
+        # O ficheiro dele traz duas `Material Output` por material: uma ligada
+        # ao Principled (a boa) e outra a um Diffuse solto. O Blender ve a que
+        # esta ativa; nos ligamos a textura ao Principled, e o exportador de
+        # glTF seguia a OUTRA e escrevia o material sem textura nenhuma -- foi
+        # assim que a pele dele saiu branca no jogo, sem um unico aviso.
+        saidas = [n for n in nt.nodes if n.type == "OUTPUT_MATERIAL"]
+        boa = next((n for n in saidas if n.inputs["Surface"].links
+                    and n.inputs["Surface"].links[0].from_node.type == "BSDF_PRINCIPLED"), None)
+        if boa:
+            for n in saidas:
+                if n is not boa:
+                    nt.nodes.remove(n)
+            boa.is_active_output = True
+            # E o alvo tem de ser ALL: a saida dele estava marcada "EEVEE", e o
+            # exportador de glTF so segue a saida generica. Duas coisas mudas a
+            # dizer o mesmo -- que a pele nao ia sair.
+            boa.target = "ALL"
         bsdf = next((n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"), None)
         if not bsdf or bsdf.inputs["Base Color"].links:
             continue
@@ -321,16 +339,30 @@ def de_saia_para_calca(corpo):
         v.co.y *= (1.0 - 0.52 * t)
         v.co.z += (Z_CINTO - v.co.z) * 0.50 * t
 
+    # As calcas ganham RANHURA PROPRIA. Sao de pano como a tunica, mas tem de
+    # poder ser tingidas a parte: com a mesma cor da tunica -- e a tunica e
+    # quase branca -- a perna vestida le-se outra vez como perna nua, e o homem
+    # volta a parecer de saia por baixo. E a diferenca de tom, e nao o tecido,
+    # que diz onde acaba a tunica.
+    base = corpo.data.materials[im_pano]
+    calcas = base.copy()
+    calcas.name = "calcas"
+    corpo.data.materials.append(calcas)
+    im_calca = len(corpo.data.materials) - 1
+
     for p in corpo.data.polygons:
         if p.material_index != im_pele:
             continue
         zs = [corpo.data.vertices[i].co.z for i in p.vertices]
-        if 0.035 < min(zs) and max(zs) < 0.47:          # entre o sapato e a anca
-            p.material_index = im_pano
+        # o sapato dele e so a SOLA (z -0.001..0.021): a canela comeca em 0.02,
+        # e a faixa antiga comecava em 0.035 -- ficava de fora, e o homem
+        # andava de calcao com as canelas nuas
+        if 0.015 < min(zs) and max(zs) < 0.47:          # entre a sola e a anca
+            p.material_index = im_calca
 
     feitos = set()
     for p in corpo.data.polygons:
-        if p.material_index != im_pano:
+        if p.material_index not in (im_pano, im_calca):
             continue
         for i in p.vertices:
             v = corpo.data.vertices[i]
