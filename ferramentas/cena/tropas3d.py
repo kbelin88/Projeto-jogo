@@ -29,7 +29,12 @@ import bpy
 from mathutils import Vector
 
 RAIZ = os.getcwd()
-PACOTE = os.path.join(RAIZ, "assets", "personagens")
+# a pasta chegou com P grande. O Windows nao distingue, o git e o Linux
+# distinguem -- procura-se pelas duas em vez de contar com a sorte.
+PACOTE = next((os.path.join(RAIZ, "assets", n)
+               for n in ("Personagens", "personagens")
+               if os.path.isdir(os.path.join(RAIZ, "assets", n))),
+              os.path.join(RAIZ, "assets", "Personagens"))
 
 # ── AS MEDIDAS DO CORPO, TIRADAS DELE E NÃO INVENTADAS ───────────────────────
 # T-pose, 5,60 m de alto. Braços abertos ao longo de X, cara virada para -Y.
