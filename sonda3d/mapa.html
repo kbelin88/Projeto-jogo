@@ -115,12 +115,16 @@ new GLTFLoader().load("pecas.glb", (g) => {
 
   const contaTri = (m) => (m.geometry.index ? m.geometry.index.count
                                            : m.geometry.attributes.position.count) / 3;
-  for (const ch of (banco["chao"] || [])) {
-    ch.receiveShadow = true;
-    ch.castShadow = false;
-    cena.add(ch);
-    nTri += contaTri(ch);
-  }
+  // O CHAO E AS ESTRADAS entram inteiros, sem instanciar: sao peca unica, ha uma
+  // so de cada. Nao lancam sombra -- sao superficies deitadas, e uma sombra de
+  // uma superficie deitada sobre si propria so faz aquele riscado sujo.
+  for (const nome of ["chao", "estradas"])
+    for (const ch of (banco[nome] || [])) {
+      ch.receiveShadow = true;
+      ch.castShadow = false;
+      cena.add(ch);
+      nTri += contaTri(ch);
+    }
 
   // CONTAR ANTES DE CRIAR: um InstancedMesh nasce com a contagem fixa e nao
   // cresce depois. Contar primeiro e mais barato do que adivinhar por cima.

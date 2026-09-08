@@ -66,6 +66,7 @@ MATA = json.load(open(os.path.join(os.getcwd(), "assets/sprites/mata.json"), enc
 copias = []
 protos = {}          # nome curto -> receita (para reconstruir)
 legiveis = {}        # nome curto -> assinatura legivel (so para se ler o JSON)
+bocas, centros = {}, {}
 
 
 def juntar(reg, dx, dy, giro=0.0):
@@ -98,6 +99,13 @@ for cid in cidades:
     vx, vy = REDE["c"][cid]["x"], REDE["c"][cid]["y"]
     mx, my = em_metros(vx, vy)
     juntar(reg, mx, my)
+    # AS BOCAS, ja em metros do mapa. Sao elas que dizem onde uma estrada
+    # encosta -- e a mesma correcao que o mapa 2D levou: acabar na PORTA, e nao
+    # a desaparecer por baixo da peca.
+    bocas[cid] = [{"p": [round(mx + bx, 2), round(my + by, 2)],
+                   "rumo": round(rumo, 4)}
+                  for bx, by, _bz, rumo in P.PORTOES_CENA]
+    centros[cid] = [round(mx, 2), round(my, 2)]
     print("SONDA %-11s %-8s %3d pecas" % (cid, perfil, len(reg)), flush=True)
 
 print("SONDA %d aldeias, %d copias, %d prototipos distintos"
@@ -167,6 +175,79 @@ for nome in usadas:
 if faltam:
     print("SONDA AVISO: sem receita para %s" % faltam)
 
+# ── AS ESTRADAS ─────────────────────────────────────────────────────────────
+# Uma fita de geometria por troco, pousada um palmo acima do chao. Duas coisas
+# que o mapa 2D aprendeu a duras penas e que se herdam aqui de graca:
+#
+#   * a estrada acaba na BOCA do portao que aponta para o rumo dela, e nao no
+#     centro da aldeia -- senao desaparece por baixo da peca sem se ligar a nada;
+#   * a meia-largura VARIA ao longo do caminho. Uma faixa de largura constante
+#     le-se como fita adesiva por melhor que seja a cor.
+#
+# O rumo das bocas foi gravado em graus do MAPA, portanto aqui e so escolher a
+# mais alinhada -- a mesma conta que o canvas ja faz.
+def boca_para(cid, rumo_alvo):
+    melhor, dif = None, 999.0
+    for b in bocas.get(cid, []):
+        d = abs(((math.degrees(b["rumo"]) - rumo_alvo + 540) % 360) - 180)
+        if d < dif:
+            dif, melhor = d, b
+    return melhor["p"] if melhor and dif <= 46 else None
+
+
+# A LARGURA NAO E A DO MAPA 2D. La a estrada tem 0,70 de celula porque e
+# INFORMACAO num quadro visto de cima, e um mapa de jogo exagera as estradas de
+# proposito. Convertido a escala, isso davam 36 m -- uma auto-estrada ao lado de
+# casas de 7 m. Aqui manda o chao: 18 m de ponta a ponta, larga o suficiente
+# para se ver de cima e estreita o suficiente para nao ser ridicula ao pe de uma
+# porta. E a primeira vez que as duas coisas tem de bater certo ao mesmo tempo.
+LARG_ESTRADA = 9.0                            # meia-largura, em metros
+verts, faces = [], []
+trocos = 0
+LIGACOES = []
+for a, viz in REDE["v"].items():
+    for b in viz:
+        if a < b and a in centros and b in centros:
+            LIGACOES.append((a, b))
+for a, b in LIGACOES:
+    ax, ay = centros[a]
+    bx, by = centros[b]
+    rumo = math.degrees(math.atan2(by - ay, bx - ax))
+    p0 = boca_para(a, rumo) or [ax, ay]
+    p1 = boca_para(b, (rumo + 180) % 360) or [bx, by]
+    comp = math.hypot(p1[0] - p0[0], p1[1] - p0[1])
+    if comp < 1:
+        continue
+    N = max(8, int(comp / 18))
+    base = len(verts)
+    for i in range(N + 1):
+        t = i / N
+        # SERPENTEIA, com as PONTAS QUIETAS: se a curva chegasse ate ao fim, a
+        # estrada nascia ao lado da porta em vez de nela.
+        k = min(1.0, min(i, N - i) / (N * 0.24))
+        desvio = (math.sin(t * comp * 0.010) * 0.7
+                  + math.sin(t * comp * 0.023 + 1.1) * 0.3) * comp * 0.020 * k
+        cx = p0[0] + (p1[0] - p0[0]) * t
+        cy = p0[1] + (p1[1] - p0[1]) * t
+        nx, ny = -(p1[1] - p0[1]) / comp, (p1[0] - p0[0]) / comp
+        cx += nx * desvio
+        cy += ny * desvio
+        w = LARG_ESTRADA * (0.5 + 0.09 * math.sin(t * 21 + comp)
+                            + 0.06 * math.sin(t * 47))
+        verts.append((cx + nx * w, cy + ny * w, 0.10))
+        verts.append((cx - nx * w, cy - ny * w, 0.10))
+    for i in range(N):
+        faces.append((base + 2 * i, base + 2 * i + 1,
+                      base + 2 * i + 3, base + 2 * i + 2))
+    trocos += 1
+estradas = P._novo(P._malha("estradas", verts, faces, "caminho", bisel=0), "caminho")
+for col in list(estradas.users_collection):
+    col.objects.unlink(estradas)
+cena.objects.link(estradas)
+estradas.name = estradas.data.name = "estradas"
+print("SONDA estradas: %d trocos, %d faces, %.1f m de largura"
+      % (trocos, len(faces), LARG_ESTRADA * 2))
+
 # ── O CHAO, COM A FORMA DA ILHA ─────────────────────────────────────────────
 # Uma grelha sobre o retangulo do mapa, da qual se apagam as faces que caem na
 # agua. E a primeira vez que a terra tem BORDA em vez de um desfoque de alfa:
@@ -180,6 +261,56 @@ FUNDO = 18.0          # quanto a margem desce abaixo do nivel da terra
 th, tw = terra.shape
 LX, LY = IB_LARG * M_POR_VB, IB_ALT * M_POR_VB
 px, py = LX / tw, LY / th
+
+# ── NADA NA AGUA ────────────────────────────────────────────────────────────
+# Havia aldeias e bosques a boiar. Nao e um erro de posicao: e um DESACORDO de
+# mascaras. O `espalhar_mata.py` decide "isto e terra" com o alfa da arte a
+# 0,70 na resolucao cheia; o chao daqui decide com o mesmo alfa reduzido e a
+# 0,43. Duas leituras da mesma imagem, e as duas legitimas -- so nao concordam
+# na beira, que e exatamente onde isto se ve.
+#
+# Corrigir a jusante (empurrar as pecas para dentro) seria mexer no mapa por
+# causa de uma malha. Corrige-se a montante: quem manda e ONDE AS PECAS ESTAO,
+# e o chao e obrigado a existir por baixo delas. Uma aldeia numa peninsula
+# passa a TER a peninsula.
+def carimbar_terra(mx, my, raio_m):
+    i0 = max(0, int((mx + LX / 2 - raio_m) / px))
+    i1 = min(tw - 1, int((mx + LX / 2 + raio_m) / px))
+    j0 = max(0, int((LY / 2 - my - raio_m) / py))
+    j1 = min(th - 1, int((LY / 2 - my + raio_m) / py))
+    for j in range(j0, j1 + 1):
+        for i in range(i0, i1 + 1):
+            cx = (i + 0.5) * px - LX / 2
+            cy = LY / 2 - (j + 0.5) * py
+            if (cx - mx) ** 2 + (cy - my) ** 2 <= raio_m * raio_m:
+                terra[j, i] = True
+
+
+# AS ALDEIAS MANDAM, A MATA OBEDECE. Sao dois casos e nao um:
+#   * uma aldeia esta onde o mapa do jogo diz que esta -- e uma coordenada do
+#     `world-iberia.js`, e o motor conta com ela. Se o chao nao chega la, o
+#     errado e o chao: carimba-se terra por baixo.
+#   * um bosque e decoracao. Carimbar terra por baixo de um bosque ao largo faz
+#     uma ILHOTA com tres arvores, que e pior do que nao ter o bosque.
+#     Esse tira-se.
+antes_terra = int(terra.sum())
+for cid, c in centros.items():
+    carimbar_terra(c[0], c[1], C.PERFIS[REDE["c"][cid]["t"]]["raio"] + 26.0)
+print("SONDA chao carimbado sob as aldeias: %d -> %d celulas (+%.1f%%)"
+      % (antes_terra, int(terra.sum()),
+         (terra.sum() - antes_terra) / max(antes_terra, 1) * 100))
+
+
+def em_terra(mx, my):
+    i = int((mx + LX / 2) / px)
+    j = int((LY / 2 - my) / py)
+    return 0 <= i < tw and 0 <= j < th and bool(terra[j, i])
+
+
+antes_mata = len(manchas)
+manchas = [m for m in manchas if em_terra(*m["p"])]
+print("SONDA mata: %d manchas, %d fora de terra removidas"
+      % (len(manchas), antes_mata - len(manchas)))
 verts, faces = [], []
 indice = {}
 for j in range(th):
@@ -227,6 +358,130 @@ cena.objects.link(chao)
 chao.name = "chao"
 print("SONDA chao: %d faces de %.0f x %.0f m, ilha de %.0f x %.0f m"
       % (len(faces), px, py, LX, LY))
+
+# ── O FORNO DAS PECAS ───────────────────────────────────────────────────────
+# Ate aqui as pecas viajavam com a cor CHAPADA da paleta, porque o glTF nao
+# leva os nossos materiais: sao grafos de nos, com a textura mapeada por
+# coordenada de OBJETO (a geometria nasce por codigo e nunca foi desdobrada) e
+# a cor misturada em modo COLOR.
+#
+# Agora desdobra-se cada peca e assa-se nela DUAS coisas:
+#   * a COR ja resolvida -- a fotografia com o nosso tom por cima;
+#   * a OCLUSAO -- o escurecido dos cantos e dos encostos.
+# E multiplicam-se uma pela outra numa textura so.
+#
+# A oclusao vem daqui e nao do navegador por medicao: em tempo real o SSAO
+# valeu ~3% de escurecimento; assada no Cycles, 37% dos pixeis ficam abaixo de
+# 200. E custa zero a desenhar.
+#
+# ASSA-SE SO O QUE NAO TEM DIRECAO. O sol continua a ser calculado ao vivo --
+# um sol assado colava a sombra de uma hora do dia a peca para sempre, e a peca
+# aparece no mapa virada para qualquer lado.
+def assar_peca(ob, px, amostras):
+    import numpy as _np
+    bpy.ops.object.select_all(action="DESELECT")
+    bpy.context.view_layer.objects.active = ob
+    ob.select_set(True)
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.uv.smart_project(angle_limit=1.15, island_margin=0.010)
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+    def alvo(nome):
+        im = bpy.data.images.new(nome, px, px, alpha=False)
+        for m in ob.data.materials:
+            if not m or not m.use_nodes:
+                continue
+            n = m.node_tree.nodes.new("ShaderNodeTexImage")
+            n.image = im
+            n.select = True
+            m.node_tree.nodes.active = n
+        return im
+
+    ce = bpy.context.scene
+    ce.render.bake.use_pass_direct = False
+    ce.render.bake.use_pass_indirect = False
+    ce.render.bake.use_pass_color = True
+    ce.render.bake.margin = 6
+    cor = alvo("cor_" + ob.name)
+    bpy.ops.object.bake(type="DIFFUSE")
+    oc = alvo("ao_" + ob.name)
+    bpy.ops.object.bake(type="AO")
+
+    a = _np.empty(px * px * 4, dtype=_np.float32); cor.pixels.foreach_get(a)
+    b = _np.empty(px * px * 4, dtype=_np.float32); oc.pixels.foreach_get(b)
+    b[3::4] = 1.0
+    # a oclusao entra SUAVIZADA. Crua escurece de mais e a peca fica encardida;
+    # aqui vale 70%.
+    a *= (0.30 + 0.70 * b)
+    a = _np.clip(a, 0.0, 1.0)
+
+    # ── A CODIFICACAO sRGB E FEITA AQUI, A MAO ──────────────────────────────
+    # O forno escreve valores LINEARES no tampao. O que viaja no glTF e um PNG
+    # de 8 bits que o navegador le como sRGB -- e a conversao entre os dois nao
+    # aconteceu: medido, as texturas chegavam com luminancia 20 em 255, que e
+    # exatamente o valor linear da paleta escrito em cru. Tudo preto.
+    # Converte-se aqui e marca-se a imagem como Non-Color, para mais ninguem
+    # lhe tocar.
+    #
+    # E o espaco de cor E DEFINIDO ANTES de escrever os pixeis: mudar o espaco
+    # de cor de uma imagem RECARREGA-A e deita fora o que la estivesse. Este
+    # projeto ja perdeu meio dia com isso, noutra ferramenta.
+    rgb = a.reshape(-1, 4)[:, :3]
+    baixo = rgb <= 0.0031308
+    rgb[:] = _np.where(baixo, rgb * 12.92,
+                       1.055 * _np.power(_np.maximum(rgb, 1e-8), 1 / 2.4) - 0.055)
+    a = a.reshape(-1)
+    a[3::4] = 1.0
+    cor.colorspace_settings.name = "Non-Color"
+    cor.pixels.foreach_set(_np.clip(a, 0.0, 1.0))
+    cor.update()
+    bpy.data.images.remove(oc)
+
+    m = bpy.data.materials.new("assado_" + ob.name)
+    m.use_nodes = True
+    nt = m.node_tree
+    tex = nt.nodes.new("ShaderNodeTexImage")
+    tex.image = cor
+    bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    bsdf.inputs["Roughness"].default_value = 0.88
+    nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    # UM MATERIAL SO por peca. Alem da cor, isto colapsa as 3 a 5 primitivas do
+    # glTF numa: menos chamadas de desenho, e o carregador do lado do navegador
+    # deixa de ter de as juntar.
+    ob.data.materials.clear()
+    ob.data.materials.append(m)
+
+
+if os.environ.get("ASSAR", "1") == "1":
+    ce = bpy.context.scene
+    bpy.ops.preferences.addon_enable(module="cycles")
+    ce.render.engine = "CYCLES"
+    prefs = bpy.context.preferences.addons["cycles"].preferences
+    for tipo in ("OPTIX", "CUDA"):
+        try:
+            prefs.compute_device_type = tipo
+        except Exception:
+            continue
+        prefs.get_devices()
+        if any(x.type == tipo for x in prefs.devices):
+            for dev in prefs.devices:
+                dev.use = dev.type in (tipo, "CPU")
+            ce.cycles.device = "GPU"
+            break
+    ce.cycles.samples = 24
+    mundo = bpy.data.worlds.new("forno")
+    ce.world = mundo
+    mundo.use_nodes = True
+    mundo.node_tree.nodes["Background"].inputs["Color"].default_value = (1, 1, 1, 1)
+    mundo.node_tree.nodes["Background"].inputs["Strength"].default_value = 1.0
+    t_forno = time.time()
+    for nome in feitas:
+        ob = bpy.context.scene.objects.get(nome)
+        if ob:
+            assar_peca(ob, 512, 24)
+    print("SONDA %d pecas assadas em %.1f s" % (len(feitas), time.time() - t_forno),
+          flush=True)
 
 # as texturas descem antes de viajar (ver a medicao em SONDAGEM_3D)
 for im in bpy.data.images:
