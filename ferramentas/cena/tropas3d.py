@@ -241,3 +241,104 @@ def montar(tipo, mats, corpo, arm):
     bpy.context.view_layer.objects.active = corpo
     bpy.ops.object.join()
     return corpo, arm
+
+# ═══ O SOLDADO DO OPENGAMEART ════════════════════════════════════════════════
+# Base alternativa, e melhor que a do Quaternius para o que queremos: 1082
+# triangulos, 18 ossos, proporcoes humanas, elmo com bico, e uma LANCA que ja
+# vem com ele. Cinco animacoes, tres de lanceiro (idle_walk, alerted_walk,
+# hit_spear). CC0.
+#
+# Vem por acabar, e e preciso saber em que:
+#   * o corpo a serio chama-se `guard`; `Cube` e um objeto perdido e ha um
+#     plano com nome de fotografia de webcam esquecido no ficheiro;
+#   * as texturas estao la dentro, 2048x2048, e NENHUM material as usa. Todos
+#     sao um Principled cinzento por omissao. Nao faltam ficheiros: falta a
+#     ligacao;
+#   * a lanca nao esta presa ao esqueleto -- fica onde esta enquanto o homem
+#     anda.
+SOLDADO = os.path.join(PACOTE, "medieval-soldier", "soldier-20.blend")
+PERNA_X = 0.075          # afastamento do eixo de cada perna, medido nos ossos
+Z_CINTO = 0.565
+ALT_OGA = 1.169
+
+
+def abrir_soldado():
+    """abre o soldado CC0, limpa o lixo do ficheiro e liga-lhe as texturas"""
+    bpy.ops.wm.open_mainfile(filepath=SOLDADO)
+    for o in list(bpy.data.objects):
+        if o.name.startswith("WIN_") or o.name == "Cube":
+            bpy.data.objects.remove(o, do_unlink=True)
+    corpo = bpy.data.objects["guard"]
+    arm = next(o for o in bpy.data.objects if o.type == "ARMATURE")
+    QUAL = {"armor_clothe": "armor.jpg", "belt": "armor.jpg", "helmet": "armor.jpg",
+            "shoes": "armor.jpg", "skin": "skin.001"}
+    for m in bpy.data.materials:
+        im = bpy.data.images.get(QUAL.get(m.name, ""))
+        if not im or not im.size[0] or not m.use_nodes:
+            continue
+        nt = m.node_tree
+        bsdf = next((n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"), None)
+        if not bsdf or bsdf.inputs["Base Color"].links:
+            continue
+        tex = nt.nodes.new("ShaderNodeTexImage")
+        tex.image = im
+        nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+        bsdf.inputs["Roughness"].default_value = 0.82
+    return corpo, arm
+
+
+def de_saia_para_calca(corpo):
+    """a tunica desce ate ao joelho a alargar, e de perfil le-se como saia.
+
+    Tres passos, e o terceiro e o que decide:
+      1. a barra APERTA em direcao ao eixo de cada perna e SOBE -- o sino unico
+         vira duas colunas e a tunica passa a acabar a meio da coxa;
+      2. as pernas ENGROSSAM 1,45x em volta do proprio eixo (nao do centro do
+         corpo, senao afastavam-se em vez de engrossarem);
+      3. e as faces das pernas trocam de PELE para PANO. Uma perna nua debaixo
+         de uma tunica le-se como saia por mais curta que a tunica fique; a
+         mesma perna em pano le-se como calca. Foi a troca de material, e nao a
+         forma, que resolveu.
+
+    A faixa vai ate ao CINTO e nao ate meio: a parte mais larga do sino estava
+    entre os 0,50 e os 0,565, e apertar so ate 0,50 deixava a barriga da saia
+    exatamente onde estava.
+    """
+    mats = [m.name if m else "?" for m in corpo.data.materials]
+    im_pano, im_pele = mats.index("armor_clothe"), mats.index("skin")
+    pano = set()
+    for p in corpo.data.polygons:
+        if p.material_index == im_pano:
+            pano.update(p.vertices)
+
+    for i in sorted(pano):
+        v = corpo.data.vertices[i]
+        if v.co.z >= Z_CINTO:
+            continue
+        eixo = -PERNA_X if v.co.x < 0 else PERNA_X
+        t = min(1.0, max(0.0, (Z_CINTO - v.co.z) / (Z_CINTO - 0.27)))
+        v.co.x = eixo + (v.co.x - eixo) * (1.0 - 0.66 * t)
+        v.co.y *= (1.0 - 0.52 * t)
+        v.co.z += (Z_CINTO - v.co.z) * 0.50 * t
+
+    for p in corpo.data.polygons:
+        if p.material_index != im_pele:
+            continue
+        zs = [corpo.data.vertices[i].co.z for i in p.vertices]
+        if 0.035 < min(zs) and max(zs) < 0.47:          # entre o sapato e a anca
+            p.material_index = im_pano
+
+    feitos = set()
+    for p in corpo.data.polygons:
+        if p.material_index != im_pano:
+            continue
+        for i in p.vertices:
+            v = corpo.data.vertices[i]
+            if i in feitos or not (0.035 < v.co.z < 0.42):
+                continue
+            eixo = -PERNA_X if v.co.x < 0 else PERNA_X
+            v.co.x = eixo + (v.co.x - eixo) * 1.45
+            v.co.y *= 1.45
+            feitos.add(i)
+    corpo.data.update()
+    return len(pano), len(feitos)
