@@ -376,6 +376,7 @@ transformed.y += onda * transformed.x * 0.05;`);
   const PX_FIGURA_MORRE = 10;
   const PX_BANDEIRA_CHEIA = 12;
   const PX_BANDEIRA_NASCE = 20;
+  const PX_BANDEIRA_MORRE = 34;    // acima disto a figura fala por si
   function pxPorMetro(dist) {
     const h = rend.domElement.clientHeight || 720;
     return (h / (2 * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2))) / Math.max(dist, 1);
@@ -549,10 +550,21 @@ transformed.y += onda * transformed.x * 0.05;`);
         const bruto = via.inv ? (1 - tt) * via.comp : tt * via.comp;
         noCaminho(via, bruto, _p);
         const px = ALT_FIGURA * pxPorMetro(cam.position.distanceTo(_p));
+        // ── E DE PERTO O ESTANDARTE SAI DE CENA ─────────────────────────
+        // Ele existe para SUBSTITUIR a figura quando ela deixa de se ler. A
+        // partir do momento em que se veem os homens, ele deixou de ter
+        // trabalho -- e um simbolo de mapa por cima de uma cena que ja se
+        // percebe e so uma etiqueta a tapar o que se veio ver.
+        // Apaga-se entre os 20 e os 34 pixeis: nessa faixa a coluna ja e
+        // legivel e o simbolo ja nao faz falta.
         const op = px <= PX_BANDEIRA_CHEIA ? 1
-                 : px >= PX_BANDEIRA_NASCE ? 0.30
-                 : 1 - 0.70 * (px - PX_BANDEIRA_CHEIA)
-                       / (PX_BANDEIRA_NASCE - PX_BANDEIRA_CHEIA);
+                 : px >= PX_BANDEIRA_MORRE ? 0
+                 : px <= PX_BANDEIRA_NASCE
+                   ? 1 - 0.55 * (px - PX_BANDEIRA_CHEIA)
+                         / (PX_BANDEIRA_NASCE - PX_BANDEIRA_CHEIA)
+                   : 0.45 * (1 - (px - PX_BANDEIRA_NASCE)
+                                 / (PX_BANDEIRA_MORRE - PX_BANDEIRA_NASCE));
+        if (op <= 0.02) continue;
         const sp = estandartes[nb++];
         sp.visible = true;
         sp.material.map = texturaEstandarte(m.dono, m.tipo || "lanceiro",
