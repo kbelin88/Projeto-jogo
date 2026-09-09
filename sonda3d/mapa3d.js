@@ -426,22 +426,23 @@ transformed.y += onda * transformed.x * 0.05;`);
   // da um salto que se ve.
   const PX_FIGURA_MORRE = 10;
   // ── E QUANDO É QUE A PLACA SE ABRE ──────────────────────────────────────
-  // Abaixo dos 26 píxeis por figura não se distingue um arqueiro de um
-  // lanceiro: a placa é uma só, com o total. Acima dos 52 já se veem os
-  // homens, e aí o que interessa é quantos são de cada — abre-se numa por
-  // tipo, cada uma por cima do seu bloco. No meio, as duas cruzam-se, que é o
-  // que esconde a troca.
-  // Em metros de camara (ecra de 1080, campo de 50 graus): abre por completo
-  // aos ~200 m e so fecha abaixo dos ~380 m. Estava a abrir aos 118 m, e era
-  // preciso ir espreitar o exercito para saber do que ele era feito -- que e
-  // justamente a informacao de que se precisa ANTES de chegar la.
-  const PX_PLACA_JUNTA = 16;
-  const PX_PLACA_ABRE = 30;
+  // Abaixo do limiar a placa é uma só, com o total; acima abre-se numa por
+  // tipo, cada uma por cima do seu bloco.
+  //
+  // ── E A TROCA É UM CORTE, NAO UMA PASSAGEM ──────────────────────────────
+  // Havia uma banda em que as duas placas se cruzavam, uma a apagar-se e a
+  // outra a acender-se. Numa figura que aparece e desaparece isso esconde a
+  // troca; num NUMERO nao esconde nada -- da dois numeros meio transparentes ao
+  // mesmo tempo, e nenhum deles se le. Um numero ou esta la ou nao esta.
+  //
+  // Corta-se no ponto em que a passagem comecava: 16 pixeis por figura, que num
+  // ecra de 1080 com campo de 42 graus sao 464 m de camara.
+  const PX_PLACA_ABRE = 16;
   // tamanho no ECRÃ e não no mundo (`sizeAttenuation: false`): uma placa que
   // encolhe com a distância é inútil justamente quando é mais precisa
   // medido no ecra: `scale` aqui vale cerca de 1,67 vezes a fracao da
   // altura do ecra, portanto 0,085 da uma placa de ~150 px num 1080p
-  const ESC_GRANDE = 0.058;
+  const ESC_GRANDE = 0.030;
   const ESC_PEQUENA = 0.036;
   function pxPorMetro(dist) {
     const h = rend.domElement.clientHeight || 720;
@@ -704,21 +705,21 @@ transformed.y += onda * transformed.x * 0.05;`);
     for (const { via, bruto, m } of lista) {
       noCaminho(via, bruto, _p);
       const px = ALT_FIGURA * pxPorMetro(cam.position.distanceTo(_p));
-      // 0 = longe (uma placa só), 1 = perto (uma por tipo)
-      const abre = Math.max(0, Math.min(1,
-        (px - PX_PLACA_JUNTA) / (PX_PLACA_ABRE - PX_PLACA_JUNTA)));
+      const aberta = px >= PX_PLACA_ABRE;
 
-      if (abre < 0.98 && nb < estandartes.length) {
+      if (!aberta && nb < estandartes.length) {
         const sp = estandartes[nb++];
         sp.visible = true;
         sp.material.map = placaGrande(m.dono, m.tropas || 0);
-        sp.material.opacity = 1 - abre;
+        sp.material.opacity = 1;
         sp.material.needsUpdate = true;
-        _p.y += ALT_FIGURA * 1.5;
+        sp.center.set(0.5, 0);
+        _p.y += ALT_FIGURA * 1.35;
         sp.position.copy(_p);
         sp.scale.set(ESC_GRANDE, ESC_GRANDE, 1);
       }
-      if (abre > 0.02 && m.composicao) {
+      if (aberta && m.composicao) {
+        let piso = 0;
         for (const bl of blocosDe(via, bruto, m)) {
           if (nb >= estandartes.length) break;
           const quantos = m.composicao[bl.tipo] || 0;
@@ -726,10 +727,19 @@ transformed.y += onda * transformed.x * 0.05;`);
           const sp = estandartes[nb++];
           sp.visible = true;
           sp.material.map = placaTipo(m.dono, bl.tipo, quantos);
-          sp.material.opacity = abre;
+          sp.material.opacity = 1;
           sp.material.needsUpdate = true;
+          // ── E EMPILHAM-SE NO ECRA, NAO NO MUNDO ─────────────────────────
+          // À distância da troca os blocos estão a dez metros uns dos outros e
+          // as etiquetas, que têm tamanho fixo no ecrã, caem uma em cima da
+          // outra. Afastá-las no MUNDO não resolve -- ao longe esse afastamento
+          // também encolhe. Mexe-se no `center` do sprite, que é em alturas da
+          // própria etiqueta: elas empilham-se sempre, esteja a câmara onde
+          // estiver, e cada uma continua por cima do seu bloco.
+          sp.center.set(0.5, -piso * 1.12);
+          piso++;
           noCaminho(via, bl.metros, _p);
-          _p.y += ALT_FIGURA * 1.15;
+          _p.y += ALT_FIGURA * 1.35;
           sp.position.copy(_p);
           sp.scale.set(ESC_PEQUENA * 3.4, ESC_PEQUENA, 1);
         }
