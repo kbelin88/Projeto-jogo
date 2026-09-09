@@ -512,6 +512,8 @@ for a, b in LIGACOES:
 
     p0 = puxar_para_dentro(p0, ax, ay, a)
     p1 = puxar_para_dentro(p1, bx, by, b)
+    raio_a = C.PERFIS[REDE["c"][a]["t"]]["raio"]
+    raio_b = C.PERFIS[REDE["c"][b]["t"]]["raio"]
     comp = math.hypot(p1[0] - p0[0], p1[1] - p0[1])
     if comp < 1:
         continue
@@ -558,8 +560,19 @@ for a, b in LIGACOES:
         # fita colada -- e era isso o "nao esta bem encaixado". Um caminho a
         # serio abre-se onde as carrocas manobram para entrar, e e essa abertura
         # que faz a estrada PERTENCER a aldeia em vez de lhe tocar.
-        borda = min(t * comp, (1 - t) * comp)
-        adro = 1.0 + 0.85 * max(0.0, 1.0 - borda / 30.0) ** 1.6
+        # ── O ADRO PERTENCE AO PORTAO, NAO A PONTA DA FITA ──────────────
+        # Media-se a distancia a PONTA da fita. Enquanto a ponta ficava no
+        # portao isso dava no mesmo; desde que ela passou a entrar para dentro
+        # da muralha, o ponto mais largo ficou escondido debaixo do chao da
+        # aldeia e o que sobrava ca fora era a cauda do alargamento -- uma cunha
+        # de calcada a acabar em nada na relva. Foi a ultima marca do Lucas.
+        #
+        # A distancia certa e a MURALHA: o adro abre onde as carrocas manobram
+        # para entrar, e fecha 30 m depois. Dentro da aldeia fica no maximo, e
+        # ninguem o ve porque o chao da aldeia esta por cima.
+        borda = min(math.hypot(cx - ax, cy - ay) - raio_a,
+                    math.hypot(cx - bx, cy - by) - raio_b)
+        adro = 1.0 + 0.85 * max(0.0, 1.0 - max(0.0, borda) / 30.0) ** 1.6
         w = LARG_ESTRADA * adro * (0.5 + 0.09 * math.sin(t * 21 + comp)
                                    + 0.06 * math.sin(t * 47))
         # ── CADA BEIRA COM A SUA ALTURA ─────────────────────────────────
