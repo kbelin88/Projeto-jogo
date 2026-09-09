@@ -158,13 +158,24 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
   // `clonarComOssos` e nao `.clone()`: um clone normal partilha o esqueleto, e
   // a coluna inteira andava em unisono -- que e o aspeto de uma maquina, nao
   // de um exercito.
-  const POCO_ANIM = 48;
+  // por TIPO. Tres pocos de 48 seriam 144 esqueletos a espera; o corte por
+  // pixeis nunca poe tantos no ecra ao mesmo tempo, e cada copia custa
+  // memoria mesmo escondida.
+  const POCO_ANIM = 28;
   const animados = {};
-  for (const [tipo, ficheiro] of [["lanceiro", "lanceiro.glb"]]) {
+  // o cavaleiro nao anda: galopa. E o esqueleto dele e o do CAVALO, com o
+  // homem congelado em cima, portanto o passo tem outro nome -- por isso a
+  // animacao se procura por tropa e nao por um padrao so
+  const PASSO = { lanceiro: /idle_walk/i, arqueiro: /idle_walk/i,
+                  cavaleiro: /^gallop$/i };
+  for (const [tipo, ficheiro] of [["lanceiro", "lanceiro.glb"],
+                                  ["arqueiro", "arqueiro.glb"],
+                                  ["cavaleiro", "cavaleiro.glb"]]) {
     const ga = await new Promise((ok) =>
       new GLTFLoader().load(BASE + ficheiro, ok, undefined, () => ok(null)));
     if (!ga) continue;
-    const passo = ga.animations.find((a) => /idle_walk/i.test(a.name))
+    const passo = ga.animations.find((a) => PASSO[tipo].test(a.name))
+      || ga.animations.find((a) => /walk/i.test(a.name))
       || ga.animations[0];
     const lista = [];
     for (let i = 0; i < POCO_ANIM; i++) {

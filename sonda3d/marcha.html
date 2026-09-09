@@ -51,34 +51,41 @@ Object.assign(window, { mapa, cena, cam, ctrl, MAPA, THREE });
 // o mapa em modo demonstração inventa colunas; aqui as tropas são estas
 mapa.atualizar({ turno: 0, aldeias: [], marchas: [] });
 
-const g = await new Promise((ok, mal) =>
-  new GLTFLoader().load("./lanceiro.glb", ok, undefined, mal));
-
-// ── A COLUNA ───────────────────────────────────────────────────────────────
-// Uma malha com ossos NÃO se instancia: cada soldado é uma cópia sua, com o
-// seu esqueleto e o seu tocador de animação. É o preço da animação a sério, e
-// só se paga porque nunca há mais do que algumas dezenas à vista.
+// ── AS TRES COLUNAS ────────────────────────────────────────────────────────
+// Uma malha com ossos NAO se instancia: cada figura e uma copia sua, com o seu
+// esqueleto e o seu tocador de animacao. E o preco da animacao a serio, e so
+// se paga porque nunca ha mais do que algumas dezenas a vista.
 //
-// `clone` do SkeletonUtils e não `.clone()`: um clone normal partilha o
-// esqueleto, e a coluna inteira andaria em uníssono, com todos os homens a
-// pisar no mesmo instante -- que é o aspeto de uma máquina, não de um exército.
-const QUANTOS = 6;
-const acaoAndar = g.animations.find((a) => /idle_walk/i.test(a.name)) || g.animations[0];
-console.log("animações:", g.animations.map((a) => a.name).join(", "));
+// `clone` do SkeletonUtils e nao `.clone()`: um clone normal partilha o
+// esqueleto, e a coluna inteira andaria em unisono, com todos os homens a
+// pisar no mesmo instante -- que e o aspeto de uma maquina, nao de um exercito.
+const TROPAS = [
+  { tipo: "lanceiro",  quantos: 4, lat: -3.6, passo: /idle_walk/i, vel: 9.0 },
+  { tipo: "arqueiro",  quantos: 4, lat: 0.0,  passo: /idle_walk/i, vel: 9.0 },
+  { tipo: "cavaleiro", quantos: 3, lat: 3.6,  passo: /^gallop$/i,  vel: 9.0 },
+];
 
 const soldados = [];
-for (let i = 0; i < QUANTOS; i++) {
-  const raiz = clonarComOssos(g.scene);
-  raiz.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true;
-                                         o.frustumCulled = false; } });
-  raiz.scale.setScalar(2.2);                 // o tamanho escolhido na tamanhos.html
-  const mix = new THREE.AnimationMixer(raiz);
-  const act = mix.clipAction(acaoAndar);
-  act.play();
-  // CADA UM COM A SUA FASE. Sem isto seriam seis cópias do mesmo instante.
-  act.time = (i * 0.37) % acaoAndar.duration;
-  cena.add(raiz);
-  soldados.push({ raiz, mix, atraso: i * 7.5 });
+for (const t of TROPAS) {
+  const g = await new Promise((ok, mal) =>
+    new GLTFLoader().load("./" + t.tipo + ".glb", ok, undefined, mal));
+  const acao = g.animations.find((a) => t.passo.test(a.name))
+    || g.animations.find((a) => /walk/i.test(a.name)) || g.animations[0];
+  console.log(t.tipo + ": " + g.animations.map((a) => a.name).join(", ")
+              + "  -> " + acao.name);
+  for (let i = 0; i < t.quantos; i++) {
+    const raiz = clonarComOssos(g.scene);
+    raiz.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true;
+                                           o.frustumCulled = false; } });
+    raiz.scale.setScalar(2.2);                 // o tamanho escolhido na tamanhos.html
+    const mix = new THREE.AnimationMixer(raiz);
+    const act = mix.clipAction(acao);
+    act.play();
+    // CADA UM COM A SUA FASE. Sem isto seriam copias do mesmo instante.
+    act.time = (i * 0.37) % acao.duration;
+    cena.add(raiz);
+    soldados.push({ raiz, mix, atraso: i * 7.5, lat: t.lat, vel: t.vel });
+  }
 }
 
 // ── O CAMINHO ──────────────────────────────────────────────────────────────
@@ -128,10 +135,9 @@ function avancar(dt) {
     let sentido = 1;
     if (d > COMP) { d = volta - d; sentido = -1; }
     const rumo = noCaminho(d, _p) + (sentido < 0 ? Math.PI : 0);
-    // ao lado do eixo, alternando: uma coluna não anda em fila indiana
-    // 1,8 m e nao 2,8: a estrada tem cerca de dez metros e a 2,8 os homens de
-    // fora iam com um pe na relva
-    const lat = ((i % 2) * 2 - 1) * 1.8;
+    // cada tropa na sua faixa, e dentro dela dois a dois: uma coluna não anda
+    // em fila indiana, e a estrada tem cerca de dez metros de largura
+    const lat = s.lat + ((i % 2) * 2 - 1) * 1.1;
     _p.x += Math.cos(rumo + Math.PI / 2) * lat;
     _p.z += Math.sin(rumo + Math.PI / 2) * lat;
     s.raiz.position.copy(_p);
@@ -175,7 +181,7 @@ for (const b of document.querySelectorAll("#hud button")) {
 const med = document.getElementById("med");
 setInterval(() => {
   med.innerHTML = "<b>" + mapa.fps + "</b> fps<br>"
-    + QUANTOS + " lanceiros animados<br>"
+    + soldados.length + " figuras animadas<br>"
     + "estrada de " + Math.round(COMP) + " m<br>"
     + "camara a " + Math.round(ctrl.getDistance()) + " m";
 }, 500);
