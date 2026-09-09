@@ -1996,6 +1996,20 @@
           try { empurrarPara3D(); }
           catch (e) { if (!erro3D) { erro3D = e; console.error("ponte 3D:", e); } }
         }, 250);
+        // ── E OS RISCOS SEGUEM A CAMARA ──────────────────────────────────
+        // A cada quadro, porque a camara mexe-se: um risco pintado uma vez
+        // ficaria colado ao ecra e deixaria de apontar o que apontava assim
+        // que se girasse o mapa. Sem nada para desenhar, limpa uma vez e para
+        // -- nao ha razao para gastar um quadro a limpar uma tela ja limpa.
+        let _tinhaMarcas = false;
+        (function lacoMarcas() {
+          requestAnimationFrame(lacoMarcas);
+          if (!M3D) return;
+          const ha = MARC.marcas.length > 0 || !!MARC.a_riscar;
+          if (!ha && !_tinhaMarcas) return;
+          _tinhaMarcas = ha;
+          try { desenharMarcas3D(); } catch (e) { /* nao mata o mapa */ }
+        })();
       })
       .catch((e) => {
         // FALHA VISIVEL. Um carregamento que morre em silencio ja custou um dia
@@ -4524,11 +4538,74 @@
   // para lado nenhum. Aconteceu.
   if (typeof window !== "undefined") window.MARC = MARC;
 
+  // ── O CADERNO POR CIMA DO MAPA 3D ─────────────────────────────────────────
+  // O caderno nasceu colado ao 2D: desenhava dentro do `draw` e convertia o
+  // rato com o `panX`/`scale` da camara plana. Com o 3D ligado o `draw` sai a
+  // cabeca (o canvas plano deixou de pintar) e aquela conta deixou de querer
+  // dizer nada -- o lapis funcionava e nao aparecia um risco.
+  //
+  // O que NAO muda: uma marca continua gravada em coordenadas do MAPA. E por
+  // isso que o `oQueEstaAqui`, o `centroDoRisco` e o `ler_marcas.py` continuam
+  // a valer sem lhes tocar. Muda so a conversao para o ecra e onde se pinta.
+  let telaMarcas = null;
+  function telaDasMarcas() {
+    if (telaMarcas) return telaMarcas;
+    telaMarcas = document.createElement("canvas");
+    telaMarcas.id = "telaMarcas";
+    telaMarcas.style.cssText = "position:fixed;inset:0;z-index:40;"
+      + "pointer-events:none;display:block";
+    // ── E E ELA QUE APANHA O RATO ────────────────────────────────────────
+    // O `mousedown` do jogo esta no canvas plano, e com o 3D ligado esse canvas
+    // fica ESCONDIDO -- e um elemento escondido nao recebe rato nenhum. O lapis
+    // ficava ligado, o cursor mudava, e clicar nao fazia nada. Quem esta por
+    // cima e esta tela, portanto e ela que tem de ouvir.
+    telaMarcas.addEventListener("mousedown", (e) => {
+      if (e.button !== 0 || !MARC.ligado) return;
+      if (marcarInicio(e)) e.preventDefault();
+    });
+    document.body.appendChild(telaMarcas);
+    return telaMarcas;
+  }
+
+  // ── A CONVERSAO E CALIBRADA, NAO COPIADA ──────────────────────────────────
+  // O mapa cozido traz as aldeias em METROS; o `world-iberia` traz as mesmas em
+  // viewBox. Duas aldeias chegam para tirar a escala e a origem -- e derivar em
+  // vez de repetir as constantes do exportador e o que impede as duas contas de
+  // divergirem no dia em que uma delas mudar.
+  let _cal = null;
+  function calibrar3D() {
+    if (_cal || !M3D || typeof Iberia === "undefined") return _cal;
+    const A = "lisboa", B = "barcelona";
+    const va = Iberia.CIDADES.find((c) => c.id === A);
+    const vb = Iberia.CIDADES.find((c) => c.id === B);
+    const ma = M3D.MAPA.aldeias[A], mb = M3D.MAPA.aldeias[B];
+    if (!va || !vb || !ma || !mb) return null;
+    const k = (ma.p[0] - mb.p[0]) / (va.x - vb.x);
+    _cal = { k, ox: va.x - ma.p[0] / k, oy: va.y + ma.p[1] / k };
+    return _cal;
+  }
+  const vbParaMetros = (vx, vy) => {
+    const c = calibrar3D();
+    return c ? [(vx - c.ox) * c.k, -(vy - c.oy) * c.k] : null;
+  };
+  const metrosParaVb = (mx, my) => {
+    const c = calibrar3D();
+    return c ? [mx / c.k + c.ox, -my / c.k + c.oy] : null;
+  };
+
   function marcarLigar(v) {
     MARC.ligado = v === undefined ? !MARC.ligado : v;
     const b = document.getElementById("barraMarcas");
     if (b) b.style.display = MARC.ligado ? "flex" : "none";
     canvas.style.cursor = MARC.ligado ? "crosshair" : "";
+    if (M3D) {
+      const t = telaDasMarcas();
+      // so apanha o rato enquanto o lapis esta ligado: de resto tem de deixar
+      // passar tudo, senao a camara deixava de girar
+      t.style.pointerEvents = MARC.ligado ? "auto" : "none";
+      t.style.cursor = MARC.ligado ? "crosshair" : "";
+      desenharMarcas3D();
+    }
     if (typeof draw === "function") draw();
   }
 
@@ -4546,6 +4623,19 @@
   // afastava. Aqui em teste o DPR era 1 e o defeito nao aparecia.
   // A regra: converter para o espaco em que se DESENHA, nao para o buffer.
   function marcarPonto(ev) {
+    // ── COM O 3D, O PONTO E O SITIO DO CHAO DEBAIXO DO CURSOR ───────────
+    // Nao ha `panX` nem `scale`: ha uma camara em orbita. O raio ate ao
+    // terreno da o sitio a serio, e esse converte-se para coordenadas do mapa
+    // -- as mesmas de sempre, para o resto do caderno nao dar por nada.
+    if (M3D) {
+      const r = M3D.rend.domElement.getBoundingClientRect();
+      const p = M3D.mundoDoEcra(ev.clientX - r.left, ev.clientY - r.top);
+      if (!p) return null;
+      const vb = metrosParaVb(p.x, -p.z);
+      // a altura fica guardada a parte: e o que permite voltar a projetar o
+      // risco quando a camara gira, sem tornar a perguntar ao terreno
+      return vb ? [vb[0], vb[1], p.y] : null;
+    }
     const r = canvas.getBoundingClientRect();
     const tx = ev.clientX - r.left;
     const ty = ev.clientY - r.top;
@@ -4567,13 +4657,16 @@
 
   function marcarInicio(ev) {
     if (!MARC.ligado || !IB) return false;
-    MARC.a_riscar = { cor: MARC.cor, pts: [marcarPonto(ev)] };
+    const p = marcarPonto(ev);
+    if (!p) return false;                 // clicou no ceu: nao ha sitio nenhum
+    MARC.a_riscar = { cor: MARC.cor, pts: [p] };
     return true;
   }
 
   function marcarMover(ev) {
     if (!MARC.a_riscar) return false;
     const p = marcarPonto(ev);
+    if (!p) return true;                  // saiu para o ceu: o risco espera
     const u = MARC.a_riscar.pts[MARC.a_riscar.pts.length - 1];
     if (Math.hypot(p[0] - u[0], p[1] - u[1]) > 2) MARC.a_riscar.pts.push(p);
     draw();
@@ -4589,6 +4682,45 @@
   // Mede ~40 KB em vez de 1,5 MB, e vale mais: e a vista que ELE julgou certa
   // para mostrar o defeito.
   function fotoDoRisco(pts) {
+    // ── COM O 3D, A FOTO SAI DO WEBGL E LEVA O RISCO POR CIMA ───────────
+    // Duas coisas que so se sabem tentando: o `three` nao guarda o buffer de
+    // desenho, portanto ha que MANDAR desenhar e recortar no mesmo instante --
+    // um recorte tirado mais tarde vem preto. E o risco esta noutra tela, a de
+    // cima: a foto compoe as duas, senao mostra o defeito sem mostrar onde eu
+    // estava a apontar, que e metade do recado.
+    if (M3D) {
+      const V = new M3D.THREE.Vector3();
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (const q of pts) {
+        const mm = vbParaMetros(q[0], q[1]);
+        if (!mm) continue;
+        V.set(mm[0], q.length > 2 ? q[2] : 0, -mm[1]);
+        const e = M3D.ecraDoMundo(V);
+        x0 = Math.min(x0, e.x); y0 = Math.min(y0, e.y);
+        x1 = Math.max(x1, e.x); y1 = Math.max(y1, e.y);
+      }
+      if (!(x1 > x0 - 1e6)) return "";
+      const f = Math.max(90, ((x1 - x0) + (y1 - y0)) * 0.35);
+      x0 -= f; y0 -= f; x1 += f; y1 += f;
+      const tela = M3D.rend.domElement;
+      const rp = tela.getBoundingClientRect();
+      const kx = tela.width / rp.width, ky = tela.height / rp.height;
+      const sx = Math.max(0, Math.round(x0 * kx)), sy = Math.max(0, Math.round(y0 * ky));
+      const sw = Math.min(tela.width - sx, Math.round((x1 - x0) * kx));
+      const sh = Math.min(tela.height - sy, Math.round((y1 - y0) * ky));
+      if (sw < 8 || sh < 8) return "";
+      M3D.rend.render(M3D.cena, M3D.cam);      // desenhar e recortar de seguida
+      const k = Math.min(1, 720 / sw);
+      const c = document.createElement("canvas");
+      c.width = Math.round(sw * k); c.height = Math.round(sh * k);
+      const g = c.getContext("2d");
+      g.drawImage(tela, sx, sy, sw, sh, 0, 0, c.width, c.height);
+      const marcasTela = telaDasMarcas();
+      g.drawImage(marcasTela, Math.round(x0 * DPR), Math.round(y0 * DPR),
+                  Math.round((x1 - x0) * DPR), Math.round((y1 - y0) * DPR),
+                  0, 0, c.width, c.height);
+      return c.toDataURL("image/png");
+    }
     const cs = TILE * scale;
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
     for (const q of pts) {
@@ -4625,51 +4757,86 @@
     MARC.marcas.push(m);
     MARC.a_riscar = null;
     draw();                       // primeiro desenhar: a foto tem de LEVAR o risco
+    if (M3D) desenharMarcas3D();  // e no 3D o risco vive na tela de cima
     try { m.foto = fotoDoRisco(m.pts); } catch (e) { m.foto = ""; }
     return true;
+  }
+
+  // ── PINTAR OS RISCOS ──────────────────────────────────────────────────────
+  // Uma so rotina para as duas vistas. O que muda entre elas e apenas COMO um
+  // ponto do mapa vira um ponto do ecra -- e isso entra como argumento. Duas
+  // copias desta funcao acabariam por divergir num detalhe qualquer, e o risco
+  // de uma vista deixaria de ser o mesmo risco da outra.
+  function pintarMarcas(g, px, larg, fonte) {
+    g.save();
+    g.lineCap = "round"; g.lineJoin = "round";
+    for (const m of MARC.marcas.concat(MARC.a_riscar ? [MARC.a_riscar] : [])) {
+      const pts = m.pts.map(px).filter(Boolean);
+      if (!pts.length) continue;
+      g.lineWidth = larg * 1.55;
+      g.strokeStyle = "rgba(0,0,0,.45)";         // contorno: legivel sobre tudo
+      g.beginPath();
+      g.moveTo(pts[0][0], pts[0][1]);
+      for (const q of pts.slice(1)) g.lineTo(q[0], q[1]);
+      if (pts.length === 1) g.arc(pts[0][0], pts[0][1], larg * 2.4, 0, 6.284);
+      g.stroke();
+      g.lineWidth = larg;
+      g.strokeStyle = MARC_COR[m.cor];
+      g.stroke();
+      if (pts.length === 1) {
+        g.fillStyle = MARC_COR[m.cor];
+        g.beginPath();
+        g.arc(pts[0][0], pts[0][1], larg * 1.8, 0, 6.284);
+        g.fill();
+      }
+      // o NUMERO. E o que permite dizer "o 2 esta resolvido" em vez de
+      // descrever outra vez o sitio — a mesma razao de existir do caderno.
+      const idx = MARC.marcas.indexOf(m);
+      if (idx < 0) continue;
+      let mx = 0, my = 0;
+      for (const q of pts) { mx += q[0]; my += q[1]; }
+      mx /= pts.length; my /= pts.length;
+      const r = Math.max(...pts.map((q) => Math.hypot(q[0] - mx, q[1] - my)));
+      g.font = "700 " + fonte + "px system-ui, sans-serif";
+      g.textAlign = "center"; g.textBaseline = "middle";
+      g.lineWidth = 3; g.strokeStyle = "rgba(0,0,0,.7)";
+      g.strokeText(String(idx + 1), mx + r + 12, my - r - 4);
+      g.fillStyle = MARC_COR[m.cor];
+      g.fillText(String(idx + 1), mx + r + 12, my - r - 4);
+    }
+    g.restore();
+  }
+
+  // a tela por cima do 3D redesenha-se a cada quadro: a camara mexe-se e os
+  // riscos tem de mexer-se com ela, senao deixam de apontar o que apontavam
+  const _v3m = { x: 0, y: 0, z: 0 };
+  function desenharMarcas3D() {
+    if (!M3D) return;
+    const t = telaDasMarcas();
+    const L = Math.round(window.innerWidth), A = Math.round(window.innerHeight);
+    if (t.width !== L * DPR || t.height !== A * DPR) {
+      t.width = L * DPR; t.height = A * DPR;
+      t.style.width = L + "px"; t.style.height = A + "px";
+    }
+    const g = t.getContext("2d");
+    g.setTransform(DPR, 0, 0, DPR, 0, 0);
+    g.clearRect(0, 0, L, A);
+    if (!MARC.marcas.length && !MARC.a_riscar) return;
+    const V = new M3D.THREE.Vector3();
+    pintarMarcas(g, (p) => {
+      const mm = vbParaMetros(p[0], p[1]);
+      if (!mm) return null;
+      V.set(mm[0], p.length > 2 ? p[2] : 0, -mm[1]);
+      const e = M3D.ecraDoMundo(V);
+      return e.atras ? null : [e.x, e.y];
+    }, 4, 16);
   }
 
   function desenharMarcas() {
     if (!MARC.marcas.length && !MARC.a_riscar) return;
     const cs = TILE * scale;
-    const px = (p) => [panX + celX(p[0]) * cs, panY + celY(p[1]) * cs];
-    ctx.save();
-    ctx.lineCap = "round"; ctx.lineJoin = "round";
-    for (const m of MARC.marcas.concat(MARC.a_riscar ? [MARC.a_riscar] : [])) {
-      const pts = m.pts.map(px);
-      ctx.lineWidth = Math.max(3, cs * 0.10);
-      ctx.strokeStyle = "rgba(0,0,0,.45)";       // contorno: legivel sobre tudo
-      ctx.beginPath();
-      ctx.moveTo(pts[0][0], pts[0][1]);
-      for (const q of pts.slice(1)) ctx.lineTo(q[0], q[1]);
-      if (pts.length === 1) ctx.arc(pts[0][0], pts[0][1], Math.max(4, cs * 0.16), 0, 6.284);
-      ctx.stroke();
-      ctx.lineWidth = Math.max(2, cs * 0.065);
-      ctx.strokeStyle = MARC_COR[m.cor];
-      ctx.stroke();
-      if (pts.length === 1) {
-        ctx.fillStyle = MARC_COR[m.cor];
-        ctx.beginPath();
-        ctx.arc(pts[0][0], pts[0][1], Math.max(3, cs * 0.12), 0, 6.284);
-        ctx.fill();
-      }
-      // o NUMERO. E o que permite dizer "o 2 esta resolvido" em vez de
-      // descrever outra vez o sitio — a mesma razao de existir do caderno.
-      const idx = MARC.marcas.indexOf(m);
-      if (idx >= 0) {
-        let mx = 0, my = 0;
-        for (const q of pts) { mx += q[0]; my += q[1]; }
-        mx /= pts.length; my /= pts.length;
-        const r = Math.max(...pts.map((q) => Math.hypot(q[0] - mx, q[1] - my)));
-        ctx.font = "700 " + Math.max(13, cs * 0.30) + "px system-ui, sans-serif";
-        ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.7)";
-        ctx.strokeText(String(idx + 1), mx + r + 12, my - r - 4);
-        ctx.fillStyle = MARC_COR[m.cor];
-        ctx.fillText(String(idx + 1), mx + r + 12, my - r - 4);
-      }
-    }
-    ctx.restore();
+    pintarMarcas(ctx, (p) => [panX + celX(p[0]) * cs, panY + celY(p[1]) * cs],
+                 Math.max(2, cs * 0.065), Math.max(13, cs * 0.30));
   }
 
   // A QUE PECA PERTENCE UMA MARCA. E isto que transforma "um risco em (812,533)"

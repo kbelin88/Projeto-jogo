@@ -1041,6 +1041,30 @@ transformed.y += onda * transformed.x * 0.05;`);
       for (const [tipo, l] of Object.entries(tropaInst)) r[tipo] = l[0] ? l[0].count : 0;
       return r;
     },
+    // ── A PONTE DO CADERNO DE MARCAS ──────────────────────────────────────
+    // Duas contas que so podem viver aqui, porque so aqui existe a camara e o
+    // chao. O jogo pergunta "que sitio do mundo esta debaixo deste pixel" e
+    // "onde e que este sitio aparece no ecra" -- e com isso desenha as marcas
+    // por cima do 3D sem saber nada de camaras.
+    //
+    // O raio bate no CHAO e nao no que estiver a frente: uma marca e um sitio
+    // do terreno, e se batesse na copa de uma arvore ficaria pendurada no ar
+    // assim que a camara rodasse.
+    mundoDoEcra(px, py) {
+      if (!malhaChao) return null;
+      const r = rend.domElement.getBoundingClientRect();
+      const rc = new THREE.Raycaster();
+      rc.setFromCamera(new THREE.Vector2(
+        (px / r.width) * 2 - 1, -(py / r.height) * 2 + 1), cam);
+      const bate = rc.intersectObject(malhaChao, false);
+      return bate.length ? bate[0].point.clone() : null;
+    },
+    ecraDoMundo(v) {
+      const r = rend.domElement.getBoundingClientRect();
+      const q = v.clone().project(cam);
+      return { x: (q.x * 0.5 + 0.5) * r.width, y: (-q.y * 0.5 + 0.5) * r.height,
+               atras: q.z > 1 };
+    },
     parar(v) { parado = !!v; },
     redimensionar: tamanho,
     destruir() { vivo = false; rend.dispose(); hospedeiro.removeChild(tela); },
