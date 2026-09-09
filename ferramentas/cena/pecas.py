@@ -46,6 +46,7 @@ COR = {
     "colmo":      (0.270, 0.180, 0.062, 1),
     "colmo2":     (0.205, 0.132, 0.048, 1),
     "pedra":      (0.185, 0.172, 0.150, 1),
+    "falesia":    (0.120, 0.115, 0.104, 1),
     "folha":      (0.036, 0.076, 0.020, 1),
     "folha2":     (0.058, 0.098, 0.026, 1),
     "folha3":     (0.086, 0.104, 0.030, 1),
@@ -185,6 +186,10 @@ FICHEIRO = {
     "madeira2":   ("madeira2", 2.0, 0.8),
     "viga":       ("madeira", 1.4, 0.9),
     "pedra":      ("pedra", 3.0, 1.0),
+    # a FALESIA e a pedra tratada e com ladrilho grande: numa parede de 60 m,
+    # um ladrilho de 3 m repete vinte vezes e le-se como papel de parede.
+    # A 9 m os estratos tem tamanho de estratos.
+    "falesia":    ("falesia", 9.0, 1.0),
     "alicerce":   ("alicerce", 2.6, 1.0),
     "reboco":     ("taipa", 3.4, 0.6),
     "reboco2":    ("taipa", 3.0, 0.6),

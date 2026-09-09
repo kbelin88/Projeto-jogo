@@ -1,4 +1,4 @@
-# tex_estrada.py — faz a textura da estrada a partir da que veio da Internet.
+# tex_estrada.py — trata as texturas de chao que o glTF leva cruas.
 #
 #   python ferramentas/cena/tex_estrada.py
 #
@@ -28,16 +28,27 @@ import numpy as np
 from PIL import Image
 
 RAIZ = os.getcwd()
-ORIGEM = os.path.join(RAIZ, "assets", "texturas", "caminho")
-DESTINO = os.path.join(RAIZ, "assets", "texturas", "caminho_batido")
 
-BRILHO = 1.62          # o caminho passa a ser mais claro do que a relva
-DESSATURA = 0.42       # quanto se puxa ao cinzento (0 = fica como está)
-CONTRASTE = 0.68       # < 1 acalma o cascalho
-TOM = (1.00, 0.95, 0.84)   # um toque de poeira quente, sem ir ao tijolo
+# ── AS RECEITAS ──────────────────────────────────────────────────────────────
+# (pasta de origem, pasta de destino, brilho, dessaturacao, contraste, tom)
+#
+# O CAMINHO clareia: um caminho de terra e a coisa clara no meio do verde, o
+# sitio onde a erva foi gasta ate ao po. Escuro, lia-se como asfalto molhado.
+#
+# O PENHASCO trocou de fotografia. Estava a sair da pasta `pedra`, que e um
+# MURO DE ALVENARIA -- pedras aparelhadas com argamassa entre elas. Tratada,
+# clareada ou escurecida, uma parede de 40 m com aquilo em cima nunca ia ser
+# uma falesia: era a muralha de um castelo com 2 km de comprimento. O `penedo`
+# e rocha a serio, com fracturas verticais e liquen, e as fracturas caem no
+# sentido em que a parede cai. So se lhe tira metade do verde e se lhe da um
+# fio de contraste -- o contraste e o que faz os estratos.
+RECEITAS = [
+    ("caminho", "caminho_batido", 1.62, 0.42, 0.68, (1.00, 0.95, 0.84)),
+    ("penedo", "falesia", 1.05, 0.48, 1.08, (0.96, 0.97, 1.00)),
+]
 
 
-def tratar(a):
+def tratar(a, BRILHO, DESSATURA, CONTRASTE, TOM):
     x = a.astype(np.float32) / 255.0
     # trabalha-se em LINEAR: clarear em sRGB queima os claros e deixa os
     # escuros para trás, e o resultado é uma imagem lavada em vez de clara
@@ -53,16 +64,20 @@ def tratar(a):
 
 
 if __name__ == "__main__":
-    os.makedirs(DESTINO, exist_ok=True)
-    im = Image.open(os.path.join(ORIGEM, "cor.jpg")).convert("RGB")
-    a = np.asarray(im)
-    b = tratar(a)
-    Image.fromarray(b).save(os.path.join(DESTINO, "cor.jpg"), quality=94)
-    # o relevo e a rugosidade não se tocam: o que estava errado era a LUZ
-    for f in ("normal.png", "rugosidade.png"):
-        o = os.path.join(ORIGEM, f)
-        if os.path.exists(o):
-            shutil.copy2(o, os.path.join(DESTINO, f))
-    print("SONDA %s: luminancia media %.3f -> %.3f (em sRGB, 0 a 1)"
-          % (os.path.basename(DESTINO), a.mean() / 255.0, b.mean() / 255.0))
-    print("SONDA gravado em %s" % DESTINO)
+    for de, para, br, ds, ct, tom in RECEITAS:
+        origem = os.path.join(RAIZ, "assets", "texturas", de)
+        destino = os.path.join(RAIZ, "assets", "texturas", para)
+        if not os.path.exists(os.path.join(origem, "cor.jpg")):
+            print("SONDA falta %s" % origem)
+            continue
+        os.makedirs(destino, exist_ok=True)
+        a = np.asarray(Image.open(os.path.join(origem, "cor.jpg")).convert("RGB"))
+        b = tratar(a, br, ds, ct, tom)
+        Image.fromarray(b).save(os.path.join(destino, "cor.jpg"), quality=94)
+        # o relevo e a rugosidade nao se tocam: o que estava errado era a LUZ
+        for f in ("normal.png", "rugosidade.png"):
+            o = os.path.join(origem, f)
+            if os.path.exists(o):
+                shutil.copy2(o, os.path.join(destino, f))
+        print("SONDA %-16s luminancia media %.3f -> %.3f"
+              % (para, a.mean() / 255.0, b.mean() / 255.0))

@@ -336,6 +336,38 @@ assert relevo.shape == terra.shape, (
 relevo = _caixa(relevo.astype(np.float32), RAIO_BORRAO)
 relevo = relevo / max(float(relevo[terra].max()), 1e-6) * ALTURA_MAX
 
+# ── A BEIRA-MAR ─────────────────────────────────────────────────────────────
+# O campo de alturas nao sabia que existe mar: chegava a costa com a altura que
+# tivesse e caia dali a pique. Como TODA a costa fazia o mesmo, a ilha lia-se
+# como uma fatia de bolo num prato -- 20 m de parede a toda a volta, sempre a
+# mesma. E uma falesia que esta em todo o lado nao e uma falesia: e o corte da
+# maquete.
+#
+# Aqui a costa passa a ter duas caras. Uma mancha lenta percorre o mapa e
+# decide, troco a troco, se aquela beira e PRAIA -- e entao a terra desce para
+# quase o nivel da agua nos ultimos 40 m -- ou se e FALESIA, e entao nada se
+# toca e a parede fica com toda a altura que a serra lhe der.
+#
+# O tecto so DESCE (`minimum`): nao ha praia levantada, e o interior, a mais de
+# 40 m de agua, e exatamente o mesmo campo de antes.
+COSTA = 8             # ate onde o mar manda no relevo, em celulas (~40 m)
+PRAIA = 2.5           # a que altura a terra encosta a agua, onde ha praia
+_dist = np.full(terra.shape, float(COSTA), dtype=np.float32)
+_frente = ~terra
+for _k in range(1, COSTA):
+    _frente = (_frente | np.roll(_frente, 1, 0) | np.roll(_frente, -1, 0)
+                       | np.roll(_frente, 1, 1) | np.roll(_frente, -1, 1))
+    _dist = np.minimum(_dist, np.where(_frente, float(_k), float(COSTA)))
+_dist[~terra] = 0.0
+_t = np.clip(_dist / COSTA, 0.0, 1.0)
+_t = _t * _t * (3 - 2 * _t)
+_gx = np.arange(tw, dtype=np.float32)[None, :] * px - LX / 2
+_gy = LY / 2 - np.arange(th, dtype=np.float32)[:, None] * py
+_fal = 0.5 + 0.5 * np.sin(_gx * 0.0034 + _gy * 0.0021)
+_fal = np.clip((_fal - 0.34) / 0.26, 0.0, 1.0)      # ~metade da costa e rocha
+_tecto = PRAIA + (ALTURA_MAX - PRAIA) * _t
+relevo = np.minimum(relevo, _tecto + _fal * (ALTURA_MAX - _tecto))
+
 
 def altura_em(mx, my):
     """a altura do terreno num ponto, em metros, com interpolacao bilinear.
@@ -791,26 +823,34 @@ def encostar(vi, vj):
 
 
 verts, faces = [], []
+saia = []                 # as faces da margem, que sao rocha e nao prado
+uvs_face = {}             # UV por FACE: a margem partilha vertices na esquina
+beiras = []               # (canto A, canto B, di, dj) de cada troco de costa
 indice = {}
+
+
+def _canto(ci, cj):
+    ch = (ci, cj)
+    if ch not in indice:
+        indice[ch] = len(verts)
+        ex, ey = encostar(ci, cj)
+        verts.append((ex, ey,
+                      float(relevo[min(cj, th - 1), min(ci, tw - 1)])))
+    return indice[ch]
+
+
 for j in range(th):
     for i in range(tw):
         if not terra[j, i]:
             continue
-        canto = []
-        for di, dj in ((0, 0), (1, 0), (1, 1), (0, 1)):
-            ch = (i + di, j + dj)
-            if ch not in indice:
-                indice[ch] = len(verts)
-                ex, ey = encostar(i + di, j + dj)
-                verts.append((ex, ey,
-                              float(relevo[min(j + dj, th - 1), min(i + di, tw - 1)])))
-            canto.append(indice[ch])
-        faces.append(tuple(canto))
+        faces.append(tuple(_canto(i + di, j + dj)
+                           for di, dj in ((0, 0), (1, 0), (1, 1), (0, 1))))
         # ── A MARGEM ────────────────────────────────────────────────────────
         # Sem isto a ilha e uma FOLHA: a terra e o mar encontram-se no mesmo
         # plano e a costa nao se le como costa, le-se como uma mudanca de cor.
-        # Onde a celula ao lado e agua, desce-se uma parede ate abaixo do mar.
-        # E a diferenca entre um mapa pintado e uma ilha que tem margem.
+        # Onde a celula ao lado e agua, guarda-se o troco. As paredes so se
+        # levantam no fim, quando ja se souber QUANTOS trocos chegam a cada
+        # canto -- e essa contagem que decide para onde a rocha sai.
         for (di, dj), (a, b) in (((-1, 0), ((0, 0), (0, 1))),
                                  ((1, 0), ((1, 1), (1, 0))),
                                  ((0, -1), ((1, 0), (0, 0))),
@@ -818,23 +858,144 @@ for j in range(th):
             vi, vj = i + di, j + dj
             if 0 <= vi < tw and 0 <= vj < th and terra[vj, vi]:
                 continue                                   # tem terra ao lado
-            topo = []
-            for ddi, ddj in (a, b):
-                ch = (i + ddi, j + ddj)
-                if ch not in indice:
-                    indice[ch] = len(verts)
-                    ex, ey = encostar(i + ddi, j + ddj)
-                    verts.append((ex, ey,
-                                  float(relevo[min(j + ddj, th - 1),
-                                               min(i + ddi, tw - 1)])))
-                topo.append(indice[ch])
-            fundo = []
-            for ddi, ddj in (b, a):
-                ex, ey = encostar(i + ddi, j + ddj)
-                verts.append((ex, ey, -FUNDO))
-                fundo.append(len(verts) - 1)
-            faces.append((topo[0], topo[1], fundo[0], fundo[1]))
+            _canto(i + a[0], j + a[1])
+            _canto(i + b[0], j + b[1])
+            beiras.append(((i + a[0], j + a[1]), (i + b[0], j + b[1]), di, dj))
+
+# ── O PENHASCO E UMA FITA, NAO UMA FILA DE LAMINAS ──────────────────────────
+# Cada troco fazia os SEUS dois vertices de baixo e empurrava-os para fora pela
+# sua propria normal. Numa costa em escada, o troco virado a norte e o virado a
+# leste encontram-se no mesmo canto e saiam em direccoes diferentes: abriam
+# entre si uma fenda de metros. De perto, a falesia nao era uma parede -- eram
+# laminas soltas com o mar a passar no meio delas.
+#
+# A cura e uma so: UM pe por canto, partilhado. A direccao em que esse pe sai e
+# a SOMA das normais dos trocos que la chegam, o que esquadria a esquina em vez
+# de a rasgar. E ja que o canto tem uma direccao, aproveita-se para empurrar
+# tambem o TOPO uns metros -- e o que tira da costa o angulo recto da grelha,
+# que era a outra metade do ar de maquete.
+FLARE = (4.5, 2.6, 1.4)   # o pe: quanto a rocha avanca para a agua
+ALISA, K_ALISA = 3, 0.62  # quantas passagens de alisamento da linha de costa
+
+
+def _fora(ex, ey, r):
+    return (r[0] + r[1] * math.sin(ex * 0.017 + ey * 0.023)
+                 + r[2] * math.sin(ex * 0.061 - ey * 0.044))
+
+
+def _tom_rocha(ex, ey, ez):
+    """quanto a rocha devolve de luz, ponto a ponto.
+
+    ── PORQUE NAO CHEGA A FOTOGRAFIA ────────────────────────────────────────
+    Uma parede com uma fotografia so tem o mesmo tom dos 60 m de altura e ao
+    longo dos 2 km de costa: nao e rocha, e papel de parede. E a fotografia nao
+    pode resolver isto sozinha, porque o ladrilho repete.
+
+    Duas coisas se juntam aqui, e as duas sao de LUZ:
+      * o pe e mais escuro e mais FRIO -- a pedra que o mar molha nao devolve
+        luz, e a pouca que devolve vem do ceu;
+      * ao longo da costa ha manchas lentas, porque nem toda a falesia e da
+        mesma pedra nem apanha o mesmo sol.
+    """
+    t = max(0.0, min(1.0, (ez + 4.0) / 22.0))
+    b = 0.62 + 0.42 * t
+    b *= (1.0 + 0.11 * math.sin(ex * 0.0071 + ey * 0.0093)
+              + 0.06 * math.sin(ex * 0.024 - ey * 0.017))
+    b = max(0.30, min(1.10, b))
+    return (b * (0.94 + 0.10 * t), b * (0.97 + 0.04 * t), b * 1.06)
+
+
+cor_rocha = {}          # so a rocha a le: o prado esta noutra ranhura
+dir_canto, vizinho = {}, {}
+for ca, cb, di, dj in beiras:
+    for c in (ca, cb):
+        d = dir_canto.setdefault(c, [0.0, 0.0])
+        d[0] += di
+        d[1] += dj
+    vizinho.setdefault(ca, set()).add(cb)
+    vizinho.setdefault(cb, set()).add(ca)
+
+# ── ALISAR A LINHA DE COSTA ─────────────────────────────────────────────────
+# A costa e o contorno de uma GRELHA, portanto e uma escada de angulos rectos
+# de 5 em 5 m. A primeira tentativa foi empurrar cada canto uns metros para
+# fora, e saiu ao contrario do esperado: numa escada, o canto convexo aponta
+# para fora e o concavo para dentro, de modo que um empurrao de magnitude suave
+# alternava de SENTIDO celula a celula. A costa deixou de ser uma escada e
+# passou a ser uma SERRA de dentes -- pior, porque agora tinha buracos.
+#
+# O que apaga uma escada nao e deslocar: e MEDIAR. Cada canto anda um pouco na
+# direccao da media dos seus dois vizinhos de costa, tres vezes. O degrau
+# arredonda, o contorno fica continuo, e nada alterna porque nada e empurrado.
+# A mesma media serve a DIRECCAO de saida, que sofria do mesmo mal.
+_pos = dict((c, (verts[indice[c]][0], verts[indice[c]][1])) for c in vizinho)
+for _ in range(ALISA):
+    _novo_pos, _novo_dir = {}, {}
+    for c, ns in vizinho.items():
+        mx = sum(_pos[n][0] for n in ns) / len(ns)
+        my = sum(_pos[n][1] for n in ns) / len(ns)
+        _novo_pos[c] = (_pos[c][0] + (mx - _pos[c][0]) * K_ALISA,
+                        _pos[c][1] + (my - _pos[c][1]) * K_ALISA)
+        dx = sum(dir_canto[n][0] for n in ns) / len(ns)
+        dy = sum(dir_canto[n][1] for n in ns) / len(ns)
+        _novo_dir[c] = [dir_canto[c][0] + (dx - dir_canto[c][0]) * K_ALISA,
+                        dir_canto[c][1] + (dy - dir_canto[c][1]) * K_ALISA]
+    _pos, dir_canto = _novo_pos, _novo_dir
+for c, (mx, my) in _pos.items():
+    verts[indice[c]] = (mx, my, verts[indice[c]][2])
+
+# ── E A PAREDE TEM TRES ANEIS, NAO DOIS ─────────────────────────────────────
+# Com um anel em cima e outro no fundo, a cor da rocha so podia subir numa
+# rampa unica -- e o fundo esta 18 m ABAIXO da agua, portanto metade da rampa
+# ficava escondida e o que se via era quase tudo do mesmo tom. O anel do meio
+# poe o controlo onde ha olhos: a linha de agua. E de caminho da a parede um
+# talude, que uma parede a prumo dos 20 m aos -18 nao tem.
+MAR = 2.0                 # a que altura passa o anel da linha de agua
+meio, pe = {}, {}
+for c, (dx, dy) in dir_canto.items():
+    n = math.hypot(dx, dy) or 1.0
+    dx, dy = dx / n, dy / n
+    ex, ey, vz = verts[indice[c]]
+    f = _fora(ex, ey, FLARE)
+    zm = min(MAR, vz - 1.0)
+    meio[c] = len(verts)
+    verts.append((ex + dx * f * 0.45, ey + dy * f * 0.45, zm))
+    pe[c] = len(verts)
+    verts.append((ex + dx * f, ey + dy * f, -FUNDO))
+    cor_rocha[indice[c]] = _tom_rocha(ex, ey, vz)
+    cor_rocha[meio[c]] = _tom_rocha(ex, ey, zm)
+    cor_rocha[pe[c]] = _tom_rocha(ex, ey, -FUNDO)
+
+for ca, cb, di, dj in beiras:
+    for cima, baixo in ((indice, meio), (meio, pe)):
+        faces.append((cima[ca], cima[cb], baixo[cb], baixo[ca]))
+        saia.append(len(faces) - 1)
+        # UV pelo eixo horizontal DOMINANTE desta face -- numa parede, o eixo
+        # errado colapsa a textura numa risca. Guardado por FACE e nao por
+        # vertice: as esquinas partilham o pe e discordariam do eixo.
+        uvs_face[len(faces) - 1] = dict(
+            (idx, ((verts[idx][1] if abs(di) > abs(dj) else verts[idx][0]),
+                   verts[idx][2]))
+            for idx in faces[-1])
+
 chao = P._novo(P._malha("chao", verts, faces, "relva", bisel=0), "relva")
+# ── DUAS RANHURAS: O PRADO E A ROCHA ────────────────────────────────────────
+# A margem estava no mesmo material do chao, e por isso o penhasco era relva a
+# escorrer ate a agua. Uma ranhura propria e a diferenca entre uma ilha com
+# costa e um tapete recortado.
+chao.data.materials.append(
+    P.material_uv("falesia", rugosidade=0.96, cor_vertice=True))
+for _f in saia:
+    chao.data.polygons[_f].material_index = 1
+_uvc = chao.data.uv_layers.new(name="UVMap")
+_cvc = chao.data.color_attributes.new(name="Col", type="BYTE_COLOR",
+                                      domain="CORNER")
+for _p in chao.data.polygons:
+    _m = uvs_face.get(_p.index) or {}
+    for _li in _p.loop_indices:
+        _vi = chao.data.loops[_li].vertex_index
+        _uvc.data[_li].uv = _m.get(_vi, (0.0, 0.0))
+        _cvc.data[_li].color = (*cor_rocha.get(_vi, (1.0, 1.0, 1.0)), 1.0)
+print("SONDA penhascos: %d faces de rocha em %d do chao" % (len(saia), len(faces)))
 for col in list(chao.users_collection):
     col.objects.unlink(col.objects.get(chao.name) or chao)
 cena.objects.link(chao)
