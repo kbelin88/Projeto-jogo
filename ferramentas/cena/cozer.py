@@ -97,7 +97,14 @@ def amb(nome, pad):
     return float(os.environ.get(nome, pad))
 
 
-PORTOES_POR_TAMANHO = {"pequena": 2, "media": 2, "grande": 3, "capital": 3}
+# ── QUANTOS PORTOES ─────────────────────────────────────────────────────────
+# Medido na rede v3: com 2/2/3/3, 32 das 74 pontas de estrada ficavam sem
+# portao alinhado -- quase metade -- e essas acabavam no CENTRO da aldeia,
+# atravessando a muralha. Subir um em cada tamanho tira a maior parte disso sem
+# transformar o muro num crivo: a regra dos 31 graus de afastamento continua a
+# recusar portoes encostados, portanto uma aldeia com duas estradas juntas
+# continua a ter um portao so para as duas.
+PORTOES_POR_TAMANHO = {"pequena": 3, "media": 3, "grande": 4, "capital": 4}
 
 
 def rumos_de(cidade):

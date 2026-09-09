@@ -426,13 +426,23 @@ for m in manchas:
 #
 # O rumo das bocas foi gravado em graus do MAPA, portanto aqui e so escolher a
 # mais alinhada -- a mesma conta que o canvas ja faz.
+SEM_PORTAO = []
+
+
 def boca_para(cid, rumo_alvo):
     melhor, dif = None, 999.0
     for b in bocas.get(cid, []):
         d = abs(((math.degrees(b["rumo"]) - rumo_alvo + 540) % 360) - 180)
         if d < dif:
             dif, melhor = d, b
-    return melhor["p"] if melhor and dif <= 46 else None
+    if melhor and dif <= 46:
+        return melhor["p"]
+    # ── E CONTAR AS VEZES QUE NAO HA PORTAO PARA ALI ────────────────────
+    # Sem portao alinhado a estrada acaba no CENTRO da aldeia: entra pela
+    # muralha e sai do outro lado. Com a rede v3 os rumos mudaram todos, e eu
+    # nao quero adivinhar quantas vezes isso acontece -- quero o numero.
+    SEM_PORTAO.append("%s (%+.0f graus)" % (cid, rumo_alvo))
+    return None
 
 
 # A LARGURA NAO E A DO MAPA 2D. La a estrada tem 0,70 de celula porque e
@@ -461,8 +471,18 @@ for a, b in LIGACOES:
     ax, ay = centros[a]
     bx, by = centros[b]
     rumo = math.degrees(math.atan2(by - ay, bx - ax))
-    p0 = boca_para(a, rumo) or [ax, ay]
-    p1 = boca_para(b, (rumo + 180) % 360) or [bx, by]
+    # ── E QUEM NAO ACHA PORTAO PARA NA MURALHA ──────────────────────────
+    # A alternativa antiga era o CENTRO da aldeia, e uma estrada que aponta ao
+    # centro entra pela muralha e sai do outro lado. Parar na muralha e a
+    # verdade do sitio: chega-se ali e contorna-se ate ao portao. Com o chao da
+    # aldeia por cima, a ponta fica escondida e le-se como um largo.
+    def na_muralha(cid, cx, cy, rumoGraus):
+        r = C.PERFIS[REDE["c"][cid]["t"]]["raio"] + 1.0
+        a_ = math.radians(rumoGraus)
+        return [cx + math.cos(a_) * r, cy + math.sin(a_) * r]
+
+    p0 = boca_para(a, rumo) or na_muralha(a, ax, ay, rumo)
+    p1 = boca_para(b, (rumo + 180) % 360) or na_muralha(b, bx, by, (rumo + 180) % 360)
     # e ENTRA 6 m para dentro da boca. Acabar exatamente na porta deixa uma
     # costura visivel entre a fita e a peca; entrando um pouco, a estrada passa
     # por baixo do portao e a juncao desaparece.
@@ -558,6 +578,52 @@ for col in list(estradas.users_collection):
     col.objects.unlink(estradas)
 cena.objects.link(estradas)
 estradas.name = estradas.data.name = "estradas"
+# ── O CHAO DA ALDEIA ────────────────────────────────────────────────────────
+# A fita entra 6 m para dentro do portao de proposito -- e o que esconde a
+# juncao entre a estrada e a peca da povoacao. Visto de cima, porem, esse pedaco
+# ficava a passear por dentro da muralha, e era isso o "chato dentro das
+# aldeias".
+#
+# A solucao e do Lucas e e a certa: um chao proprio, de terra batida, POR CIMA
+# da estrada. A ponta da fita passa a ficar por baixo dele e desaparece, e a
+# aldeia ganha uma superficie que se le como recinto em vez de relva com casas
+# em cima. De caminho, e a primeira coisa deste mapa que esta pronta a receber
+# uma textura de chao pisado.
+#
+# 0,62 m acima do terreno contra os 0,45 da estrada: 17 cm de folga, que chegam
+# para nao haver briga de profundidade e nao chegam para se ver um degrau.
+vc, fc, uvc = [], [], []
+LADRILHO_CHAO = 18.0
+for cid, c in centros.items():
+    raio = C.PERFIS[REDE["c"][cid]["t"]]["raio"] + 2.5
+    z = altura_em(c[0], c[1]) + 0.62
+    meio = len(vc)
+    vc.append((c[0], c[1], z))
+    uvc.append((0.0, 0.0))
+    N = 28
+    for i in range(N):
+        ang = 2 * math.pi * i / N
+        dx, dy = math.cos(ang) * raio, math.sin(ang) * raio
+        vc.append((c[0] + dx, c[1] + dy, z))
+        uvc.append((dx / LADRILHO_CHAO, dy / LADRILHO_CHAO))
+    for i in range(N):
+        fc.append((meio, meio + 1 + i, meio + 1 + (i + 1) % N))
+chaoAldeia = P._novo(P._malha("chao_aldeia", vc, fc, "terra", bisel=0), "terra")
+_uvA = chaoAldeia.data.uv_layers.new(name="UVMap")
+for _p in chaoAldeia.data.polygons:
+    for _li in _p.loop_indices:
+        _uvA.data[_li].uv = uvc[chaoAldeia.data.loops[_li].vertex_index]
+for col in list(chaoAldeia.users_collection):
+    col.objects.unlink(chaoAldeia)
+cena.objects.link(chaoAldeia)
+chaoAldeia.name = chaoAldeia.data.name = "chao_aldeia"
+print("SONDA chao das aldeias: %d discos, %d faces" % (len(centros), len(fc)))
+if SEM_PORTAO:
+    print("SONDA ⚠ %d pontas de estrada sem portao alinhado: %s"
+          % (len(SEM_PORTAO), ", ".join(SEM_PORTAO[:8])))
+else:
+    print("SONDA todas as pontas de estrada acharam portao")
+
 print("SONDA estradas: %d trocos, %d faces, %.1f m de largura, %d com curva autoral"
       % (trocos, len(faces), LARG_ESTRADA * 2, len(VIA_DE)))
 

@@ -202,7 +202,12 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
 
   let nTri = 0, nInst = 0;
   let malhaChao = null;
-  for (const nome of ["chao", "estradas"])
+  // ── AS TRES MALHAS QUE NAO SE INSTANCIAM ────────────────────────────────
+  // Tudo o resto e uma peca repetida aos milhares; estas tres existem uma vez e
+  // entram por nome. O `chao_aldeia` e o disco de terra batida dentro da
+  // muralha: e ele que tapa a ponta da estrada que entra pelo portao, e sem
+  // este nome aqui ele viria no ficheiro e nunca chegaria a cena.
+  for (const nome of ["chao", "estradas", "chao_aldeia"])
     for (const ch of (banco[nome] || [])) {
       if (nome === "chao") malhaChao = ch;
       ch.receiveShadow = true;
@@ -211,6 +216,14 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
         ch.material.polygonOffset = true;
         ch.material.polygonOffsetFactor = -4;
         ch.material.polygonOffsetUnits = -8;
+      }
+      if (nome === "chao_aldeia") {
+        // esta por cima da estrada em 17 cm, mas a estrada tem desvio de
+        // poligono para vencer o chao -- sem um desvio maior aqui, a fita
+        // furava o largo da aldeia justamente onde ela devia desaparecer
+        ch.material.polygonOffset = true;
+        ch.material.polygonOffsetFactor = -8;
+        ch.material.polygonOffsetUnits = -16;
       }
       cena.add(ch);
       nTri += contaTri(ch);
