@@ -458,7 +458,9 @@ VIA_DE = {}
 for _e in REDE.get("e", []):
     if _e.get("via"):
         VIA_DE[tuple(sorted((_e["de"], _e["para"])))] = em_metros(*_e["via"][0])
-verts, faces, uvs = [], [], []
+verts, faces, uvs, cores = [], [], [], []
+MIOLO = 0.52          # a fracao da fita que e terra nua
+BERMA = (0.62, 0.70, 0.44)   # a berma puxa ao verde sem apagar a terra
 trocos = 0
 eixos = []            # o CAMINHO de cada troco, para as tropas o seguirem
 LIGACOES = []
@@ -573,16 +575,36 @@ for a, b in LIGACOES:
                     math.hypot(cx - bx, cy - by) - raio_b)
         adro = 1.0 + 0.85 * max(0.0, 1.0 - max(0.0, borda) / 30.0) ** 1.6
         w = LARG_ESTRADA * adro * (0.5 + 0.09 * math.sin(t * 21 + comp)
-                                   + 0.06 * math.sin(t * 47))
+                                   + 0.06 * math.sin(t * 47)
+                                   # ── E A BEIRA E IRREGULAR ────────────
+                                   # Uma beira a direito nao existe em caminho
+                                   # nenhum: e o corte de um poligono, e le-se
+                                   # como tal. Este termo rapido faz a terra
+                                   # avancar e recuar meio metro de dois em
+                                   # dois passos.
+                                   + 0.055 * math.sin(t * comp * 0.31 + 2.1)
+                                   + 0.035 * math.sin(t * comp * 0.73))
         # ── CADA BEIRA COM A SUA ALTURA ─────────────────────────────────
         # A estrada acompanha o terreno, mas a altura do EIXO nao serve para as
         # duas beiras: numa encosta de traves uma delas voa e a outra
         # enterra-se, e num adro de 33 m de largo isso da um degrau que se ve.
         # Cada canto pergunta a sua propria altura.
-        ex1, ey1 = cx + nx * w, cy + ny * w
-        ex2, ey2 = cx - nx * w, cy - ny * w
-        verts.append((ex1, ey1, altura_em(ex1, ey1) + 0.45))
-        verts.append((ex2, ey2, altura_em(ex2, ey2) + 0.45))
+        # ── A ESTRADA TEM BERMA ─────────────────────────────────────────
+        # Quatro pontos por anel em vez de dois: a terra nua ocupa o MEIO e as
+        # duas faixas de fora sao berma pisada, que se apaga na relva por cor de
+        # vertice. De cima a fita continua a ter os mesmos 18 m e le-se na
+        # mesma; de perto e um caminho de carroca de nove metros com dois metros
+        # e meio de erva gasta de cada lado -- que e o que um caminho e.
+        #
+        # A cor de vertice sobrevive ao glTF (COLOR_0) e o `three` multiplica-a
+        # pela textura. E a unica maneira de ter um DEGRADE nesta cadeia: um no
+        # de mistura no material nao chega ao outro lado.
+        for lado, val in ((+1.0, 1.0), (+MIOLO, 1.0), (-MIOLO, 1.0), (-1.0, 1.0)):
+            ex, ey = cx + nx * w * lado, cy + ny * w * lado
+            verts.append((ex, ey, altura_em(ex, ey) + 0.45))
+            fora = abs(lado) > MIOLO + 1e-6
+            cores.append(BERMA if fora else (1.0, 1.0, 1.0))
+            uvs.append((andado, w * lado))
         # ── E CADA VERTICE LEVA O SEU UV ─────────────────────────────────
         # Sem UV nao ha textura possivel: uma fita so tem cor. O `u` anda com
         # a estrada (metros percorridos a dividir pelo ladrilho) e o `v`
@@ -599,14 +621,14 @@ for a, b in LIGACOES:
         # textura), e o alargamento do adro nao estica o desenho para os lados:
         # a fita fica mais larga e mostra mais textura, como um caminho de
         # verdade.
-        uvs.append((andado, +w))
-        uvs.append((andado, -w))
         # o EIXO leva a altura do centro, que e por onde as tropas andam --
         # nao a de nenhuma das beiras
         eixo.append([round(cx, 1), round(cy, 1), round(altura_em(cx, cy) + 0.5, 1)])
     for i in range(N):
-        faces.append((base + 2 * i, base + 2 * i + 1,
-                      base + 2 * i + 3, base + 2 * i + 2))
+        a0 = base + 4 * i
+        b0 = base + 4 * (i + 1)
+        for k in range(3):
+            faces.append((a0 + k, a0 + k + 1, b0 + k + 1, b0 + k))
     eixos.append({"de": a, "para": b, "pts": eixo})
     trocos += 1
 # ── A MATA ABRE CAMINHO ─────────────────────────────────────────────────────
@@ -662,11 +684,16 @@ print("SONDA mata afastada da estrada: %d empurroes, %d manchas caidas na agua"
 
 estradas = P._novo(P._malha("estradas", verts, faces, "caminho", bisel=0), "caminho")
 estradas.data.materials.clear()
-estradas.data.materials.append(P.material_uv("caminho", rugosidade=0.95))
+estradas.data.materials.append(
+    P.material_uv("caminho", rugosidade=0.95, cor_vertice=True, claro=2.1))
 _uv = estradas.data.uv_layers.new(name="UVMap")
+_cv = estradas.data.color_attributes.new(name="Col", type="BYTE_COLOR",
+                                         domain="CORNER")
 for _p in estradas.data.polygons:
     for _li in _p.loop_indices:
-        _uv.data[_li].uv = uvs[estradas.data.loops[_li].vertex_index]
+        _vi = estradas.data.loops[_li].vertex_index
+        _uv.data[_li].uv = uvs[_vi]
+        _cv.data[_li].color = (*cores[_vi], 1.0)
 for col in list(estradas.users_collection):
     col.objects.unlink(estradas)
 cena.objects.link(estradas)
@@ -702,7 +729,8 @@ for cid, c in centros.items():
         fc.append((meio, meio + 1 + i, meio + 1 + (i + 1) % N))
 chaoAldeia = P._novo(P._malha("chao_aldeia", vc, fc, "terra", bisel=0), "terra")
 chaoAldeia.data.materials.clear()
-chaoAldeia.data.materials.append(P.material_uv("terra", rugosidade=0.95))
+chaoAldeia.data.materials.append(
+    P.material_uv("terra", rugosidade=0.95, claro=1.7))
 _uvA = chaoAldeia.data.uv_layers.new(name="UVMap")
 for _p in chaoAldeia.data.polygons:
     for _li in _p.loop_indices:

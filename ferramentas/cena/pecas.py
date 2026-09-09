@@ -191,7 +191,9 @@ FICHEIRO = {
     "relva":      ("relva", 3.2, 0.5),
     "relva_seca": ("relva", 3.6, 0.5),
     "terra":      ("terra", 3.0, 0.7),
-    "caminho":    ("caminho", 2.4, 0.7),
+    # a estrada usa a versao TRATADA (ver ferramentas/cena/tex_estrada.py):
+    # o glTF nao leva o grafo de nos, portanto o tom tem de vir ja na imagem
+    "caminho":    ("caminho_batido", 2.4, 0.7),
     "lavrado":    ("terra", 2.2, 0.7),
     # ── OS SOLDADOS (08/09) ──────────────────────────────────────────────
     # O LADRILHO E MINUSCULO, e e isso que faz a diferenca. Um anel de cota de
@@ -307,7 +309,7 @@ def _por_ficheiro(nt, p, nome):
     return cor
 
 
-def material_uv(nome, rugosidade=0.9):
+def material_uv(nome, rugosidade=0.9, cor_vertice=False, claro=1.0):
     """o mesmo material, mapeado pelo UV da malha e nao por coordenadas de objeto.
 
     Uma peca de aldeia nasce de caixas e nunca foi desdobrada: ali as
@@ -340,13 +342,44 @@ def material_uv(nome, rugosidade=0.9):
         cor, rug, nor = carregar_tex(nt, pasta, metros, forca,
                                      tinta=COR[nome], uv=True)
     if cor is None:
-        p.inputs["Base Color"].default_value = COR[nome]
-    else:
-        nt.links.new(cor, p.inputs["Base Color"])
-        if rug:
-            nt.links.new(rug, p.inputs["Roughness"])
-        if nor:
-            nt.links.new(nor, p.inputs["Normal"])
+        base = nt.nodes.new("ShaderNodeRGB")
+        base.outputs[0].default_value = COR[nome]
+        cor = base.outputs[0]
+    if rug:
+        nt.links.new(rug, p.inputs["Roughness"])
+    if nor:
+        nt.links.new(nor, p.inputs["Normal"])
+    if claro != 1.0:
+        # ── UM CAMINHO E MAIS CLARO QUE A ERVA ───────────────────────────
+        # A fotografia da o detalhe e a paleta da o tom, mas a LUMINOSIDADE vem
+        # toda da fotografia -- e a desta e escura. O resultado era uma faixa
+        # castanha quase preta a atravessar a relva, o contrario do que uma
+        # estrada de terra faz na paisagem: ela e a coisa CLARA no meio do
+        # verde, porque e o sitio onde a erva foi gasta ate ao po.
+        b = nt.nodes.new("ShaderNodeMix")
+        b.data_type = "RGBA"
+        b.blend_type = "MULTIPLY"
+        b.inputs["Factor"].default_value = 1.0
+        b.inputs[7].default_value = (claro, claro, claro, 1.0)
+        nt.links.new(cor, b.inputs[6])
+        cor = b.outputs["Result"]
+    if cor_vertice:
+        # ── A COR DE VERTICE ENTRA PELO MATERIAL ─────────────────────────
+        # E nao so pelos dados da malha. O exportador de glTF, no modo por
+        # omissao, so escreve a COLOR_0 se o MATERIAL a usar -- pintar os
+        # vertices e nao a ligar aqui dava uma malha com as cores gravadas e um
+        # ficheiro sem elas. E de caminho o Blender passa a mostrar o mesmo que
+        # o jogo, que e como se confere sem abrir o navegador.
+        ca = nt.nodes.new("ShaderNodeVertexColor")
+        ca.layer_name = "Col"
+        mult = nt.nodes.new("ShaderNodeMix")
+        mult.data_type = "RGBA"
+        mult.blend_type = "MULTIPLY"
+        mult.inputs["Factor"].default_value = 1.0
+        nt.links.new(cor, mult.inputs[6])
+        nt.links.new(ca.outputs["Color"], mult.inputs[7])
+        cor = mult.outputs["Result"]
+    nt.links.new(cor, p.inputs["Base Color"])
     _mats[chave] = m
     return m
 
