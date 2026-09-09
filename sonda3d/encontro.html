@@ -1,0 +1,304 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>O encontro na estrada</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0d1418; color: #e8dcc0;
+               font: 13px system-ui, sans-serif; overflow: hidden; }
+  #palco { position: fixed; inset: 0; }
+  #hud { position: fixed; top: 12px; left: 12px; z-index: 5; width: 320px;
+         background: rgba(20,15,8,.92); border: 1px solid #6b5836;
+         border-radius: 8px; padding: 11px 13px; }
+  #hud h1 { font-size: 13px; margin: 0 0 8px; letter-spacing: .06em; }
+  #hud p { color: #cbbd94; line-height: 1.5; margin: 7px 0 0; }
+  #hud b { color: #f0d9a0; }
+  #hud button { background: #3a2e18; color: #e8dcc0; border: 1px solid #6b5836;
+                border-radius: 5px; padding: 5px 9px; margin: 4px 4px 0 0;
+                cursor: pointer; font: inherit; }
+  #hud button:hover { background: #55401f; }
+  #med { position: fixed; top: 12px; right: 12px; z-index: 5; text-align: right;
+         background: rgba(20,15,8,.92); border: 1px solid #6b5836;
+         border-radius: 8px; padding: 9px 12px; font-variant-numeric: tabular-nums; }
+  #med b { color: #f0d9a0; font-size: 16px; }
+  #carga { position: fixed; inset: 0; display: flex; align-items: center;
+           justify-content: center; background: #0d1418; z-index: 9; color: #cbbd94; }
+</style>
+<div id="palco"></div>
+<div id="carga">a montar o encontro...</div>
+<div id="hud">
+  <h1>O ENCONTRO NA ESTRADA</h1>
+  <p>A estrada entre <b>Madrid</b> e <b>Toledo</b> tem <b id="np">?</b> postos.
+     Duas colunas avançam de posto em posto e param no mesmo — que é onde a
+     batalha há de acontecer.</p>
+  <div>
+    <button data-c="ver">ver o encontro</button>
+    <button data-c="lado">ver de lado</button>
+    <button data-c="alto">ver de cima</button>
+    <button data-c="outra">outra vez</button>
+  </div>
+  <p id="estado">&nbsp;</p>
+</div>
+<div id="med"></div>
+
+<script type="module">
+import { iniciar, COR_REI } from "./mapa3d.js";
+import * as THREE from "./vendor/three.module.js";
+import { GLTFLoader } from "./vendor/loaders/GLTFLoader.js";
+import { clone as clonarComOssos } from "./vendor/utils/SkeletonUtils.js";
+
+const mapa = await iniciar(document.getElementById("palco"));
+const { cena, cam, ctrl, MAPA } = mapa;
+Object.assign(window, { mapa, cena, cam, ctrl, MAPA, THREE });
+mapa.atualizar({ turno: 0, aldeias: [], marchas: [] });   // as tropas são estas
+
+// ── A ESTRADA COM POSTOS ────────────────────────────────────────────────────
+// ── PORQUE É QUE A ESTRADA PRECISA DE POSTOS ────────────────────────────────
+// Duas colunas em rota de colisão numa linha contínua ou se atravessam ou
+// param num sítio arbitrário, e as duas coisas leem-se mal. Com postos, o
+// encontro é uma condição EXATA — mesmo posto, sentidos opostos — e acontece
+// num LUGAR, que é o que a câmara precisa para haver cena.
+//
+// Os postos são repartidos por FRAÇÃO da estrada e não por metros, porque o
+// que tem de ser igual entre os dois lados é o TEMPO: dois exércitos à mesma
+// velocidade, um de cada ponta, hão de encontrar-se num posto e não entre dois.
+const via = MAPA.estradas.find((e) => (e.de === "madrid" && e.para === "toledo")
+                                   || (e.de === "toledo" && e.para === "madrid"));
+const pts = via.pts;
+const acum = [0];
+for (let i = 1; i < pts.length; i++)
+  acum.push(acum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+const COMP = acum[acum.length - 1];
+
+const _p = new THREE.Vector3();
+function noCaminho(metros, saida) {
+  const d = Math.max(0, Math.min(COMP - 0.01, metros));
+  let i = 1;
+  while (i < acum.length - 1 && acum[i] < d) i++;
+  const t = (d - acum[i - 1]) / Math.max(acum[i] - acum[i - 1], 1e-6);
+  const a = pts[i - 1], b = pts[i];
+  saida.set(a[0] + (b[0] - a[0]) * t, a[2] + (b[2] - a[2]) * t,
+            -(a[1] + (b[1] - a[1]) * t));
+  return Math.atan2(-(b[1] - a[1]), b[0] - a[0]);
+}
+
+const N_POSTOS = 7;                       // ímpar: há um posto no MEIO da estrada
+const postos = [];
+for (let i = 0; i < N_POSTOS; i++) {
+  const m = COMP * (i + 0.5) / N_POSTOS;
+  const v = new THREE.Vector3();
+  const rumo = noCaminho(m, v);
+  postos.push({ m, v: v.clone(), rumo });
+}
+document.getElementById("np").textContent = N_POSTOS;
+
+// o marco: um prumo de pedra à beira da estrada. Faz duas coisas — diz onde é
+// um posto, e faz uma estrada LER-SE COMO UMA SÓ, que é o defeito de que o
+// Lucas se queixa há meses (duas estradas a passar a vinte metros uma da outra
+// parecem a mesma, e dois exércitos em estradas diferentes parecem atravessar-se)
+const geoMarco = new THREE.CylinderGeometry(0.55, 0.85, 3.2, 5);
+const matMarco = new THREE.MeshStandardMaterial({ color: 0x9a9384, roughness: 0.95 });
+const marcos = new THREE.InstancedMesh(geoMarco, matMarco, N_POSTOS);
+marcos.castShadow = marcos.receiveShadow = true;
+const _m4 = new THREE.Matrix4();
+postos.forEach((p, i) => {
+  const lado = new THREE.Vector3(Math.cos(p.rumo + Math.PI / 2), 0,
+                                 Math.sin(p.rumo + Math.PI / 2)).multiplyScalar(7.5);
+  _m4.makeTranslation(p.v.x + lado.x, p.v.y + 1.6, p.v.z + lado.z);
+  marcos.setMatrixAt(i, _m4);
+});
+cena.add(marcos);
+
+// ── AS DUAS COLUNAS ─────────────────────────────────────────────────────────
+// ── E PORQUE É QUE ELAS TÊM DE TER COR DE REI ───────────────────────────────
+// Até aqui as tropas distinguiam-se por TIPO: ocre o lanceiro, verde o
+// arqueiro, vermelho o cavaleiro. Num encontro isso não chega — o que se tem
+// de ler primeiro é DE QUEM SÃO, e só depois o que são. A túnica passa a levar
+// a cor do Rei; a silhueta continua a dizer o tipo.
+//
+// `clonarComOssos` partilha os materiais entre as cópias, portanto pintar um
+// pintava a coluna inimiga também: o material tem de ser clonado por lado.
+const glb = {};
+for (const tipo of ["lanceiro", "arqueiro", "cavaleiro"])
+  glb[tipo] = await new Promise((ok, mal) =>
+    new GLTFLoader().load("./" + tipo + ".glb", ok, undefined, mal));
+
+const PASSO = { lanceiro: /idle_walk/i, arqueiro: /idle_walk/i, cavaleiro: /^gallop$/i };
+const PARADO = { lanceiro: /alerted_stand/i, arqueiro: /alerted_stand/i,
+                 cavaleiro: /^idle$/i };
+const TUNICA = { A: 0x35557f, B: 0x8e3a2c };
+
+function figura(tipo, rei) {
+  const g = glb[tipo];
+  const raiz = clonarComOssos(g.scene);
+  raiz.traverse((o) => {
+    if (!o.isMesh) return;
+    o.castShadow = o.receiveShadow = true;
+    o.frustumCulled = false;
+    if (o.material && o.material.name === "M_armor_clothe") {
+      o.material = o.material.clone();
+      o.material.color.setHex(TUNICA[rei]);
+    }
+  });
+  raiz.scale.setScalar(2.2);
+  const mix = new THREE.AnimationMixer(raiz);
+  const dos = {};
+  for (const [nome, padrao] of [["andar", PASSO[tipo]], ["parar", PARADO[tipo]]]) {
+    const cl = g.animations.find((a) => padrao.test(a.name))
+      || g.animations.find((a) => /walk/i.test(a.name)) || g.animations[0];
+    dos[nome] = mix.clipAction(cl);
+  }
+  cena.add(raiz);
+  return { raiz, mix, acao: dos, tipo };
+}
+
+// a ORDEM é a coluna: quem o Rei põe à frente vai à frente, e vê-se
+const HOSTE = {
+  A: ["lanceiro", "lanceiro", "lanceiro", "arqueiro", "arqueiro"],
+  B: ["lanceiro", "lanceiro", "arqueiro", "arqueiro", "cavaleiro"],
+};
+const exercitos = {};
+for (const rei of ["A", "B"]) {
+  const homens = HOSTE[rei].map((t, i) => {
+    const f = figura(t, rei);
+    f.fila = i;
+    f.acao.andar.play();
+    f.acao.andar.time = (i * 0.41) % f.acao.andar.getClip().duration;
+    return f;
+  });
+  exercitos[rei] = {
+    homens,
+    posto: rei === "A" ? -1 : N_POSTOS,      // fora da estrada, a entrar
+    sentido: rei === "A" ? 1 : -1,
+    prog: 0,                                  // 0..1 entre o posto e o seguinte
+  };
+}
+
+// ── O AVANÇO, DE POSTO EM POSTO ─────────────────────────────────────────────
+const T_POSTO = 1.9;                         // segundos para vencer um posto
+let travados = false, relogio = 0, disputado = (N_POSTOS - 1) >> 1;
+const estado = document.getElementById("estado");
+
+function ondeParam(e) {
+  // o posto para onde este exército quer ir a seguir
+  return e.posto + e.sentido;
+}
+
+function avancar(dt) {
+  relogio += dt;
+  const A = exercitos.A, B = exercitos.B;
+  if (!travados) {
+    // ── A CONDIÇÃO DE ENCONTRO ──────────────────────────────────────────
+    // Não é distância, é POSTO. Ou pedem o mesmo posto, ou já se cruzaram —
+    // as duas dizem a mesma coisa: daqui não passam. Medir por distância era
+    // voltar ao problema de origem, em que dois exércitos a vinte metros um
+    // do outro (em estradas diferentes!) pareciam estar a lutar.
+    const proxA = ondeParam(A), proxB = ondeParam(B);
+    if (proxA >= proxB) {
+      travados = true;
+      // ── E O POSTO DISPUTADO É O SÍTIO ───────────────────────────────
+      // Parar cada um no seu posto deixava-os a oitenta metros de distância,
+      // que no ecrã não é um confronto: é um desencontro. Os dois avançam
+      // PARA o posto que ambos pediram e travam a poucos passos um do
+      // outro. O lugar da batalha é o posto, não o meio-termo entre dois.
+      disputado = proxA;
+      for (const e of [A, B]) e.parada = disputado - e.sentido * 0.13;
+      estado.innerHTML = "Travaram no posto <b>" + (disputado + 1) + "</b> de "
+        + N_POSTOS + " &mdash; é aqui que a batalha acontece.";
+    } else {
+      for (const e of [A, B]) {
+        e.prog += dt / T_POSTO;
+        while (e.prog >= 1) { e.prog -= 1; e.posto += e.sentido; }
+      }
+    }
+  } else {
+    for (const e of [A, B]) {
+      const onde = e.posto + e.sentido * e.prog;
+      const falta = e.parada - onde;
+      if (Math.abs(falta) > 0.012) {
+        e.prog += Math.sign(falta) * e.sentido * Math.min(Math.abs(falta),
+                                                          dt / T_POSTO);
+      } else if (!e.pronto) {
+        e.pronto = true;                        // chegou: põe-se em guarda
+        for (const h of e.homens) {
+          h.acao.andar.fadeOut(0.35);
+          h.acao.parar.reset().fadeIn(0.35).play();
+        }
+      }
+    }
+  }
+
+  for (const rei of ["A", "B"]) {
+    const e = exercitos[rei];
+    const alvo = e.posto + e.sentido * e.prog;
+    e.homens.forEach((h, i) => {
+      h.mix.update(dt);
+      // cada homem uma casa atrás do da frente, em metros e não em postos:
+      // um posto é uma unidade de TEMPO, e a coluna é uma coisa física
+      const m = COMP * (alvo + 0.5) / N_POSTOS - e.sentido * i * 6.2;
+      const rumo = noCaminho(Math.max(2, Math.min(COMP - 2, m)), _p)
+        + (e.sentido < 0 ? Math.PI : 0);
+      const lat = ((i % 2) * 2 - 1) * 1.9;
+      _p.x += Math.cos(rumo + Math.PI / 2) * lat;
+      _p.z += Math.sin(rumo + Math.PI / 2) * lat;
+      h.raiz.position.copy(_p);
+      // a peça olha para +Y no Blender, que a exportação manda para -Z: um
+      // quarto de volta a menos do que a conta óbvia
+      h.raiz.rotation.y = -rumo - Math.PI / 2;
+    });
+  }
+}
+
+let ultimo = performance.now();
+function passo() {
+  requestAnimationFrame(passo);
+  const agora = performance.now();
+  const dt = Math.min((agora - ultimo) / 1000, 0.1);
+  ultimo = agora;
+  avancar(dt);
+}
+window.avancar = avancar;      // para conferir com o painel escondido
+document.getElementById("carga").remove();
+passo();
+
+// ── AS CÂMARAS ──────────────────────────────────────────────────────────────
+// a camara enquadra o POSTO DISPUTADO -- que e onde a cena esta, e nao o
+// meio geometrico da estrada
+function olhar(de, alto, dist) {
+  const q = postos[Math.max(0, Math.min(N_POSTOS - 1, disputado))];
+  ctrl.target.copy(q.v).add(new THREE.Vector3(0, 3, 0));
+  cam.position.set(q.v.x + Math.cos(q.rumo + de) * dist, q.v.y + alto,
+                   q.v.z + Math.sin(q.rumo + de) * dist);
+  ctrl.update();
+}
+for (const b of document.querySelectorAll("#hud button")) {
+  b.onclick = () => {
+    const c = b.dataset.c;
+    if (c === "outra") {
+      travados = false;
+      estado.innerHTML = "&nbsp;";
+      for (const rei of ["A", "B"]) {
+        const e = exercitos[rei];
+        e.posto = rei === "A" ? -1 : N_POSTOS;
+        e.prog = 0;
+        e.pronto = false;
+        for (const h of e.homens) {
+          h.acao.parar.fadeOut(0.3);
+          h.acao.andar.reset().fadeIn(0.3).play();
+        }
+      }
+      return;
+    }
+    if (c === "ver") olhar(Math.PI / 2 + 0.55, 15, 48);
+    if (c === "lado") olhar(Math.PI / 2, 9, 56);
+    if (c === "alto") olhar(0, 95, 45);
+  };
+}
+olhar(Math.PI / 2 + 0.55, 15, 48);
+
+const med = document.getElementById("med");
+setInterval(() => {
+  med.innerHTML = "<b>" + mapa.fps + "</b> fps<br>"
+    + (exercitos.A.homens.length + exercitos.B.homens.length) + " figuras animadas<br>"
+    + N_POSTOS + " postos em " + Math.round(COMP) + " m<br>"
+    + Math.round(COMP / N_POSTOS) + " m por posto";
+}, 500);
+</script>
