@@ -25,6 +25,7 @@ sys.path.append(os.path.join(RAIZ, "ferramentas", "cena"))
 import tropas3d as T                                       # noqa: E402
 
 SAIDA = os.path.join(RAIZ, "sonda3d")
+PERNA_X = T.PERNA_X
 
 corpo, arm = T.abrir_soldado()
 import pecas as P                                          # noqa: E402
@@ -33,6 +34,76 @@ P.LIXO = None
 
 n_pano, n_perna = T.de_saia_para_calca(corpo)
 print("SONDA calças: %d vértices de barra, %d de perna" % (n_pano, n_perna))
+
+def _linear(c):
+    """de sRGB (o que se ve num seletor de cor) para linear (o que o no le)"""
+    return tuple(v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
+                 for v in c)
+
+
+def _tingir(mat, cor, nome):
+    m = mat.copy()
+    m.name = nome
+    nt = m.node_tree
+    bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    lig = bsdf.inputs["Base Color"].links
+    if not lig:
+        bsdf.inputs["Base Color"].default_value = (*_linear(cor), 1.0)
+        return m
+    fonte = lig[0].from_socket
+    mis = nt.nodes.new("ShaderNodeMix")
+    mis.data_type = "RGBA"
+    mis.blend_type = "MULTIPLY"
+    mis.inputs["Factor"].default_value = 1.0
+    nt.links.new(fonte, mis.inputs[6])                 # A
+    mis.inputs[7].default_value = (*_linear(cor), 1.0)  # B
+    nt.links.new(mis.outputs[2], bsdf.inputs["Base Color"])
+    return m
+
+
+# ── AS BOTAS ─────────────────────────────────────────────────────────────────
+# O sapato dele e uma SOLA: uma casca de 3 cm no fundo do pe, e mais nada. Com
+# o homem a andar, essa casca fica ao nivel do chao e a estrada come-a metade
+# do tempo -- o que se ve e um soldado descalco que enterra o pe no terreno a
+# cada passo. Nao ha geometria de bota para pintar; ha que a fazer.
+#
+# Duas caixas por pe (o pe e o cano), presas ao osso da canela com peso 1. Nao
+# ha osso de pe neste esqueleto, e nao faz falta: o tornozelo nao articula.
+def _caixa(bm, larg, comp, alt, centro):
+    r = bmesh.ops.create_cube(bm, size=1.0)["verts"]
+    bmesh.ops.scale(bm, verts=r, vec=(larg, comp, alt))
+    bmesh.ops.translate(bm, verts=r, vec=centro)
+
+
+COR_BOTA = (0.30, 0.23, 0.17)          # couro escuro, contra a la clara da calca
+# um material SO para as duas botas: um por bota daria duas primitivas de
+# glTF onde basta uma
+MAT_BOTA = _tingir(P.material("couro"), COR_BOTA, "M_bota")
+botas = []
+for osso, sinal in (("lowerleg.R", 1.0), ("lowerleg.L", -1.0)):
+    me = bpy.data.meshes.new("bota")
+    bm = bmesh.new()
+    x = sinal * PERNA_X
+    _caixa(bm, 0.088, 0.130, 0.056, (x, 0.012, 0.026))     # o pe
+    _caixa(bm, 0.076, 0.080, 0.072, (x, -0.006, 0.088))    # o cano
+    bmesh.ops.bevel(bm, geom=list(bm.verts) + list(bm.edges) + list(bm.faces),
+                    offset=0.009, segments=1, affect="EDGES")
+    bm.to_mesh(me)
+    bm.free()
+    ob = bpy.data.objects.new("bota", me)
+    bpy.context.scene.collection.objects.link(ob)
+    me.materials.append(MAT_BOTA)
+    g = ob.vertex_groups.new(name=osso)
+    g.add(range(len(me.vertices)), 1.0, "REPLACE")
+    botas.append(ob)
+
+bpy.ops.object.select_all(action="DESELECT")
+for ob in botas:
+    ob.select_set(True)
+corpo.select_set(True)
+bpy.context.view_layer.objects.active = corpo
+bpy.ops.object.join()
+print("SONDA duas botas presas as canelas")
 
 # ── A LANÇA ──────────────────────────────────────────────────────────────────
 # A dele fica no ficheiro. Vem solta (sem pai e sem pesos) e, pior, desenhada
@@ -106,35 +177,9 @@ print("SONDA lança de %.2f m presa à mão direita" % (COMP * 2.0 / T.ALT_OGA))
 # nuas. A cor entra como FATOR do glTF (uma multiplicacao por cima da textura),
 # que e a unica maneira de tingir que sobrevive a exportacao -- um no de mistura
 # qualquer sai de la sem textura nenhuma.
-def _linear(c):
-    """de sRGB (o que se ve num seletor de cor) para linear (o que o no le)"""
-    return tuple(v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
-                 for v in c)
-
-
-def _tingir(mat, cor, nome):
-    m = mat.copy()
-    m.name = nome
-    nt = m.node_tree
-    bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
-    lig = bsdf.inputs["Base Color"].links
-    if not lig:
-        bsdf.inputs["Base Color"].default_value = (*_linear(cor), 1.0)
-        return m
-    fonte = lig[0].from_socket
-    mis = nt.nodes.new("ShaderNodeMix")
-    mis.data_type = "RGBA"
-    mis.blend_type = "MULTIPLY"
-    mis.inputs["Factor"].default_value = 1.0
-    nt.links.new(fonte, mis.inputs[6])                 # A
-    mis.inputs[7].default_value = (*_linear(cor), 1.0)  # B
-    nt.links.new(mis.outputs[2], bsdf.inputs["Base Color"])
-    return m
-
-
 # tunica de linho tinto de ocre, calcas de la escura, e a pele a ficar clara
 # por contraste -- e assim que se le um soldado a quarenta pixeis de altura
-COR = {"armor_clothe": (0.62, 0.47, 0.28), "calcas": (0.27, 0.22, 0.18)}
+COR = {"armor_clothe": (0.62, 0.47, 0.28), "calcas": (0.46, 0.41, 0.33)}
 NOSSO = {"armor_clothe": "pano", "calcas": "pano", "belt": "couro",
          "helmet": "malha", "shoes": "couro"}
 for i, m in enumerate(corpo.data.materials):
@@ -145,6 +190,29 @@ for i, m in enumerate(corpo.data.materials):
     cor = COR.get(m.name)
     corpo.data.materials[i] = _tingir(base, cor, "M_" + m.name) if cor else base
 print("SONDA materiais: %s" % ", ".join(m.name for m in corpo.data.materials))
+
+# ── UMA RANHURA POR MATERIAL ─────────────────────────────────────────────────
+# O cinto e os sapatos ficaram os dois com o nosso couro, em ranhuras separadas.
+# Cada ranhura e uma PRIMITIVA no glTF, e cada primitiva e uma chamada de
+# desenho por soldado — com quarenta e oito homens no ecra, uma ranhura repetida
+# custa quarenta e oito chamadas para nada.
+visto = {}
+troca = {}
+for i, m in enumerate(corpo.data.materials):
+    if m.name in visto:
+        troca[i] = visto[m.name]
+    else:
+        visto[m.name] = i
+if troca:
+    # so se REAPONTAM as faces; a ranhura repetida fica la, vazia, e o
+    # exportador nao escreve primitiva para um material que ninguem usa. Tirar
+    # a ranhura seria mais limpo e e uma armadilha: o Blender ja reindexa as
+    # faces ao remover uma, e reindexar por cima disso mandou a ponta de aco da
+    # lanca para o material da madeira -- uma primitiva a menos e um material a
+    # menos, sem um aviso.
+    for f in corpo.data.polygons:
+        f.material_index = troca.get(f.material_index, f.material_index)
+    print("SONDA ranhuras repetidas reapontadas: %d" % len(troca))
 
 # ── O TAMANHO ────────────────────────────────────────────────────────────────
 # 2,0 m de peça; o mapa desenha a 2,2x. A escala aplica-se à ARMADURA e não à

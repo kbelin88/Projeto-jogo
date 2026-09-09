@@ -26,6 +26,7 @@
 import * as THREE from "./vendor/three.module.js";
 import { GLTFLoader } from "./vendor/loaders/GLTFLoader.js";
 import { OrbitControls } from "./vendor/controls/OrbitControls.js";
+import { clone as clonarComOssos } from "./vendor/utils/SkeletonUtils.js";
 
 const BASE = new URL(".", import.meta.url).href;
 
@@ -146,6 +147,45 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
       ? o.parent.name : o.name;
     (banco[n] = banco[n] || []).push(o);
   });
+  // ── AS TROPAS DE CARNE ──────────────────────────────────────────────────
+  // O resto do mapa e geometria rigida instanciada aos milhares. Estas nao:
+  // uma malha com ossos NAO se instancia, cada soldado e uma copia sua com o
+  // seu esqueleto e o seu tocador. E isso so se pode pagar por causa de uma
+  // decisao anterior -- o corte por pixeis, que limita as figuras a vista a
+  // algumas dezenas. O que fizemos para elas se LEREM e o que torna a animacao
+  // a serio acessivel.
+  //
+  // `clonarComOssos` e nao `.clone()`: um clone normal partilha o esqueleto, e
+  // a coluna inteira andava em unisono -- que e o aspeto de uma maquina, nao
+  // de um exercito.
+  const POCO_ANIM = 48;
+  const animados = {};
+  for (const [tipo, ficheiro] of [["lanceiro", "lanceiro.glb"]]) {
+    const ga = await new Promise((ok) =>
+      new GLTFLoader().load(BASE + ficheiro, ok, undefined, () => ok(null)));
+    if (!ga) continue;
+    const passo = ga.animations.find((a) => /idle_walk/i.test(a.name))
+      || ga.animations[0];
+    const lista = [];
+    for (let i = 0; i < POCO_ANIM; i++) {
+      const raiz = clonarComOssos(ga.scene);
+      raiz.traverse((o) => {
+        if (o.isMesh) { o.castShadow = true; o.receiveShadow = true;
+                        o.frustumCulled = false; }
+      });
+      raiz.visible = false;
+      const mix = new THREE.AnimationMixer(raiz);
+      const act = mix.clipAction(passo);
+      act.play();
+      // cada um com a sua fase: sem isto seriam quarenta e oito copias do
+      // mesmo instante, todas a pisar ao mesmo tempo
+      act.time = (i * 0.37) % passo.duration;
+      cena.add(raiz);
+      lista.push({ raiz, mix });
+    }
+    animados[tipo] = lista;
+  }
+
   const contaTri = (m) => (m.geometry.index ? m.geometry.index.count
                                             : m.geometry.attributes.position.count) / 3;
 
@@ -384,6 +424,7 @@ transformed.y += onda * transformed.x * 0.05;`);
 
   const TIPOS = MAPA.tropas || [];
   const VEL_DEMO = { lanceiro: 5.5, arqueiro: 7.0, cavaleiro: 11.0 };
+  let nAnim = 0;                        // figuras de carne no ecra
   const TETO_TROPA = 400;               // instancias reservadas por tipo
   const tropaInst = {};
   for (const tipo of TIPOS) {
@@ -480,13 +521,36 @@ transformed.y += onda * transformed.x * 0.05;`);
   function porTropas(t) {
     const conta = {};
     for (const tipo of Object.keys(tropaInst)) conta[tipo] = 0;
+    const vivos = {};
+    for (const tipo of Object.keys(animados)) vivos[tipo] = 0;
     const meter = (tipo, via, metros, rumoExtra, j) => {
       const lista = tropaInst[tipo];
-      if (!lista || conta[tipo] >= TETO_TROPA) return;
+      const carne = animados[tipo];
+      const cheio = !carne || vivos[tipo] >= carne.length;
+      if (cheio && (!lista || conta[tipo] >= TETO_TROPA)) return;
       const rumo = noCaminho(via, metros, _p) + rumoExtra;
       const lat = ((j % 2) * 2 - 1) * 2.6;
       _p.x += Math.cos(rumo + Math.PI / 2) * lat;
       _p.z += Math.sin(rumo + Math.PI / 2) * lat;
+
+      // ── QUEM TEM PERNAS ANDA COM ELAS ──────────────────────────────────
+      // Nada de balanco postico: as pernas dele mexem-se. E se o poco acabar,
+      // nao se desenha -- misturar homens animados com simbolos rigidos na
+      // mesma coluna via-se mais do que faltar um homem.
+      // e se o poco acabar, cai-se no simbolo rigido em vez de nao desenhar
+      // nada: "nao vejo tropas" e a pior coisa que este mapa pode dizer, e ja
+      // custou uma tarde a perceber que a causa era outra
+      if (carne && vivos[tipo] < carne.length) {
+        const s = carne[vivos[tipo]++];
+        s.raiz.visible = true;
+        s.raiz.position.copy(_p);
+        // a peca olha para +Y no Blender (e para onde aponta a biqueira), e a
+        // exportacao com Y para cima manda isso para -Z: um quarto de volta a
+        // menos do que a conta obvia, e a coluna desce a estrada de lado
+        s.raiz.rotation.set(0, -rumo - Math.PI / 2, 0);
+        s.raiz.scale.setScalar(ESCALA_TROPA);
+        return;
+      }
       // O BALANCO DO PASSO, mais lento. Estava a 6,7 Hz, que nao se le como
       // passo -- le-se como vibracao, e era metade do "andam picando". Um
       // homem a marchar bate o pe duas vezes por segundo.
@@ -597,6 +661,9 @@ transformed.y += onda * transformed.x * 0.05;`);
     }
     for (const [tipo, lista] of Object.entries(tropaInst))
       for (const im of lista) { im.count = conta[tipo]; im.instanceMatrix.needsUpdate = true; }
+    for (const [tipo, carne] of Object.entries(animados))
+      for (let i = vivos[tipo]; i < carne.length; i++) carne[i].raiz.visible = false;
+    nAnim = Object.values(vivos).reduce((a, b) => a + b, 0);
   }
 
   // ── O ESTANDARTE ────────────────────────────────────────────────────────
@@ -690,6 +757,11 @@ transformed.y += onda * transformed.x * 0.05;`);
     ultimo = agora;
     ctrl.update();
     porTropas(relogio);
+    // os tocadores so andam para os que estao a vista: um mixer parado nao
+    // custa nada, e sao 48 poços por tipo
+    const dts = dtQuadro / 1000;
+    for (const carne of Object.values(animados))
+      for (const s of carne) if (s.raiz.visible) s.mix.update(dts);
     fumegar(relogio);
     if (matMar.userData.sh) matMar.userData.sh.uniforms.tempo.value = relogio * 0.001;
     for (const rei of Object.keys(panos))
@@ -728,7 +800,7 @@ transformed.y += onda * transformed.x * 0.05;`);
     // pecas, que e a unica maneira de uma comparacao valer alguma coisa.
     get banco() { return banco; },
     get diagnostico() {
-      return { ligadoAoJogo, marchas: marchas.length,
+      return { ligadoAoJogo, marchas: marchas.length, figurasAnimadas: nAnim,
                tiposComMalha: Object.keys(tropaInst),
                viasConhecidas: Object.keys(eixoDe).length,
                ultimoMotivo: motivo };

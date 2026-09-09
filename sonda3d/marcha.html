@@ -135,8 +135,12 @@ function avancar(dt) {
     _p.x += Math.cos(rumo + Math.PI / 2) * lat;
     _p.z += Math.sin(rumo + Math.PI / 2) * lat;
     s.raiz.position.copy(_p);
-    // a peça olha para +X; o mapa roda-a com o rumo da marcha
-    s.raiz.rotation.y = -rumo;
+    // ── PARA ONDE OLHA A PEÇA ────────────────────────────────────────────
+    // Não para +X, como eu tinha assumido: no Blender ele olha para +Y (é para
+    // onde aponta a biqueira da sola), e a exportação com Y para cima manda o
+    // +Y do Blender para o -Z do three. Um quarto de volta a menos, e a coluna
+    // inteira desce a estrada de lado, a olhar para a berma.
+    s.raiz.rotation.y = -rumo - Math.PI / 2;
     if (i === 0) alvoCam.copy(_p);
   });
 
