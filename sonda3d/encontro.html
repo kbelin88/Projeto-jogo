@@ -44,6 +44,7 @@ import { iniciar, COR_REI } from "./mapa3d.js";
 import * as THREE from "./vendor/three.module.js";
 import { GLTFLoader } from "./vendor/loaders/GLTFLoader.js";
 import { clone as clonarComOssos } from "./vendor/utils/SkeletonUtils.js";
+import { mergeGeometries } from "./vendor/utils/BufferGeometryUtils.js";
 
 const mapa = await iniciar(document.getElementById("palco"));
 const { cena, cam, ctrl, MAPA } = mapa;
@@ -172,9 +173,153 @@ for (const rei of ["A", "B"]) {
   };
 }
 
+// ── A SALVA ─────────────────────────────────────────────────────────────────
+// ── PORQUE É QUE ISTO É BARATO ──────────────────────────────────────────────
+// O motor resolve o combate por números: quando a cena começa, o resultado JÁ
+// ESTÁ DECIDIDO. Não há física, não há deteção de acertos, não há IA nenhuma —
+// há um GUIÃO. Cada flecha sabe em quem vai acertar antes de sair da corda, e
+// cada queda tem hora marcada.
+//
+// É a diferença entre ENCENAR um resultado, que é código, e SIMULAR uma
+// batalha, que é impossível com o que temos. E é como os antigos o faziam,
+// não por esperteza: por não terem outra hipótese.
+const N_FLECHAS = 140;
+// EXAGERADA, e de propósito. Uma flecha à escala destes homens tem cinco
+// centímetros de grossura e não se vê a trinta metros. O Age of Empires faz o
+// mesmo: a flecha não é um objeto, é um SINAL de que há combate.
+const _gh = new THREE.CylinderGeometry(0.055, 0.085, 2.4, 4);
+const _gp = new THREE.ConeGeometry(0.16, 0.40, 4);
+_gp.translate(0, 1.40, 0);
+const _gf = new THREE.BoxGeometry(0.02, 0.42, 0.30);
+_gf.translate(0, -1.00, 0);
+const flechas = new THREE.InstancedMesh(
+  mergeGeometries([_gh, _gp, _gf]),
+  new THREE.MeshStandardMaterial({ color: 0x6d5738, roughness: 0.92 }), N_FLECHAS);
+flechas.castShadow = true;
+flechas.frustumCulled = false;
+flechas.count = 0;
+cena.add(flechas);
+
+// gravidade exagerada, e de propósito: as figuras estão a 2,2x, e com os 9,8
+// do mundo real a flecha fazia um arco de bala perdida em vez de um arco de
+// arco. O que se quer é que se VEJA subir e cair.
+const GRAV = -30;
+const voo = [];
+const _o3 = new THREE.Vector3(), _d3 = new THREE.Vector3();
+const _q3 = new THREE.Quaternion(), _s3 = new THREE.Vector3(1, 1, 1);
+const _m3 = new THREE.Matrix4(), _cima = new THREE.Vector3(0, 1, 0);
+
+function lancar(origem, destino, vitima) {
+  const dist = origem.distanceTo(destino);
+  // ── O ARCO TEM DE SER ALTO ──────────────────────────────────────────────
+  // Com um tempo de voo curto a flecha vai quase a direito, chega deitada e
+  // fica no chão como um pau caído. O que se lê como salva é a subida: as
+  // flechas contra o céu e a queda a pique. Portanto o tempo de voo é
+  // ESCOLHIDO alto, e a velocidade sai da conta -- não o contrário.
+  const tv = 0.8 + dist / 32;
+  const v = destino.clone().sub(origem).divideScalar(tv);
+  v.y -= 0.5 * GRAV * tv;              // a conta do tiro: v = (D-O)/t - ½gt
+  voo.push({ o: origem.clone(), v, t: 0, tv, cravada: -1, vitima });
+  if (voo.length > N_FLECHAS) voo.shift();
+}
+
+function moverFlechas(dt) {
+  for (const f of voo) {
+    if (f.cravada >= 0) { f.cravada += dt; continue; }
+    f.t += dt;
+    if (f.t >= f.tv) {
+      f.t = f.tv;
+      f.cravada = 0;
+      // a queda acontece quando a FLECHA CHEGA, não quando é disparada: é o
+      // que faz o espectador ligar as duas coisas
+      if (f.vitima && !f.vitima.caido) tombar(f.vitima);
+    }
+  }
+  // as cravadas ficam no chão um bocado: um campo a encher-se de flechas diz
+  // "aqui houve uma batalha" melhor do que qualquer efeito
+  while (voo.length && voo[0].cravada > 9) voo.shift();
+  let n = 0;
+  for (const f of voo) {
+    const t = f.t;
+    _o3.set(f.o.x + f.v.x * t, f.o.y + f.v.y * t + 0.5 * GRAV * t * t,
+            f.o.z + f.v.z * t);
+    _d3.set(f.v.x, f.v.y + GRAV * t, f.v.z).normalize();
+    _q3.setFromUnitVectors(_cima, _d3);
+    _m3.compose(_o3, _q3, _s3);
+    flechas.setMatrixAt(n++, _m3);
+  }
+  flechas.count = n;
+  flechas.instanceMatrix.needsUpdate = true;
+}
+
+function tombar(h) {
+  h.caido = { t: 0 };
+  h.acao.andar.fadeOut(0.15);
+  h.acao.parar.fadeOut(0.15);
+}
+
+// ── O GUIÃO ─────────────────────────────────────────────────────────────────
+// Escrito de uma vez, no instante em que as duas hostes travam. Depois só se
+// toca. Quando houver motor, é ele que escreve isto — e a cena não muda nada.
+const _mao = new THREE.Vector3();
+let guiao = null, tGuiao = 0, iGuiao = 0;
+
+function montarGuiao() {
+  const g = [];
+  let t = 1.0;
+  // três flechas por arqueiro em cada salva: uma flecha sozinha é um tiro,
+  // três ao mesmo tempo são uma SALVA -- e é a salva que se lê de longe
+  const POR_ARQUEIRO = 3;
+  for (let salva = 0; salva < 12; salva++) {
+    for (const rei of ["A", "B"]) {
+      const meus = exercitos[rei].homens.filter((h) => h.tipo === "arqueiro");
+      const deles = exercitos[rei === "A" ? "B" : "A"].homens;
+      meus.forEach((h, k) => {
+        const q = t + k * 0.24;
+        g.push({ t: q, faz: "puxar", quem: h });
+        for (let f = 0; f < POR_ARQUEIRO; f++)
+          g.push({ t: q + 0.70 + f * 0.13, faz: "atirar", quem: h, deles,
+                   mata: f === 0 && k === 0 && salva >= 2 && salva % 2 === 0 });
+      });
+    }
+    t += 2.9;
+  }
+  g.sort((a, b) => a.t - b.t);
+  return g;
+}
+
+function tocarGuiao(dt) {
+  tGuiao += dt;
+  while (iGuiao < guiao.length && guiao[iGuiao].t <= tGuiao) {
+    const ev = guiao[iGuiao++];
+    if (ev.quem.caido) continue;
+    if (ev.faz === "puxar") { ev.quem.puxa = 0; continue; }
+    ev.quem.puxa = null;
+    const vivos = ev.deles.filter((h) => !h.caido);
+    if (!vivos.length) continue;
+    const alvo = vivos[Math.floor(Math.random() * vivos.length)];
+    const arco = ev.quem.raiz.getObjectByName("hand.L");
+    (arco || ev.quem.raiz).getWorldPosition(_mao);
+    _mao.y += 1.0;
+    const d = alvo.raiz.position.clone();
+    if (ev.mata) {
+      d.y += 2.4;                       // ao peito: esta flecha tem nome
+      lancar(_mao, d, alvo);
+    } else {
+      d.x += (Math.random() - 0.5) * 9;
+      d.z += (Math.random() - 0.5) * 9;
+      d.y += 0.1;                       // ao chão à volta dele
+      lancar(_mao, d, null);
+    }
+  }
+}
+
 // ── O AVANÇO, DE POSTO EM POSTO ─────────────────────────────────────────────
 const T_POSTO = 1.9;                         // segundos para vencer um posto
 let travados = false, relogio = 0, disputado = (N_POSTOS - 1) >> 1;
+const _euler = new THREE.Euler();
+const _qPuxa = new THREE.Quaternion();
+const _eixoPuxa = new THREE.Vector3(1, 0, 0);
 const estado = document.getElementById("estado");
 
 function ondeParam(e) {
@@ -224,13 +369,44 @@ function avancar(dt) {
         }
       }
     }
+    if (A.pronto && B.pronto) {
+      if (!guiao) {
+        guiao = montarGuiao();
+        estado.innerHTML = "Travaram no posto <b>" + (disputado + 1) + "</b> de "
+          + N_POSTOS + ". Guião escrito: <b>"
+          + guiao.filter((e) => e.faz === "atirar").length + "</b> tiros, <b>"
+          + guiao.filter((e) => e.mata).length + "</b> com nome.";
+      }
+      tocarGuiao(dt);
+    }
   }
+  moverFlechas(dt);
 
   for (const rei of ["A", "B"]) {
     const e = exercitos[rei];
     const alvo = e.posto + e.sentido * e.prog;
     e.homens.forEach((h, i) => {
+      // ── QUEM CAI FICA ONDE CAIU ───────────────────────────────────────
+      // Não há animação de morte, e não faz falta: a esta escala uma queda
+      // para a frente em meio segundo lê-se perfeitamente. O tocador PÁRA,
+      // senão o morto continuava em guarda enquanto tomba.
+      if (h.caido) {
+        h.caido.t = Math.min(1, h.caido.t + dt / 0.65);
+        const u = h.caido.t;
+        _euler.set(-(Math.PI / 2) * u * u * (3 - 2 * u), h.raiz.rotation.y, 0, "YXZ");
+        h.raiz.quaternion.setFromEuler(_euler);
+        h.raiz.position.y = h.chao - 0.5 * u;
+        return;
+      }
       h.mix.update(dt);
+      // a corda a ser puxada: o braço direito recua enquanto o tiro se prepara.
+      // Aplica-se DEPOIS do tocador, senão a animação escrevia por cima.
+      if (h.puxa !== null && h.puxa !== undefined) {
+        h.puxa = Math.min(0.7, h.puxa + dt);
+        const b = h.raiz.getObjectByName("lowerarm.R");
+        if (b) b.quaternion.multiply(
+          _qPuxa.setFromAxisAngle(_eixoPuxa, -1.25 * (h.puxa / 0.7)));
+      }
       // cada homem uma casa atrás do da frente, em metros e não em postos:
       // um posto é uma unidade de TEMPO, e a coluna é uma coisa física
       const m = COMP * (alvo + 0.5) / N_POSTOS - e.sentido * i * 6.2;
@@ -240,6 +416,7 @@ function avancar(dt) {
       _p.x += Math.cos(rumo + Math.PI / 2) * lat;
       _p.z += Math.sin(rumo + Math.PI / 2) * lat;
       h.raiz.position.copy(_p);
+      h.chao = _p.y;
       // a peça olha para +Y no Blender, que a exportação manda para -Z: um
       // quarto de volta a menos do que a conta óbvia
       h.raiz.rotation.y = -rumo - Math.PI / 2;
@@ -256,6 +433,9 @@ function passo() {
   avancar(dt);
 }
 window.avancar = avancar;      // para conferir com o painel escondido
+window.diag = () => ({ flechas: flechas.count, noAr: voo.filter((f) => f.cravada < 0).length,
+  caidos: [...exercitos.A.homens, ...exercitos.B.homens].filter((h) => h.caido).length,
+  guiao: guiao ? guiao.length : 0, i: iGuiao, t: Math.round(tGuiao) });
 document.getElementById("carga").remove();
 passo();
 
@@ -274,12 +454,15 @@ for (const b of document.querySelectorAll("#hud button")) {
     const c = b.dataset.c;
     if (c === "outra") {
       travados = false;
+      guiao = null; iGuiao = 0; tGuiao = 0;
+      voo.length = 0;
       estado.innerHTML = "&nbsp;";
       for (const rei of ["A", "B"]) {
         const e = exercitos[rei];
         e.posto = rei === "A" ? -1 : N_POSTOS;
         e.prog = 0;
         e.pronto = false;
+        for (const h of e.homens) { h.caido = null; h.puxa = null; }
         for (const h of e.homens) {
           h.acao.parar.fadeOut(0.3);
           h.acao.andar.reset().fadeIn(0.3).play();
@@ -299,6 +482,8 @@ setInterval(() => {
   med.innerHTML = "<b>" + mapa.fps + "</b> fps<br>"
     + (exercitos.A.homens.length + exercitos.B.homens.length) + " figuras animadas<br>"
     + N_POSTOS + " postos em " + Math.round(COMP) + " m<br>"
-    + Math.round(COMP / N_POSTOS) + " m por posto";
+    + flechas.count + " flechas no ar e no chão<br>"
+    + [...exercitos.A.homens, ...exercitos.B.homens].filter((h) => h.caido).length
+    + " caídos";
 }, 500);
 </script>
