@@ -490,6 +490,28 @@ for a, b in LIGACOES:
     L0 = math.hypot(dx0, dy0) or 1.0
     p0 = [p0[0] - dx0 / L0 * 6.0, p0[1] - dy0 / L0 * 6.0]
     p1 = [p1[0] + dx0 / L0 * 6.0, p1[1] + dy0 / L0 * 6.0]
+
+    # ── E A PONTA TEM DE FICAR DENTRO DA MURALHA ────────────────────────
+    # Os 6 m acima escondiam a juncao quando a estrada acabava no portao. Mas a
+    # boca que o `bocas` grava e a do CORPO DA GUARDA, que avanca uns metros
+    # para fora do muro: com 6 m nao chegava para entrar, e a fita acabava a ceu
+    # aberto -- um leque de calcada colado ao muro, a acabar num corte a direito
+    # no meio da relva. Medido antes de corrigir: 17 das 74 pontas ficavam de
+    # fora, ate 8,2 m. Sao as "pontas soltas" que o Lucas marcou.
+    #
+    # A regra passa a ser dita em vez de esperada: a ponta fica a `raio - 5` do
+    # centro, e nunca mais para fora. Ai o corte fica sempre por baixo do chao
+    # da aldeia e do muro.
+    def puxar_para_dentro(pt, cx, cy, cid):
+        r = C.PERFIS[REDE["c"][cid]["t"]]["raio"] - 5.0
+        dx, dy = pt[0] - cx, pt[1] - cy
+        L = math.hypot(dx, dy)
+        if L <= r or L < 1e-6:
+            return pt
+        return [cx + dx / L * r, cy + dy / L * r]
+
+    p0 = puxar_para_dentro(p0, ax, ay, a)
+    p1 = puxar_para_dentro(p1, bx, by, b)
     comp = math.hypot(p1[0] - p0[0], p1[1] - p0[1])
     if comp < 1:
         continue
@@ -569,6 +591,57 @@ for a, b in LIGACOES:
                       base + 2 * i + 3, base + 2 * i + 2))
     eixos.append({"de": a, "para": b, "pts": eixo})
     trocos += 1
+# ── A MATA ABRE CAMINHO ─────────────────────────────────────────────────────
+# Nao havia regra nenhuma: a mata so era filtrada por cair na agua. Medido nesta
+# rede, 103 das 380 manchas tocavam uma estrada e algumas assentavam EM CIMA do
+# eixo -- a estrada entrava no bosque e desaparecia, e o que ficava a vista era
+# um coto. Foi metade do que o Lucas marcou como "estrada sem sentido".
+#
+# Apagar as 103 tirava um terco da floresta. Empurram-se: a mancha desliza pela
+# perpendicular ate a estrada ficar livre, que e o que uma floresta faz a volta
+# de um caminho de verdade. So se apaga a que, depois de empurrada, cair fora de
+# terra.
+def _dist_eixo(q, A, B):
+    dx, dy = B[0] - A[0], B[1] - A[1]
+    L = dx * dx + dy * dy
+    t = 0.0 if L == 0 else max(0.0, min(1.0, ((q[0]-A[0])*dx + (q[1]-A[1])*dy) / L))
+    px_, py_ = A[0] + t * dx, A[1] + t * dy
+    return math.hypot(q[0] - px_, q[1] - py_), (q[0] - px_, q[1] - py_)
+
+
+_raio_arr = {}
+for _i, _arr in enumerate(bosques):
+    _raio_arr[_i] = max((math.hypot(t["p"][0], t["p"][1]) for t in _arr), default=0.0)
+COPA = 5.0                      # a copa passa do tronco; sem isto roca a fita
+empurradas, afogadas = 0, 0
+for m in manchas:
+    R = _raio_arr.get(m["b"], 0.0) * m.get("e", 1.0) + LARG_ESTRADA + COPA
+    for _ in range(4):
+        pior, vetor = 1e9, None
+        for eixo_ in eixos:
+            # `pts` e nao `P`: neste ficheiro `P` e o modulo `pecas`, e usa-lo
+            # como variavel local apaga-o em silencio -- o erro so aparece
+            # dezenas de linhas a frente, num `P._novo` que diz que uma lista
+            # nao tem esse metodo
+            pts_ = eixo_["pts"]
+            for i in range(len(pts_) - 1):
+                dd, vv = _dist_eixo(m["p"], pts_[i], pts_[i + 1])
+                if dd < pior:
+                    pior, vetor = dd, vv
+        if pior >= R or vetor is None:
+            break
+        L = math.hypot(*vetor) or 1.0
+        m["p"] = [round(m["p"][0] + vetor[0] / L * (R - pior + 0.5), 1),
+                  round(m["p"][1] + vetor[1] / L * (R - pior + 0.5), 1)]
+        empurradas += 1
+antes_emp = len(manchas)
+manchas = [m for m in manchas if em_terra(*m["p"])]
+afogadas = antes_emp - len(manchas)
+for m in manchas:
+    m["z"] = round(altura_em(m["p"][0], m["p"][1]), 2)
+print("SONDA mata afastada da estrada: %d empurroes, %d manchas caidas na agua"
+      % (empurradas, afogadas))
+
 estradas = P._novo(P._malha("estradas", verts, faces, "caminho", bisel=0), "caminho")
 _uv = estradas.data.uv_layers.new(name="UVMap")
 for _p in estradas.data.polygons:
