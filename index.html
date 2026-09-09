@@ -1956,7 +1956,15 @@
             + M3D.pecas.toLocaleString("pt") + " pecas &middot; "
             + (M3D.triangulos / 1e6).toFixed(1) + "M triangulos<br>"
             + d.marchas + " marcha(s) &middot; "
-            + (t.lanceiro + t.arqueiro + t.cavaleiro) + " figuras no ecra"
+            // ── AS DE CARNE CONTAM TAMBEM ─────────────────────────────────
+            // `contagemTropas` conta so os SIMBOLOS RIGIDOS instanciados. Desde
+            // que as tropas passaram a ser malhas com ossos, esse numero e zero
+            // quase sempre -- e o mostrador dizia "0 figuras no ecra" com vinte
+            // e quatro homens a marchar a frente dos olhos. Este contador existe
+            // precisamente para distinguir "nao ha tropas" de "ha e nao se
+            // veem"; a mentir, faz o contrario do que foi feito para fazer.
+            + (d.figurasAnimadas + t.lanceiro + t.arqueiro + t.cavaleiro)
+            + " figuras no ecra"
             // vermelho SO para o que e defeito. "sem marchas" no turno 0 e a
             // verdade, nao um alarme -- e um mostrador que grita por tudo
             // ensina a ignora-lo.
