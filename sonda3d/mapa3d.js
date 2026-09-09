@@ -431,14 +431,18 @@ transformed.y += onda * transformed.x * 0.05;`);
   // homens, e aí o que interessa é quantos são de cada — abre-se numa por
   // tipo, cada uma por cima do seu bloco. No meio, as duas cruzam-se, que é o
   // que esconde a troca.
-  const PX_PLACA_JUNTA = 26;
-  const PX_PLACA_ABRE = 52;
+  // Em metros de camara (ecra de 1080, campo de 50 graus): abre por completo
+  // aos ~200 m e so fecha abaixo dos ~380 m. Estava a abrir aos 118 m, e era
+  // preciso ir espreitar o exercito para saber do que ele era feito -- que e
+  // justamente a informacao de que se precisa ANTES de chegar la.
+  const PX_PLACA_JUNTA = 16;
+  const PX_PLACA_ABRE = 30;
   // tamanho no ECRÃ e não no mundo (`sizeAttenuation: false`): uma placa que
   // encolhe com a distância é inútil justamente quando é mais precisa
   // medido no ecra: `scale` aqui vale cerca de 1,67 vezes a fracao da
   // altura do ecra, portanto 0,085 da uma placa de ~150 px num 1080p
-  const ESC_GRANDE = 0.085;
-  const ESC_PEQUENA = 0.038;
+  const ESC_GRANDE = 0.058;
+  const ESC_PEQUENA = 0.036;
   function pxPorMetro(dist) {
     const h = rend.domElement.clientHeight || 720;
     return (h / (2 * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2))) / Math.max(dist, 1);
@@ -887,6 +891,11 @@ transformed.y += onda * transformed.x * 0.05;`);
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({
       sizeAttenuation: false, depthTest: false, transparent: true,
       toneMapped: false }));
+    // ── A PLACA CRESCE PARA CIMA ──────────────────────────────────────────
+    // Ancorada ao meio, metade dela cai por cima da tropa -- e de camara
+    // baixa, que e a maioria dos angulos, tapava justamente o que se estava a
+    // contar. Ancorada em BAIXO, o ponto e o pe da placa e ela sobe dali.
+    sp.center.set(0.5, 0);
     sp.renderOrder = 950;
     sp.visible = false;
     cena.add(sp);
