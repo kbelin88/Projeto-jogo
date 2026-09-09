@@ -1,0 +1,390 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Traçar a rede</title>
+<!--
+  tracar-rede.html — onde a rede de estradas nova é desenhada à mão.
+
+  Abrir com o servidor a correr:  http://localhost:8000/ferramentas/tracar-rede.html
+
+  ── PORQUE ISTO É UM SVG E NÃO UM CANVAS ───────────────────────────────────
+  O jogo desenha a ilha cobrindo o retângulo do viewBox `130 144 1429 886` com
+  escala uniforme ancorada no topo (`xMidYMin slice`). Essa é a amarra entre a
+  imagem e as coordenadas calibradas das 24 aldeias — qualquer outro encaixe
+  desloca tudo, e o desenho feito aqui não serviria para nada.
+
+  Num SVG esse encaixe É a etiqueta `preserveAspectRatio`: o próprio navegador
+  faz a conta, e os pontos que se clicam já saem em coordenadas do viewBox, as
+  mesmas do `world-iberia.js`. Não há uma linha de matemática de conversão
+  neste ficheiro — e é por isso que não há aqui uma classe inteira de erros.
+-->
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #10161a; color: #e8dcc0;
+               font: 13px system-ui, sans-serif; overflow: hidden; }
+  #palco { position: fixed; inset: 0 320px 0 0; }
+  svg { width: 100%; height: 100%; display: block; cursor: crosshair; }
+  #lado { position: fixed; top: 0; right: 0; bottom: 0; width: 320px;
+          background: #171d21; border-left: 1px solid #2f3a40;
+          padding: 14px 16px; overflow-y: auto; box-sizing: border-box; }
+  h1 { font-size: 13px; letter-spacing: .08em; margin: 0 0 12px; color: #f0d9a0; }
+  h2 { font-size: 11px; letter-spacing: .08em; margin: 18px 0 7px;
+       color: #8fa3ad; text-transform: uppercase; font-weight: 600; }
+  button { background: #243036; color: #e8dcc0; border: 1px solid #3d4d55;
+           border-radius: 6px; padding: 7px 11px; margin: 0 5px 6px 0;
+           cursor: pointer; font: inherit; }
+  button:hover { background: #31414a; }
+  button.on { background: #6b5836; border-color: #c9a24a; color: #fff3d6; }
+  button.acao { background: #3a2e18; border-color: #6b5836; }
+  p { color: #9fb0b8; line-height: 1.55; margin: 8px 0 0; }
+  b { color: #e8dcc0; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  td { padding: 2px 0; color: #9fb0b8; }
+  td.n { text-align: right; color: #e8dcc0; font-variant-numeric: tabular-nums; }
+  .mau { color: #e08b7d; }
+  .bom { color: #86b98a; }
+  #avisos { margin-top: 6px; font-size: 12px; line-height: 1.5; }
+  #avisos div { margin: 3px 0; }
+</style>
+
+<div id="palco">
+  <svg id="mapa" viewBox="130 144 1429 886">
+    <image href="../assets/ilha-chao.png" x="130" y="144" width="1429" height="886"
+           preserveAspectRatio="xMidYMin slice"></image>
+    <g id="gVelhas"></g>
+    <g id="gEstradas"></g>
+    <g id="gAldeias"></g>
+    <line id="fio" stroke="#c9a24a" stroke-width="4" stroke-dasharray="10 8"
+          style="display:none" />
+  </svg>
+</div>
+
+<div id="lado">
+  <h1>TRAÇAR A REDE</h1>
+
+  <h2>ferramenta</h2>
+  <button data-f="mover" class="on">mover aldeia</button>
+  <button data-f="aldeia">nova aldeia</button>
+  <button data-f="estrada">estrada</button>
+  <button data-f="apagar">apagar</button>
+  <p id="dica">Arrasta uma aldeia para a mudar de sítio.</p>
+
+  <h2>a rede</h2>
+  <table>
+    <tr><td>aldeias</td><td class="n" id="nA">0</td></tr>
+    <tr><td>estradas</td><td class="n" id="nE">0</td></tr>
+    <tr><td>ligações por aldeia</td><td class="n" id="grau">0</td></tr>
+  </table>
+
+  <h2>o que está mal</h2>
+  <div id="avisos"></div>
+
+  <h2>guardar</h2>
+  <button class="acao" id="bSalvar">gravar rede-nova.json</button>
+  <button id="bBaixar">descarregar</button>
+  <p id="estado">&nbsp;</p>
+
+  <h2>o mapa de hoje</h2>
+  <button id="bVelhas">ver as estradas antigas</button>
+  <button id="bLimpar">apagar todas as estradas</button>
+  <p>As 24 aldeias entram nas posições de hoje. As estradas entram
+     <b>vazias</b> — é para as pores uma a uma.</p>
+</div>
+
+<script src="../world-iberia.js"></script>
+<script>
+// ── AS REGRAS, EM NÚMEROS ───────────────────────────────────────────────────
+// Medidas na rede de hoje antes de se mexer em nada, para haver contra o quê
+// comparar: 39 pares de estradas passam a menos de 60 m uma da outra no meio
+// do caminho, 3 pares cruzam-se sem entroncamento nenhum, e Toledo e Madrid
+// têm 6 ligações cada. Uma coluna a marchar tem 10 m de largura -- duas
+// estradas a 20 m são, para o olho, uma só, e é daí que vem o "tropas a
+// atravessarem-se sem lutar".
+const M_POR_VB = 1.967;        // metros de mundo por unidade do viewBox
+const PERTO_M = 120;           // duas estradas mais perto do que isto: mau
+const PERTO = PERTO_M / M_POR_VB;
+const PONTA = 40;              // ignora este bocado junto a cada aldeia: ali
+                               // as estradas juntam-se de propósito
+const GRAU_MAX = 4;
+
+const SVG = document.getElementById("mapa");
+const gV = document.getElementById("gVelhas");
+const gE = document.getElementById("gEstradas");
+const gA = document.getElementById("gAldeias");
+const fio = document.getElementById("fio");
+
+let aldeias = [];              // { id, nome, x, y }
+let estradas = [];             // [idA, idB]
+let ferramenta = "mover";
+let ligando = null;            // id da aldeia de onde parte a estrada a desenhar
+let arrastando = null;
+
+// ── as aldeias de hoje entram; as estradas não ──────────────────────────────
+const IB = window.Iberia;
+for (const c of IB.CIDADES) aldeias.push({ id: c.id, nome: c.nome, x: c.x, y: c.y });
+const VELHAS = (IB.ESTRADAS || IB.estradas || []).map((e) =>
+  Array.isArray(e) ? [e[0], e[1]] : [e.de || e.a, e.para || e.b]);
+
+// ── o ponto do rato em coordenadas do VIEWBOX ───────────────────────────────
+// `getScreenCTM` é a matriz que o navegador usou para encaixar o SVG; a sua
+// inversa devolve o ponto no espaço do desenho. É a mesma conta que o encaixe
+// da ilha usou, portanto não há hipótese de divergirem.
+function ponto(ev) {
+  const p = SVG.createSVGPoint();
+  p.x = ev.clientX; p.y = ev.clientY;
+  return p.matrixTransform(SVG.getScreenCTM().inverse());
+}
+
+const acharPerto = (x, y, raio = 26) => {
+  let melhor = null, d0 = raio * raio;
+  for (const a of aldeias) {
+    const d = (a.x - x) ** 2 + (a.y - y) ** 2;
+    if (d < d0) { d0 = d; melhor = a; }
+  }
+  return melhor;
+};
+
+// ── desenhar ────────────────────────────────────────────────────────────────
+function el(tag, attrs) {
+  const e = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+const por = (id) => aldeias.find((a) => a.id === id);
+
+function pintar() {
+  gE.textContent = "";
+  for (const [a, b] of estradas) {
+    const p = por(a), q = por(b);
+    if (!p || !q) continue;
+    const l = el("line", { x1: p.x, y1: p.y, x2: q.x, y2: q.y,
+      stroke: "#d8c48a", "stroke-width": 5, "stroke-linecap": "round" });
+    l.style.cursor = "pointer";
+    l.onclick = (ev) => {
+      if (ferramenta !== "apagar") return;
+      ev.stopPropagation();
+      estradas = estradas.filter(([x, y]) => !(x === a && y === b));
+      pintar(); conferir();
+    };
+    gE.appendChild(l);
+  }
+  gA.textContent = "";
+  for (const a of aldeias) {
+    const g = el("g", {});
+    g.appendChild(el("circle", { cx: a.x, cy: a.y, r: 13,
+      fill: a.id === ligando ? "#c9a24a" : "#2f6fb5",
+      stroke: "#0d1418", "stroke-width": 3 }));
+    const t = el("text", { x: a.x, y: a.y - 20, "text-anchor": "middle",
+      fill: "#f0e4c4", "font-size": 21, "font-family": "system-ui, sans-serif",
+      "font-weight": 600, "paint-order": "stroke", stroke: "#0d1418",
+      "stroke-width": 5 });
+    t.textContent = a.nome;
+    g.appendChild(t);
+    g.style.cursor = "pointer";
+    g.onmousedown = (ev) => aoTocarAldeia(ev, a);
+    gA.appendChild(g);
+  }
+}
+
+function pintarVelhas(ligado) {
+  gV.textContent = "";
+  if (!ligado) return;
+  for (const [a, b] of VELHAS) {
+    const p = por(a), q = por(b);
+    if (!p || !q) continue;
+    gV.appendChild(el("line", { x1: p.x, y1: p.y, x2: q.x, y2: q.y,
+      stroke: "#5c6b74", "stroke-width": 3, "stroke-dasharray": "8 10" }));
+  }
+}
+
+// ── o que cada ferramenta faz ───────────────────────────────────────────────
+function aoTocarAldeia(ev, a) {
+  ev.stopPropagation();
+  if (ferramenta === "apagar") {
+    aldeias = aldeias.filter((x) => x !== a);
+    estradas = estradas.filter(([p, q]) => p !== a.id && q !== a.id);
+    pintar(); conferir(); return;
+  }
+  if (ferramenta === "estrada") {
+    if (ligando === null) { ligando = a.id; pintar(); return; }
+    if (ligando === a.id) { ligando = null; pintar(); return; }
+    const [x, y] = [ligando, a.id].sort();
+    if (!estradas.some(([p, q]) => p === x && q === y)) estradas.push([x, y]);
+    ligando = null;
+    fio.style.display = "none";
+    pintar(); conferir(); return;
+  }
+  if (ferramenta === "mover") arrastando = a;
+}
+
+SVG.addEventListener("mousedown", (ev) => {
+  if (ferramenta !== "aldeia") return;
+  const p = ponto(ev);
+  const n = prompt("Nome da aldeia nova:", "Aldeia " + (aldeias.length + 1));
+  if (!n) return;
+  const id = n.toLowerCase().normalize("NFD").replace(/[^a-z0-9]+/g, "");
+  if (!id || por(id)) { alert("nome repetido ou vazio"); return; }
+  aldeias.push({ id, nome: n, x: Math.round(p.x * 10) / 10,
+                 y: Math.round(p.y * 10) / 10 });
+  pintar(); conferir();
+});
+
+SVG.addEventListener("mousemove", (ev) => {
+  const p = ponto(ev);
+  if (arrastando) {
+    arrastando.x = Math.round(p.x * 10) / 10;
+    arrastando.y = Math.round(p.y * 10) / 10;
+    pintar(); conferir();
+    return;
+  }
+  if (ferramenta === "estrada" && ligando !== null) {
+    const o = por(ligando);
+    fio.setAttribute("x1", o.x); fio.setAttribute("y1", o.y);
+    fio.setAttribute("x2", p.x); fio.setAttribute("y2", p.y);
+    fio.style.display = "";
+  }
+});
+addEventListener("mouseup", () => { arrastando = null; });
+addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape") { ligando = null; fio.style.display = "none"; pintar(); }
+});
+
+for (const b of document.querySelectorAll("#lado button[data-f]")) {
+  b.onclick = () => {
+    ferramenta = b.dataset.f;
+    ligando = null;
+    fio.style.display = "none";
+    for (const o of document.querySelectorAll("#lado button[data-f]"))
+      o.classList.toggle("on", o === b);
+    document.getElementById("dica").textContent = {
+      mover: "Arrasta uma aldeia para a mudar de sítio.",
+      aldeia: "Clica no mapa para pôr uma aldeia nova.",
+      estrada: "Clica numa aldeia e depois na outra. Esc desiste.",
+      apagar: "Clica numa estrada ou numa aldeia para a tirar.",
+    }[ferramenta];
+    pintar();
+  };
+}
+
+// ── O CONFERIDOR ────────────────────────────────────────────────────────────
+// Transforma "mais bonito" em números. Corre a cada mexida: desenhas, ele diz
+// o que está mal, corriges. É medir em vez de achar.
+function distSeg(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy;
+  const t = L === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / L));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+function cruzam(a, b, c, d) {
+  const s = (p, q, r) => Math.sign((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x));
+  return s(a, b, c) !== s(a, b, d) && s(c, d, a) !== s(c, d, b);
+}
+
+function conferir() {
+  document.getElementById("nA").textContent = aldeias.length;
+  document.getElementById("nE").textContent = estradas.length;
+  const g = {};
+  for (const a of aldeias) g[a.id] = 0;
+  for (const [p, q] of estradas) { g[p]++; g[q]++; }
+  const graus = Object.values(g);
+  document.getElementById("grau").textContent = aldeias.length
+    ? (2 * estradas.length / aldeias.length).toFixed(1) : "0";
+
+  const av = [];
+  const demais = Object.entries(g).filter(([, n]) => n > GRAU_MAX);
+  if (demais.length) av.push(["mau", demais.length + " aldeia(s) com mais de "
+    + GRAU_MAX + " ligações: " + demais.map(([k, n]) => k + " (" + n + ")").join(", ")]);
+  const soltas = Object.entries(g).filter(([, n]) => n === 0);
+  if (soltas.length) av.push(["mau", soltas.length + " aldeia(s) sem estrada nenhuma: "
+    + soltas.map(([k]) => k).join(", ")]);
+
+  // dois segmentos que se cruzam sem partilharem aldeia = cruzamento no meio
+  // do campo, sem entroncamento. Foi assim que dois exércitos em estradas
+  // diferentes passaram a parecer que se atravessavam.
+  let cruz = 0, perto = 0;
+  for (let i = 0; i < estradas.length; i++)
+    for (let j = i + 1; j < estradas.length; j++) {
+      const [a1, b1] = estradas[i], [a2, b2] = estradas[j];
+      const partilha = a1 === a2 || a1 === b2 || b1 === a2 || b1 === b2;
+      const A = por(a1), B = por(b1), C = por(a2), D = por(b2);
+      if (!A || !B || !C || !D) continue;
+      if (!partilha && cruzam(A, B, C, D)) { cruz++; continue; }
+      if (partilha) continue;
+      // o miolo de uma contra o miolo da outra
+      let m = Infinity;
+      for (let k = 0; k <= 20; k++) {
+        const t = k / 20;
+        const x = A.x + (B.x - A.x) * t, y = A.y + (B.y - A.y) * t;
+        if (Math.hypot(x - A.x, y - A.y) < PONTA
+            || Math.hypot(x - B.x, y - B.y) < PONTA) continue;
+        m = Math.min(m, distSeg(x, y, C.x, C.y, D.x, D.y));
+      }
+      if (m < PERTO) perto++;
+    }
+  if (cruz) av.push(["mau", cruz + " cruzamento(s) de estradas sem aldeia no meio"]);
+  if (perto) av.push(["mau", perto + " par(es) de estradas a menos de " + PERTO_M
+    + " m uma da outra"]);
+
+  // o grafo tem de ser todo uma peça
+  if (aldeias.length && estradas.length) {
+    const viz = {};
+    for (const a of aldeias) viz[a.id] = [];
+    for (const [p, q] of estradas) { viz[p].push(q); viz[q].push(p); }
+    const vistos = new Set([aldeias[0].id]);
+    const fila = [aldeias[0].id];
+    while (fila.length) for (const v of viz[fila.pop()] || [])
+      if (!vistos.has(v)) { vistos.add(v); fila.push(v); }
+    if (vistos.size < aldeias.length)
+      av.push(["mau", "o mapa está partido em pedaços: " + vistos.size
+        + " aldeias ligadas de " + aldeias.length]);
+  }
+
+  const cx = document.getElementById("avisos");
+  cx.innerHTML = av.length
+    ? av.map(([c, t]) => '<div class="' + c + '">&#9679; ' + t + "</div>").join("")
+    : '<div class="bom">&#9679; nada a apontar</div>';
+}
+
+// ── guardar ─────────────────────────────────────────────────────────────────
+function comoTexto() {
+  return JSON.stringify({
+    // o viewBox fica gravado: é a única coisa que dá sentido aos x,y
+    viewBox: "130 144 1429 886",
+    aldeias: aldeias.map((a) => ({ id: a.id, nome: a.nome, x: a.x, y: a.y })),
+    estradas: estradas.map(([a, b]) => [a, b]),
+  }, null, 1);
+}
+const estado = document.getElementById("estado");
+document.getElementById("bSalvar").onclick = async () => {
+  try {
+    const r = await fetch("/salvar-mapa", { method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ arquivo: "rede-nova.json", texto: comoTexto() }) });
+    estado.textContent = r.ok ? "gravado em rede-nova.json"
+                              : "falhou: " + r.status;
+  } catch (e) { estado.textContent = "falhou: " + e.message; }
+};
+document.getElementById("bBaixar").onclick = () => {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([comoTexto()], { type: "application/json" }));
+  a.download = "rede-nova.json";
+  a.click();
+};
+let velhasLigadas = false;
+document.getElementById("bVelhas").onclick = (ev) => {
+  velhasLigadas = !velhasLigadas;
+  ev.target.classList.toggle("on", velhasLigadas);
+  pintarVelhas(velhasLigadas);
+};
+document.getElementById("bLimpar").onclick = () => {
+  if (confirm("Apagar todas as estradas desenhadas?")) {
+    estradas = []; pintar(); conferir();
+  }
+};
+
+// se já houver um desenho gravado, continua-se dele
+fetch("../rede-nova.json").then((r) => (r.ok ? r.json() : null)).then((d) => {
+  if (!d) return;
+  aldeias = d.aldeias.map((a) => ({ ...a }));
+  estradas = d.estradas.map((e) => [e[0], e[1]]);
+  estado.textContent = "retomado de rede-nova.json";
+}).catch(() => {}).finally(() => { pintar(); conferir(); });
+</script>

@@ -37,7 +37,9 @@ PORTA = 8000
 RAIZ = os.path.dirname(os.path.abspath(__file__))
 # Unico arquivo que o navegador pode gravar. Lista fechada de proposito: o
 # servidor escuta em localhost, mas nao ha motivo para aceitar caminho livre.
-GRAVAVEIS = {"mapa-ajustes.js"}
+# `rede-nova.json` e o que a ferramentas/tracar-rede.html grava: o desenho
+# da rede de estradas nova, antes de virar world-iberia.js.
+GRAVAVEIS = {"mapa-ajustes.js", "rede-nova.json"}
 
 
 class Manipulador(http.server.SimpleHTTPRequestHandler):
