@@ -612,11 +612,28 @@ transformed.y += onda * transformed.x * 0.05;`);
     turnoAnterior = turno;
     marcadoEm = agora;
   }
+  // ── E QUANDO O JOGO JA MANDA UM `t` QUE ANDA ────────────────────────────
+  // Esta perseguicao existe porque o `t` do motor e um degrau. Num replay a
+  // ponte ja o entrega continuo, e entao perseguir so acrescenta atraso: o
+  // exercito passaria a estar onde ESTEVE e nao onde o motor diz que esta.
+  //
+  // Distinguem-se sozinhos pelo TAMANHO do avanco por quadro: continuo move-se
+  // milesimos, um degrau de turno move-se meio. Nao ha nada no meio.
+  const alvoAnt = new Map();
   function tSuave(chave, alvo, dt) {
     const a = suave.get(chave);
     // um salto grande e uma marcha NOVA, nao um avanco: nao se interpola de
     // uma ponta do mapa para a outra
-    if (a === undefined || Math.abs(alvo - a) > 0.6) { suave.set(chave, alvo); return alvo; }
+    if (a === undefined || Math.abs(alvo - a) > 0.6) {
+      suave.set(chave, alvo); alvoAnt.set(chave, alvo); return alvo;
+    }
+    const ant = alvoAnt.get(chave);
+    alvoAnt.set(chave, alvo);
+    if (ant !== undefined && Math.abs(alvo - ant) > 1e-5
+        && Math.abs(alvo - ant) < 0.06) {
+      suave.set(chave, alvo);
+      return alvo;
+    }
     // 0.02 restante ao fim de um turno: chega la, sem parar pelo caminho
     const k = 1 - Math.pow(0.02, dt / Math.max(msPorTurno * 0.9, 300));
     const n = a + (alvo - a) * k;
@@ -787,7 +804,8 @@ transformed.y += onda * transformed.x * 0.05;`);
       }
       // marchas que acabaram deixam de ter memoria: senao a proxima com a
       // mesma chave herdava o `t` da anterior e comecava a meio do caminho
-      for (const k of [...suave.keys()]) if (!vistas.has(k)) suave.delete(k);
+      for (const k of [...suave.keys()])
+        if (!vistas.has(k)) { suave.delete(k); alvoAnt.delete(k); }
     } else {
       for (const col of colunas) {
         if (!col.via) continue;

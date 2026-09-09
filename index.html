@@ -1893,7 +1893,14 @@
         };
       }),
       marchas: (game.movimentos || []).map((m) => {
-        const pos = Engine.posicaoRota(game, m);
+        // a posicao e a do MOTOR (`posicaoRota` anda pelo peso da rota, nao por
+        // pixel), mas com o progresso ja avancado dentro do turno -- entrega-se
+        // um `turnosRestantes` fracionario a mesma funcao em vez de reimplementar
+        // o passeio pela rota aqui fora
+        const prog = progMarcha(m);
+        const pos = Engine.posicaoRota(game, m.turnosTotal
+          ? Object.assign({}, m, { turnosRestantes: m.turnosTotal * (1 - prog) })
+          : m);
         if (!pos) return null;
         const a = Engine.aldeiaPorId(game, pos.aId);
         const b = Engine.aldeiaPorId(game, pos.bId);
@@ -2362,7 +2369,7 @@
       // so o replay avanca repFrac de 0 a 1 entre um quadro e o proximo, pra
       // a tropa ANDAR pela estrada em vez de saltar de turno em turno no
       // video. Ver animarEntreQuadros().
-      const prog = m.turnosTotal ? Math.min(progTeto(m), (m.turnosTotal - m.turnosRestantes + repFrac) / m.turnosTotal) : 1;
+      const prog = progMarcha(m);
       const pts = pontosCaminho(m);
       const p = pts ? pontoNaRota(pts, prog) : { x: o.x + (d.x - o.x) * prog, y: o.y + (d.y - o.y) * prog };
       const dx = SX(p.x) - mx, dy = SY(p.y) - my, d2 = dx * dx + dy * dy, raio = Math.max(13, cs * 0.38);
@@ -2792,6 +2799,20 @@
   // pela plantada do estandarte (efeito `plantar`), que dura ~320 ms em vez de
   // um turno inteiro.
   function progTeto() { return 1; }
+  // ── ONDE VAI A MARCHA, E SO AQUI ─────────────────────────────────────────
+  // `turnosRestantes` e um DEGRAU: so muda uma vez por turno. Desenhado tal e
+  // qual, um exercito de um turno nasce a porta da aldeia e desaparece sem
+  // nunca pisar a estrada; um de dois turnos da um salto ate ao meio e some.
+  // `repFrac` (0 a 1 entre um quadro do replay e o seguinte) e o que o faz
+  // ANDAR. Estava escrito em dois sitios do desenho 2D e em nenhum da ponte
+  // para o 3D -- e por isso o mapa 3D mostrava exatamente esse salto.
+  //
+  // Uma conta, um sitio. Quem quiser saber onde esta um exercito pergunta aqui.
+  function progMarcha(m) {
+    return m.turnosTotal
+      ? Math.min(progTeto(m), (m.turnosTotal - m.turnosRestantes + repFrac) / m.turnosTotal)
+      : 1;
+  }
   // Quem estava a 1 turno de chegar no quadro ANTERIOR: e desta lista que sai a
   // composicao do estandarte que planta na aldeia conquistada (o exercito ja
   // nao existe no quadro novo — foi consumido pela conquista).
@@ -5164,7 +5185,7 @@
       // so o replay avanca repFrac de 0 a 1 entre um quadro e o proximo, pra
       // a tropa ANDAR pela estrada em vez de saltar de turno em turno no
       // video. Ver animarEntreQuadros().
-      const prog = m.turnosTotal ? Math.min(progTeto(m), (m.turnosTotal - m.turnosRestantes + repFrac) / m.turnosTotal) : 1;
+      const prog = progMarcha(m);
       const pts = pontosCaminho(m);                       // motor #1: segue a estrada
       const p = pts ? pontoNaRota(pts, prog) : { x: lerp(o.x, d.x, prog), y: lerp(o.y, d.y, prog), seg: 0 };
       const mx = SX(p.x);
