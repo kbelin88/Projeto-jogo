@@ -248,7 +248,7 @@ def vestir(corpo, nosso, cor):
     print("SONDA materiais: %s" % ", ".join(m.name for m in corpo.data.materials))
 
 
-def lanca(corpo, arm, comp=1.40, abaixo=0.34, raio=0.014):
+def lanca(corpo, arm, comp=1.40, abaixo=0.34, raio=0.014, inclinar=0.0):
     """a nossa, não a dele.
 
     A do ficheiro vem solta (sem pai e sem pesos) e, pior, desenhada para uma
@@ -268,10 +268,22 @@ def lanca(corpo, arm, comp=1.40, abaixo=0.34, raio=0.014):
     bmesh.ops.translate(bm, verts=ponta["verts"],
                         vec=(0.0, 0.0, comp - abaixo + 0.085))
     ob = _objeto("lanca", bm, [P.material("madeira2"), P.material("aco")])
-    ob.data.transform(mathutils.Matrix.Translation(punho))
     for f in ob.data.polygons:                 # a ponta é de aço, a haste não
-        if f.center.z > punho.z + comp - abaixo:
+        if f.center.z > comp - abaixo - 0.001:
             f.material_index = 1
+    # ── A LANÇA DO CAVALEIRO VAI INCLINADA, E ISSO É UMA RENDIÇÃO ────────────
+    # Eu disse ao Lucas que baixar a lança na carga seria uma pose, como sentar
+    # o homem. Estava errado, e a culpa é de uma decisão minha anterior: o
+    # cavaleiro é carga RÍGIDA presa a um osso do cavalo, sem esqueleto próprio.
+    # Não há braço para rodar em tempo de execução.
+    #
+    # A saída honesta é inclinar a lança AQUI, de vez. Um cavaleiro leva a lança
+    # meio deitada tanto a marchar como a carregar, e no mapa ele está sempre a
+    # galope — portanto a inclinação está certa nos dois casos, e não custa um
+    # ficheiro nem um quadro.
+    if inclinar:
+        ob.data.transform(mathutils.Matrix.Rotation(-inclinar, 4, "X"))
+    ob.data.transform(mathutils.Matrix.Translation(punho))
     prender(ob, corpo, arm, "hand.R")
     print("SONDA lança de %.2f m" % (comp * 2.0 / T.ALT_OGA))
 
@@ -445,7 +457,7 @@ elif QUAL == "arqueiro":
 
 elif QUAL == "cavaleiro":
     calcar(corpo)
-    lanca(corpo, arm, comp=1.55, abaixo=0.30)
+    lanca(corpo, arm, comp=1.55, abaixo=0.30, inclinar=math.radians(52))
     vestir(corpo, VESTE,
            {"armor_clothe": (0.52, 0.24, 0.20), "calcas": COR_CALCA})
     juntar_ranhuras(corpo)

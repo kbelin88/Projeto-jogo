@@ -172,8 +172,8 @@ function pose(h, nome) {
 
 // a ORDEM é a coluna: quem o Rei põe à frente vai à frente, e vê-se
 const HOSTE = {
-  A: ["lanceiro", "lanceiro", "lanceiro", "arqueiro", "arqueiro"],
-  B: ["lanceiro", "lanceiro", "arqueiro", "arqueiro", "cavaleiro"],
+  A: ["lanceiro", "lanceiro", "lanceiro", "arqueiro", "arqueiro", "arqueiro"],
+  B: ["lanceiro", "lanceiro", "lanceiro", "arqueiro", "arqueiro", "cavaleiro"],
 };
 const exercitos = {};
 for (const rei of ["A", "B"]) {
@@ -190,6 +190,106 @@ for (const rei of ["A", "B"]) {
     sentido: rei === "A" ? 1 : -1,
     prog: 0,                                  // 0..1 entre o posto e o seguinte
   };
+}
+
+// ── OS NÚMEROS POR CIMA ─────────────────────────────────────────────────────
+// As figuras são um SÍMBOLO DE PROPORÇÃO e não um censo: cinco homens no ecrã
+// valem cinquenta na estrada. Quem diz a verdade é o número, e por isso ele
+// está sempre ao lado — para nunca se poder ler o ecrã e tirar daí um número
+// que o motor não executou. É a regra de sempre, aplicada ao desenho.
+const TROPAS = { A: 46, B: 52 };
+const CURTO = { lanceiro: "L", arqueiro: "A", cavaleiro: "C" };
+
+function placa(rei) {
+  const c = document.createElement("canvas");
+  c.width = 220;
+  c.height = 108;
+  const tex = new THREE.CanvasTexture(c);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: tex, transparent: true, depthTest: false, depthWrite: false }));
+  sp.scale.set(12.5, 6.1, 1);
+  sp.renderOrder = 20;
+  cena.add(sp);
+  return { c, g: c.getContext("2d"), tex, sp, ultimo: null };
+}
+
+function pintarPlaca(p, rei, n, comp) {
+  const chave = n + "|" + comp;
+  if (p.ultimo === chave) return;
+  p.ultimo = chave;
+  const g = p.g;
+  g.clearRect(0, 0, 220, 108);
+  g.fillStyle = "rgba(14,11,7,.86)";
+  g.strokeStyle = "#6b5836";
+  g.lineWidth = 3;
+  g.beginPath();
+  g.roundRect(3, 3, 214, 102, 12);
+  g.fill();
+  g.stroke();
+  g.fillStyle = "#" + TUNICA[rei].toString(16).padStart(6, "0");
+  g.beginPath();
+  g.roundRect(11, 11, 20, 86, 6);
+  g.fill();
+  g.fillStyle = "#f2e6c6";
+  g.font = "700 58px system-ui, sans-serif";
+  g.textAlign = "center";
+  g.fillText(String(n), 128, 62);
+  g.font = "600 21px system-ui, sans-serif";
+  g.fillStyle = "#c9bb93";
+  g.fillText(comp, 128, 92);
+  p.tex.needsUpdate = true;
+}
+
+// ── O PÓ ────────────────────────────────────────────────────────────────────
+// O que dá PESO a um choque não é a animação, é o chão a levantar-se. Um
+// punhado de manchas a crescer e a apagar-se em menos de um segundo faz mais
+// pela pancada do que qualquer coisa que eu saiba animar.
+const _cp = document.createElement("canvas");
+_cp.width = _cp.height = 64;
+{
+  const g = _cp.getContext("2d");
+  const r = g.createRadialGradient(32, 32, 2, 32, 32, 31);
+  r.addColorStop(0, "rgba(190,176,146,.85)");
+  r.addColorStop(0.55, "rgba(176,162,132,.35)");
+  r.addColorStop(1, "rgba(170,156,126,0)");
+  g.fillStyle = r;
+  g.fillRect(0, 0, 64, 64);
+}
+const texPo = new THREE.CanvasTexture(_cp);
+const POS = [];
+for (let i = 0; i < 40; i++) {
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: texPo, transparent: true, depthWrite: false, opacity: 0 }));
+  sp.visible = false;
+  cena.add(sp);
+  POS.push({ sp, t: 9, dur: 1 });
+}
+let iPo = 0;
+
+function poeira(x, y, z, quantos, tamanho) {
+  for (let k = 0; k < quantos; k++) {
+    const p = POS[iPo = (iPo + 1) % POS.length];
+    p.t = 0;
+    p.dur = 0.6 + Math.random() * 0.5;
+    p.r0 = tamanho * (0.5 + Math.random() * 0.4);
+    p.r1 = p.r0 * 2.6;
+    p.sp.position.set(x + (Math.random() - 0.5) * tamanho,
+                      y + 0.4 + Math.random() * 0.6,
+                      z + (Math.random() - 0.5) * tamanho);
+    p.sp.visible = true;
+  }
+}
+
+function moverPoeira(dt) {
+  for (const p of POS) {
+    if (p.t >= p.dur) { p.sp.visible = false; continue; }
+    p.t += dt;
+    const u = Math.min(1, p.t / p.dur);
+    const r = p.r0 + (p.r1 - p.r0) * u;
+    p.sp.scale.set(r, r, 1);
+    p.sp.position.y += dt * 0.9;
+    p.sp.material.opacity = 0.75 * (1 - u) * (1 - u);
+  }
 }
 
 // ── A SALVA ─────────────────────────────────────────────────────────────────
@@ -290,53 +390,70 @@ const _mao = new THREE.Vector3();
 function osso(raiz, nome) {
   return raiz.getObjectByName(nome) || raiz.getObjectByName(nome.replace(".", ""));
 }
-let guiao = null, tGuiao = 0, iGuiao = 0;
+let guiao = null, tGuiao = 0, iGuiao = 0, acabou = null, tFim = 0;
+const placas = { A: null, B: null };
 
 function montarGuiao() {
   const g = [];
-  const lado = (rei) => exercitos[rei];
   const inimigo = (rei) => exercitos[rei === "A" ? "B" : "A"].homens;
-  const dos = (rei, tipo) => lado(rei).homens.filter((h) => h.tipo === tipo);
-  // três flechas por arqueiro em cada salva: uma flecha sozinha é um tiro,
-  // três ao mesmo tempo são uma SALVA -- e é a salva que se lê de longe
+  const dos = (rei, tipo) => exercitos[rei].homens.filter((h) => h.tipo === tipo);
   const POR_ARQUEIRO = 3;
   let t = 1.0;
 
+  // ── AS BAIXAS SÃO CONTADAS, NÃO SORTEADAS ────────────────────────────────
+  // Seis figuras por lado, e o guião gasta exatamente seis: o Rei A perde
+  // quatro (uma flecha, dois golpes, um atropelo) e o Rei B perde duas. Fica
+  // com dois homens de pé para fugir — na primeira versão perdia os seis e a
+  // debandada não tinha ninguém para debandar, o que dá uma batalha que acaba
+  // com um campo vazio em vez de com uma derrota.
+  //
   // ── A VAGA É A BATIDA DA CENA ─────────────────────────────────────────────
   // E não é invenção da animação: é a mecânica. Quando o Rei manda um ataque
   // composto, escolhe a ORDEM das tropas, e essa ordem é exatamente isto — os
-  // arqueiros a abrir, os lanceiros a fechar, e assim por diante. Uma batalha
-  // sem vagas é uma trapalhada sem forma; com vagas tem princípio, meio e fim
-  // de graça, e cada tempo lê-se porque é um tipo contra outro.
-  for (let vaga = 0; vaga < 4; vaga++) {
-    // ── as flechas abrem ───────────────────────────────────────────────────
+  // arqueiros a abrir, os lanceiros a fechar, a cavalaria a decidir. Uma
+  // batalha sem vagas é uma trapalhada sem forma; com vagas tem princípio,
+  // meio e fim de graça, e cada tempo lê-se porque é um tipo contra outro.
+  for (let vaga = 0; vaga < 3; vaga++) {
     for (const rei of ["A", "B"]) {
       dos(rei, "arqueiro").forEach((h, k) => {
         const q = t + k * 0.24;
         g.push({ t: q, faz: "puxar", quem: h });
         for (let f = 0; f < POR_ARQUEIRO; f++)
           g.push({ t: q + 0.70 + f * 0.13, faz: "atirar", quem: h,
-                   deles: inimigo(rei), mata: f === 0 && k === 0 && vaga > 0 });
+                   deles: inimigo(rei),
+                   mata: f === 0 && k === 0
+                     && ((rei === "B" && vaga === 2) || (rei === "A" && vaga === 1)) });
       });
     }
     t += 3.4;
 
-    // ── e as lanças fecham ─────────────────────────────────────────────────
     for (const rei of ["A", "B"])
       g.push({ t, faz: "carregar", quem: dos(rei, "lanceiro"), quanto: 3.6 });
     t += 1.3;
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < 3; k++)
       for (const rei of ["A", "B"])
         dos(rei, "lanceiro").forEach((h, j) => {
           g.push({ t: t + k * 0.95 + j * 0.17, faz: "bater", quem: h,
-                   deles: inimigo(rei), mata: k === 2 && j === 0 });
+                   deles: inimigo(rei),
+                   mata: k === 2 && j === 0
+                     && (rei === "B" ? vaga < 2 : vaga === 1) });
         });
-    }
     t += 3.4;
     for (const rei of ["A", "B"])
       g.push({ t, faz: "carregar", quem: dos(rei, "lanceiro"), quanto: 0 });
     t += 2.2;
   }
+
+  // ── A CARGA ───────────────────────────────────────────────────────────────
+  // A vaga que decide. O cavaleiro do Rei B atravessa a linha inteira: não
+  // para no contacto, PASSA — é isso que separa uma carga de um ataque, e é
+  // por isso que a cavalaria quebra linhas em vez de as desgastar.
+  const cav = dos("B", "cavaleiro");
+  g.push({ t, faz: "grito", texto: "A cavalaria do Rei B carrega." });
+  g.push({ t: t + 0.2, faz: "carregar", quem: cav, quanto: 26, veloc: 20 });
+  g.push({ t: t + 1.5, faz: "atropelar", quem: cav[0], deles: inimigo("B") });
+  t += 4.0;
+  g.push({ t, faz: "fim" });
   g.sort((a, b) => a.t - b.t);
   return g;
 }
@@ -346,7 +463,47 @@ function tocarGuiao(dt) {
   while (iGuiao < guiao.length && guiao[iGuiao].t <= tGuiao) {
     const ev = guiao[iGuiao++];
     if (ev.faz === "carregar") {
-      for (const h of ev.quem) if (!h.caido) h.avancoAlvo = ev.quanto;
+      for (const h of ev.quem) {
+        if (h.caido) continue;
+        h.avancoAlvo = ev.quanto;
+        h.veloc = ev.veloc || 6;
+      }
+      continue;
+    }
+    if (ev.faz === "grito") { estado.innerHTML = ev.texto; continue; }
+    if (ev.faz === "atropelar") {
+      // quem é atropelado cai onde está: a carga não escolhe, varre
+      const vivos = ev.deles.filter((h) => !h.caido);
+      if (vivos.length) {
+        const q = vivos[Math.floor(Math.random() * vivos.length)];
+        poeira(q.raiz.position.x, q.raiz.position.y, q.raiz.position.z, 5, 3.4);
+        tombar(q);
+      }
+      continue;
+    }
+    if (ev.faz === "fim") {
+      // ── QUEM PERDE, FOGE ────────────────────────────────────────────────
+      // Uma batalha sem fim não é uma batalha, é um moinho. O lado com menos
+      // homens de pé quebra e desce a estrada por onde veio; o outro fica a
+      // ocupar o posto, que é o que se estava a disputar desde o princípio.
+      const vivosDe = (r) => exercitos[r].homens.filter((h) => !h.caido).length;
+      const perde = vivosDe("A") <= vivosDe("B") ? "A" : "B";
+      const ganha = perde === "A" ? "B" : "A";
+      for (const h of exercitos[perde].homens) {
+        if (h.caido) continue;
+        h.fugindo = true;
+        h.avancoAlvo = -260;
+        h.veloc = 11;
+      }
+      for (const h of exercitos[ganha].homens) {
+        if (!h.caido) { h.avancoAlvo = 2.4; h.veloc = 3; }
+      }
+      acabou = ganha;
+      const restam = Math.round(TROPAS[ganha] / exercitos[ganha].homens.length
+                                * vivosDe(ganha));
+      estado.innerHTML = "O <b>Rei " + ganha + "</b> ficou com o posto. "
+        + "Restam-lhe <b>" + restam + "</b> tropas; o Rei " + perde
+        + " quebrou e desce a estrada.";
       continue;
     }
     if (ev.quem.caido) continue;
@@ -356,6 +513,8 @@ function tocarGuiao(dt) {
       if (ev.quem.acao[ev.quem.pose]) ev.quem.acao[ev.quem.pose].fadeOut(0.12);
       ev.quem.acao.bater.reset().fadeIn(0.12).play();
       ev.quem.pose = "bater";
+      const _q = ev.quem.raiz.position;
+      poeira(_q.x, _q.y, _q.z, 2, 2.0);
       const vivos = ev.deles.filter((h) => !h.caido && h.tipo === "lanceiro");
       if (ev.mata && vivos.length) tombar(vivos[0]);
       continue;
@@ -445,6 +604,33 @@ function avancar(dt) {
     }
   }
   moverFlechas(dt);
+  moverPoeira(dt);
+  if (acabou && (tFim += dt) > 9) recomecar();
+
+  // ── O NÚMERO SEGUE A HOSTE ────────────────────────────────────────────────
+  // Fica sobre o centro dos que estão de pé, e some quando já não há ninguém.
+  // Cada figura vale `TROPAS / figuras` — quando uma cai, o número cai com ela.
+  for (const rei of ["A", "B"]) {
+    if (!placas[rei]) placas[rei] = placa(rei);
+    const pl = placas[rei];
+    const e = exercitos[rei];
+    const vivos = e.homens.filter((h) => !h.caido);
+    if (!vivos.length) { pl.sp.visible = false; continue; }
+    pl.sp.visible = true;
+    const porFigura = TROPAS[rei] / e.homens.length;
+    const conta = {};
+    let cx = 0, cy = -1e9, cz = 0;
+    for (const h of vivos) {
+      conta[CURTO[h.tipo]] = (conta[CURTO[h.tipo]] || 0) + 1;
+      cx += h.raiz.position.x;
+      cz += h.raiz.position.z;
+      cy = Math.max(cy, h.raiz.position.y);
+    }
+    pl.sp.position.set(cx / vivos.length, cy + 13.5, cz / vivos.length);
+    pintarPlaca(pl, rei, Math.round(porFigura * vivos.length),
+                ["L", "A", "C"].filter((k) => conta[k])
+                  .map((k) => conta[k] + " " + k).join("  ·  "));
+  }
 
   for (const rei of ["A", "B"]) {
     const e = exercitos[rei];
@@ -470,7 +656,17 @@ function avancar(dt) {
       if (travados) {
         const dAv = h.avancoAlvo - h.avanco;
         if (Math.abs(dAv) > 0.03) {
-          h.avanco += Math.sign(dAv) * Math.min(Math.abs(dAv), 6 * dt);
+          h.avanco += Math.sign(dAv) * Math.min(Math.abs(dAv),
+                                                (h.veloc || 6) * dt);
+          // o cavalo levanta pó; o homem a pé não levanta nada que se veja
+          if (h.tipo === "cavaleiro" && Math.abs(dAv) > 1) {
+            h.po = (h.po || 0) + dt;
+            if (h.po > 0.10) {
+              h.po = 0;
+              poeira(h.raiz.position.x, h.raiz.position.y,
+                     h.raiz.position.z, 1, 3.2);
+            }
+          }
           if (h.pose !== "bater") pose(h, "andar");
         } else if (h.pose === "andar") {
           pose(h, "parar");
@@ -492,15 +688,21 @@ function avancar(dt) {
       const m = COMP * (alvo + 0.5) / N_POSTOS
         - e.sentido * i * 6.2 + e.sentido * h.avanco;
       const rumo = noCaminho(Math.max(2, Math.min(COMP - 2, m)), _p)
-        + (e.sentido < 0 ? Math.PI : 0);
+        + (e.sentido < 0 ? Math.PI : 0) + (h.fugindo ? Math.PI : 0);
       const lat = ((i % 2) * 2 - 1) * 1.9;
       _p.x += Math.cos(rumo + Math.PI / 2) * lat;
       _p.z += Math.sin(rumo + Math.PI / 2) * lat;
       h.raiz.position.copy(_p);
       h.chao = _p.y;
-      // a peça olha para +Y no Blender, que a exportação manda para -Z: um
-      // quarto de volta a menos do que a conta óbvia
-      h.raiz.rotation.y = -rumo - Math.PI / 2;
+      // ── OS TRÊS EIXOS, E NÃO SÓ O DE CIMA ─────────────────────────────
+      // A queda escreve no `quaternion`, e o three mantém `rotation` em passo
+      // com ele: quem tombou fica com `rotation.x` a meio π. Repor só o eixo
+      // vertical deixava, ao recomeçar a batalha, meia hoste a marchar deitada
+      // de costas -- de pé para o motor, no chão para quem olha.
+      //
+      // A peça olha para +Y no Blender, que a exportação manda para -Z: daí o
+      // quarto de volta a menos do que a conta óbvia.
+      h.raiz.rotation.set(0, -rumo - Math.PI / 2, 0);
     });
   }
 }
@@ -531,30 +733,34 @@ function olhar(de, alto, dist) {
                    q.v.z + Math.sin(q.rumo + de) * dist);
   ctrl.update();
 }
+// ── E DEPOIS RECOMEÇA ───────────────────────────────────────────────────────
+// A bancada fica a andar sozinha: acabada a batalha, espera uns segundos e as
+// duas hostes voltam a descer a estrada. É para se poder deixar aberta e ver a
+// coisa inteira mais do que uma vez sem lhe tocar.
+function recomecar() {
+  travados = false;
+  guiao = null; iGuiao = 0; tGuiao = 0; acabou = null; tFim = 0;
+  voo.length = 0;
+  flechas.count = 0;
+  for (const p of POS) { p.t = 9; p.sp.visible = false; }
+  estado.innerHTML = "&nbsp;";
+  for (const rei of ["A", "B"]) {
+    const e = exercitos[rei];
+    e.posto = rei === "A" ? -1 : N_POSTOS;
+    e.prog = 0;
+    e.pronto = false;
+    for (const h of e.homens) {
+      h.caido = null; h.puxa = null; h.avanco = 0; h.avancoAlvo = 0;
+      h.fugindo = false; h.veloc = 6;
+      pose(h, "andar");
+    }
+  }
+}
+
 for (const b of document.querySelectorAll("#hud button")) {
   b.onclick = () => {
     const c = b.dataset.c;
-    if (c === "outra") {
-      travados = false;
-      guiao = null; iGuiao = 0; tGuiao = 0;
-      voo.length = 0;
-      estado.innerHTML = "&nbsp;";
-      for (const rei of ["A", "B"]) {
-        const e = exercitos[rei];
-        e.posto = rei === "A" ? -1 : N_POSTOS;
-        e.prog = 0;
-        e.pronto = false;
-        for (const h of e.homens) {
-          h.caido = null; h.puxa = null; h.avanco = 0; h.avancoAlvo = 0;
-          pose(h, "andar");
-        }
-        for (const h of e.homens) {
-          h.acao.parar.fadeOut(0.3);
-          h.acao.andar.reset().fadeIn(0.3).play();
-        }
-      }
-      return;
-    }
+    if (c === "outra") { recomecar(); return; }
     if (c === "ver") olhar(Math.PI / 2 + 0.55, 15, 48);
     if (c === "lado") olhar(Math.PI / 2, 9, 56);
     if (c === "alto") olhar(0, 95, 45);
@@ -569,6 +775,6 @@ setInterval(() => {
     + N_POSTOS + " postos em " + Math.round(COMP) + " m<br>"
     + flechas.count + " flechas no ar e no chão<br>"
     + [...exercitos.A.homens, ...exercitos.B.homens].filter((h) => h.caido).length
-    + " caídos";
+    + " caídos" + (acabou ? "<br>venceu o Rei " + acabou : "");
 }, 500);
 </script>
