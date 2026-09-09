@@ -344,14 +344,20 @@ relevo = relevo / max(float(relevo[terra].max()), 1e-6) * ALTURA_MAX
 # maquete.
 #
 # Aqui a costa passa a ter duas caras. Uma mancha lenta percorre o mapa e
-# decide, troco a troco, se aquela beira e PRAIA -- e entao a terra desce para
-# quase o nivel da agua nos ultimos 40 m -- ou se e FALESIA, e entao nada se
-# toca e a parede fica com toda a altura que a serra lhe der.
+# decide, troco a troco, se aquela beira e PRAIA -- e entao a terra desce nos
+# ultimos 40 m e vai acabar DEBAIXO DE AGUA -- ou se e FALESIA, e entao nada
+# se toca e a parede fica com toda a altura que a serra lhe der.
+#
+# O mergulho e o ponto. Com a praia a parar acima do mar, a costa era na mesma
+# um degrau -- baixo, mas a pique, e uma praia nao e um degrau baixo: e um
+# plano que entra na agua. Deixando a terra descer abaixo de zero, a linha de
+# costa deixa de ser a beira da malha e passa a ser o sitio onde o terreno
+# CRUZA o nivel do mar, e a parede de rocha, ali, fica submersa.
 #
 # O tecto so DESCE (`minimum`): nao ha praia levantada, e o interior, a mais de
 # 40 m de agua, e exatamente o mesmo campo de antes.
 COSTA = 8             # ate onde o mar manda no relevo, em celulas (~40 m)
-PRAIA = 2.5           # a que altura a terra encosta a agua, onde ha praia
+PRAIA = -3.5          # a praia MERGULHA: a linha de agua tem de ser molhada
 _dist = np.full(terra.shape, float(COSTA), dtype=np.float32)
 _frente = ~terra
 for _k in range(1, COSTA):
@@ -363,8 +369,13 @@ _t = np.clip(_dist / COSTA, 0.0, 1.0)
 _t = _t * _t * (3 - 2 * _t)
 _gx = np.arange(tw, dtype=np.float32)[None, :] * px - LX / 2
 _gy = LY / 2 - np.arange(th, dtype=np.float32)[:, None] * py
-_fal = 0.5 + 0.5 * np.sin(_gx * 0.0034 + _gy * 0.0021)
-_fal = np.clip((_fal - 0.34) / 0.26, 0.0, 1.0)      # ~metade da costa e rocha
+# DUAS ondas, e a segunda e a que importa. Com uma so, de 1850 m, a ilha de
+# 2,8 km levava uma volta e meia: dava duas praias e duas falesias, cada uma
+# com meio quilometro -- que a essa escala nao e uma costa variada, e uma costa
+# partida ao meio. A segunda onda, de ~600 m, e o que faz a beira mudar de
+# feicao ao ritmo a que se anda por ela.
+_fal = (0.5 + 0.5 * np.sin(_gx * 0.0034 + _gy * 0.0021)) * 0.6      + (0.5 + 0.5 * np.sin(_gx * 0.0102 - _gy * 0.0131)) * 0.4
+_fal = np.clip((_fal - 0.42) / 0.24, 0.0, 1.0)      # ~metade da costa e rocha
 _tecto = PRAIA + (ALTURA_MAX - PRAIA) * _t
 relevo = np.minimum(relevo, _tecto + _fal * (ALTURA_MAX - _tecto))
 
@@ -404,7 +415,9 @@ def altura_em(mx, my):
 # peca, agora feita no mapa.
 patamares = {}
 for cid, c in centros.items():
-    h = altura_em(c[0], c[1])
+    # o chao da praia mergulha; uma aldeia nunca. O patamar tem chao seco por
+    # baixo mesmo que o campo, ali, ja va a caminho da agua.
+    h = max(altura_em(c[0], c[1]), 4.0)
     patamares[cid] = h
     raio = C.PERFIS[REDE["c"][cid]["t"]]["raio"] + 20.0
     # A RAMPA E LARGA de proposito. Com 1,9 raios via-se um DISCO a volta de
@@ -707,7 +720,11 @@ for m in manchas:
                   round(m["p"][1] + vetor[1] / L * (R - pior + 0.5), 1)]
         empurradas += 1
 antes_emp = len(manchas)
-manchas = [m for m in manchas if em_terra(*m["p"])]
+# `em_terra` le a MASCARA, e desde que a praia mergulha isso ja nao chega: uma
+# mancha pode estar em terra pela mascara e a meio metro DEBAIXO de agua pelo
+# campo de alturas. Um pinhal na rebentacao.
+manchas = [m for m in manchas
+           if em_terra(*m["p"]) and altura_em(m["p"][0], m["p"][1]) > 1.2]
 afogadas = antes_emp - len(manchas)
 for m in manchas:
     m["z"] = round(altura_em(m["p"][0], m["p"][1]), 2)
@@ -883,6 +900,44 @@ def _fora(ex, ey, r):
                  + r[2] * math.sin(ex * 0.061 - ey * 0.044))
 
 
+def _rugas(ex, ey):
+    """o vaivem CURTO da parede: contrafortes e goelas, de 20 em 20 m.
+
+    O `_fora` varia em centenas de metros -- e escala de baia, nao de rocha. A
+    parede continuava a ser um plano, e um plano com uma fotografia por cima le
+    como fotografia. Isto e o que lhe da relevo a distancia de quem passa: um
+    troco avanca, o do lado recua, e a luz rasante faz o resto.
+    """
+    return (2.6 * math.sin(ex * 0.29 + ey * 0.24)
+            + 1.2 * math.sin(ex * 0.17 - ey * 0.21))
+
+
+def _uv_rocha(ex, ey, ez, di, dj):
+    """onde a fotografia da rocha assenta nesta parede.
+
+    O `u` corre pelo eixo horizontal DOMINANTE da face -- numa parede, o eixo
+    errado colapsa a textura numa risca.
+
+    ── E DEPOIS TORCE-SE ────────────────────────────────────────────────────
+    Com o `u` a ser a coordenada do mundo, o ladrilho de 9 m repete com um
+    ritmo CERTO ao longo de 2 km de costa: via-se o mesmo penedo de 9 em 9
+    metros, e nada denuncia mais depressa uma textura do que ela ser pontual.
+
+    Torcer o proprio `u` desmancha o compasso sem custar um triangulo: onde a
+    onda lenta sobe, a fotografia estica; onde desce, comprime. E torcer o `v`
+    faz os estratos SUBIREM E DESCEREM ao longo da costa, em vez de ficarem
+    todos a mesma altura -- que era a outra metade do ar de papel de parede.
+
+    As amplitudes estao presas a uma regra: a derivada nunca pode chegar a
+    zero, senao a imagem dobra sobre si propria. Somadas, valem 0,11 -- longe
+    de 1, com folga de sobra.
+    """
+    u = ey if abs(di) > abs(dj) else ex
+    return (u + 7.0 * math.sin(u * 0.0062 + ez * 0.011)
+              + 2.5 * math.sin(u * 0.028),
+            ez + 3.2 * math.sin(u * 0.0105) + 1.1 * math.sin(u * 0.037))
+
+
 def _tom_rocha(ex, ey, ez):
     """quanto a rocha devolve de luz, ponto a ponto.
 
@@ -956,11 +1011,16 @@ for c, (dx, dy) in dir_canto.items():
     dx, dy = dx / n, dy / n
     ex, ey, vz = verts[indice[c]]
     f = _fora(ex, ey, FLARE)
-    zm = min(MAR, vz - 1.0)
+    g = _rugas(ex, ey)
+    # o anel do meio e o que se VE: e nele que as rugas contam, e a sua altura
+    # tambem varia, senao a linha de agua e uma regua ao longo de 2 km
+    zm = min(MAR + 1.6 * math.sin(ex * 0.13 - ey * 0.11), vz - 1.0)
+    om = f * 0.45 + g
     meio[c] = len(verts)
-    verts.append((ex + dx * f * 0.45, ey + dy * f * 0.45, zm))
+    verts.append((ex + dx * om, ey + dy * om, zm))
+    op = f + g * 0.7
     pe[c] = len(verts)
-    verts.append((ex + dx * f, ey + dy * f, -FUNDO))
+    verts.append((ex + dx * op, ey + dy * op, -FUNDO))
     cor_rocha[indice[c]] = _tom_rocha(ex, ey, vz)
     cor_rocha[meio[c]] = _tom_rocha(ex, ey, zm)
     cor_rocha[pe[c]] = _tom_rocha(ex, ey, -FUNDO)
@@ -969,12 +1029,10 @@ for ca, cb, di, dj in beiras:
     for cima, baixo in ((indice, meio), (meio, pe)):
         faces.append((cima[ca], cima[cb], baixo[cb], baixo[ca]))
         saia.append(len(faces) - 1)
-        # UV pelo eixo horizontal DOMINANTE desta face -- numa parede, o eixo
-        # errado colapsa a textura numa risca. Guardado por FACE e nao por
-        # vertice: as esquinas partilham o pe e discordariam do eixo.
+        # guardado por FACE e nao por vertice: as esquinas partilham o pe e
+        # discordariam sobre qual e o eixo dominante
         uvs_face[len(faces) - 1] = dict(
-            (idx, ((verts[idx][1] if abs(di) > abs(dj) else verts[idx][0]),
-                   verts[idx][2]))
+            (idx, _uv_rocha(verts[idx][0], verts[idx][1], verts[idx][2], di, dj))
             for idx in faces[-1])
 
 chao = P._novo(P._malha("chao", verts, faces, "relva", bisel=0), "relva")
