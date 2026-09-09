@@ -425,12 +425,90 @@ transformed.y += onda * transformed.x * 0.05;`);
   // os dois, e e ela que esconde a troca. Cortar e acender no mesmo instante
   // da um salto que se ve.
   const PX_FIGURA_MORRE = 10;
-  const PX_BANDEIRA_CHEIA = 12;
-  const PX_BANDEIRA_NASCE = 20;
-  const PX_BANDEIRA_MORRE = 34;    // acima disto a figura fala por si
+  // ── E QUANDO É QUE A PLACA SE ABRE ──────────────────────────────────────
+  // Abaixo dos 26 píxeis por figura não se distingue um arqueiro de um
+  // lanceiro: a placa é uma só, com o total. Acima dos 52 já se veem os
+  // homens, e aí o que interessa é quantos são de cada — abre-se numa por
+  // tipo, cada uma por cima do seu bloco. No meio, as duas cruzam-se, que é o
+  // que esconde a troca.
+  const PX_PLACA_JUNTA = 26;
+  const PX_PLACA_ABRE = 52;
+  // tamanho no ECRÃ e não no mundo (`sizeAttenuation: false`): uma placa que
+  // encolhe com a distância é inútil justamente quando é mais precisa
+  // medido no ecra: `scale` aqui vale cerca de 1,67 vezes a fracao da
+  // altura do ecra, portanto 0,085 da uma placa de ~150 px num 1080p
+  const ESC_GRANDE = 0.085;
+  const ESC_PEQUENA = 0.038;
   function pxPorMetro(dist) {
     const h = rend.domElement.clientHeight || 720;
     return (h / (2 * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2))) / Math.max(dist, 1);
+  }
+
+  // ── A FORMAÇÃO ──────────────────────────────────────────────────────────
+  // Doze lugares, sempre os mesmos, três de frente. O que muda é QUEM os
+  // ocupa: reparte-se pela composição verdadeira do exército, com duas regras
+  // que não se negoceiam --
+  //
+  //   todo o tipo que existe ganha pelo menos um boneco (um lanceiro no meio
+  //   de duzentos arqueiros vê-se, e esse é o erro certo a cometer);
+  //   nenhum tipo que não existe aparece.
+  //
+  // Antes disto, a ponte do jogo achatava o exército ao `tipoDominante` e o
+  // mapa desenhava doze arqueiros para um exército que tinha lanceiros lá
+  // dentro. Não era desenho: era informação deitada fora no caminho.
+  //
+  // O número de bonecos é FIXO e não cresce com o exército — quem diz a
+  // grandeza é a placa. Doze figuras custam sempre o mesmo, e num mapa com
+  // seis batalhas ao mesmo tempo isso é a diferença entre um orçamento e uma
+  // surpresa.
+  const N_FORMA = 12;
+  const LARGURA_FORMA = 3;
+  const ORDEM_FORMA = ["lanceiro", "arqueiro", "cavaleiro"];
+  const NOME_EN = { lanceiro: ["spearman", "spearmen"],
+                    arqueiro: ["archer", "archers"],
+                    cavaleiro: ["knight", "knights"] };
+
+  function formacaoDe(m) {
+    const c = m.composicao;
+    if (!c) return [{ tipo: m.tipo || "lanceiro", n: N_FORMA }];
+    const tipos = ORDEM_FORMA.filter((t) => (c[t] || 0) > 0);
+    if (!tipos.length) return [{ tipo: m.tipo || "lanceiro", n: N_FORMA }];
+    const total = tipos.reduce((a, t) => a + c[t], 0);
+    const bruto = tipos.map((t) => N_FORMA * c[t] / total);
+    const n = bruto.map((v) => Math.max(1, Math.floor(v)));
+    const resto = bruto.map((v, i) => v - n[i]);
+    let sobra = N_FORMA - n.reduce((a, b) => a + b, 0);
+    while (sobra > 0) {                        // os lugares a mais vão a quem
+      let k = 0;                               // ficou com o maior resto
+      for (let i = 1; i < resto.length; i++) if (resto[i] > resto[k]) k = i;
+      n[k]++; resto[k] -= 1; sobra--;
+    }
+    while (sobra < 0) {                        // e os a menos saem a quem tem
+      let k = -1, maior = 1;                   // mais, sem nunca chegar a zero
+      for (let i = 0; i < n.length; i++) if (n[i] > maior) { maior = n[i]; k = i; }
+      if (k < 0) break;
+      n[k]--; sobra++;
+    }
+    return tipos.map((t, i) => ({ tipo: t, n: n[i] }));
+  }
+
+  const _PASSO = (t) => (t === "cavaleiro" ? 7.4 : 4.6);
+  const _LARG = (t) => (t === "cavaleiro" ? 4.4 : 3.2);
+
+  // onde fica o centro de cada bloco, em metros ao longo da via. Serve as
+  // placas: a etiqueta de um tipo tem de estar por cima daquele tipo.
+  function blocosDe(via, cabeca, m) {
+    const r = [];
+    let fundo = 0;
+    for (const bl of formacaoDe(m)) {
+      const linhas = Math.ceil(bl.n / LARGURA_FORMA);
+      const centro = fundo + (linhas - 1) * _PASSO(bl.tipo) / 2;
+      r.push({ tipo: bl.tipo, n: bl.n, fundo,
+               metros: Math.max(0, Math.min(via.comp,
+                 cabeca - centro * (via.inv ? -1 : 1))) });
+      fundo += linhas * _PASSO(bl.tipo) + 2.8;
+    }
+    return r;
   }
 
   const TIPOS = MAPA.tropas || [];
@@ -482,8 +560,18 @@ transformed.y += onda * transformed.x * 0.05;`);
     if (sorte() > 0.55) continue;
     const tipo = TIPOS[Math.floor(sorte() * TIPOS.length)];
     if (!tropaInst[tipo]) continue;
-    colunas.push({ tipo, via: eixoDe[e.de + ">" + e.para],
-                   n: 3 + Math.floor(sorte() * 6), t0: sorte() * 400 });
+    // exércitos MISTOS, para a demonstração mostrar o que o jogo mostra: em
+    // modo de jogo a composição vem do motor, aqui inventa-se uma
+    const comp = { lanceiro: 0, arqueiro: 0, cavaleiro: 0 };
+    comp[tipo] = 8 + Math.floor(sorte() * 40);
+    for (const outro of ORDEM_FORMA)
+      if (outro !== tipo && sorte() > 0.45) comp[outro] = 2 + Math.floor(sorte() * 22);
+    colunas.push({ tipo, composicao: comp, via: eixoDe[e.de + ">" + e.para],
+                   tropas: comp.lanceiro + comp.arqueiro + comp.cavaleiro,
+                   // a demonstracao tambem tem dois Reis: sem dono a placa saia
+                   // cinzenta, e e a COR que diz de quem e o exercito
+                   dono: colunas.length % 2 ? "B" : "A",
+                   t0: sorte() * 400 });
   }
 
   let ligadoAoJogo = false;
@@ -534,13 +622,12 @@ transformed.y += onda * transformed.x * 0.05;`);
     for (const tipo of Object.keys(tropaInst)) conta[tipo] = 0;
     const vivos = {};
     for (const tipo of Object.keys(animados)) vivos[tipo] = 0;
-    const meter = (tipo, via, metros, rumoExtra, j) => {
+    const meter = (tipo, via, metros, rumoExtra, lat, j) => {
       const lista = tropaInst[tipo];
       const carne = animados[tipo];
       const cheio = !carne || vivos[tipo] >= carne.length;
       if (cheio && (!lista || conta[tipo] >= TETO_TROPA)) return;
       const rumo = noCaminho(via, metros, _p) + rumoExtra;
-      const lat = ((j % 2) * 2 - 1) * 2.6;
       _p.x += Math.cos(rumo + Math.PI / 2) * lat;
       _p.z += Math.sin(rumo + Math.PI / 2) * lat;
 
@@ -574,6 +661,81 @@ transformed.y += onda * transformed.x * 0.05;`);
       conta[tipo]++;
     };
 
+    // ── E A COLUNA ANDA JUNTA ─────────────────────────────────────────────
+    // Cada homem ficava 7 x 2,2 = 15,4 m atrás do anterior: doze homens eram
+    // 185 m de estrada, mais de metade do troço Madrid-Toledo. Não era uma
+    // coluna, era uma fila para o pão. Agora são fileiras de três, a 4,6 m --
+    // 18 m no total, que é um batalhão.
+    const desenharColuna = (via, cabeca, rumoExtra, m) => {
+      let fundo = 0;
+      for (const bl of formacaoDe(m)) {
+        const passo = _PASSO(bl.tipo), larg = _LARG(bl.tipo);
+        for (let k = 0; k < bl.n; k++) {
+          const lin = (k / LARGURA_FORMA) | 0;
+          const col = k - lin * LARGURA_FORMA;
+          // a última fileira vem ao meio, e não encostada a um lado
+          const nesta = Math.min(LARGURA_FORMA, bl.n - lin * LARGURA_FORMA);
+          const atras = (fundo + lin * passo) * (via.inv ? -1 : 1);
+          meter(bl.tipo, via, Math.max(0, Math.min(via.comp, cabeca - atras)),
+                rumoExtra, (col - (nesta - 1) / 2) * larg, k);
+        }
+        fundo += Math.ceil(bl.n / LARGURA_FORMA) * passo + 2.8;
+      }
+    };
+
+    // as placas desenham-se para as marchas do jogo E para as colunas da
+    // demonstracao: e a mesma coisa a ser mostrada, e nao ha razao para
+    // haver dois desenhos que possam vir a discordar um do outro
+    const desenharPlacas = (lista) => {
+        // ── A PLACA ────────────────────────────────────────────────────────
+    // De longe uma só, grande, com o TOTAL e a cor do Rei a berrar — é o que
+    // conta a história quando se olha para a Ibéria inteira e as figuras têm
+    // dez píxeis. De perto abre-se numa por tipo, cada uma por cima do seu
+    // bloco: `6 archers` em cima dos arqueiros.
+    //
+    // Os números são os do MOTOR, não uma força calculada nem uma conta
+    // feita a partir dos bonecos. Doze figuras podem valer duzentos homens;
+    // quem diz quantos são é o motor, e é isso que a placa mostra.
+    let nb = 0;
+    for (const { via, bruto, m } of lista) {
+      noCaminho(via, bruto, _p);
+      const px = ALT_FIGURA * pxPorMetro(cam.position.distanceTo(_p));
+      // 0 = longe (uma placa só), 1 = perto (uma por tipo)
+      const abre = Math.max(0, Math.min(1,
+        (px - PX_PLACA_JUNTA) / (PX_PLACA_ABRE - PX_PLACA_JUNTA)));
+
+      if (abre < 0.98 && nb < estandartes.length) {
+        const sp = estandartes[nb++];
+        sp.visible = true;
+        sp.material.map = placaGrande(m.dono, m.tropas || 0);
+        sp.material.opacity = 1 - abre;
+        sp.material.needsUpdate = true;
+        _p.y += ALT_FIGURA * 1.5;
+        sp.position.copy(_p);
+        sp.scale.set(ESC_GRANDE, ESC_GRANDE, 1);
+      }
+      if (abre > 0.02 && m.composicao) {
+        for (const bl of blocosDe(via, bruto, m)) {
+          if (nb >= estandartes.length) break;
+          const quantos = m.composicao[bl.tipo] || 0;
+          if (!quantos) continue;
+          const sp = estandartes[nb++];
+          sp.visible = true;
+          sp.material.map = placaTipo(m.dono, bl.tipo, quantos);
+          sp.material.opacity = abre;
+          sp.material.needsUpdate = true;
+          noCaminho(via, bl.metros, _p);
+          _p.y += ALT_FIGURA * 1.15;
+          sp.position.copy(_p);
+          sp.scale.set(ESC_PEQUENA * 3.4, ESC_PEQUENA, 1);
+        }
+      }
+    }
+      for (let i = nb; i < estandartes.length; i++)
+        estandartes[i].visible = false;
+    };
+
+    const paraPlaca = [];
     if (ligadoAoJogo) {
       motivo = marchas.length ? "" : "sem marchas";
       // ── AS MARCHAS VERDADEIRAS ──────────────────────────────────────────
@@ -603,73 +765,30 @@ transformed.y += onda * transformed.x * 0.05;`);
         // estava mais carregado.
         noCaminho(via, bruto, _pAux);
         const px = ALT_FIGURA * pxPorMetro(cam.position.distanceTo(_pAux));
-        if (px >= PX_FIGURA_MORRE) {
-          const quantos = Math.max(1, Math.min(12, Math.round(Math.sqrt(m.tropas || 1))));
-          for (let j = 0; j < quantos; j++) {
-            const atras = j * 7.0 * ESCALA_TROPA * (via.inv ? -1 : 1);
-            meter(m.tipo || "lanceiro", via,
-                  Math.max(0, Math.min(via.comp, bruto - atras)), rumoExtra, j);
-          }
-        }
+        if (px >= PX_FIGURA_MORRE) desenharColuna(via, bruto, rumoExtra, m);
+        paraPlaca.push({ via, bruto, m });
       }
-      // ── OS ESTANDARTES ─────────────────────────────────────────────────
-      // Um por coluna, com tamanho fixo no ecra, e a opacidade a subir a
-      // medida que as figuras se tornam ilegiveis. Entre os 20 e os 12 pixeis
-      // veem-se os dois; e essa faixa que esconde a troca.
-      let nb = 0;
-      for (const m of marchas) {
-        const via = eixoDe[m.de + ">" + m.para];
-        if (!via || nb >= estandartes.length) continue;
-        const chave = m.dono + "|" + m.de + ">" + m.para + "|" + (m.tipo || "");
-        const tt = suave.has(chave) ? suave.get(chave) : m.t;
-        const bruto = via.inv ? (1 - tt) * via.comp : tt * via.comp;
-        noCaminho(via, bruto, _p);
-        const px = ALT_FIGURA * pxPorMetro(cam.position.distanceTo(_p));
-        // ── E DE PERTO O ESTANDARTE SAI DE CENA ─────────────────────────
-        // Ele existe para SUBSTITUIR a figura quando ela deixa de se ler. A
-        // partir do momento em que se veem os homens, ele deixou de ter
-        // trabalho -- e um simbolo de mapa por cima de uma cena que ja se
-        // percebe e so uma etiqueta a tapar o que se veio ver.
-        // Apaga-se entre os 20 e os 34 pixeis: nessa faixa a coluna ja e
-        // legivel e o simbolo ja nao faz falta.
-        const op = px <= PX_BANDEIRA_CHEIA ? 1
-                 : px >= PX_BANDEIRA_MORRE ? 0
-                 : px <= PX_BANDEIRA_NASCE
-                   ? 1 - 0.55 * (px - PX_BANDEIRA_CHEIA)
-                         / (PX_BANDEIRA_NASCE - PX_BANDEIRA_CHEIA)
-                   : 0.45 * (1 - (px - PX_BANDEIRA_NASCE)
-                                 / (PX_BANDEIRA_MORRE - PX_BANDEIRA_NASCE));
-        if (op <= 0.02) continue;
-        const sp = estandartes[nb++];
-        sp.visible = true;
-        sp.material.map = texturaEstandarte(m.dono, m.tipo || "lanceiro",
-                                            m.tropas || 1);
-        sp.material.opacity = op;
-        sp.material.needsUpdate = true;
-        // acima da cabeca da coluna, nunca por cima dela
-        _p.y += ALT_FIGURA * 1.25;
-        sp.position.copy(_p);
-        sp.scale.set(72 * 0.00052, 92 * 0.00052, 1);
-      }
-      for (let i = nb; i < estandartes.length; i++) estandartes[i].visible = false;
-
       // marchas que acabaram deixam de ter memoria: senao a proxima com a
       // mesma chave herdava o `t` da anterior e comecava a meio do caminho
       for (const k of [...suave.keys()]) if (!vistas.has(k)) suave.delete(k);
     } else {
-      for (const sp of estandartes) sp.visible = false;
       for (const col of colunas) {
         if (!col.via) continue;
         const vel = VEL_DEMO[col.tipo] || 6;
-        for (let j = 0; j < col.n; j++) {
-          const volta = col.via.comp * 2;
-          let d = ((t * 0.001 * vel + col.t0 - j * 7.0) % volta + volta) % volta;
-          let sentido = 1;
-          if (d > col.via.comp) { d = volta - d; sentido = -1; }
-          meter(col.tipo, col.via, d, sentido < 0 ? Math.PI : 0, j);
-        }
+        const volta = col.via.comp * 2;
+        let d = ((t * 0.001 * vel + col.t0) % volta + volta) % volta;
+        let sentido = 1;
+        if (d > col.via.comp) { d = volta - d; sentido = -1; }
+        // o corte por pixeis tambem vale na demonstracao: sem ele o mapa
+        // inteiro desenhava oitenta e quatro esqueletos de dois pixeis
+        noCaminho(col.via, d, _pAux);
+        if (ALT_FIGURA * pxPorMetro(cam.position.distanceTo(_pAux))
+            >= PX_FIGURA_MORRE)
+          desenharColuna(col.via, d, sentido < 0 ? Math.PI : 0, col);
+        paraPlaca.push({ via: col.via, bruto: d, m: col });
       }
     }
+    desenharPlacas(paraPlaca);
     for (const [tipo, lista] of Object.entries(tropaInst))
       for (const im of lista) { im.count = conta[tipo]; im.instanceMatrix.needsUpdate = true; }
     for (const [tipo, carne] of Object.entries(animados))
@@ -682,27 +801,20 @@ transformed.y += onda * transformed.x * 0.05;`);
   // poucas combinacoes e cada uma so se desenha uma vez. Um por coluna, com
   // tamanho fixo no ECRA -- e o que faz dele um simbolo de mapa e nao um
   // objeto do mundo.
-  const SINAL = { lanceiro: "↑", arqueiro: "›", cavaleiro: "♦" };
   const cacheBand = new Map();
-  function texturaEstandarte(rei, tipo, n) {
-    const chave = rei + "|" + tipo + "|" + n;
-    if (cacheBand.has(chave)) return cacheBand.get(chave);
-    const c = document.createElement("canvas");
-    c.width = 72; c.height = 92;
-    const g = c.getContext("2d");
-    const cor = "#" + new THREE.Color(COR_REI[rei] || COR_REI.null).getHexString();
-    // o pano: retangulo com a ponta em bico, como um pendao
-    g.beginPath();
-    g.moveTo(6, 4); g.lineTo(66, 4); g.lineTo(66, 62);
-    g.lineTo(36, 78); g.lineTo(6, 62); g.closePath();
-    g.fillStyle = cor; g.fill();
-    g.lineWidth = 5; g.strokeStyle = "rgba(12,8,3,.85)"; g.stroke();
-    g.fillStyle = "#fff6e0";
-    g.textAlign = "center"; g.textBaseline = "middle";
-    g.font = "700 34px system-ui, sans-serif";
-    g.fillText(String(n), 36, 32);
-    g.font = "700 22px system-ui, sans-serif";
-    g.fillText(SINAL[tipo] || "", 36, 58);
+  // ── AS CORES DO REI, MAIS FORTES ────────────────────────────────────────
+  // Derivadas de `COR_REI` e não escritas outra vez: uma segunda tabela de
+  // cores acaba sempre por discordar da primeira, e então a placa contradiz a
+  // bandeira. Aqui só se levanta o brilho.
+  function corForte(rei) {
+    const c = new THREE.Color(COR_REI[rei] || COR_REI.null);
+    c.r = Math.min(1, c.r * 1.35 + 0.05);
+    c.g = Math.min(1, c.g * 1.35 + 0.05);
+    c.b = Math.min(1, c.b * 1.35 + 0.05);
+    return "#" + c.getHexString();
+  }
+
+  function _guardar(chave, c) {
     const t = new THREE.CanvasTexture(c);
     t.colorSpace = THREE.SRGBColorSpace;
     if (cacheBand.size > 240) {                 // nao cresce sem fim
@@ -713,6 +825,61 @@ transformed.y += onda * transformed.x * 0.05;`);
     cacheBand.set(chave, t);
     return t;
   }
+
+  function placaGrande(rei, n) {
+    const chave = "G|" + rei + "|" + n;
+    if (cacheBand.has(chave)) return cacheBand.get(chave);
+    const c = document.createElement("canvas");
+    c.width = c.height = 192;
+    const g = c.getContext("2d");
+    g.fillStyle = corForte(rei);
+    g.beginPath();
+    g.roundRect(8, 8, 176, 176, 26);
+    g.fill();
+    g.lineWidth = 10;
+    g.strokeStyle = "rgba(10,7,3,.92)";
+    g.stroke();
+    const txt = String(n);
+    g.fillStyle = "#fff8ea";
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.font = "800 " + (txt.length > 3 ? 62 : txt.length > 2 ? 80 : 104)
+      + "px system-ui, sans-serif";
+    g.fillText(txt, 96, 100);
+    return _guardar(chave, c);
+  }
+
+  function placaTipo(rei, tipo, n) {
+    const chave = "T|" + rei + "|" + tipo + "|" + n;
+    if (cacheBand.has(chave)) return cacheBand.get(chave);
+    const c = document.createElement("canvas");
+    c.width = 340;
+    c.height = 100;
+    const g = c.getContext("2d");
+    g.fillStyle = "rgba(12,9,5,.92)";
+    g.beginPath();
+    g.roundRect(5, 5, 330, 90, 18);
+    g.fill();
+    g.lineWidth = 6;
+    g.strokeStyle = corForte(rei);
+    g.stroke();
+    g.fillStyle = corForte(rei);
+    g.beginPath();
+    g.roundRect(20, 24, 16, 52, 8);
+    g.fill();
+    const par = NOME_EN[tipo] || ["", ""];
+    g.textBaseline = "middle";
+    g.textAlign = "left";
+    g.fillStyle = "#fff6e4";
+    g.font = "800 52px system-ui, sans-serif";
+    g.fillText(String(n), 52, 52);
+    const larg = g.measureText(String(n)).width;
+    g.font = "600 40px system-ui, sans-serif";
+    g.fillStyle = "#e2d3ac";
+    g.fillText(n === 1 ? par[0] : par[1], 52 + larg + 14, 53);
+    return _guardar(chave, c);
+  }
+
   // um lote de sprites reaproveitados: 64 chegam e sobram, e criar/destruir
   // sprites a cada quadro seria lixo para o coletor
   const estandartes = [];

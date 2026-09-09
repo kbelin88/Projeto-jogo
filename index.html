@@ -1902,9 +1902,15 @@
         // aparece -- e o mesmo criterio do relatorio que ele recebe
         if (vis && !vis.has(a.id) && !vis.has(b.id)) return null;
         return { de: a.slug, para: b.slug, t: pos.t, dono: m.dono,
-                 // `tipoDominante` leva o estado como primeiro argumento -- e a
-                 // mesma conta que decide o matchup no combate, portanto a peca
-                 // que marcha e a que o motor considera dominante
+                 // ── A COMPOSICAO INTEIRA, E NAO O TIPO DOMINANTE ──────────
+                 // Isto achatava o exercito a UM tipo, e o mapa desenhava doze
+                 // arqueiros para um exercito que levava lanceiros la dentro.
+                 // Nao era uma decisao de desenho: era informacao do motor
+                 // deitada fora no caminho, e a regra da casa e que o ecra tem
+                 // de mostrar o que o motor executou.
+                 composicao: Object.assign({}, m.tropas),
+                 // o dominante fica -- e o que decide o matchup no combate, e
+                 // ha sitios (a legenda, o simbolo rigido) que ainda o querem
                  tipo: Engine.tipoDominante(game, m.tropas) || "lanceiro",
                  tropas: Engine.contarTropas(m.tropas) };
       }).filter(Boolean),
