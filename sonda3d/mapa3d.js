@@ -344,7 +344,10 @@ transformed.y += onda * transformed.x * 0.05;`);
   }
 
   const chapas = {};
-  const K_PLACA = 0.00042;
+  // 25% mais pequenas do que os 0,00042 originais, a pedido do Lucas: com os
+  // quadrados das tropas no ecra ao mesmo tempo, os nomes das aldeias
+  // deixaram de precisar de tanto peso
+  const K_PLACA = 0.000315;
   for (const [cid, a] of Object.entries(MAPA.aldeias || {})) {
     const nome = a.nome || (cid.charAt(0).toUpperCase() + cid.slice(1));
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({
