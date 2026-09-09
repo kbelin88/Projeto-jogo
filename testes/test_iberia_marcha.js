@@ -1,7 +1,7 @@
 // test_iberia_marcha.js — Fase 3, fatia 1: mundo da Iberia + marcha por custo.
 //
 // O que este teste protege:
-//   1. o teatro nasce do arquivo autoral (24 cidades, 41 estradas, 2 capitais)
+//   1. o teatro nasce do arquivo autoral (24 cidades, 39 estradas, 2 capitais)
 //   2. a marcha sai de rota(), NAO de Math.hypot  (a lacuna L3, de vez)
 //   3. o fator de tropa preserva o espelhamento do mapa
 //   4. o mapa procedural (v1/v2) continua medindo por pixel como antes
@@ -26,9 +26,9 @@ console.log("EQUILIBRIO DO ARQUIVO");
 t("verificarEquilibrio() zerado (o teste de sanidade do mapa, no CI)", () => {
   assert.deepStrictEqual(Iberia.verificarEquilibrio(), []);
 });
-t("24 cidades / 41 estradas / par bijetivo", () => {
+t("24 cidades / 39 estradas / par bijetivo", () => {
   assert.strictEqual(Iberia.CIDADES.length, 24);
-  assert.strictEqual(Iberia.ESTRADAS.length, 41);
+  assert.strictEqual(Iberia.ESTRADAS.length, 39);
   const byId = Object.fromEntries(Iberia.CIDADES.map((c) => [c.id, c]));
   for (const c of Iberia.CIDADES) assert.strictEqual(byId[c.par].par, c.id, "par quebrado em " + c.id);
   assert.strictEqual(Iberia.CIDADES.filter((c) => c.lado === "O").length, 12);
@@ -45,7 +45,7 @@ t("24 cidades, 2 capitais, 12 por lado", () => {
   assert.strictEqual(e.aldeias.filter((a) => a.dono === null).length, 22);
 });
 
-t("as 41 estradas do arquivo viraram a rede (nenhuma derivada)", () => {
+t("as 39 estradas do arquivo viraram a rede (nenhuma derivada)", () => {
   const e = Engine.criarEstadoInicial(cfgIberia());
   const n = Object.values(e.estradas.adj).reduce((s, v) => s + v.length, 0) / 2;
   assert.strictEqual(n, Iberia.ESTRADAS.length);
@@ -85,13 +85,17 @@ t("turnos saem do custo autoral, nao da linha reta", () => {
   assert.strictEqual(ref, e.config.velocidade_passo.media);
 });
 
-t("salamanca-toledo (serra) cobra o custo autoral, nao o pixel", () => {
+// Na rede v3 Salamanca e Toledo deixaram de ter estrada directa: vai-se por
+// Madrid, custo 6. O que o teste guarda nao e o numero -- e que o percurso
+// e cobrado pelo CUSTO AUTORAL e nao pela distancia em pixeis, que aqui o
+// subestima (4 contra 6). A asercao de baixo tranca isso.
+t("salamanca-toledo cobra o custo autoral, nao o pixel", () => {
   const e = Engine.criarEstadoInicial(cfgIberia());
   const a = e.aldeias[idDe(e, "salamanca")], b = e.aldeias[idDe(e, "toledo")];
   const porPixel = Math.hypot(a.x - b.x, a.y - b.y) / Iberia.MAPA.pxPorTurno;
   const cam = Engine.caminhoEntre(e, a.id, b.id);
   const turnos = Engine.turnosDeCaminho(e, cam, { arqueiro: 5 });
-  assert.strictEqual(turnos, 5);                 // ceil(4.5)
+  assert.strictEqual(turnos, 6);                 // salamanca>madrid>toledo
   assert.ok(Math.ceil(porPixel) < turnos,
     "o teste perde o sentido se o pixel nao subestimar a serra");
 });
@@ -103,7 +107,9 @@ t("tropa lenta demora mais, rapida menos", () => {
   const medio = Engine.turnosDeCaminho(e, cam, { arqueiro: 5 });
   const rapido = Engine.turnosDeCaminho(e, cam, { cavaleiro: 5 });
   assert.ok(lento > medio && medio > rapido, `esperado lento>medio>rapido, veio ${lento}/${medio}/${rapido}`);
-  assert.deepStrictEqual([lento, medio, rapido], [13, 9, 6]);
+  // os numeros sao da rede v3 (Lisboa->Toledo custa 7); o que o teste guarda
+  // e a ORDEM e o facto de o exercito misto andar ao passo do mais lento
+  assert.deepStrictEqual([lento, medio, rapido], [11, 7, 5]);
   // exercito misto viaja na velocidade da tropa mais lenta
   assert.strictEqual(Engine.turnosDeCaminho(e, cam, { lanceiro: 1, cavaleiro: 9 }), lento);
 });

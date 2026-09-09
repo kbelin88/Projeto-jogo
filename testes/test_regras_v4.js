@@ -42,11 +42,14 @@ t("1b CONFIG do jogo com os valores exatos decididos", () => {
   assert.strictEqual(E.CONFIG.vitoriaTurnos, 2);
 });
 
-// --- 2. Distancia: centro 9 -> 6, corte uniforme --------------------------
-t("2 escalaMarcha corta o centro de 9 para 2 turnos (simetrico)", () => {
+// --- 2. Distancia: centro 7 -> 2, corte uniforme --------------------------
+// O 9 era do mapa v2 (41 estradas). Com a rede v3 o mesmo percurso custa 7
+// no ruleset arquivado -- o que o teste guarda nao e o numero, e que a
+// `escalaMarcha` corta o centro e corta IGUAL nos dois lados.
+t("2 escalaMarcha corta o centro de 7 para 2 turnos (simetrico)", () => {
   const o = stOld(), v = stV4();
-  assert.strictEqual(marcha(o, "lisboa", "toledo"), 9, "old Lisboa->Toledo");
-  assert.strictEqual(marcha(o, "barcelona", "madrid"), 9, "old espelho");
+  assert.strictEqual(marcha(o, "lisboa", "toledo"), 7, "old Lisboa->Toledo");
+  assert.strictEqual(marcha(o, "barcelona", "madrid"), 7, "old espelho");
   assert.strictEqual(marcha(v, "lisboa", "toledo"), 2, "v4 Lisboa->Toledo");
   assert.strictEqual(marcha(v, "barcelona", "madrid"), 2, "v4 espelho");
 });
