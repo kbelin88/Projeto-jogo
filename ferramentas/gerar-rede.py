@@ -153,6 +153,8 @@ P = {a["id"]: (a["x"], a["y"]) for a in d["aldeias"]}
 NOME = {a["id"]: a["nome"] for a in d["aldeias"]}
 E = sorted({tuple(sorted(e)) for e in d["estradas"]})
 
+# as fichas vem do proprio world-iberia, em memoria: nada de ficheiros
+# temporarios largados na raiz do projeto
 velho = json.loads(subprocess.run(
     [os.environ.get("NODE", "node"), "-e",
      "const I=require('./world-iberia.js');"
