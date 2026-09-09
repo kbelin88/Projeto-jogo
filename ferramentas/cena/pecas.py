@@ -214,7 +214,7 @@ FICHEIRO = {
 _tex_avisado = set()
 
 
-def carregar_tex(nt, pasta, metros, forca=1.0, tinta=None):
+def carregar_tex(nt, pasta, metros, forca=1.0, tinta=None, uv=False):
     """liga uma textura de ficheiro e devolve (cor, rugosidade, normal).
 
     Devolve os sinais em vez de os ligar a um sombreador, porque há sítios que
@@ -233,7 +233,12 @@ def carregar_tex(nt, pasta, metros, forca=1.0, tinta=None):
     mapa = nos.new("ShaderNodeMapping")
     k = 1.0 / metros
     mapa.inputs["Scale"].default_value = (k, k, k)
-    liga.new(coord.outputs["Object"], mapa.inputs["Vector"])
+    # ── OBJETO OU UV ─────────────────────────────────────────────────────
+    # Por objeto para tudo o que nasce de caixas e cilindros. Por UV para as
+    # duas malhas que foram desdobradas de proposito -- a estrada e o chao da
+    # aldeia -- porque uma malha de 2,8 km mapeada por objeto estica o desenho
+    # ao longo do mapa inteiro.
+    liga.new(coord.outputs["UV" if uv else "Object"], mapa.inputs["Vector"])
 
     def imagem(f, dados=True):
         c = os.path.join(caminho, f)
@@ -300,6 +305,50 @@ def _por_ficheiro(nt, p, nome):
     if nor:
         nt.links.new(nor, p.inputs["Normal"])
     return cor
+
+
+def material_uv(nome, rugosidade=0.9):
+    """o mesmo material, mapeado pelo UV da malha e nao por coordenadas de objeto.
+
+    Uma peca de aldeia nasce de caixas e nunca foi desdobrada: ali as
+    coordenadas de objeto sao a unica hipotese, e sao boas -- o padrao acompanha
+    a peca e mantem a escala em metros. Mas a estrada e UMA malha de 2,8 km e o
+    chao da aldeia um disco: mapeados por objeto, o desenho estica-se pelo mapa
+    inteiro. Estes dois foram desdobrados de proposito (o `u` a andar com o
+    caminho, o `v` a atravessa-lo) e e por ai que a textura tem de entrar.
+
+    ── E O NOME LEVA `_uv` POR UMA RAZAO PRATICA ────────────────────────────
+    # O exportador achata a cor de todo o material cujo nome esteja na paleta,
+    # porque o glTF nao leva grafos de nos. Um nome que a paleta nao conhece
+    # passa por ele intacto -- e e isso que faz destes os unicos materiais com
+    # fotografia a chegar ao jogo.
+    """
+    chave = nome + "_uv"
+    if chave in _mats:
+        return _mats[chave]
+    achado = FICHEIRO.get(nome)
+    m = bpy.data.materials.new("M_" + chave)
+    m.use_nodes = True
+    nt = m.node_tree
+    p = nt.nodes["Principled BSDF"]
+    p.inputs["Roughness"].default_value = rugosidade
+    if "Specular IOR Level" in p.inputs:
+        p.inputs["Specular IOR Level"].default_value = 0.06
+    cor = rug = nor = None
+    if achado:
+        pasta, metros, forca = achado
+        cor, rug, nor = carregar_tex(nt, pasta, metros, forca,
+                                     tinta=COR[nome], uv=True)
+    if cor is None:
+        p.inputs["Base Color"].default_value = COR[nome]
+    else:
+        nt.links.new(cor, p.inputs["Base Color"])
+        if rug:
+            nt.links.new(rug, p.inputs["Roughness"])
+        if nor:
+            nt.links.new(nor, p.inputs["Normal"])
+    _mats[chave] = m
+    return m
 
 
 def material(nome, rugosidade=0.9, variar=VARIA_INSTANCIA):

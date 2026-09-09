@@ -459,7 +459,6 @@ for _e in REDE.get("e", []):
     if _e.get("via"):
         VIA_DE[tuple(sorted((_e["de"], _e["para"])))] = em_metros(*_e["via"][0])
 verts, faces, uvs = [], [], []
-LADRILHO = 24.0      # metros de estrada por repeticao da textura
 trocos = 0
 eixos = []            # o CAMINHO de cada troco, para as tropas o seguirem
 LIGACOES = []
@@ -594,8 +593,14 @@ for a, b in LIGACOES:
         if i:
             andado += math.dist((cx, cy), ant)
         ant = (cx, cy)
-        uvs.append((andado / LADRILHO, 1.0))
-        uvs.append((andado / LADRILHO, 0.0))
+        # ── O UV VAI EM METROS ──────────────────────────────────────────
+        # E nao em "fracao do ladrilho". Assim quem decide o tamanho do desenho
+        # e o MATERIAL (que ja sabe quantos metros tem o ladrilho de cada
+        # textura), e o alargamento do adro nao estica o desenho para os lados:
+        # a fita fica mais larga e mostra mais textura, como um caminho de
+        # verdade.
+        uvs.append((andado, +w))
+        uvs.append((andado, -w))
         # o EIXO leva a altura do centro, que e por onde as tropas andam --
         # nao a de nenhuma das beiras
         eixo.append([round(cx, 1), round(cy, 1), round(altura_em(cx, cy) + 0.5, 1)])
@@ -656,6 +661,8 @@ print("SONDA mata afastada da estrada: %d empurroes, %d manchas caidas na agua"
       % (empurradas, afogadas))
 
 estradas = P._novo(P._malha("estradas", verts, faces, "caminho", bisel=0), "caminho")
+estradas.data.materials.clear()
+estradas.data.materials.append(P.material_uv("caminho", rugosidade=0.95))
 _uv = estradas.data.uv_layers.new(name="UVMap")
 for _p in estradas.data.polygons:
     for _li in _p.loop_indices:
@@ -679,7 +686,6 @@ estradas.name = estradas.data.name = "estradas"
 # 0,62 m acima do terreno contra os 0,45 da estrada: 17 cm de folga, que chegam
 # para nao haver briga de profundidade e nao chegam para se ver um degrau.
 vc, fc, uvc = [], [], []
-LADRILHO_CHAO = 18.0
 for cid, c in centros.items():
     raio = C.PERFIS[REDE["c"][cid]["t"]]["raio"] + 2.5
     z = altura_em(c[0], c[1]) + 0.62
@@ -691,10 +697,12 @@ for cid, c in centros.items():
         ang = 2 * math.pi * i / N
         dx, dy = math.cos(ang) * raio, math.sin(ang) * raio
         vc.append((c[0] + dx, c[1] + dy, z))
-        uvc.append((dx / LADRILHO_CHAO, dy / LADRILHO_CHAO))
+        uvc.append((dx, dy))          # tambem em metros, pela mesma razao
     for i in range(N):
         fc.append((meio, meio + 1 + i, meio + 1 + (i + 1) % N))
 chaoAldeia = P._novo(P._malha("chao_aldeia", vc, fc, "terra", bisel=0), "terra")
+chaoAldeia.data.materials.clear()
+chaoAldeia.data.materials.append(P.material_uv("terra", rugosidade=0.95))
 _uvA = chaoAldeia.data.uv_layers.new(name="UVMap")
 for _p in chaoAldeia.data.polygons:
     for _li in _p.loop_indices:
@@ -934,6 +942,15 @@ if os.environ.get("ASSAR", "1") == "1":
 for im in bpy.data.images:
     if im.size[0] > TEX_PX:
         im.scale(TEX_PX, TEX_PX)
+    # ── E EMPACOTADAS ────────────────────────────────────────────────────
+    # A textura da estrada vive num ficheiro fora do .blend. Sem empacotar, o
+    # exportador de glTF vai buscar o ORIGINAL ao disco e leva os 4K inteiros
+    # -- ou nao o leva de todo. Empacotada, o que viaja e a versao ja reduzida.
+    if im.size[0] and not im.packed_file:
+        try:
+            im.pack()
+        except RuntimeError:
+            pass
 # e a cor achata-se na paleta, porque o glTF nao leva os nossos grafos de nos
 for m in bpy.data.materials:
     if not m.use_nodes:
