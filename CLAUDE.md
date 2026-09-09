@@ -1,7 +1,7 @@
 # CLAUDE.md — Arena dos Reis (Projeto Jogo)
 
 Guia de contexto para qualquer modelo/agente que for trabalhar neste repositório.
-Atualizado: 19/08/2026. Repo público: https://github.com/kbelin88/Projeto-jogo
+Atualizado: 09/09/2026. Repo público: https://github.com/kbelin88/Projeto-jogo
 
 ---
 
@@ -437,3 +437,81 @@ que ficou para trás. É `counterPorAlvoDe` (`analisar-log.js:383`); exige o `.r
 agosto). Desde então tudo corre em modelos **`:free`**, com teto de **20 req/min e 1000/dia** —
 e é esse teto, mais o relógio, que dimensiona uma bateria. Custo observado quando havia crédito:
 ~$0.041/turno com dois raciocinadores.
+
+---
+
+## 8. O MAPA EM 3D (a linha viva desde 07/09)
+
+O jogo continua a ser o `index.html`. O que mudou é a **pele**: existe agora um
+mapa a três dimensões, com aldeias, estradas, mata, relevo, costa — e **tropas
+animadas a marchar por ela**. Liga-se com `index.html?mapa=3d`; sem esse
+parâmetro o jogo abre no canvas 2D de sempre e nada disto é carregado.
+
+### 8.1 O que corre no navegador
+
+| ficheiro | o que é |
+|---|---|
+| `sonda3d/mapa3d.js` | o mapa 3D: carrega, povoa, anima, e é a ponte com o motor |
+| `sonda3d/mapa.html` | o mapa sozinho, sem jogo — é onde se confere qualquer alteração |
+| `sonda3d/marcha.html` | bancada: duas aldeias e uma tropa a ir e vir |
+| `sonda3d/encontro.html` | bancada: a batalha encenada (flechas, choque, carga, debandada) |
+
+Consomem quatro ficheiros **que não estão no git** (`.gitignore`), porque são
+saída de forno e pesam dezenas de MB: `sonda3d/pecas.glb` (a biblioteca: cada
+protótipo UMA vez, na origem), `sonda3d/mapa3d.json` (onde fica cada cópia) e
+`sonda3d/{lanceiro,arqueiro,cavaleiro}.glb`. **Quem clonar o repo tem de os
+cozer** — ver 8.2. Idem `assets/texturas/`.
+
+### 8.2 O forno
+
+```bash
+"/c/Program Files/Blender Foundation/Blender 5.2/blender.exe" -b --factory-startup   -noaudio -P ferramentas/cena/exportar_mapa.py      # ~105 s -> pecas.glb + mapa3d.json
+```
+
+```bash
+python ferramentas/cena/tex_estrada.py                # trata as fotografias (ver 8.3)
+```
+
+| ferramenta | o que faz |
+|---|---|
+| `ferramentas/cena/exportar_mapa.py` | o mapa inteiro: chão, relevo, costa, estradas, mata, aldeias |
+| `ferramentas/cena/pecas.py` | a biblioteca de peças e **as tabelas `FICHEIRO` / `COR`** (que textura, que ladrilho, que tom) |
+| `ferramentas/cena/exportar_tropa.py` | os três soldados, do mesmo corpo, com esqueleto e animações |
+| `ferramentas/cena/tex_estrada.py` | trata as fotografias **fora** do Blender |
+| `ferramentas/tracar-rede.html` | a página onde a rede de estradas se desenha à mão |
+| `ferramentas/gerar-rede.py` | lê `rede-nova.json` e escreve o `world-iberia.js` |
+
+### 8.3 As armadilhas do glTF (todas custaram horas)
+
+- **O glTF NÃO leva grafos de nós.** Do material só sobrevivem *uma imagem* e o
+  `baseColorFactor`. Tingir, clarear ou misturar no Blender é deitado fora na
+  porta. **O que tem de mudar, muda na IMAGEM** — é para isso que o
+  `tex_estrada.py` existe. Confirmado duas vezes a abrir o GLB.
+  O único padrão que sobrevive: imagem → `ShaderNodeMix` MULTIPLY com uma
+  constante → Base Color, que sai como textura × `baseColorFactor`.
+- **Material sem `metallicFactor` declarado assume metal = 1.0**, e metal branco
+  sem ambiente renderiza **preto**. Foi o cavalo preto.
+- O exportador segue só o **Material Output ativo** com `target="ALL"`. Um
+  segundo output esquecido faz a peça sair sem textura, sem um aviso.
+- O `GLTFLoader` do three **corta os pontos dos nomes**: `mao.L` chega `maoL`.
+- **`InstancedMesh` não aceita malhas com esqueleto.** O que torna a animação
+  pagável é o corte por **tamanho aparente em píxeis**
+  (`px = altura × (h / (2·tan(fov/2))) / dist`), não por metros.
+- A cor de vértice (COLOR_0) é a única forma de passar um **gradiente** pela
+  cadeia — e só é exportada se o **material** a usar (`cor_vertice=True`).
+
+### 8.4 O que já está trancado, e não se mexe
+
+- **A rede de estradas foi refeita do zero (V2)**: 24 cidades, **37 estradas**,
+  `verificarEquilibrio()` = 0 **por construção** (custos = comprimento/velocidade
+  do terreno, mediados entre gémeas). Lisboa→Barcelona custa 17.
+- **Ninguém se atravessa na estrada.** A deteção é por **varredura de troços
+  percorridos** no passo, não por amostragem de posições num instante — travada
+  por `testes/test_varredura_estrada.js`.
+- **Marcha é sempre custo de rota**, nunca píxeis, e o progresso do replay tem
+  **uma implementação só** (`progMarcha` no `index.html`), partilhada pelos dois
+  sítios 2D e pela ponte 3D. Ter duas foi o bug das marchas que saltavam para o
+  meio da estrada e desapareciam.
+- **O caderno de marcas funciona por cima do mapa 3D** (`ferramentas/cena/COMO_MARCAR.md`).
+  A calibração sai de Lisboa e Barcelona **medidas**, não de constantes copiadas.
+
