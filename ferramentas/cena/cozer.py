@@ -57,8 +57,11 @@ REDE = json.loads(subprocess.run(
      "const g={};for(const c of W.CIDADES)g[c.id]=[];"
      "for(const e of W.ESTRADAS){if(g[e.de])g[e.de].push(e.para);"
      "if(g[e.para])g[e.para].push(e.de);}"
+     # as ESTRADAS vao inteiras, com a curva autoral: e o `via` que faz a
+     # fita do mapa 3D dobrar pelo mesmo sitio por onde o desenho 2D dobra
      "console.log(JSON.stringify({c:Object.fromEntries(W.CIDADES.map("
-     "c=>[c.id,{x:c.x,y:c.y,t:c.tamanho,nome:c.nome,papel:c.papel}])),v:g}))"],
+     "c=>[c.id,{x:c.x,y:c.y,t:c.tamanho,nome:c.nome,papel:c.papel}])),v:g,"
+     "e:W.ESTRADAS.map(e=>({de:e.de,para:e.para,via:e.via||null}))}))"],
     capture_output=True, text=True, check=True, cwd=os.getcwd()).stdout)
 
 ARGS = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []

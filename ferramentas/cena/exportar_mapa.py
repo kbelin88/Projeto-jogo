@@ -442,7 +442,14 @@ def boca_para(cid, rumo_alvo):
 # para se ver de cima e estreita o suficiente para nao ser ridicula ao pe de uma
 # porta. E a primeira vez que as duas coisas tem de bater certo ao mesmo tempo.
 LARG_ESTRADA = 9.0                            # meia-largura, em metros
-verts, faces = [], []
+# as curvas autorais, ja em metros da cena. O `via` do world-iberia esta em
+# coordenadas do viewBox, que e onde o desenho 2D vive.
+VIA_DE = {}
+for _e in REDE.get("e", []):
+    if _e.get("via"):
+        VIA_DE[tuple(sorted((_e["de"], _e["para"])))] = em_metros(*_e["via"][0])
+verts, faces, uvs = [], [], []
+LADRILHO = 24.0      # metros de estrada por repeticao da textura
 trocos = 0
 eixos = []            # o CAMINHO de cada troco, para as tropas o seguirem
 LIGACOES = []
@@ -478,15 +485,28 @@ for a, b in LIGACOES:
     N = max(8, int(comp / 5))
     base = len(verts)
     eixo = []
+    andado, ant = 0.0, None
+    # ── A CURVA E A DO MAPA, NAO UMA INVENTADA AQUI ─────────────────────
+    # Antes esta fita serpenteava com dois senos escolhidos a olho. Ficava
+    # bonita e discordava do desenho 2D: as duas vistas punham a mesma estrada
+    # em sitios diferentes, e um exercito a meio do caminho aparecia em pontos
+    # que nao eram o mesmo ponto. Agora dobra pelo `via` do world-iberia --
+    # o mesmo que o canvas usa -- e so lhe fica um bracejar pequeno por cima,
+    # que e o que tira o ar de regua sem mentir sobre o traçado.
+    ctl = VIA_DE.get(tuple(sorted((a, b))))
     for i in range(N + 1):
         t = i / N
-        # SERPENTEIA, com as PONTAS QUIETAS: se a curva chegasse ate ao fim, a
-        # estrada nascia ao lado da porta em vez de nela.
-        k = min(1.0, min(i, N - i) / (N * 0.24))
-        desvio = (math.sin(t * comp * 0.010) * 0.7
-                  + math.sin(t * comp * 0.023 + 1.1) * 0.3) * comp * 0.020 * k
         cx = p0[0] + (p1[0] - p0[0]) * t
         cy = p0[1] + (p1[1] - p0[1]) * t
+        if ctl:
+            # Bezier de segundo grau pelas duas bocas, com o ponto de controlo
+            # levado para a mesma banda: a curva passa por onde o desenho passa
+            cx = (1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * ctl[0] + t * t * p1[0]
+            cy = (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * ctl[1] + t * t * p1[1]
+        # e as PONTAS FICAM QUIETAS: se o bracejar chegasse ao fim, a estrada
+        # nascia ao lado da porta em vez de nela
+        k = min(1.0, min(i, N - i) / (N * 0.24))
+        desvio = math.sin(t * comp * 0.019 + 1.1) * comp * 0.007 * k
         nx, ny = -(p1[1] - p0[1]) / comp, (p1[0] - p0[0]) / comp
         cx += nx * desvio
         cy += ny * desvio
@@ -509,6 +529,18 @@ for a, b in LIGACOES:
         ex2, ey2 = cx - nx * w, cy - ny * w
         verts.append((ex1, ey1, altura_em(ex1, ey1) + 0.45))
         verts.append((ex2, ey2, altura_em(ex2, ey2) + 0.45))
+        # ── E CADA VERTICE LEVA O SEU UV ─────────────────────────────────
+        # Sem UV nao ha textura possivel: uma fita so tem cor. O `u` anda com
+        # a estrada (metros percorridos a dividir pelo ladrilho) e o `v`
+        # atravessa-a de beira a beira. Assim um ladrilho de terra batida
+        # repete-se AO LONGO do caminho e nunca de traves, que e como se ve
+        # numa estrada de verdade -- e alargar no adro estica o desenho para
+        # os lados em vez de o cortar.
+        if i:
+            andado += math.dist((cx, cy), ant)
+        ant = (cx, cy)
+        uvs.append((andado / LADRILHO, 1.0))
+        uvs.append((andado / LADRILHO, 0.0))
         # o EIXO leva a altura do centro, que e por onde as tropas andam --
         # nao a de nenhuma das beiras
         eixo.append([round(cx, 1), round(cy, 1), round(altura_em(cx, cy) + 0.5, 1)])
@@ -518,12 +550,16 @@ for a, b in LIGACOES:
     eixos.append({"de": a, "para": b, "pts": eixo})
     trocos += 1
 estradas = P._novo(P._malha("estradas", verts, faces, "caminho", bisel=0), "caminho")
+_uv = estradas.data.uv_layers.new(name="UVMap")
+for _p in estradas.data.polygons:
+    for _li in _p.loop_indices:
+        _uv.data[_li].uv = uvs[estradas.data.loops[_li].vertex_index]
 for col in list(estradas.users_collection):
     col.objects.unlink(estradas)
 cena.objects.link(estradas)
 estradas.name = estradas.data.name = "estradas"
-print("SONDA estradas: %d trocos, %d faces, %.1f m de largura"
-      % (trocos, len(faces), LARG_ESTRADA * 2))
+print("SONDA estradas: %d trocos, %d faces, %.1f m de largura, %d com curva autoral"
+      % (trocos, len(faces), LARG_ESTRADA * 2, len(VIA_DE)))
 
 # ── O CHAO, COM A FORMA DA ILHA ─────────────────────────────────────────────
 # Uma grelha sobre o retangulo do mapa, da qual se apagam as faces que caem na

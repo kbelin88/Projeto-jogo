@@ -1355,8 +1355,64 @@
   // Dois exercitos INIMIGOS se cruzaram no mesmo trecho, em sentidos opostos?
   // Teste instantaneo: no trecho lo<->hi, quem vai lo->hi ja alcancou quem vai
   // hi->lo (posicoes medidas a partir de lo). Sem estado anterior -> deterministico.
+  // ── O QUE O EXERCITO VARREU NESTE PASSO ───────────────────────────────────
+  // `posicaoRota` diz onde ele ESTA. Para saber se dois inimigos se cruzaram
+  // isso nao chega: eles podem ter-se atravessado ENTRE duas fotografias.
+  // Medido na P6: um cruzamento real perdido em 834 pares -- ao fim do turno um
+  // dos dois ja tinha mudado de troco, e a comparacao, que exige os dois no
+  // MESMO troco, deixava de os ver.
+  //
+  // Isto devolve os trocos que ele percorreu no passo, com o intervalo em cada
+  // um. Deixa de haver "entre fotografias": o passo inteiro esta aqui, e o
+  // encontro passa a ser uma sobreposicao de intervalos -- exata, sem amostragem.
+  function percursoNoPasso(estado, mov) {
+    const cam = mov.caminho;
+    if (!cam || cam.length < 2) return [];
+    const total = pesoRota(estado, cam);
+    const fr = (r) => Math.max(0, Math.min(1,
+      mov.turnosTotal ? (mov.turnosTotal - r) / mov.turnosTotal : 1));
+    let d0 = fr(mov.turnosRestantes + 1) * total;
+    let d1 = fr(mov.turnosRestantes) * total;
+    if (d1 < d0) { const t = d0; d0 = d1; d1 = t; }
+    const saida = [];
+    let acc = 0;
+    for (let i = 0; i + 1 < cam.length; i++) {
+      const seg = pesoTrecho(estado, cam[i], cam[i + 1]);
+      const ini = Math.max(d0, acc), fim = Math.min(d1, acc + seg);
+      if (fim >= ini) {
+        saida.push({ aId: cam[i], bId: cam[i + 1],
+                     de: seg > 0 ? (ini - acc) / seg : 0,
+                     ate: seg > 0 ? (fim - acc) / seg : 0 });
+      }
+      acc += seg;
+    }
+    return saida;
+  }
+
   function cruzaramNaEstrada(estado, m1, m2) {
     if (m1.dono === m2.dono) return false;
+    // ── A VARREDURA, QUE E EXATA ────────────────────────────────────────────
+    // Dois inimigos encontram-se se os trocos que percorreram no passo se
+    // sobrepuserem. Em sentidos opostos, sobrepor-se E cruzar-se; no mesmo
+    // sentido, e partilhar a estrada -- que pela regra de 23/08 tambem e
+    // combate. Nao ha instante nenhum a ser amostrado, portanto nao ha nada
+    // para escapar por entre dois instantes.
+    if (estado.config.varreduraEstrada !== false) {
+      const iguais = estado.config.cruzamentoMesmoSentido !== false;
+      for (const t1 of percursoNoPasso(estado, m1)) {
+        const lo = Math.min(t1.aId, t1.bId), hi = Math.max(t1.aId, t1.bId);
+        for (const t2 of percursoNoPasso(estado, m2)) {
+          if (lo !== Math.min(t2.aId, t2.bId) || hi !== Math.max(t2.aId, t2.bId)) continue;
+          const d1 = t1.aId < t1.bId ? 1 : -1, d2 = t2.aId < t2.bId ? 1 : -1;
+          if (d1 === d2 && !iguais) continue;
+          // os dois medidos a partir de `lo`, para caberem no mesmo eixo
+          const n = (t, d) => (d === 1 ? [t.de, t.ate] : [1 - t.ate, 1 - t.de]);
+          const [a0, a1] = n(t1, d1), [b0, b1] = n(t2, d2);
+          if (a1 >= b0 && b1 >= a0) return true;
+        }
+      }
+      return false;
+    }
     const p1 = posicaoRota(estado, m1), p2 = posicaoRota(estado, m2);
     if (!p1 || !p2) return false;
     const lo = Math.min(p1.aId, p1.bId), hi = Math.max(p1.aId, p1.bId);
