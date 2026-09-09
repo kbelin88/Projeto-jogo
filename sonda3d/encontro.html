@@ -125,6 +125,8 @@ for (const tipo of ["lanceiro", "arqueiro", "cavaleiro"])
 const PASSO = { lanceiro: /idle_walk/i, arqueiro: /idle_walk/i, cavaleiro: /^gallop$/i };
 const PARADO = { lanceiro: /alerted_stand/i, arqueiro: /alerted_stand/i,
                  cavaleiro: /^idle$/i };
+const GOLPE = { lanceiro: /hit_spear/i, arqueiro: /hit_spear/i,
+                cavaleiro: /^gallop$/i };
 const TUNICA = { A: 0x35557f, B: 0x8e3a2c };
 
 function figura(tipo, rei) {
@@ -142,13 +144,30 @@ function figura(tipo, rei) {
   raiz.scale.setScalar(2.2);
   const mix = new THREE.AnimationMixer(raiz);
   const dos = {};
-  for (const [nome, padrao] of [["andar", PASSO[tipo]], ["parar", PARADO[tipo]]]) {
+  for (const [nome, padrao] of [["andar", PASSO[tipo]], ["parar", PARADO[tipo]],
+                                ["bater", GOLPE[tipo]]]) {
     const cl = g.animations.find((a) => padrao.test(a.name))
       || g.animations.find((a) => /walk/i.test(a.name)) || g.animations[0];
     dos[nome] = mix.clipAction(cl);
   }
+  // o golpe é UMA vez e volta à guarda; se fosse em ciclo o homem ficava a
+  // esfaquear o ar depois de o inimigo já ter caído
+  dos.bater.setLoop(THREE.LoopOnce, 1);
+  dos.bater.clampWhenFinished = true;
   cena.add(raiz);
-  return { raiz, mix, acao: dos, tipo };
+  return { raiz, mix, acao: dos, tipo, pose: null, avanco: 0, avancoAlvo: 0,
+           golpe: dos.bater.getClip().duration };
+}
+
+// ── UMA POSE DE CADA VEZ ────────────────────────────────────────────────────
+// Trocar de animação à mão em cinco sítios diferentes foi o que me deu, na
+// primeira tentativa, um morto a continuar em guarda enquanto tombava. Passa
+// tudo por aqui, e quem já está na pose pedida não faz nada.
+function pose(h, nome) {
+  if (h.pose === nome || !h.acao[nome]) return;
+  if (h.acao[h.pose]) h.acao[h.pose].fadeOut(0.2);
+  h.acao[nome].reset().fadeIn(0.2).play();
+  h.pose = nome;
 }
 
 // a ORDEM é a coluna: quem o Rei põe à frente vai à frente, e vê-se
@@ -161,7 +180,7 @@ for (const rei of ["A", "B"]) {
   const homens = HOSTE[rei].map((t, i) => {
     const f = figura(t, rei);
     f.fila = i;
-    f.acao.andar.play();
+    pose(f, "andar");
     f.acao.andar.time = (i * 0.41) % f.acao.andar.getClip().duration;
     return f;
   });
@@ -254,35 +273,69 @@ function moverFlechas(dt) {
 
 function tombar(h) {
   h.caido = { t: 0 };
-  h.acao.andar.fadeOut(0.15);
-  h.acao.parar.fadeOut(0.15);
+  for (const a of Object.values(h.acao)) a.fadeOut(0.15);
 }
 
 // ── O GUIÃO ─────────────────────────────────────────────────────────────────
 // Escrito de uma vez, no instante em que as duas hostes travam. Depois só se
 // toca. Quando houver motor, é ele que escreve isto — e a cena não muda nada.
 const _mao = new THREE.Vector3();
+
+// ── O PONTO QUE NUNCA SE VÊ FALHAR ──────────────────────────────────────────
+// O glTF guarda os ossos como `hand.L`, e o carregador do three TIRA O PONTO ao
+// montar a cena: lá dentro chamam-se `handL`. Procurar por `hand.L` devolve
+// `undefined` — e `undefined` aqui não dá erro nenhum, dá uma flecha a sair dos
+// pés do arqueiro e um braço que nunca puxa a corda. Duas coisas que eu tinha
+// escrito e que nunca chegaram a acontecer.
+function osso(raiz, nome) {
+  return raiz.getObjectByName(nome) || raiz.getObjectByName(nome.replace(".", ""));
+}
 let guiao = null, tGuiao = 0, iGuiao = 0;
 
 function montarGuiao() {
   const g = [];
-  let t = 1.0;
+  const lado = (rei) => exercitos[rei];
+  const inimigo = (rei) => exercitos[rei === "A" ? "B" : "A"].homens;
+  const dos = (rei, tipo) => lado(rei).homens.filter((h) => h.tipo === tipo);
   // três flechas por arqueiro em cada salva: uma flecha sozinha é um tiro,
   // três ao mesmo tempo são uma SALVA -- e é a salva que se lê de longe
   const POR_ARQUEIRO = 3;
-  for (let salva = 0; salva < 12; salva++) {
+  let t = 1.0;
+
+  // ── A VAGA É A BATIDA DA CENA ─────────────────────────────────────────────
+  // E não é invenção da animação: é a mecânica. Quando o Rei manda um ataque
+  // composto, escolhe a ORDEM das tropas, e essa ordem é exatamente isto — os
+  // arqueiros a abrir, os lanceiros a fechar, e assim por diante. Uma batalha
+  // sem vagas é uma trapalhada sem forma; com vagas tem princípio, meio e fim
+  // de graça, e cada tempo lê-se porque é um tipo contra outro.
+  for (let vaga = 0; vaga < 4; vaga++) {
+    // ── as flechas abrem ───────────────────────────────────────────────────
     for (const rei of ["A", "B"]) {
-      const meus = exercitos[rei].homens.filter((h) => h.tipo === "arqueiro");
-      const deles = exercitos[rei === "A" ? "B" : "A"].homens;
-      meus.forEach((h, k) => {
+      dos(rei, "arqueiro").forEach((h, k) => {
         const q = t + k * 0.24;
         g.push({ t: q, faz: "puxar", quem: h });
         for (let f = 0; f < POR_ARQUEIRO; f++)
-          g.push({ t: q + 0.70 + f * 0.13, faz: "atirar", quem: h, deles,
-                   mata: f === 0 && k === 0 && salva >= 2 && salva % 2 === 0 });
+          g.push({ t: q + 0.70 + f * 0.13, faz: "atirar", quem: h,
+                   deles: inimigo(rei), mata: f === 0 && k === 0 && vaga > 0 });
       });
     }
-    t += 2.9;
+    t += 3.4;
+
+    // ── e as lanças fecham ─────────────────────────────────────────────────
+    for (const rei of ["A", "B"])
+      g.push({ t, faz: "carregar", quem: dos(rei, "lanceiro"), quanto: 3.6 });
+    t += 1.3;
+    for (let k = 0; k < 3; k++) {
+      for (const rei of ["A", "B"])
+        dos(rei, "lanceiro").forEach((h, j) => {
+          g.push({ t: t + k * 0.95 + j * 0.17, faz: "bater", quem: h,
+                   deles: inimigo(rei), mata: k === 2 && j === 0 });
+        });
+    }
+    t += 3.4;
+    for (const rei of ["A", "B"])
+      g.push({ t, faz: "carregar", quem: dos(rei, "lanceiro"), quanto: 0 });
+    t += 2.2;
   }
   g.sort((a, b) => a.t - b.t);
   return g;
@@ -292,13 +345,27 @@ function tocarGuiao(dt) {
   tGuiao += dt;
   while (iGuiao < guiao.length && guiao[iGuiao].t <= tGuiao) {
     const ev = guiao[iGuiao++];
+    if (ev.faz === "carregar") {
+      for (const h of ev.quem) if (!h.caido) h.avancoAlvo = ev.quanto;
+      continue;
+    }
     if (ev.quem.caido) continue;
+    if (ev.faz === "bater") {
+      // o golpe e a queda são o MESMO instante: é isso que os liga aos olhos
+      // de quem vê. Com meio segundo entre eles já parecem duas coisas.
+      if (ev.quem.acao[ev.quem.pose]) ev.quem.acao[ev.quem.pose].fadeOut(0.12);
+      ev.quem.acao.bater.reset().fadeIn(0.12).play();
+      ev.quem.pose = "bater";
+      const vivos = ev.deles.filter((h) => !h.caido && h.tipo === "lanceiro");
+      if (ev.mata && vivos.length) tombar(vivos[0]);
+      continue;
+    }
     if (ev.faz === "puxar") { ev.quem.puxa = 0; continue; }
     ev.quem.puxa = null;
     const vivos = ev.deles.filter((h) => !h.caido);
     if (!vivos.length) continue;
     const alvo = vivos[Math.floor(Math.random() * vivos.length)];
-    const arco = ev.quem.raiz.getObjectByName("hand.L");
+    const arco = osso(ev.quem.raiz, "hand.L");
     (arco || ev.quem.raiz).getWorldPosition(_mao);
     _mao.y += 1.0;
     const d = alvo.raiz.position.clone();
@@ -363,10 +430,7 @@ function avancar(dt) {
                                                           dt / T_POSTO);
       } else if (!e.pronto) {
         e.pronto = true;                        // chegou: põe-se em guarda
-        for (const h of e.homens) {
-          h.acao.andar.fadeOut(0.35);
-          h.acao.parar.reset().fadeIn(0.35).play();
-        }
+        for (const h of e.homens) pose(h, "parar");
       }
     }
     if (A.pronto && B.pronto) {
@@ -399,17 +463,34 @@ function avancar(dt) {
         return;
       }
       h.mix.update(dt);
+      // ── O AVANÇO DA VAGA ──────────────────────────────────────────────
+      // A linha de guarda é o lugar de cada um; a vaga que ataca sai dela e
+      // volta. Guardar isto como um DESVIO à linha (e não como uma posição
+      // nova) é o que faz o recuo ser de graça: manda-se o desvio a zero.
+      if (travados) {
+        const dAv = h.avancoAlvo - h.avanco;
+        if (Math.abs(dAv) > 0.03) {
+          h.avanco += Math.sign(dAv) * Math.min(Math.abs(dAv), 6 * dt);
+          if (h.pose !== "bater") pose(h, "andar");
+        } else if (h.pose === "andar") {
+          pose(h, "parar");
+        }
+        if (h.pose === "bater"
+            && (h.acao.bater.paused || h.acao.bater.time >= h.golpe - 1e-3))
+          pose(h, "parar");
+      }
       // a corda a ser puxada: o braço direito recua enquanto o tiro se prepara.
       // Aplica-se DEPOIS do tocador, senão a animação escrevia por cima.
       if (h.puxa !== null && h.puxa !== undefined) {
         h.puxa = Math.min(0.7, h.puxa + dt);
-        const b = h.raiz.getObjectByName("lowerarm.R");
+        const b = osso(h.raiz, "lowerarm.R");
         if (b) b.quaternion.multiply(
           _qPuxa.setFromAxisAngle(_eixoPuxa, -1.25 * (h.puxa / 0.7)));
       }
       // cada homem uma casa atrás do da frente, em metros e não em postos:
       // um posto é uma unidade de TEMPO, e a coluna é uma coisa física
-      const m = COMP * (alvo + 0.5) / N_POSTOS - e.sentido * i * 6.2;
+      const m = COMP * (alvo + 0.5) / N_POSTOS
+        - e.sentido * i * 6.2 + e.sentido * h.avanco;
       const rumo = noCaminho(Math.max(2, Math.min(COMP - 2, m)), _p)
         + (e.sentido < 0 ? Math.PI : 0);
       const lat = ((i % 2) * 2 - 1) * 1.9;
@@ -433,6 +514,7 @@ function passo() {
   avancar(dt);
 }
 window.avancar = avancar;      // para conferir com o painel escondido
+window.ex = exercitos;
 window.diag = () => ({ flechas: flechas.count, noAr: voo.filter((f) => f.cravada < 0).length,
   caidos: [...exercitos.A.homens, ...exercitos.B.homens].filter((h) => h.caido).length,
   guiao: guiao ? guiao.length : 0, i: iGuiao, t: Math.round(tGuiao) });
@@ -462,7 +544,10 @@ for (const b of document.querySelectorAll("#hud button")) {
         e.posto = rei === "A" ? -1 : N_POSTOS;
         e.prog = 0;
         e.pronto = false;
-        for (const h of e.homens) { h.caido = null; h.puxa = null; }
+        for (const h of e.homens) {
+          h.caido = null; h.puxa = null; h.avanco = 0; h.avancoAlvo = 0;
+          pose(h, "andar");
+        }
         for (const h of e.homens) {
           h.acao.parar.fadeOut(0.3);
           h.acao.andar.reset().fadeIn(0.3).play();
