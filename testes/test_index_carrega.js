@@ -89,7 +89,7 @@ t("o script roda ate o fim sem lancar (pega TDZ e nome sumido)", () => {
 t("o mapa autoral chegou inteiro ao index", () => {
   const Iberia = require(path.join(RAIZ, "world-iberia.js"));
   assert.strictEqual(Iberia.CIDADES.length, 24);
-  assert.strictEqual(Iberia.ESTRADAS.length, 39);
+  assert.strictEqual(Iberia.ESTRADAS.length, 37);
   assert.deepStrictEqual(Iberia.verificarEquilibrio(), []);
   // os campos cosmeticos assados em 03/08 continuam la
   assert.ok(Iberia.CIDADES.some((c) => c.desloc), "sumiram os `desloc`");

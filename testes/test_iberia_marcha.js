@@ -1,7 +1,7 @@
 // test_iberia_marcha.js — Fase 3, fatia 1: mundo da Iberia + marcha por custo.
 //
 // O que este teste protege:
-//   1. o teatro nasce do arquivo autoral (24 cidades, 39 estradas, 2 capitais)
+//   1. o teatro nasce do arquivo autoral (24 cidades, 37 estradas, 2 capitais)
 //   2. a marcha sai de rota(), NAO de Math.hypot  (a lacuna L3, de vez)
 //   3. o fator de tropa preserva o espelhamento do mapa
 //   4. o mapa procedural (v1/v2) continua medindo por pixel como antes
@@ -26,9 +26,9 @@ console.log("EQUILIBRIO DO ARQUIVO");
 t("verificarEquilibrio() zerado (o teste de sanidade do mapa, no CI)", () => {
   assert.deepStrictEqual(Iberia.verificarEquilibrio(), []);
 });
-t("24 cidades / 39 estradas / par bijetivo", () => {
+t("24 cidades / 37 estradas / par bijetivo", () => {
   assert.strictEqual(Iberia.CIDADES.length, 24);
-  assert.strictEqual(Iberia.ESTRADAS.length, 39);
+  assert.strictEqual(Iberia.ESTRADAS.length, 37);
   const byId = Object.fromEntries(Iberia.CIDADES.map((c) => [c.id, c]));
   for (const c of Iberia.CIDADES) assert.strictEqual(byId[c.par].par, c.id, "par quebrado em " + c.id);
   assert.strictEqual(Iberia.CIDADES.filter((c) => c.lado === "O").length, 12);
@@ -45,7 +45,7 @@ t("24 cidades, 2 capitais, 12 por lado", () => {
   assert.strictEqual(e.aldeias.filter((a) => a.dono === null).length, 22);
 });
 
-t("as 39 estradas do arquivo viraram a rede (nenhuma derivada)", () => {
+t("as 37 estradas do arquivo viraram a rede (nenhuma derivada)", () => {
   const e = Engine.criarEstadoInicial(cfgIberia());
   const n = Object.values(e.estradas.adj).reduce((s, v) => s + v.length, 0) / 2;
   assert.strictEqual(n, Iberia.ESTRADAS.length);
@@ -86,16 +86,16 @@ t("turnos saem do custo autoral, nao da linha reta", () => {
 });
 
 // Na rede v3 Salamanca e Toledo deixaram de ter estrada directa: vai-se por
-// Madrid, custo 6. O que o teste guarda nao e o numero -- e que o percurso
+// Badajoz, custo 6,5. O que o teste guarda nao e o numero -- e que o percurso
 // e cobrado pelo CUSTO AUTORAL e nao pela distancia em pixeis, que aqui o
-// subestima (4 contra 6). A asercao de baixo tranca isso.
+// subestima (4 contra 7). A asercao de baixo tranca isso.
 t("salamanca-toledo cobra o custo autoral, nao o pixel", () => {
   const e = Engine.criarEstadoInicial(cfgIberia());
   const a = e.aldeias[idDe(e, "salamanca")], b = e.aldeias[idDe(e, "toledo")];
   const porPixel = Math.hypot(a.x - b.x, a.y - b.y) / Iberia.MAPA.pxPorTurno;
   const cam = Engine.caminhoEntre(e, a.id, b.id);
   const turnos = Engine.turnosDeCaminho(e, cam, { arqueiro: 5 });
-  assert.strictEqual(turnos, 6);                 // salamanca>madrid>toledo
+  assert.strictEqual(turnos, 7);                 // salamanca>badajoz>toledo
   assert.ok(Math.ceil(porPixel) < turnos,
     "o teste perde o sentido se o pixel nao subestimar a serra");
 });
