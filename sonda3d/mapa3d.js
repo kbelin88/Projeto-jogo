@@ -57,26 +57,83 @@ export async function iniciar(hospedeiro, opcoes = {}) {
   cena.fog = new THREE.Fog(0x8fb0c2, LX * 0.95, LX * 2.6);
 
   // ── o mar ───────────────────────────────────────────────────────────────
+  // ── A AGUA A 0 m, ONDE O FORNO A ESPERA ───────────────────────────────────
+  // Esteve a -11 m desde 08/09, de antes de haver praias. O forno desenha a
+  // praia a mergulhar ate -3,5 m e a linha de agua da rocha a +2 m -- a contar
+  // com um mar a zero. Com a agua 11 m abaixo, toda a costa acabava num degrau
+  // de rocha de 12 a 14 m, e nao havia praia que se visse. Medido a 11/09:
+  // nenhuma peca e nenhuma arvore do mapa fica abaixo de 2 m, portanto subir a
+  // agua nao afoga nada.
+  //
+  // ── RASO JUNTO A COSTA, FUNDO AO LARGO ─────────────────────────────────────
+  // Uma cor so, igual na beira e em alto mar, nao diz onde a terra acaba. O
+  // `mar_costa.png` (do forno) da a distancia de cada ponto a terra; com ela o
+  // mar fica turquesa e transparente junto a costa, escuro ao largo, e ganha
+  // uma fita de espuma na linha de agua. Sem os ficheiros, fica como era.
+  let costa = null;
+  try {
+    const meta = await (await fetch(BASE + "mar_costa.json")).json();
+    const tex = await new THREE.TextureLoader().loadAsync(BASE + "mar_costa.png");
+    tex.flipY = false;                      // a linha 0 da imagem e o norte (z0)
+    tex.colorSpace = THREE.NoColorSpace;    // sao metros, nao sao cor
+    costa = { tex, meta };
+  } catch (e) {
+    console.warn("mar sem mar_costa.* -- cor chapada (correr o forno):", e);
+  }
   const matMar = new THREE.MeshStandardMaterial({
-    color: 0x1d4657, roughness: 0.40, metalness: 0.06 });
+    color: 0x1d4657, roughness: 0.40, metalness: 0.06, transparent: true });
   matMar.onBeforeCompile = (sh) => {
     sh.uniforms.tempo = { value: 0 };
+    if (costa) {
+      const m = costa.meta;
+      sh.defines = Object.assign(sh.defines || {}, { TEM_COSTA: "" });
+      sh.uniforms.costa = { value: costa.tex };
+      sh.uniforms.costaT = { value: new THREE.Vector4(m.x0, m.z0, m.dx, m.dz) };
+      sh.uniforms.costaN = { value: new THREE.Vector2(m.W, m.H) };
+    }
     matMar.userData.sh = sh;
     sh.vertexShader = `varying vec3 vMar;
 ` + sh.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
 vMar = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
     sh.fragmentShader = `uniform float tempo;
 varying vec3 vMar;
-` + sh.fragmentShader.replace("#include <normal_fragment_begin>", `#include <normal_fragment_begin>
+#ifdef TEM_COSTA
+uniform sampler2D costa;
+uniform vec4 costaT;
+uniform vec2 costaN;
+#endif
+` + sh.fragmentShader.replace("#include <color_fragment>", `#include <color_fragment>
+// metros ate a terra; fora do retangulo do mapa e sempre alto mar
+float dCosta = 255.0;
+#ifdef TEM_COSTA
+vec2 cuv = vec2(((vMar.x - costaT.x) / costaT.z + 0.5) / costaN.x,
+                ((vMar.z - costaT.y) / costaT.w + 0.5) / costaN.y);
+if (all(greaterThan(cuv, vec2(0.0))) && all(lessThan(cuv, vec2(1.0))))
+  dCosta = texture2D(costa, cuv).r * 255.0;
+#endif
+float fundo = smoothstep(3.0, 150.0, dCosta);
+diffuseColor.rgb = mix(vec3(0.040, 0.235, 0.245), diffuseColor.rgb, fundo);
+// a espuma: uma fita de ~4 m que respira, com a beira a ondular
+float ondaE = sin(vMar.x * 0.31 + tempo * 1.2) * 0.5 + sin(vMar.z * 0.27 - tempo * 0.9) * 0.5;
+float faixa = 1.0 - smoothstep(0.0, 4.0 + ondaE * 1.5, dCosta);
+float espuma = clamp(faixa * (0.6 + 0.4 * sin(dCosta * 1.4 - tempo * 1.7)), 0.0, 1.0);
+diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.85, 0.88, 0.88), espuma * 0.8);
+// transparente no raso: e o que deixa ver o fundo junto a costa
+diffuseColor.a = max(mix(0.45, 1.0, smoothstep(0.0, 35.0, dCosta)), espuma);`)
+      .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>
+roughnessFactor = mix(roughnessFactor, 0.95, espuma);`)
+      .replace("#include <normal_fragment_begin>", `#include <normal_fragment_begin>
 vec2 mp = vMar.xz;
 float o1 = sin(mp.x * 0.055 + mp.y * 0.021 + tempo * 1.10);
 float o2 = sin(mp.x * -0.017 + mp.y * 0.049 + tempo * 0.83);
 float o3 = sin(mp.x * 0.031 + mp.y * -0.037 + tempo * 1.47);
-normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 0.024));`);
+// mais mansa junto a costa
+float calma = 0.3 + 0.7 * fundo;
+normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 0.024) * calma);`);
   };
   const mar = new THREE.Mesh(new THREE.PlaneGeometry(LX * 4, LY * 4), matMar);
   mar.rotation.x = -Math.PI / 2;
-  mar.position.y = -11;
+  mar.position.y = 0;
   mar.receiveShadow = true;
   cena.add(mar);
 

@@ -270,6 +270,9 @@ for cid, c in centros.items():
 print("SONDA chao carimbado sob as aldeias: %d -> %d celulas (+%.1f%%)"
       % (antes_terra, int(terra.sum()),
          (terra.sum() - antes_terra) / max(antes_terra, 1) * 100))
+# a mascara FINAL, com as aldeias, fica em disco para o `mar_costa.py`: a
+# espuma do mar tem de seguir a mesma beira que a malha, carimbos incluidos
+np.save(os.path.join(os.getcwd(), "ferramentas/cena/_terra_final.npy"), terra)
 
 
 def em_terra(mx, my):
@@ -1239,3 +1242,12 @@ with open(os.path.join(SAIDA, "mapa3d.json"), "w", encoding="utf-8") as f:
                            for c, ms in mastros.items()}}, f, separators=(",", ":"))
 print("SONDA -> sonda3d/mapa3d.json  (%.0f KB)  em %.1f s"
       % (os.path.getsize(os.path.join(SAIDA, "mapa3d.json")) / 1024, time.time() - t0))
+
+# ── O MAR PRECISA DE SABER ONDE E RASO ──────────────────────────────────────
+# A distancia a costa sai de um script a parte porque o Python do Blender nao
+# traz scipy. Corre aqui para que um forno deixe tudo coerente: se a costa
+# mudar e o mar nao, a espuma fica a flutuar onde a beira estava.
+_mc = subprocess.run(["python", os.path.join("ferramentas", "cena", "mar_costa.py")],
+                     capture_output=True, text=True)
+print((_mc.stdout or "").strip() if _mc.returncode == 0
+      else "SONDA AVISO mar_costa falhou: " + (_mc.stderr or "")[-400:])
