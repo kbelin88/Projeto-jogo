@@ -427,7 +427,8 @@ em 18/08; o P4 parece ter resolvido, falta confirmar num relatório;
 `finish error`/`length` (laguna-xs-2.1, nano-12b-v2-vl, e o próprio Lightning em 18 dos 30
 turnos de um lado do espelho);
 (e) cliente OpenRouter **duplicado** (`rei.js` × `index.html`) — a dívida continua;
-(f) 2 chaves expostas em 03/08 por revogar;
+(f) ~~2 chaves expostas em 03/08 por revogar~~ — **feito**: revogadas pelo Lucas em agosto
+(confirmado por ele em 11/09). Não voltar a listar como pendente;
 (g) ~~`main` por consolidar~~ — **feito**: `main` limpa e sincronizada (28/08);
 (h) ~~counter por tipo de alvo no `analisar-log.js`~~ — **estava feito desde 20/08** e a nota é
 que ficou para trás. É `counterPorAlvoDe` (`analisar-log.js:383`); exige o `.replay.json` como
@@ -444,8 +445,10 @@ e é esse teto, mais o relógio, que dimensiona uma bateria. Custo observado qua
 
 O jogo continua a ser o `index.html`. O que mudou é a **pele**: existe agora um
 mapa a três dimensões, com aldeias, estradas, mata, relevo, costa — e **tropas
-animadas a marchar por ela**. Liga-se com `index.html?mapa=3d`; sem esse
-parâmetro o jogo abre no canvas 2D de sempre e nada disto é carregado.
+animadas a marchar por ela**. **Desde 11/09 o 3D é o default** do `index.html`
+(é o que abre pelo `python servir.py`); o canvas 2D sozinho fica em
+`index.html?mapa=2d`. Se os ficheiros do forno faltarem, o jogo avisa e volta ao
+2D. O stub de Node dos testes não tem `location.search`, por isso corre no 2D.
 
 ### 8.1 O que corre no navegador
 

@@ -1847,8 +1847,14 @@
   }
 
   // ===== O MAPA 3D ==========================================================
-  // Ligado por ?mapa=3d no endereco. Sem o parametro o jogo corre exatamente
-  // como antes -- o mesmo padrao do ?aldeia=v4.
+  // O 3D e o DEFAULT desde 11/09: abrir o jogo pelo `python servir.py` tem de
+  // dar o jogo que existe hoje, e nao o de antes. O canvas 2D sozinho continua
+  // a um parametro de distancia: ?mapa=2d. (O ?mapa=3d antigo continua a
+  // valer, porque qualquer coisa que nao seja 2d e 3D.)
+  //
+  // So liga num navegador de verdade (`location.search` e string): o stub de
+  // Node dos testes nao tem `search`, e ali o jogo corre no caminho 2D como
+  // sempre correu -- o test_index_carrega continua a provar o mesmo script.
   //
   // ── ISTO NAO E UM SEGUNDO RULESET ──────────────────────────────────────
   // O CLAUDE.md proibe um segundo ruleset selecionavel em tempo de execucao, e
@@ -1864,7 +1870,8 @@
   // tudo o que o 2D faz, tirar o 2D seria trocar uma coisa completa por uma
   // incompleta.
   const MAPA_3D = (typeof location !== "undefined" &&
-                   /(\?|&)mapa=3d(&|$)/.test(location.search));
+                   typeof location.search === "string" &&
+                   !/(\?|&)mapa=2d(&|$)/.test(location.search));
   let M3D = null;
 
   // exposta de proposito: quando a ponte nao empurra nada, e preciso poder
@@ -1940,7 +1947,7 @@
         // ── O CONTADOR, VISIVEL ──────────────────────────────────────────
         // A ferramenta de diagnostico existia so como API de consola, e uma
         // ferramenta que e preciso saber invocar nao serve a quem esta a jogar.
-        // Canto inferior esquerdo, so com ?mapa=3d, e desliga-se com a tecla F.
+        // Canto inferior esquerdo, so no mapa 3D, e desliga-se com a tecla F.
         const cx = document.createElement("div");
         cx.id = "fps3d";
         // z-index alto e POR CIMA da caixa de benchmark de proposito: a
