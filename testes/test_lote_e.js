@@ -104,7 +104,9 @@ t("E8.5 analisador: vazios/sem-usage no fixture + retro-compat sem crash", () =>
   assert.strictEqual(fx.reis.B.finish_hist.stop, 3, "finish_hist de B deveria contar 3 stop");
   assert.strictEqual(fx.reis.B.ms_turnos_vazios.n, 3, "3 duracoes de turno vazio de B");
   // retro-compat: um log REAL antigo (03/08, pre-D1/E5) -> campos novos null, sem crash.
-  const antigo = analisarLog(require("path").join(__dirname, "..", "resultados", "baseline", "partida_ollama-qwen2.5-3b_vs_openrouter-nvidia-nemotron-nano-9b-v2-free_2026-08-03-21-21.txt"));
+  // Copia do resultados/baseline/ para dentro de testes/ (11/09): o resultados/
+  // saiu do git em 28/08, e o CI num clone limpo falhava aqui desde entao.
+  const antigo = analisarLog(require("path").join(__dirname, "ref-lote-e", "fixture_log_antigo_0803.txt"));
   assert.strictEqual(antigo.reis.A.finish_hist, null, "log antigo: finish_hist deveria ser null");
   assert.strictEqual(antigo.reis.A.ms_turnos_vazios, null, "log antigo: ms deveria ser null");
 });
