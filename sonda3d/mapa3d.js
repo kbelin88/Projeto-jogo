@@ -264,11 +264,19 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
   // entram por nome. O `chao_aldeia` e o disco de terra batida dentro da
   // muralha: e ele que tapa a ponta da estrada que entra pelo portao, e sem
   // este nome aqui ele viria no ficheiro e nunca chegaria a cena.
-  for (const nome of ["chao", "estradas", "chao_aldeia"])
+  // A `areia` (11/09) e a quarta: a fita das praias, 20 cm por cima da relva.
+  for (const nome of ["chao", "estradas", "chao_aldeia", "areia", "rocha_topo"])
     for (const ch of (banco[nome] || [])) {
       if (nome === "chao") malhaChao = ch;
       ch.receiveShadow = true;
       ch.castShadow = false;
+      if (nome === "areia") {
+        // um desvio pequeno: chega para vencer a relva onde ela sobe mais
+        // que os 20 cm, e fica abaixo do da estrada
+        ch.material.polygonOffset = true;
+        ch.material.polygonOffsetFactor = -2;
+        ch.material.polygonOffsetUnits = -4;
+      }
       if (nome === "estradas") {
         ch.material.polygonOffset = true;
         ch.material.polygonOffsetFactor = -4;
@@ -315,26 +323,56 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
   const V = new THREE.Vector3(), E = new THREE.Vector3(), R = new THREE.Euler();
   // Blender e Z-para-cima; o exportador virou a cena para Y-para-cima, mas as
   // COLOCACOES foram gravadas em coordenadas do Blender. (x, y, z) -> (x, z, -y).
-  const por = (lista, x, y, z, rz, e) => {
+  // ── A COR ENTRA POR INSTANCIA ───────────────────────────────────────────
+  // Uma mata sao 22 mil copias da MESMA malha: a cor nao pode vir da geometria.
+  // O `instanceColor` do three multiplica a cor do material por copia -- e o
+  // unico sitio onde uma arvore pode ser diferente da do lado sem custar um
+  // triangulo. Toda a instancia leva cor (branco quando nao ha razao para
+  // outra): o vetor nasce a zeros, e uma instancia sem cor sairia PRETA.
+  const BRANCO = new THREE.Color(1, 1, 1);
+  const por = (lista, x, y, z, rz, e, cor) => {
     V.set(x, z, -y);
     R.set(0, rz, 0);
     Q.setFromEuler(R);
     E.set(e, e, e);
     M.compose(V, Q, E);
-    for (const im of lista) im.setMatrixAt(im.count++, M);
+    for (const im of lista) {
+      im.setMatrixAt(im.count, M);
+      im.setColorAt(im.count, cor || BRANCO);
+      im.count++;
+    }
   };
   for (const c of MAPA.copias) {
     const l = inst[c.peca]; if (!l) continue;
     por(l, c.p[0], c.p[1], c.p[2], c.rz, c.e); nInst++;
   }
-  for (const m of MAPA.manchas)
+  // ── A MATA MUDA DE TOM COM A REGIAO ─────────────────────────────────────
+  // `m.h` e a humidade do sitio (a mesma que pinta o prado): 1 = noroeste
+  // humido, 0 = sul seco. Por cima, cada arvore leva um desvio proprio -- sem
+  // ele, 380 manchas de 6 arranjos leem-se como carimbos.
+  const MATA_SECA = new THREE.Color(1.14, 1.02, 0.72);
+  const MATA_HUMIDA = new THREE.Color(0.78, 1.00, 0.84);
+  const _cor = new THREE.Color();
+  for (const m of MAPA.manchas) {
+    const h = m.h === undefined ? 0.5 : m.h;
+    let k = 0;
     for (const t of MAPA.arranjos[m.b]) {
       const l = inst[t.peca]; if (!l) continue;
+      // desvio deterministico: a mesma arvore tem sempre o mesmo tom, entre
+      // partidas e entre o jogo e o video
+      const r = Math.sin((m.p[0] + t.p[0]) * 12.9898 + (m.p[1] + t.p[1]) * 78.233
+                         + k++ * 3.17) * 43758.5453;
+      const d = 0.90 + 0.20 * (r - Math.floor(r));
+      _cor.copy(MATA_SECA).lerp(MATA_HUMIDA, h).multiplyScalar(d);
       por(l, m.p[0] + t.p[0] * m.e, m.p[1] + t.p[1] * m.e,
-          (m.z || 0) + t.p[2] * m.e, t.rz, t.e * m.e); nInst++;
+          (m.z || 0) + t.p[2] * m.e, t.rz, t.e * m.e, _cor); nInst++;
     }
+  }
   for (const l of Object.values(inst))
-    for (const im of l) im.instanceMatrix.needsUpdate = true;
+    for (const im of l) {
+      im.instanceMatrix.needsUpdate = true;
+      if (im.instanceColor) im.instanceColor.needsUpdate = true;
+    }
 
   // ── as bandeiras, uma por mastro, com a cor do dono ──────────────────────
   // Um pano por REI, porque a cor vive no material. Uma aldeia que troca de

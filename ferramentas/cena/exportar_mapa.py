@@ -380,7 +380,160 @@ _gy = LY / 2 - np.arange(th, dtype=np.float32)[:, None] * py
 _fal = (0.5 + 0.5 * np.sin(_gx * 0.0034 + _gy * 0.0021)) * 0.6      + (0.5 + 0.5 * np.sin(_gx * 0.0102 - _gy * 0.0131)) * 0.4
 _fal = np.clip((_fal - 0.42) / 0.24, 0.0, 1.0)      # ~metade da costa e rocha
 _tecto = PRAIA + (ALTURA_MAX - PRAIA) * _t
-relevo = np.minimum(relevo, _tecto + _fal * (ALTURA_MAX - _tecto))
+_tecto_velho = _tecto + _fal * (ALTURA_MAX - _tecto)     # a costa ate 11/09
+
+# ── A PRAIA DE VERDADE (11/09) ──────────────────────────────────────────────
+# O tecto acima so baixava a BEIRA. A ilha assenta num planalto a ~40 m, e
+# nos 40 m de alcance o tecto subia de -3,5 a 150: medido, a "praia" ia de 3 m
+# a 46 m nos primeiros 30 m -- uma rampa de 60 graus, relva aos dentes ate um
+# degrau de rocha. Nenhum troco de praia tinha chao baixo a 30 m da agua.
+#
+# Uma praia e outra forma: um AREAL quase plano que entra na agua, e atras uma
+# ENCOSTA que sobe ao planalto a um declive de serra, nao de parede.
+AREAL = 30.0                      # m de areal, da beira da mascara ao topo
+AREAL_FUNDO = -2.0                # a beira da mascara ja fica debaixo de agua
+AREAL_TOPO = 1.2                  # o areal seco acaba a 1,2 m
+ENCOSTA = math.tan(math.radians(22.0))
+ALCANCE = 60                      # celulas (~295 m) de distancia a agua
+SOLTA = 20                        # nas ultimas 20, o tecto larga o terreno
+_dm = np.full(terra.shape, float(ALCANCE), dtype=np.float32)
+_f = ~terra
+for _k in range(1, ALCANCE + 1):
+    _g = (_f | np.roll(_f, 1, 0) | np.roll(_f, -1, 0)
+             | np.roll(_f, 1, 1) | np.roll(_f, -1, 1))
+    if _k % 2 == 0:
+        # alternar 4 e 8 vizinhos da uma distancia octogonal, quase redonda;
+        # so com 4 a encosta sairia em losango
+        _g = (_g | np.roll(_f, (1, 1), (0, 1)) | np.roll(_f, (1, -1), (0, 1))
+                 | np.roll(_f, (-1, 1), (0, 1)) | np.roll(_f, (-1, -1), (0, 1)))
+    _dm[_g & ~_f] = _k
+    _f = _g
+_dm = np.where(terra, _dm, 0.0) * px                 # em metros
+_s = np.clip(_dm / AREAL, 0.0, 1.0)
+_s = _s * _s * (3 - 2 * _s)
+_perfil = np.where(_dm <= AREAL, AREAL_FUNDO + (AREAL_TOPO - AREAL_FUNDO) * _s,
+                   AREAL_TOPO + (_dm - AREAL) * ENCOSTA)
+# o fim do alcance nao pode ser um corte: o tecto sobe ate deixar de mandar
+_w = np.clip((_dm / px - (ALCANCE - SOLTA)) / SOLTA, 0.0, 1.0)
+_w = _w * _w * (3 - 2 * _w)
+_perfil = _perfil * (1 - _w) + ALTURA_MAX * _w
+
+# ── SO EM COSTA BAIXA ───────────────────────────────────────────────────────
+# Onde a serra chega ao mar, uma praia a 22 graus teria de rapar a serra ate
+# centenas de metros para dentro. Na costa a serio e ai que ha falesia. A
+# altura da REGIAO (borrao de ~120 m) decide: abaixo de 50 m pode haver praia,
+# acima de 75 m e rocha, e a mancha `_fal` continua a variar o resto.
+_alto = _caixa(relevo, 12)
+_rocha = 1.0 - (1.0 - _fal) * np.clip((75.0 - _alto) / 25.0, 0.0, 1.0)
+_tecto_praia = _perfil + _rocha * (ALTURA_MAX - _perfil)
+
+# ── ONDE HA ESTRADA OU ALDEIA, A COSTA FICA COMO ERA ────────────────────────
+# Medido antes de escrever isto: 24 das 37 estradas passam a menos de 200 m de
+# uma praia. Deixa-las seguir o chao novo fazia 1047 pontos de estrada descer
+# (mediana 37 m, ate 116 m) e 16 estradas passar de 15 graus. Protegidas, a
+# praia perde 28% da costa -- e estradas e aldeias ficam IGUAIS, byte a byte.
+# Dentro da zona o tecto e o velho; fora dela, o novo; e 40 m de transicao.
+#
+# O traçado aqui e pelos CENTROS das aldeias, e nao pelas bocas dos portoes:
+# a zona tem 90 m para cada lado, e a diferenca e de metros. As ligacoes e
+# as curvas sao as mesmas que a fita das estradas usa, mais abaixo.
+PROTEGE_ESTRADA = 90.0
+PROTEGE_FADE = 40.0
+VIA_DE = {}
+for _e in REDE.get("e", []):
+    if _e.get("via"):
+        VIA_DE[tuple(sorted((_e["de"], _e["para"])))] = em_metros(*_e["via"][0])
+LIGACOES = []
+for a, viz in REDE["v"].items():
+    for b in viz:
+        if a < b and a in centros and b in centros:
+            LIGACOES.append((a, b))
+_prot = np.full(terra.shape, 1e9, dtype=np.float32)
+_alc = PROTEGE_ESTRADA + PROTEGE_FADE
+
+
+def _proteger(x, y, raio):
+    """baixa `_prot` para (distancia ao ponto - raio) na vizinhanca do ponto"""
+    r = raio + PROTEGE_FADE
+    i0, i1 = max(0, int((x + LX / 2 - r) / px)), min(tw - 1, int((x + LX / 2 + r) / px) + 1)
+    j0, j1 = max(0, int((LY / 2 - y - r) / py)), min(th - 1, int((LY / 2 - y + r) / py) + 1)
+    if i1 < i0 or j1 < j0:
+        return
+    d = np.hypot(_gx[:, i0:i1 + 1] - x, _gy[j0:j1 + 1, :] - y) - raio
+    _prot[j0:j1 + 1, i0:i1 + 1] = np.minimum(_prot[j0:j1 + 1, i0:i1 + 1], d)
+
+
+for _a, _b in LIGACOES:
+    (_ax, _ay), (_bx, _by) = centros[_a], centros[_b]
+    _ctl = VIA_DE.get(tuple(sorted((_a, _b))))
+    _n = max(2, int(math.hypot(_bx - _ax, _by - _ay) / 10.0))
+    for _i in range(_n + 1):
+        _q = _i / _n
+        if _ctl:
+            _x = (1 - _q) ** 2 * _ax + 2 * (1 - _q) * _q * _ctl[0] + _q * _q * _bx
+            _y = (1 - _q) ** 2 * _ay + 2 * (1 - _q) * _q * _ctl[1] + _q * _q * _by
+        else:
+            _x, _y = _ax + (_bx - _ax) * _q, _ay + (_by - _ay) * _q
+        _proteger(_x, _y, PROTEGE_ESTRADA)
+for _cid, _c in centros.items():
+    # a RAMPA inteira do patamar (ver abaixo): ali o chao e da aldeia
+    _proteger(_c[0], _c[1], (C.PERFIS[REDE["c"][_cid]["t"]]["raio"] + 20.0) * 3.6)
+_p = np.clip(1.0 - _prot / PROTEGE_FADE, 0.0, 1.0)
+_p = _p * _p * (3 - 2 * _p)
+relevo = np.minimum(relevo, _tecto_velho * _p + _tecto_praia * (1 - _p))
+
+_bc = terra & (np.roll(~terra, 1, 0) | np.roll(~terra, -1, 0)
+               | np.roll(~terra, 1, 1) | np.roll(~terra, -1, 1))
+_praia_nova = _bc & (_p < 0.5) & (_rocha < 0.5)
+print("SONDA praia: %d de %d celulas de costa com areal esculpido; "
+      "%d protegidas por estrada/aldeia; relevo a 30 m da agua nas praias: mediana %.1f m"
+      % (_praia_nova.sum(), _bc.sum(), (_bc & (_p >= 0.5)).sum(),
+         float(np.median(relevo[terra & (_rocha < 0.5) & (_p < 0.5)
+                                & (np.abs(_dm - 30) < 3)])) if _praia_nova.any() else -1))
+
+# ── ONDE PODE HAVER AREIA ───────────────────────────────────────────────────
+# So onde houve praia esculpida: fora das falesias (`_rocha`), fora da costa
+# protegida (`_p`) e perto de agua. Um peso suave e nao uma mascara: a beira
+# da areia sai de uma curva de nivel sobre ele, e uma mascara de 0 e 1 voltava
+# a dar a escada da grelha. A mata le o mesmo peso, mais abaixo.
+AREIA_TOPO = 2.6          # ate onde a areia sobe, em metros acima do mar
+AREIA_ONDA = 0.9          # a beira seca ondula +-0,9 m: nunca e uma regua
+_rho_areia = _caixa((1.0 - _rocha) * (1.0 - _p)
+                    * np.clip((120.0 - _dm) / 40.0, 0.0, 1.0), 6).astype(np.float32)
+
+
+# ── A COR DO CAMPO, POR REGIAO ──────────────────────────────────────────────
+# O prado era uma CHAPA verde: o material do chao estava na paleta, e a paleta
+# e achatada pelo exportador -- nunca chegou a ter fotografia. Duas coisas
+# mudam aqui: o prado passa a ser um material com foto (`prado`, o mesmo
+# ladrilho de relva mas em 7 m), e a cor de vertice pinta-o por REGIAO, do
+# verde escuro do norte ao palha do sul. O campo sai do `cor_prado.py`, que
+# le a humidade do gerador da ilha (a mesma que decide onde ha bosques).
+_cp = subprocess.run(["python", os.path.join("ferramentas", "cena", "cor_prado.py")],
+                     capture_output=True, text=True)
+print((_cp.stdout or "").strip() if _cp.returncode == 0
+      else "SONDA AVISO cor_prado falhou: " + (_cp.stderr or "")[-300:])
+_f_prado = os.path.join(os.getcwd(), "ferramentas/cena/_prado.npy")
+_prado = (np.load(_f_prado) if os.path.exists(_f_prado)
+          else np.full(terra.shape, 0.5, dtype=np.float32))
+# ── DOIS TONS PROXIMOS, E NAO DOIS BIOMAS ───────────────────────────────
+# A primeira tentativa foi (1.24, 1.08, 0.60) contra (0.70, 0.94, 0.62) e a
+# ilha inteira saiu castanha: a fotografia da relva ja e escura e puxada ao
+# azeitona, e um multiplicador com o azul a 0,6 acaba em terra batida. O que
+# se quer e uma TENDENCIA -- norte mais fresco, sul mais palha -- nao duas
+# paisagens diferentes.
+
+
+def prado_em(mx, my):
+    i = min(max(int(round((mx + LX / 2) / px)), 0), tw - 1)
+    j = min(max(int(round((LY / 2 - my) / py)), 0), th - 1)
+    return float(_prado[j, i])
+
+
+def rho_areia_em(mx, my):
+    i = min(max(int(round((mx + LX / 2) / px)), 0), tw - 1)
+    j = min(max(int(round((LY / 2 - my) / py)), 0), th - 1)
+    return float(_rho_areia[j, i])
 
 
 def altura_em(mx, my):
@@ -500,22 +653,14 @@ def boca_para(cid, rumo_alvo):
 # para se ver de cima e estreita o suficiente para nao ser ridicula ao pe de uma
 # porta. E a primeira vez que as duas coisas tem de bater certo ao mesmo tempo.
 LARG_ESTRADA = 9.0                            # meia-largura, em metros
-# as curvas autorais, ja em metros da cena. O `via` do world-iberia esta em
-# coordenadas do viewBox, que e onde o desenho 2D vive.
-VIA_DE = {}
-for _e in REDE.get("e", []):
-    if _e.get("via"):
-        VIA_DE[tuple(sorted((_e["de"], _e["para"])))] = em_metros(*_e["via"][0])
+# as curvas autorais (`VIA_DE`, em metros da cena) e as `LIGACOES` sao
+# calculadas la em cima, na beira-mar: a zona que protege as estradas das
+# praias tem de seguir o MESMO traçado que esta fita.
 verts, faces, uvs, cores = [], [], [], []
 MIOLO = 0.52          # a fracao da fita que e terra nua
 BERMA = (0.62, 0.70, 0.44)   # a berma puxa ao verde sem apagar a terra
 trocos = 0
 eixos = []            # o CAMINHO de cada troco, para as tropas o seguirem
-LIGACOES = []
-for a, viz in REDE["v"].items():
-    for b in viz:
-        if a < b and a in centros and b in centros:
-            LIGACOES.append((a, b))
 for a, b in LIGACOES:
     ax, ay = centros[a]
     bx, by = centros[b]
@@ -726,8 +871,18 @@ antes_emp = len(manchas)
 # `em_terra` le a MASCARA, e desde que a praia mergulha isso ja nao chega: uma
 # mancha pode estar em terra pela mascara e a meio metro DEBAIXO de agua pelo
 # campo de alturas. Um pinhal na rebentacao.
+# e desde 11/09 tambem nao ha pinhal EM CIMA DO AREAL: numa praia o limiar
+# sobe ate ao topo da areia, com a mesma folga da onda da beira
 manchas = [m for m in manchas
-           if em_terra(*m["p"]) and altura_em(m["p"][0], m["p"][1]) > 1.2]
+           if em_terra(*m["p"]) and altura_em(m["p"][0], m["p"][1])
+           > 1.2 + (AREIA_TOPO + AREIA_ONDA + 1.0) * rho_areia_em(*m["p"])]
+# ── E LEVA A HUMIDADE DO SITIO ──────────────────────────────────────────────
+# O mesmo campo que pinta o prado pinta a mata: onde o chao e palha, a arvore
+# nao pode ser verde de junho. Quem aplica o tom e o navegador, por instancia
+# (`instanceColor`), porque a cor de uma peca instanciada nao pode vir da
+# malha -- ela e a MESMA malha 22 mil vezes.
+for _m in manchas:
+    _m["h"] = round(prado_em(_m["p"][0], _m["p"][1]), 3)
 afogadas = antes_emp - len(manchas)
 for m in manchas:
     m["z"] = round(altura_em(m["p"][0], m["p"][1]), 2)
@@ -936,7 +1091,10 @@ def _uv_rocha(ex, ey, ez, di, dj):
     de 1, com folga de sobra.
     """
     u = ey if abs(di) > abs(dj) else ex
-    return (u + 7.0 * math.sin(u * 0.0062 + ez * 0.011)
+    # 11/09: mais torcao e uma onda LENTA a mais (1,4 km). Visto de perto, o
+    # ladrilho ainda se lia em xadrez; somadas, as derivadas valem 0,15.
+    return (u + 10.0 * math.sin(u * 0.0062 + ez * 0.011)
+              + 4.0 * math.sin(u * 0.0023 + ez * 0.006)
               + 2.5 * math.sin(u * 0.028),
             ez + 3.2 * math.sin(u * 0.0105) + 1.1 * math.sin(u * 0.037))
 
@@ -1038,7 +1196,30 @@ for ca, cb, di, dj in beiras:
             (idx, _uv_rocha(verts[idx][0], verts[idx][1], verts[idx][2], di, dj))
             for idx in faces[-1])
 
+PRADO_SECO = (1.18, 1.06, 0.74)        # multiplicam a fotografia tratada
+PRADO_HUMIDO = (0.82, 0.99, 0.80)
+_ij = {v: k for k, v in indice.items()}          # vertice da grelha -> (i, j)
+
+
+def _cor_prado(vi):
+    ck = _ij.get(vi)
+    if ck is None:
+        return (1.0, 1.0, 1.0)
+    i, j = min(ck[0], tw - 1), min(ck[1], th - 1)
+    h = float(_prado[j, i])
+    # um granulado lento por cima, para o verde nao ser uma chapa so
+    n = 0.045 * math.sin(verts[vi][0] * 0.021 + verts[vi][1] * 0.017)
+    return tuple(PRADO_SECO[k] + (PRADO_HUMIDO[k] - PRADO_SECO[k]) * h + n
+                 for k in range(3))
+
+
 chao = P._novo(P._malha("chao", verts, faces, "relva", bisel=0), "relva")
+chao.data.materials.clear()
+chao.data.materials.append(
+    # `claro`: a fotografia da relva e escura, como a do caminho era
+    # o `claro` nao vai no glTF (o factor do glTF nao passa de 1): a
+    # fotografia ja sai clara do `tex_prado.py`
+    P.material_uv("prado", rugosidade=0.95, cor_vertice=True))
 # ── DUAS RANHURAS: O PRADO E A ROCHA ────────────────────────────────────────
 # A margem estava no mesmo material do chao, e por isso o penhasco era relva a
 # escorrer ate a agua. Uma ranhura propria e a diferenca entre uma ilha com
@@ -1051,11 +1232,18 @@ _uvc = chao.data.uv_layers.new(name="UVMap")
 _cvc = chao.data.color_attributes.new(name="Col", type="BYTE_COLOR",
                                       domain="CORNER")
 for _p in chao.data.polygons:
-    _m = uvs_face.get(_p.index) or {}
+    _m = uvs_face.get(_p.index)
     for _li in _p.loop_indices:
         _vi = chao.data.loops[_li].vertex_index
-        _uvc.data[_li].uv = _m.get(_vi, (0.0, 0.0))
-        _cvc.data[_li].color = (*cor_rocha.get(_vi, (1.0, 1.0, 1.0)), 1.0)
+        # ── POR FACE, E NAO POR VERTICE ─────────────────────────────────────
+        # O topo da parede PARTILHA vertices com o prado. Lidos por vertice, o
+        # tom da rocha entrava na relva e fazia uma orla escura na beira toda.
+        if _m is not None:
+            _uvc.data[_li].uv = _m.get(_vi, (0.0, 0.0))
+            _cvc.data[_li].color = (*cor_rocha.get(_vi, (1.0, 1.0, 1.0)), 1.0)
+        else:
+            _uvc.data[_li].uv = (verts[_vi][0], verts[_vi][1])   # metros
+            _cvc.data[_li].color = (*_cor_prado(_vi), 1.0)
 print("SONDA penhascos: %d faces de rocha em %d do chao" % (len(saia), len(faces)))
 for col in list(chao.users_collection):
     col.objects.unlink(col.objects.get(chao.name) or chao)
@@ -1063,6 +1251,154 @@ cena.objects.link(chao)
 chao.name = "chao"
 print("SONDA chao: %d faces de %.0f x %.0f m, ilha de %.0f x %.0f m"
       % (len(faces), px, py, LX, LY))
+
+# ── A AREIA ─────────────────────────────────────────────────────────────────
+# Uma malha propria, 20 cm por cima do chao, como o `chao_aldeia`: nao se mexe
+# nas 107 mil faces da relva. O glTF so leva UMA fotografia por material, por
+# isso relva e areia nao se misturam dentro de um material; tem de ser duas
+# superficies.
+#
+# ── E A BEIRA NAO E A GRELHA ────────────────────────────────────────────────
+# Escolher faces inteiras de 5 m dava outra vez os dentes. A beira sai de uma
+# CURVA DE NIVEL: cada triangulo do chao e recortado onde a altura cruza o
+# limiar (que ondula e que o peso `_rho_areia` baixa para longe das praias).
+# O corte cai a meio das arestas, onde calhar, e a beira fica uma linha
+# continua e torta -- que e o que a linha da vegetacao numa praia e.
+#
+# A cor de vertice separa a areia MOLHADA (escura, junto a agua) da SECA.
+AREIA_LEVANTA = 0.20
+ROCHA_LEVANTA = 0.10
+_saia_set = set(saia)
+
+
+def _fita(valor, levanta, cor_de):
+    """recorta o chao pela curva `valor(v) = 0` e devolve uma fita propria.
+
+    `valor` < 0 e DENTRO. Os vertices sao PARTILHADOS -- os da grelha pelo
+    indice, os do corte pela aresta -- senao a fita sai facetada e com
+    costuras entre triangulos vizinhos.
+    """
+    va, fa, cores, novo, lim = [], [], [], {}, {}
+
+    def pv(chave, p):
+        if chave not in novo:
+            novo[chave] = len(va)
+            va.append((p[0], p[1], p[2] + levanta))
+            cores.append(cor_de(p))
+        return novo[chave]
+
+    for fi, f in enumerate(faces):
+        if fi in _saia_set or len(f) != 4 or any(v not in _ij for v in f):
+            continue
+        for v in f:
+            if v not in lim:
+                lim[v] = valor(v)
+        if min(lim[v] for v in f) >= 0:
+            continue
+        for tri in ((f[0], f[1], f[2]), (f[0], f[2], f[3])):
+            poly = []
+            for k in range(3):
+                a_, b_ = tri[k], tri[(k + 1) % 3]
+                fa0, fb0 = lim[a_], lim[b_]
+                if fa0 < 0:
+                    poly.append(pv(("v", a_), verts[a_]))
+                if (fa0 < 0) != (fb0 < 0):
+                    t = fa0 / (fa0 - fb0)
+                    A, B = verts[a_], verts[b_]
+                    poly.append(pv(("e", min(a_, b_), max(a_, b_)),
+                                   tuple(A[q] + (B[q] - A[q]) * t for q in range(3))))
+            for k in range(1, len(poly) - 1):
+                fa.append((poly[0], poly[k], poly[k + 1]))
+    return va, fa, cores
+
+
+def _pousar(nome, va, fa, cores, tinta, rugosidade):
+    """poe a fita na cena, com UV em metros e a cor de vertice ligada"""
+    if not fa:
+        return 0.0
+    ob = P._novo(P._malha(nome, va, fa, tinta, bisel=0), tinta)
+    ob.data.materials.clear()
+    ob.data.materials.append(P.material_uv(tinta, rugosidade=rugosidade,
+                                           cor_vertice=True))
+    uv = ob.data.uv_layers.new(name="UVMap")
+    cv = ob.data.color_attributes.new(name="Col", type="BYTE_COLOR", domain="CORNER")
+    for pol in ob.data.polygons:
+        for li in pol.loop_indices:
+            vi = ob.data.loops[li].vertex_index
+            uv.data[li].uv = (va[vi][0], va[vi][1])   # metros, como o chao da aldeia
+            cv.data[li].color = (*cores[vi], 1.0)
+    for col in list(ob.users_collection):
+        col.objects.unlink(ob)
+    cena.objects.link(ob)
+    ob.name = ob.data.name = nome
+    return sum(abs((va[b][0] - va[a][0]) * (va[c][1] - va[a][1])
+                   - (va[c][0] - va[a][0]) * (va[b][1] - va[a][1])) / 2
+               for a, b, c in fa)
+
+
+def _valor_areia(vi):
+    ci, cj = _ij[vi]
+    x, y, z = verts[vi]
+    onda = AREIA_ONDA * (0.6 * math.sin(x * 0.083 + y * 0.051)
+                         + 0.4 * math.sin(-x * 0.031 + y * 0.137))
+    rho = float(_rho_areia[min(cj, th - 1), min(ci, tw - 1)])
+    return z - ((AREIA_TOPO + onda) * rho - 6.0 * (1.0 - rho))
+
+
+def _cor_areia(p):
+    s = min(max((p[2] - 0.4) / 1.0, 0.0), 1.0)      # molhada ate 0,4 m
+    k = 0.62 + 0.38 * s
+    return (k, k * 0.97, k * 0.92)
+
+
+_va, _fa, _ca = _fita(_valor_areia, AREIA_LEVANTA, _cor_areia)
+_area_a = _pousar("areia", _va, _fa, _ca, "areia", 0.97)
+print("SONDA areia: %d triangulos, %d vertices, %.0f m2 (%.1f ha)"
+      % (len(_fa), len(_va), _area_a, _area_a / 1e4))
+
+# ── O LABIO DA FALESIA ──────────────────────────────────────────────────────
+# A relva acabava numa quina a 90 graus em cima da parede, e na encosta antes
+# dela sobravam dentes verdes. Uma falesia de verdade nao tem labio a esquadro:
+# tem rocha a transbordar por cima, aos bocados.
+#
+# Mesma tecnica da areia, outro campo: aqui manda o DECLIVE. Onde o chao passa
+# de ~26 graus (com ondulacao, para a beira nao ser uma curva de nivel limpa) e
+# esta perto da agua, entra rocha por cima da relva. Longe da costa nao entra:
+# as serras do interior sao outro assunto, e sao verdes.
+ROCHA_DECLIVE = 26.0
+ROCHA_ONDA = 7.0
+LABIO = 9.0               # quantos metros de rocha transbordam a beira
+_gz_y, _gz_x = np.gradient(relevo.astype(np.float32), py, px)
+_declive = np.degrees(np.arctan(np.hypot(_gz_x, _gz_y))).astype(np.float32)
+_perto_mar = np.clip((55.0 - _dm) / 25.0, 0.0, 1.0).astype(np.float32)
+
+
+def _valor_rocha(vi):
+    ci, cj = _ij[vi]
+    x, y, _z = verts[vi]
+    j, i = min(cj, th - 1), min(ci, tw - 1)
+    onda = ROCHA_ONDA * (0.55 * math.sin(x * 0.061 - y * 0.043)
+                         + 0.45 * math.sin(x * 0.017 + y * 0.093))
+    w = float(_perto_mar[j, i])
+    # ── DUAS RAZOES PARA HAVER ROCHA EM CIMA ────────────────────────────
+    # O chao ser INGREME, ou ser a BEIRA de uma falesia. So o declive nao
+    # chegava: nas falesias do planalto (Lisboa) o chao em cima e plano e a
+    # parede e a saia -- o labio continuava uma quina a 90 graus.
+    por_declive = (ROCHA_DECLIVE + onda) - float(_declive[j, i]) + 90.0 * (1.0 - w)
+    beira = (float(_dm[j, i]) - (LABIO + 0.45 * onda)
+             + 60.0 * (1.0 - float(_rocha[j, i])))
+    return min(por_declive, beira)
+
+
+def _cor_rocha_topo(p):
+    k = 0.86 + 0.14 * math.sin(p[0] * 0.0083 + p[1] * 0.0061)
+    return (k, k * 0.99, k * 0.97)
+
+
+_vr, _fr, _cr = _fita(_valor_rocha, ROCHA_LEVANTA, _cor_rocha_topo)
+_area_r = _pousar("rocha_topo", _vr, _fr, _cr, "falesia", 0.96)
+print("SONDA labio de rocha: %d triangulos, %.0f m2 (%.1f ha)"
+      % (len(_fr), _area_r, _area_r / 1e4))
 
 # ── O FORNO DAS PECAS ───────────────────────────────────────────────────────
 # Ate aqui as pecas viajavam com a cor CHAPADA da paleta, porque o glTF nao

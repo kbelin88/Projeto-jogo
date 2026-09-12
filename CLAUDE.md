@@ -481,6 +481,9 @@ python ferramentas/cena/tex_estrada.py                # trata as fotografias (ve
 | `ferramentas/cena/pecas.py` | a biblioteca de peças e **as tabelas `FICHEIRO` / `COR`** (que textura, que ladrilho, que tom) |
 | `ferramentas/cena/exportar_tropa.py` | os três soldados, do mesmo corpo, com esqueleto e animações |
 | `ferramentas/cena/tex_estrada.py` | trata as fotografias **fora** do Blender |
+| `ferramentas/cena/tex_prado.py` | trata a fotografia da relva (a que temos é palha seca) |
+| `ferramentas/cena/mar_costa.py` | a distância à costa, para o mar saber onde é raso |
+| `ferramentas/cena/cor_prado.py` | a humidade por região, que pinta o campo e a mata |
 | `ferramentas/tracar-rede.html` | a página onde a rede de estradas se desenha à mão |
 | `ferramentas/gerar-rede.py` | lê `rede-nova.json` e escreve o `world-iberia.js` |
 
@@ -517,4 +520,32 @@ python ferramentas/cena/tex_estrada.py                # trata as fotografias (ve
   meio da estrada e desapareciam.
 - **O caderno de marcas funciona por cima do mapa 3D** (`ferramentas/cena/COMO_MARCAR.md`).
   A calibração sai de Lisboa e Barcelona **medidas**, não de constantes copiadas.
+
+### 8.5 A paisagem: mar, praia, falésia, campo e mata (11-12/09)
+
+- **O mar está a 0 m**, que é onde o forno sempre o esperou (esteve a −11 m desde
+  08/09, de antes de haver praias, e por isso toda a costa acabava num degrau de
+  12 a 14 m). Cor por profundidade, transparência no raso e espuma na linha de
+  água saem do `mar_costa.png`; sem ele o mar volta a cor chapada e nada parte.
+- **As praias são esculpidas no relevo**: areal quase plano de 30 m que entra na
+  água, e atrás uma encosta de 22° — e **só em costa baixa** (acima de ~75 m de
+  altura de região, a costa é falésia, como numa costa real).
+- **ESTRADAS E ALDEIAS SÃO ZONA PROTEGIDA** (90 m à volta de cada estrada, a
+  rampa inteira de cada aldeia): ali o relevo é o antigo, byte a byte. Sem isso,
+  1047 dos 2583 pontos de estrada desciam (mediana 37 m) e 16 estradas passavam
+  de 15° de inclinação. **Conferir sempre depois de um forno**: as alturas das
+  estradas e os patamares das aldeias têm de bater com os de antes.
+- **A areia e o lábio de rocha são FITAS recortadas por uma curva** (`_fita` no
+  `exportar_mapa.py`), 10 a 20 cm acima do chão, e não faces da grelha: escolher
+  faces inteiras de 5 m dá os dentes de serra que já se viram na costa.
+- **O campo tem fotografia e cor de região.** Era uma chapa verde porque o
+  material do chão estava na paleta que o exportador achata. E ligar a fotografia
+  crua deixou o mapa **castanho** — a nossa tinta é um nó do Blender, e o glTF
+  deita-a fora (ver 8.3). Por isso existe o `tex_prado.py`: **o que tem de mudar,
+  muda na imagem**. O `claro` também não passa: o factor do glTF não vai acima de 1.
+- **A cor da mata entra por `instanceColor`**, no navegador: 22 mil cópias da
+  mesma malha não podem ter cor na geometria. ⚠️ **Toda a instância tem de levar
+  cor** — o vetor nasce a zeros e uma instância sem cor sai PRETA.
+- Falta: textura de areia (`assets/texturas/areia/` está vazia; sem ela fica cor
+  chapada), e árvores soltas fora das manchas.
 

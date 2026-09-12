@@ -47,6 +47,17 @@ terra_g = ndimage.zoom(terra.astype(np.uint8), (H / th, W / tw), order=0).astype
 dx, dy = px * (tw - 1) / (W - 1), py * (th - 1) / (H - 1)
 terra_g = (alfa_g > LIMIAR) | terra_g
 
+# ── A LINHA DE AGUA E ONDE O CHAO CRUZA O MAR, NAO A BORDA DA MASCARA ────────
+# Numa praia a terra mergulha: a malha continua uns metros depois de a areia ja
+# estar debaixo de agua. Medir a distancia a borda da mascara punha a espuma
+# em cima de areia submersa, a metros da linha de agua de verdade. Com o
+# relevo FINAL (o que saiu do forno), terra e so o que esta acima do mar.
+NIVEL_MAR = 0.0               # mapa3d.js: mar.position.y
+rel = os.path.join(CENA, "_relevo_final.npy")
+if os.path.exists(rel):
+    relevo_g = ndimage.zoom(np.load(rel).astype(np.float32), (H / th, W / tw), order=1)
+    terra_g &= relevo_g > NIVEL_MAR
+
 # distancia EUCLIDIANA de cada pixel de agua a terra, em metros
 dist = ndimage.distance_transform_edt(~terra_g, sampling=(dy, dx))
 Image.fromarray(np.clip(np.round(dist), 0, 255).astype(np.uint8), "L").save(

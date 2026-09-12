@@ -47,6 +47,8 @@ COR = {
     "colmo2":     (0.205, 0.132, 0.048, 1),
     "pedra":      (0.185, 0.172, 0.150, 1),
     "falesia":    (0.120, 0.115, 0.104, 1),
+    "areia":      (0.420, 0.345, 0.215, 1),
+    "prado":      (0.115, 0.170, 0.055, 1),   # o chao do mapa (11/09)   # praias (11/09): a coisa clara da costa
     "folha":      (0.036, 0.076, 0.020, 1),
     "folha2":     (0.058, 0.098, 0.026, 1),
     "folha3":     (0.086, 0.104, 0.030, 1),
@@ -97,7 +99,8 @@ FAMILIA = {
     "reboco": "taipa", "reboco2": "taipa",
     "relva": "erva", "relva_seca": "erva", "horta": "erva", "folha": "erva",
     "folha2": "erva", "folha3": "erva", "la": "erva",
-    "terra": "solo", "caminho": "solo", "lavrado": "solo",
+    "terra": "solo", "caminho": "solo", "lavrado": "solo", "areia": "solo",
+    "prado": "erva",
 }
 # (escala do padrão, alongamento no eixo maior, força do relevo, contraste da cor)
 RECEITA = {
@@ -189,7 +192,12 @@ FICHEIRO = {
     # a FALESIA e a pedra tratada e com ladrilho grande: numa parede de 60 m,
     # um ladrilho de 3 m repete vinte vezes e le-se como papel de parede.
     # A 9 m os estratos tem tamanho de estratos.
-    "falesia":    ("falesia", 9.0, 1.0),
+    "falesia":    ("falesia", 13.0, 1.0),
+    # sem a pasta, `material_uv` cai na cor chapada de COR["areia"]
+    "areia":      ("areia", 3.0, 0.4),
+    # o mesmo ladrilho da relva, mas em 7 m: o chao tem 2,8 km e a
+    # 3,2 m o padrao lia-se como ruido a distancia de jogo
+    "prado":      ("prado", 10.0, 0.35),   # pasta tratada pelo tex_prado.py
     "alicerce":   ("alicerce", 2.6, 1.0),
     "reboco":     ("taipa", 3.4, 0.6),
     "reboco2":    ("taipa", 3.0, 0.6),
