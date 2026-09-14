@@ -549,3 +549,73 @@ python ferramentas/cena/tex_estrada.py                # trata as fotografias (ve
 - Falta: textura de areia (`assets/texturas/areia/` está vazia; sem ela fica cor
   chapada), e árvores soltas fora das manchas.
 
+### 8.6 Como se corrige um soldado (o metodo, 13/09)
+
+Durante dois dias o ciclo foi: eu exportava, o Lucas via o video, descrevia o
+defeito por palavras ("uma imagem borrada da cor da bota"), e eu adivinhava a
+causa. Lento e pouco fiavel — cada volta custava um forno inteiro e acertava
+por sorte. **A regra que substitui isso: cada defeito que ele consegue VER tem
+de virar um numero ou uma imagem que EU consigo ver, antes de tentar corrigir.**
+
+Tres provas, todas escritas pelo `armar_lanceiro.py`, todas automaticas:
+
+| prova | o que responde | onde sai |
+|---|---|---|
+| **pesos por cor** | de que OSSO e cada vertice | `_saida/pesos_{frente,lado}.png` |
+| **lanca x bota** | a haste separa-se do pe no ciclo? | `varia N cm` (avisa abaixo de 4 cm) |
+| **pe x anca** | o pe passa a frente da anca? | oito numeros, um por quadro |
+| **ilhas por cor** | de que pedacos a malha e feita | `ilhas_cor.py` -> `_saida/ilhas_*.png` |
+
+A primeira apanhou, em UM render, o que sete tentativas de adivinhar nao
+apanharam: a metade de baixo da haste estava pintada da cor da BOTA. Nao havia
+mais nada para discutir.
+
+| **marca da lanca** | que madeira vai com a mao | `_saida/marca_lanca_{todo,pes}.png` |
+
+**E a causa, que vale para qualquer asset que venha de fora. Sao DUAS hastes.**
+O ComfyUI gerou a lanca duas vezes: uma vara SOLTA por dentro do modelo (ilha
+propria, 2529 vertices, raio 0,008 da altura) e a que se VE, soldada a ilha
+grande. Marcar a ilha — que parecia obviamente "a lanca", por ser comprida e
+fina (vao/largura 6,1, contra 2,7 das pernas e 2,1 do corpo) — deixou a de fora
+presa a perna: na bancada apareceram **duas madeiras no chao**, uma certa e uma
+a seguir o pe. Um render das ilhas por cor (`ilhas_cor.py`) fechou a questao num
+olhar: toda a superficie visivel era da MESMA ilha.
+
+A ilha serve na mesma, mas para outra coisa: da o **eixo exato** da lanca. Com
+esse eixo medido, a separacao e limpa em toda a altura — madeira a 0,010-0,014
+do eixo, corpo e bota a 0,04-0,11 — e um corte em **0,020** apanha as duas
+hastes e nenhuma bota.
+
+⚠ **Sem corte em altura.** Uma versao so apanhava acima do fundo da vara
+interna, a supor que mais abaixo so havia bota; a PONTEIRA ficou de fora e era
+exatamente ela que andava agarrada ao pe. O raio sozinho chega.
+
+⚠ **O cilindro tambem apanha a BIQUEIRA DA BOTA**, que o eixo atravessa rente
+ao chao — e ai o erro e ao contrario: em vez de madeira presa ao pe, fica um
+pedaco de PE preso a mao, e a bota estica e borra a cada passo (foi o mesmo
+"borrao" de antes, com outra causa). A madeira distingue-se por ser CONTINUA:
+parte-se a marca em pedacos ligados e ficam so os que atravessam o modelo de
+alto a baixo. Foram 757 vertices de bota fora.
+
+⚠ **A MALHA NAO VEM CENTRADA EM X**, e o esqueleto e simetrico a volta de x=0.
+As pernas estavam em -0,121 e +0,005 (meio em -0,058); separa-las por "x < 0"
+punha uma perna inteira e metade da outra do mesmo lado, e dai saia um
+afastamento de 0,110 num lado e 0,193 no outro. Nenhuma afinacao do numero
+arranjava isso, porque o errado era o EIXO. Acha-se sem supor nada: numa fatia
+a altura do joelho os x fazem dois montes com um vazio no meio — corta-se no
+maior vazio e cada monte da uma perna.
+
+⚠ **Apertar as pernas mexe na GEOMETRIA, nao nos ossos.** Estreitar so o
+esqueleto deixa o osso a correr fora do tubo da perna e a deformacao parte. O
+modelo vinha com 29 cm entre eixos num homem de 2 m (uma pessoa anda com 22);
+`APERTO_PERNAS` encolhe o x por rampa, nada na anca e tudo da coxa para baixo,
+e os ossos sao medidos DEPOIS, por cima do resultado.
+
+⚠ A marca tem de ser posta ANTES de reduzir, e a lanca sai para um objeto seu,
+reduz-se a parte e junta-se outra vez. Um grupo de vertices sozinho nao chega:
+o `Decimate` faz a MEDIA dos pesos e dos 7883 marcados sobravam 25 acima de 0,5.
+
+⚠ Saber onde esta a lanca tambem conserta a ALTURA: o alto da cabeca era um
+palpite (contagem de vertices por fatia) e mentiu assim que a haste mudou de
+densidade — o soldado saiu 15% mais pequeno sem um aviso. Agora e o vertice
+mais alto que **nao** e da lanca.
