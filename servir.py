@@ -43,6 +43,13 @@ GRAVAVEIS = {"mapa-ajustes.js", "rede-nova.json"}
 
 
 class Manipulador(http.server.SimpleHTTPRequestHandler):
+    # ── HTTP/1.1: A LIGACAO FICA ABERTA ──────────────────────────────────────
+    # Com HTTP/1.0 (o padrao desta classe) cada pedido abre e fecha uma ligacao.
+    # A gravar um video isso sao milhares de ligacoes por minuto, e o Windows
+    # esgota as portas efemeras: a captura morria com "Failed to fetch" ao fim
+    # de ~80 quadros, sempre. Com keep-alive a mesma ligacao serve todos.
+    protocol_version = "HTTP/1.1"
+
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=RAIZ, **kw)
 
@@ -94,6 +101,37 @@ class Manipulador(http.server.SimpleHTTPRequestHandler):
                 self._ok_json({"ok": True})
                 if modo == "w":
                     print("  checkpoint iniciado: checkpoints/" + nome)
+                return
+            if self.path == "/quadro":
+                # ── OS QUADROS DE UM VIDEO ───────────────────────────────
+                # O mapa 3D desenha e MANDA PARA CA, um quadro de cada vez,
+                # em vez de alguem gravar o ecra. Assim nao se perde um
+                # quadro quando a maquina engasga, e a marcacao dos efeitos
+                # (onde cada aldeia cai no ecra) sai exatamente do mesmo
+                # instante que a imagem.
+                #
+                # JPEG e nao PNG: pela rota das marcas, a 1,5 MB por quadro,
+                # a ligacao morria ao fim de 47. Nome fechado a digitos, como
+                # o checkpoint: impossivel escapar da pasta.
+                nome = re.sub(r"[^0-9]", "", str(dados.get("n", "")))[:8]
+                if not nome:
+                    self.send_error(403, "quadro sem numero")
+                    return
+                url = dados.get("imagem") or ""
+                marca = "data:image/jpeg;base64,"
+                if not url.startswith(marca):
+                    self.send_error(415, "so jpeg")
+                    return
+                pasta = os.path.join(RAIZ, "ferramentas", "cena", "_saida", "quadros")
+                os.makedirs(pasta, exist_ok=True)
+                import base64
+                with open(os.path.join(pasta, nome + ".jpg"), "wb") as f:
+                    f.write(base64.b64decode(url.split(",", 1)[1]))
+                if dados.get("marcacao"):
+                    with open(os.path.join(pasta, nome + ".json"), "w",
+                              encoding="utf-8", newline=chr(10)) as f:
+                        json.dump(dados["marcacao"], f, separators=(",", ":"))
+                self._ok_json({"ok": True})
                 return
             if self.path == "/marcas":
                 # ── O CADERNO DE MARCAS ──────────────────────────────────

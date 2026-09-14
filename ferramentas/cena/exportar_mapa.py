@@ -113,7 +113,31 @@ def juntar(reg, dx, dy, cid=None, giro=0.0):
 # mais quando e por ela que as tropas andam.
 # Se a capital continuar a nao convencer em 3D, troca-se a PECA. Nao se apaga
 # a cidade.
-cidades = list(REDE["c"])
+# ── A BANCADA: UM RECORTE DO MAPA, E NAO UMA SEGUNDA CENA ───────────────────
+# Para experimentar (oclusao assada, portoes, cercas) ninguem quer esperar dois
+# minutos de forno nem olhar para 2,8 km de ilha. Mas uma bancada escrita a
+# parte seria um SEGUNDO gerador -- e o que se aprendesse nela nao valeria para
+# o jogo. Entao a bancada e o MESMO forno com um recorte:
+#
+#     BANCADA="lisboa,santarem" blender -b ... -P ferramentas/cena/exportar_mapa.py
+#
+# Saem `bancada.glb` e `bancada.json` (em vez de `pecas.glb`/`mapa3d.json`), com
+# so aquelas aldeias, a estrada entre elas, o chao a volta e a mata que la cair.
+# Sem a variavel, o forno e exatamente o de sempre.
+BANCADA = [c.strip() for c in os.environ.get("BANCADA", "").split(",") if c.strip()]
+MARGEM_BANCADA = 320.0          # metros de chao para alem das aldeias
+# a oclusao assada custa minutos; na bancada e sempre, no mapa inteiro so a pedido
+ASSAR_OCLUSAO = os.environ.get("OCLUSAO", "1" if os.environ.get("BANCADA") else "0") == "1"
+OC_PIXEIS = int(os.environ.get("OC_PIXEIS", "2048"))
+OC_AMOSTRAS = int(os.environ.get("OC_AMOSTRAS", "48"))
+OC_ALCANCE = 14.0               # metros: contacto, nao o vale inteiro
+NOME_GRUPO_GLTF = "glTF Material Output"
+cidades = [c for c in REDE["c"] if not BANCADA or c in BANCADA]
+if BANCADA:
+    faltam = [c for c in BANCADA if c not in REDE["c"]]
+    if faltam:
+        raise SystemExit("BANCADA: nao ha aldeia chamada " + ", ".join(faltam))
+    print("SONDA BANCADA: %s" % ", ".join(cidades))
 for cid in cidades:
     perfil = REDE["c"][cid]["t"]
     P.registar(True)
@@ -148,6 +172,19 @@ for cid in cidades:
 
 print("SONDA %d aldeias, %d copias, %d prototipos distintos"
       % (len(cidades), len(copias), len(protos)))
+# o retangulo da bancada, a volta das aldeias escolhidas
+if BANCADA:
+    _xs = [c[0] for c in centros.values()]
+    _ys = [c[1] for c in centros.values()]
+    RECT = (min(_xs) - MARGEM_BANCADA, min(_ys) - MARGEM_BANCADA,
+            max(_xs) + MARGEM_BANCADA, max(_ys) + MARGEM_BANCADA)
+    print("SONDA BANCADA recorte: %.0f x %.0f m" % (RECT[2] - RECT[0], RECT[3] - RECT[1]))
+else:
+    RECT = None
+
+
+def no_recorte(mx, my):
+    return RECT is None or (RECT[0] <= mx <= RECT[2] and RECT[1] <= my <= RECT[3])
 print("SONDA escala: 1 unidade de viewBox = %.3f m  ->  o mapa mede %.0f x %.0f m"
       % (M_POR_VB, IB_LARG * M_POR_VB, IB_ALT * M_POR_VB))
 
@@ -178,6 +215,8 @@ for m in MATA:
     mx, my = em_metros(m["x"], m["y"])
     manchas.append({"b": m["s"], "p": [round(mx, 1), round(my, 1)],
                     "e": round(m["e"] * M_POR_VB * DIV * 1.95 / ((14 + 5) * 2.3), 3)})
+if RECT:
+    manchas = [m for m in manchas if no_recorte(*m["p"])]
 print("SONDA %d manchas de mata sobre %d arranjos" % (len(manchas), len(bosques)))
 for b in bosques:
     for r in b:
@@ -1018,6 +1057,8 @@ for j in range(th):
     for i in range(tw):
         if not terra[j, i]:
             continue
+        if RECT and not no_recorte(i * px - LX / 2, LY / 2 - j * py):
+            continue
         faces.append(tuple(_canto(i + di, j + dj)
                            for di, dj in ((0, 0), (1, 0), (1, 1), (0, 1))))
         # ── A MARGEM ────────────────────────────────────────────────────────
@@ -1331,9 +1372,9 @@ def _pousar(nome, va, fa, cores, tinta, rugosidade):
         col.objects.unlink(ob)
     cena.objects.link(ob)
     ob.name = ob.data.name = nome
-    return sum(abs((va[b][0] - va[a][0]) * (va[c][1] - va[a][1])
-                   - (va[c][0] - va[a][0]) * (va[b][1] - va[a][1])) / 2
-               for a, b, c in fa)
+    return sum(abs((va[f[1]][0] - va[f[0]][0]) * (va[f[2]][1] - va[f[0]][1])
+                   - (va[f[2]][0] - va[f[0]][0]) * (va[f[1]][1] - va[f[0]][1])) / 2
+               * (2 if len(f) == 4 else 1) for f in fa)
 
 
 def _valor_areia(vi):
@@ -1549,18 +1590,224 @@ for m in bpy.data.materials:
         m.node_tree.links.remove(lig)
     bsdf.inputs["Base Color"].default_value = cor
 
+# ── A TERRA HABITADA: CAMPOS, CERCAS E PEDRAS ───────────────────────────────
+# Um mapa com aldeias e mata, e nada entre elas, le-se como maquete. O que diz
+# "aqui vive gente" nao e a aldeia: e o campo lavrado ao lado dela, a cerca que
+# o fecha e a pedra que ninguem arrancou. Sao gerados por REGRA (ver
+# `povoar.py`), com semente fixa, e nunca caem na estrada, na mata, na areia
+# nem em terreno a pique.
+import povoar as PV                                             # noqa: E402
+
+
+def declive_em(mx, my):
+    i = min(max(int(round((mx + LX / 2) / px)), 0), tw - 1)
+    j = min(max(int(round((LY / 2 - my) / py)), 0), th - 1)
+    return float(_declive[j, i])
+
+
+# a distancia a estrada mais proxima, na grelha: a mesma amostragem que protege
+# a costa das praias, agora guardando a distancia crua
+# ⚠ grelhas PROPRIAS: la em cima `_gx`/`_gy` sao as coordenadas, mas a meio do
+# ficheiro passam a ser o gradiente do relevo (`np.gradient`). Usar os nomes de
+# cima aqui rebenta com um erro de forma que nao diz nada sobre a causa.
+_cx = np.arange(tw, dtype=np.float32)[None, :] * px - LX / 2
+_cy = LY / 2 - np.arange(th, dtype=np.float32)[:, None] * py
+_d_estrada = np.full(terra.shape, 1e9, dtype=np.float32)
+for _a, _b in LIGACOES:
+    (_ax, _ay), (_bx, _by) = centros[_a], centros[_b]
+    _ctl = VIA_DE.get(tuple(sorted((_a, _b))))
+    _n = max(2, int(math.hypot(_bx - _ax, _by - _ay) / 12.0))
+    for _i in range(_n + 1):
+        _q = _i / _n
+        if _ctl:
+            _x = (1 - _q) ** 2 * _ax + 2 * (1 - _q) * _q * _ctl[0] + _q * _q * _bx
+            _y = (1 - _q) ** 2 * _ay + 2 * (1 - _q) * _q * _ctl[1] + _q * _q * _by
+        else:
+            _x, _y = _ax + (_bx - _ax) * _q, _ay + (_by - _ay) * _q
+        _r = 40.0
+        _i0 = max(0, int((_x + LX / 2 - _r) / px))
+        _i1 = min(tw - 1, int((_x + LX / 2 + _r) / px) + 1)
+        _j0 = max(0, int((LY / 2 - _y - _r) / py))
+        _j1 = min(th - 1, int((LY / 2 - _y + _r) / py) + 1)
+        if _i1 >= _i0 and _j1 >= _j0:
+            _dd = np.hypot(_cx[:, _i0:_i1 + 1] - _x, _cy[_j0:_j1 + 1, :] - _y)
+            _d_estrada[_j0:_j1 + 1, _i0:_i1 + 1] = np.minimum(
+                _d_estrada[_j0:_j1 + 1, _i0:_i1 + 1], _dd)
+
+
+def dist_estrada_em(mx, my):
+    i = min(max(int(round((mx + LX / 2) / px)), 0), tw - 1)
+    j = min(max(int(round((LY / 2 - my) / py)), 0), th - 1)
+    return float(_d_estrada[j, i])
+
+
+def raio_de(cid):
+    return C.PERFIS[REDE["c"][cid]["t"]]["raio"]
+
+
+def _longe_da_mata(mx, my, folga):
+    for m in manchas:
+        if math.hypot(m["p"][0] - mx, m["p"][1] - my) < 24.0 * m["e"] + folga:
+            return False
+    return True
+
+
+def livre_para_campo(mx, my):
+    return (em_terra(mx, my) and no_recorte(mx, my)
+            and dist_estrada_em(mx, my) > 15.0
+            and rho_areia_em(mx, my) < 0.05
+            and all(math.hypot(c[0] - mx, c[1] - my) > raio_de(cid) + 14.0
+                    for cid, c in centros.items())
+            and _longe_da_mata(mx, my, 7.0))
+
+
+def livre_para_pedra(mx, my):
+    return (em_terra(mx, my) and no_recorte(mx, my)
+            and dist_estrada_em(mx, my) > 7.0
+            and rho_areia_em(mx, my) < 0.02
+            and all(math.hypot(c[0] - mx, c[1] - my) > raio_de(cid) + 8.0
+                    for cid, c in centros.items())
+            and _longe_da_mata(mx, my, 1.0))
+
+
+_campos, _cercas, _n_parcelas = PV.campos_e_cercas(
+    centros, raio_de, altura_em, declive_em, livre_para_campo)
+_a_campos = _pousar("campos", _campos[0], _campos[1], _campos[2], "lavrado", 0.96)
+_pousar("cercas", _cercas[0], _cercas[1], _cercas[2], "madeira", 0.85)
+print("SONDA campos: %d parcelas, %.1f ha lavrados, %d faces de cerca"
+      % (_n_parcelas, _a_campos / 1e4, len(_cercas[1])), flush=True)
+
+_lim = RECT or (-LX / 2, -LY / 2, LX / 2, LY / 2)
+_quantas_pedras = max(30, int((_lim[2] - _lim[0]) * (_lim[3] - _lim[1]) / 9000.0))
+
+
+def _ponto_ao_acaso(rnd):
+    return (rnd.uniform(_lim[0], _lim[2]), rnd.uniform(_lim[1], _lim[3]))
+
+
+_pedras, _n_pedras = PV.pedras(_quantas_pedras, _ponto_ao_acaso, altura_em,
+                               declive_em, livre_para_pedra)
+_pousar("pedras", _pedras[0], _pedras[1], _pedras[2], "pedra", 0.94)
+print("SONDA pedras: %d penedos" % _n_pedras, flush=True)
+
+
 tris = 0
 for ob in bpy.context.scene.objects:
     if ob.type == "MESH":
         ob.data.calc_loop_triangles()
         tris += len(ob.data.loop_triangles)
-alvo = os.path.join(SAIDA, "pecas.glb")
+
+# ── A OCLUSAO ASSADA ────────────────────────────────────────────────────────
+# A sombra de CONTACTO: o escuro que fica onde uma arvore encosta no chao, onde
+# a muralha nasce da terra, dentro de uma vala. O navegador nao a sabe calcular
+# (seria luz indireta em tempo real), mas o Cycles sabe -- e o glTF tem um canal
+# proprio para ela. Entao calcula-se UMA vez aqui e vai como imagem.
+#
+# ── A ARMADILHA: A CENA ESTA VAZIA ──────────────────────────────────────────
+# No forno, aldeias e arvores NAO estao na cena: sao copias que o navegador
+# coloca a partir do JSON. Assar assim daria a oclusao de um campo vazio. Por
+# isso a cena e POVOADA de proposito (copias ligadas, que nao custam memoria) e
+# esvaziada logo a seguir -- o `pecas.glb` continua a ser a biblioteca, cada
+# peca uma vez, na origem.
+if ASSAR_OCLUSAO:
+    t_oc = time.time()
+    _temp = []
+
+    def _por_copia(peca, x, y, z, rz, e):
+        proto = bpy.context.scene.objects.get(peca)
+        if not proto:
+            return
+        d = proto.copy()
+        d.data = proto.data                 # LIGADA: a malha e a mesma
+        d.location = (x, y, z)
+        d.rotation_euler = (0.0, 0.0, rz)
+        d.scale = (e, e, e)
+        cena.objects.link(d)
+        _temp.append(d)
+
+    for _c in copias:
+        _por_copia(_c["peca"], _c["p"][0], _c["p"][1], _c["p"][2], _c["rz"], _c["e"])
+    for _m in manchas:
+        for _t in bosques[_m["b"]]:
+            _por_copia(_t["peca"],
+                       _m["p"][0] + _t["p"][0] * _m["e"],
+                       _m["p"][1] + _t["p"][1] * _m["e"],
+                       _m.get("z", 0.0) + _t["p"][2] * _m["e"],
+                       _t["rz"], _t["e"] * _m["e"])
+    print("SONDA oclusao: cena povoada com %d copias" % len(_temp), flush=True)
+
+    _alvos = [o for o in (bpy.context.scene.objects.get(n)
+                          for n in ("chao", "areia", "chao_aldeia", "estradas",
+                                    "rocha_topo", "campos"))
+              if o is not None]
+    ce = bpy.context.scene
+    ce.render.engine = "CYCLES"
+    ce.cycles.samples = OC_AMOSTRAS
+    if ce.world is None:
+        ce.world = bpy.data.worlds.new("forno")
+    ce.world.light_settings.distance = OC_ALCANCE      # so contacto, nao o vale todo
+
+    for ob in _alvos:
+        # ── UM SEGUNDO UV, SO PARA A OCLUSAO ────────────────────────────────
+        # O UV do chao esta em METROS e repete-se (e assim que o ladrilho da
+        # relva se repete). Uma imagem de oclusao nao pode repetir: cada ponto
+        # do terreno precisa do SEU pedaco de imagem. Por isso um UV proprio,
+        # desdobrado sem sobreposicoes.
+        if "UVao" in ob.data.uv_layers:
+            ob.data.uv_layers.remove(ob.data.uv_layers["UVao"])
+        uv_ao = ob.data.uv_layers.new(name="UVao")
+        ob.data.uv_layers.active = uv_ao
+        bpy.ops.object.select_all(action="DESELECT")
+        ob.select_set(True)
+        bpy.context.view_layer.objects.active = ob
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="SELECT")
+        bpy.ops.uv.smart_project(angle_limit=1.15, island_margin=0.004)
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+        img = bpy.data.images.new("oclusao_" + ob.name, OC_PIXEIS, OC_PIXEIS)
+        img.colorspace_settings.name = "Non-Color"
+        for mat in ob.data.materials:
+            nt = mat.node_tree
+            no_uv = nt.nodes.new("ShaderNodeUVMap")
+            no_uv.uv_map = "UVao"
+            no_img = nt.nodes.new("ShaderNodeTexImage")
+            no_img.image = img
+            no_img.name = no_img.label = "OCLUSAO"
+            nt.links.new(no_uv.outputs["UV"], no_img.inputs["Vector"])
+            nt.nodes.active = no_img            # e para aqui que o bake escreve
+        bpy.ops.object.bake(type="AO", margin=6, use_clear=True)
+        print("SONDA oclusao assada: %s (%d px)" % (ob.name, OC_PIXEIS), flush=True)
+
+        # ── E AGORA LIGA-SE ONDE O EXPORTADOR A PROCURA ─────────────────────
+        # O glTF nao tem "um no de oclusao": o exportador procura um GRUPO DE
+        # NOS com um nome combinado e uma entrada `Occlusion`. Sem isto, a
+        # imagem fica no ficheiro do Blender e nao chega ao jogo.
+        for mat in ob.data.materials:
+            nt = mat.node_tree
+            no_img = nt.nodes.get("OCLUSAO")
+            grupo = bpy.data.node_groups.get(NOME_GRUPO_GLTF)
+            if grupo is None:
+                grupo = bpy.data.node_groups.new(NOME_GRUPO_GLTF, "ShaderNodeTree")
+                grupo.interface.new_socket("Occlusion", in_out="INPUT",
+                                           socket_type="NodeSocketFloat")
+                grupo.nodes.new("NodeGroupInput")
+            no_g = nt.nodes.new("ShaderNodeGroup")
+            no_g.node_tree = grupo
+            nt.links.new(no_img.outputs["Color"], no_g.inputs["Occlusion"])
+
+    for d in _temp:
+        bpy.data.objects.remove(d, do_unlink=True)
+    print("SONDA oclusao: %d superficies em %.1f s (cena esvaziada)"
+          % (len(_alvos), time.time() - t_oc), flush=True)
+
+alvo = os.path.join(SAIDA, "bancada.glb" if BANCADA else "pecas.glb")
 bpy.ops.export_scene.gltf(filepath=alvo, export_format="GLB", export_apply=True,
                           export_yup=True, export_cameras=False, export_lights=False)
 print("SONDA biblioteca: %d pecas, %d triangulos, %.1f MB"
       % (len(feitas), tris, os.path.getsize(alvo) / 1e6))
 
-with open(os.path.join(SAIDA, "mapa3d.json"), "w", encoding="utf-8") as f:
+with open(os.path.join(SAIDA, "bancada.json" if BANCADA else "mapa3d.json"), "w", encoding="utf-8") as f:
     json.dump({"m_por_vb": round(M_POR_VB, 4),
                "mapa_m": [round(IB_LARG * M_POR_VB), round(IB_ALT * M_POR_VB)],
                "pecas": {n: legiveis.get(n, n) for n in feitas}, "copias": copias,
@@ -1576,14 +1823,16 @@ with open(os.path.join(SAIDA, "mapa3d.json"), "w", encoding="utf-8") as f:
                "mastros": {c: [[m[0], m[1], round(m[2] + patamares.get(c, 0.0), 2),
                                 m[3]] for m in ms]
                            for c, ms in mastros.items()}}, f, separators=(",", ":"))
-print("SONDA -> sonda3d/mapa3d.json  (%.0f KB)  em %.1f s"
-      % (os.path.getsize(os.path.join(SAIDA, "mapa3d.json")) / 1024, time.time() - t0))
+_saiu = "bancada.json" if BANCADA else "mapa3d.json"
+print("SONDA -> sonda3d/%s  (%.0f KB)  em %.1f s"
+      % (_saiu, os.path.getsize(os.path.join(SAIDA, _saiu)) / 1024, time.time() - t0))
 
 # ── O MAR PRECISA DE SABER ONDE E RASO ──────────────────────────────────────
 # A distancia a costa sai de um script a parte porque o Python do Blender nao
 # traz scipy. Corre aqui para que um forno deixe tudo coerente: se a costa
 # mudar e o mar nao, a espuma fica a flutuar onde a beira estava.
 _mc = subprocess.run(["python", os.path.join("ferramentas", "cena", "mar_costa.py")],
-                     capture_output=True, text=True)
-print((_mc.stdout or "").strip() if _mc.returncode == 0
-      else "SONDA AVISO mar_costa falhou: " + (_mc.stderr or "")[-400:])
+                     capture_output=True, text=True) if not BANCADA else None
+if _mc is not None:
+    print((_mc.stdout or "").strip() if _mc.returncode == 0
+          else "SONDA AVISO mar_costa falhou: " + (_mc.stderr or "")[-400:])

@@ -1,6 +1,6 @@
 <!doctype html>
 <meta charset="utf-8">
-<title>A Iberia em 3D</title>
+<title>Bancada 3D</title>
 <style>
   html, body { margin: 0; height: 100%; background: #0d1418; color: #e8dcc0;
                font: 13px system-ui, sans-serif; overflow: hidden; }
@@ -20,13 +20,14 @@
            font-size: 15px; color: #cbbd94; }
 </style>
 <div id="palco"></div>
-<div id="carga">a montar a Iberia...</div>
+<div id="carga">a montar a bancada...</div>
 <div id="hud">
-  <h1>A IBERIA EM 3D</h1>
+  <h1>BANCADA &mdash; LISBOA E SANTAREM</h1>
   <label><input type="checkbox" id="sombras" checked> sombras</label>
   <label><input type="checkbox" id="nomes" checked> nomes das aldeias</label>
   <label><input type="checkbox" id="parar"> parar o tempo</label>
   <label><input type="checkbox" id="alto"> vista de cima</label>
+  <label><input type="checkbox" id="seguir" checked> seguir a coluna</label>
   <p>Arrasta para girar &middot; roda para aproximar &middot; botao direito
      para deslocar. Desce ate ao chao e passeia entre as aldeias.</p>
 </div>
@@ -56,12 +57,29 @@ function queixa(msg) {
     + "<div style='max-width:520px'>" + (ficheiro
       ? "A pagina foi aberta com <b>duplo clique</b>. Assim o navegador bloqueia os pedidos. "
         + "Abra uma consola na pasta do projeto, corra <b>python servir.py</b> e va a "
-        + "<b>http://localhost:8000/sonda3d/mapa.html</b>."
+        + "<b>http://localhost:8000/sonda3d/bancada.html</b>."
       : "Confirme que o <b>python servir.py</b> esta a correr, e que o forno ja gerou os "
         + "ficheiros da cena (ver CLAUDE.md §8.2).") + "</div>";
 }
 
-const mapa = await iniciar(document.getElementById("palco"));
+// o soldado novo entra SO na bancada: o jogo continua com o de sempre
+const mapa = await iniciar(document.getElementById("palco"),
+                           { cena: "bancada", velDemo: 1.6,
+                             tropas: { lanceiro: "lanceiro_novo.glb" } });
+// a camara comeca em cima das duas aldeias, e nao no meio da ilha
+{
+  const cs = Object.values(mapa.MAPA.aldeias);
+  const mx = cs.reduce((s, a) => s + a.p[0], 0) / cs.length;
+  const my = cs.reduce((s, a) => s + a.p[1], 0) / cs.length;
+  // ABRE JUNTO A ESTRADA, e nao no alto: as figuras so se desenham acima de
+  // dez pixeis, e uma bancada que abre longe parece uma bancada sem soldados
+  const via = mapa.MAPA.estradas[0];
+  const meio = via.pts[Math.floor(via.pts.length / 2)];
+  const alvo = new mapa.THREE.Vector3(meio[0], meio[2] + 1.5, -meio[1]);
+  mapa.ctrl.target.copy(alvo);
+  mapa.cam.position.set(alvo.x + 22, alvo.y + 11, alvo.z + 20);
+  mapa.ctrl.update();
+}
 Object.assign(window, { mapa, cena: mapa.cena, cam: mapa.cam, ctrl: mapa.ctrl,
                         MAPA: mapa.MAPA, THREE: mapa.THREE, rend: mapa.rend });
 document.getElementById("carga").remove();
@@ -74,17 +92,55 @@ liga("nomes", (v) => { mapa.cena.traverse((o) => { if (o.isSprite) o.visible = v
 liga("parar", (v) => mapa.parar(v));
 liga("alto", (v) => {
   if (!v) return;
-  const [, LY] = mapa.MAPA.mapa_m;
-  mapa.cam.position.set(0, LY * 1.15, LY * 0.35);
-  mapa.ctrl.target.set(0, 0, 0);
+  const cs = Object.values(mapa.MAPA.aldeias);
+  const mx = cs.reduce((s, a) => s + a.p[0], 0) / cs.length;
+  const my = cs.reduce((s, a) => s + a.p[1], 0) / cs.length;
+  mapa.cam.position.set(mx, 800, -my + 120);
+  mapa.ctrl.target.set(mx, 0, -my);
 });
+
+// ── A CAMARA SEGUE A COLUNA ─────────────────────────────────────────────────
+// Numa bancada de duas aldeias a coluna anda o tempo todo, e uma camara parada
+// passa metade do tempo a olhar para relva. Aqui ela fica atras dos soldados,
+// a distancia de quem quer ver o passo. Desligando a caixa, o rato manda.
+let aSeguir = true;
+liga("seguir", (v) => { aSeguir = v; });
+{
+  const T = mapa.THREE;
+  const ant = new T.Vector3();
+  let tem = false;
+  setInterval(() => {
+    if (!aSeguir) return;
+    let alvo = null;
+    mapa.cena.traverse((o) => {
+      if (alvo || !o.visible || !o.isSkinnedMesh) return;
+      let r = o; while (r.parent && r.parent !== mapa.cena) r = r.parent;
+      if (r.visible) alvo = r;
+    });
+    if (!alvo) return;
+    const p = new T.Vector3();
+    alvo.getWorldPosition(p);
+    const rumo = alvo.rotation.y;
+    // atras e um pouco de lado, a altura de quem esta de pe na berma
+    const atras = new T.Vector3(Math.sin(rumo) * 19, 8.5, Math.cos(rumo) * 19);
+    const quer = p.clone().add(atras);
+    if (!tem) { ant.copy(quer); tem = true; }
+    ant.lerp(quer, 0.12);                 // sem solavancos
+    mapa.cam.position.copy(ant);
+    mapa.ctrl.target.copy(p).add(new T.Vector3(0, 1.4, 0));
+    mapa.ctrl.update();
+  }, 60);
+}
 
 const med = document.getElementById("med");
 const [LX, LY] = mapa.MAPA.mapa_m;
 setInterval(() => {
   const alt = Math.round(90 - mapa.THREE.MathUtils.radToDeg(
     Math.acos(mapa.cam.position.clone().sub(mapa.ctrl.target).normalize().y)));
+  const r = mapa.ritmoDoPasso;
   med.innerHTML = "<b>" + mapa.fps + "</b> fps<br>"
+    + (r.figuras ? r.figuras + " soldados &middot; " + r.velocidade.toFixed(1)
+        + " m/s &middot; passo a " + r.escala.toFixed(2) + "x<br>" : "")
     + mapa.pecas.toLocaleString("pt") + " pecas &middot; "
     + (mapa.triangulos / 1e6).toFixed(1) + "M triangulos<br>"
     + "camara a " + alt + "&deg; &middot; " + Math.round(mapa.ctrl.getDistance()) + " m<br>"

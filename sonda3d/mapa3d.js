@@ -40,8 +40,16 @@ export async function iniciar(hospedeiro, opcoes = {}) {
   tela.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block";
   hospedeiro.appendChild(tela);
 
+  // ── QUAL CENA ───────────────────────────────────────────────────────────
+  // Por omissao, a ilha inteira. Com `{ cena: "bancada" }` carrega o recorte
+  // que o forno faz com BANCADA=... -- duas aldeias e a estrada entre elas,
+  // para experimentar sem esperar pelo mapa todo. O modulo e o mesmo: o que
+  // se ve na bancada e o que o jogo vai ver.
+  const CENA = opcoes.cena || null;
+  const FICH_JSON = (CENA || "mapa3d") + ".json";
+  const FICH_GLB = CENA ? CENA + ".glb" : "pecas.glb";
   const cfgSol = await (await fetch(BASE + "cena.json")).json();
-  const MAPA = await (await fetch(BASE + "mapa3d.json")).json();
+  const MAPA = await (await fetch(BASE + FICH_JSON)).json();
   const [LX, LY] = MAPA.mapa_m;
 
   const rend = new THREE.WebGLRenderer({ canvas: tela, antialias: true,
@@ -194,7 +202,7 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
   }
 
   const g = await new Promise((ok, mal) =>
-    new GLTFLoader().load(BASE + "pecas.glb", ok, undefined, mal));
+    new GLTFLoader().load(BASE + FICH_GLB, ok, undefined, mal));
 
   // uma peca pode ser VARIAS malhas: o glTF parte-as por material
   const banco = {};
@@ -225,9 +233,13 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
   // animacao se procura por tropa e nao por um padrao so
   const PASSO = { lanceiro: /idle_walk/i, arqueiro: /idle_walk/i,
                   cavaleiro: /^gallop$/i };
-  for (const [tipo, ficheiro] of [["lanceiro", "lanceiro.glb"],
-                                  ["arqueiro", "arqueiro.glb"],
-                                  ["cavaleiro", "cavaleiro.glb"]]) {
+  // ── DE ONDE VEM CADA TROPA ──────────────────────────────────────────────
+  // Por omissao, os tres de sempre. Com `{ tropas: { lanceiro: "outro.glb" } }`
+  // troca-se um sem tocar nos outros -- e sem apagar o que ja funciona, que e
+  // como se experimenta um soldado novo.
+  const TROPAS = Object.assign({ lanceiro: "lanceiro.glb", arqueiro: "arqueiro.glb",
+                                 cavaleiro: "cavaleiro.glb" }, opcoes.tropas || {});
+  for (const [tipo, ficheiro] of Object.entries(TROPAS)) {
     const ga = await new Promise((ok) =>
       new GLTFLoader().load(BASE + ficheiro, ok, undefined, () => ok(null)));
     if (!ga) continue;
@@ -249,7 +261,8 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
       // mesmo instante, todas a pisar ao mesmo tempo
       act.time = (i * 0.37) % passo.duration;
       cena.add(raiz);
-      lista.push({ raiz, mix });
+      // `dur` e `ant` servem para casar o passo com a velocidade (ver adiante)
+      lista.push({ raiz, mix, dur: passo.duration, ant: null, v: 0 });
     }
     animados[tipo] = lista;
   }
@@ -265,11 +278,32 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
   // muralha: e ele que tapa a ponta da estrada que entra pelo portao, e sem
   // este nome aqui ele viria no ficheiro e nunca chegaria a cena.
   // A `areia` (11/09) e a quarta: a fita das praias, 20 cm por cima da relva.
-  for (const nome of ["chao", "estradas", "chao_aldeia", "areia", "rocha_topo"])
+  for (const nome of ["chao", "estradas", "chao_aldeia", "areia", "rocha_topo",
+                      "campos", "cercas", "pedras"])
     for (const ch of (banco[nome] || [])) {
       if (nome === "chao") malhaChao = ch;
       ch.receiveShadow = true;
       ch.castShadow = false;
+      // ── A OCLUSAO TAMBEM PINTA, E NAO SO ESCURECE O AMBIENTE ────────────
+      // O three usa o `aoMap` a maneira fisica: ele so atenua a luz AMBIENTE.
+      // Aqui o sol vale 3,2 e o ceu 1,2 -- medido -- portanto a sombra de
+      // contacto assada quase nao aparecia: tres fotos com intensidades
+      // diferentes sairam iguais. Num mapa estilizado o que se quer e a
+      // MARCA da sombra, tambem ao sol, por isso ela entra tambem na cor.
+      if (ch.material.aoMap) {
+        ch.material.aoMapIntensity = 1.0;
+        ch.material.onBeforeCompile = (sh) => {
+          sh.uniforms.forcaOc = { value: 0.85 };
+          sh.fragmentShader = `uniform float forcaOc;
+` + sh.fragmentShader.replace(
+            "#include <color_fragment>", `#include <color_fragment>
+#ifdef USE_AOMAP
+  float oclusao = texture2D(aoMap, vAoMapUv).r;
+  diffuseColor.rgb *= mix(1.0, oclusao, forcaOc);
+#endif`);
+        };
+        ch.material.needsUpdate = true;
+      }
       if (nome === "areia") {
         // um desvio pequeno: chega para vencer a relva onde ela sobe mais
         // que os 20 cm, e fica abaixo do da estrada
@@ -629,6 +663,10 @@ transformed.y += onda * transformed.x * 0.05;`);
 
   const TIPOS = MAPA.tropas || [];
   const VEL_DEMO = { lanceiro: 5.5, arqueiro: 7.0, cavaleiro: 11.0 };
+  // numa bancada de duas aldeias, a velocidade feita para atravessar uma ilha
+  // de 2,8 km le-se como corrida. `velDemo` (em m/s) permite por a coluna a
+  // passo de gente para se ver a marcha de perto.
+  const K_DEMO = opcoes.velDemo ? opcoes.velDemo / 6 : 1;
   let nAnim = 0;                        // figuras de carne no ecra
   const TETO_TROPA = 400;               // instancias reservadas por tipo
   const tropaInst = {};
@@ -688,6 +726,19 @@ transformed.y += onda * transformed.x * 0.05;`);
                    // cinzenta, e e a COR que diz de quem e o exercito
                    dono: colunas.length % 2 ? "B" : "A",
                    t0: sorte() * 400 });
+  }
+
+  // ── NUM MAPA PEQUENO, O SORTEIO PODE DEIXAR TUDO VAZIO ──────────────────
+  // Com uma estrada so (a bancada de duas aldeias), o sorteio acima tem 45% de
+  // hipotese de nao pôr coluna nenhuma -- e a pagina abre com o mapa deserto,
+  // que parece avaria. Havendo vias, ha sempre pelo menos uma coluna.
+  if (!colunas.length) {
+    const chave = Object.keys(eixoDe)[0];
+    if (chave) {
+      const comp = { lanceiro: 14, arqueiro: 5, cavaleiro: 3 };
+      colunas.push({ tipo: "lanceiro", composicao: comp, via: eixoDe[chave],
+                     tropas: 22, dono: "A", t0: 0 });
+    }
   }
 
   let ligadoAoJogo = false;
@@ -780,6 +831,17 @@ transformed.y += onda * transformed.x * 0.05;`);
         // menos do que a conta obvia, e a coluna desce a estrada de lado
         s.raiz.rotation.set(0, -rumo - Math.PI / 2, 0);
         s.raiz.scale.setScalar(ESCALA_TROPA);
+        // ── A QUE VELOCIDADE ESTE HOMEM ANDA ───────────────────────────────
+        // Medida aqui, no unico sitio que sabe onde ele estava e onde esta.
+        // Sem isto o passo corre sempre ao mesmo ritmo e os pes patinam no
+        // chao -- ora a escorregar para a frente, ora a pedalar no sitio.
+        // A media com o valor anterior tira os saltos de quando um lugar do
+        // poco passa a servir outro soldado.
+        if (s.ant && dtQuadro > 0) {
+          const v = s.ant.distanceTo(_p) / (dtQuadro / 1000);
+          s.v = v > 25 ? s.v : s.v * 0.72 + v * 0.28;   // salto = troca de dono
+        }
+        (s.ant = s.ant || new THREE.Vector3()).copy(_p);
         return;
       }
       // O BALANCO DO PASSO, mais lento. Estava a 6,7 Hz, que nao se le como
@@ -917,7 +979,7 @@ transformed.y += onda * transformed.x * 0.05;`);
     } else {
       for (const col of colunas) {
         if (!col.via) continue;
-        const vel = VEL_DEMO[col.tipo] || 6;
+        const vel = (VEL_DEMO[col.tipo] || 6) * K_DEMO;
         const volta = col.via.comp * 2;
         let d = ((t * 0.001 * vel + col.t0) % volta + volta) % volta;
         let sentido = 1;
@@ -1071,23 +1133,43 @@ transformed.y += onda * transformed.x * 0.05;`);
   addEventListener("resize", tamanho);
   tamanho();
 
-  function laco() {
-    if (!vivo) return;
-    requestAnimationFrame(laco);
-    quadros++;
-    const agora = performance.now();
-    // teto de 100 ms: com a pagina escondida o navegador estrangula o rAF, e
-    // sem isto as tropas teleportavam-se meio mapa ao voltar
-    dtQuadro = Math.min(agora - ultimo, 100);
+  // ── O PASSO, SEPARADO DO LACO ───────────────────────────────────────────
+  // Tudo o que faz o mapa MEXER esta aqui: por as tropas na estrada, andar com
+  // os esqueletos, o mar, o fumo, a sombra a seguir a camara. O laco chama-o
+  // com o tempo que passou de verdade; quem grava um video chama-o com um
+  // passo FIXO (33 ms por quadro) e obtem sempre o mesmo filme,
+  // independentemente da maquina.
+  //
+  // Isto nasceu de uma gravacao inteira sem uma tropa no ecra: o rAF nao corre
+  // numa janela escondida, e como as tropas eram colocadas AQUI dentro, nao
+  // eram colocadas de todo. Desenhar sozinho nao chega -- e preciso dar o passo.
+  function avancar(dt) {
+    dtQuadro = dt;
     if (!parado) relogio += dtQuadro;
-    ultimo = agora;
     ctrl.update();
     porTropas(relogio);
     // os tocadores so andam para os que estao a vista: um mixer parado nao
     // custa nada, e sao 48 poços por tipo
     const dts = dtQuadro / 1000;
-    for (const carne of Object.values(animados))
-      for (const s of carne) if (s.raiz.visible) s.mix.update(dts);
+    // ── O PASSO SEGUE A MARCHA ────────────────────────────────────────────
+    // Um ciclo do lanceiro cobre ~0,7 m de chao. Se a coluna anda a 1,4 m/s,
+    // o ciclo tem de correr ao dobro -- senao ve-se o homem a deslizar. Os
+    // limites existem para o caso de a marcha parar (ninguem fica congelado)
+    // ou de o replay correr a 3x (ninguem corre como um desenho animado).
+    // MEDIDO na geometria do soldado novo: a coxa balanca 22 graus para cada
+    // lado e o pe percorre ~0,67 m por passo, dois passos por ciclo -> 1,3 m.
+    // A minha primeira conta usou UM passo e o ciclo corria ao dobro: a 1,3 m/s
+    // as pernas batiam como se ele corresse.
+    const PASSO_M = { lanceiro: 1.3, arqueiro: 1.3, cavaleiro: 3.2 };
+    for (const [tipo, carne] of Object.entries(animados)) {
+      const metrosPorCiclo = PASSO_M[tipo] || 0.7;
+      for (const s of carne) {
+        if (!s.raiz.visible) continue;
+        const natural = metrosPorCiclo / Math.max(s.dur, 0.05);
+        const escala = Math.min(Math.max(s.v / natural, 0.35), 2.6);
+        s.mix.update(dts * escala);
+      }
+    }
     fumegar(relogio);
     if (matMar.userData.sh) matMar.userData.sh.uniforms.tempo.value = relogio * 0.001;
     for (const rei of Object.keys(panos))
@@ -1105,6 +1187,17 @@ transformed.y += onda * transformed.x * 0.05;`);
     sc.updateProjectionMatrix();
     rend.render(cena, cam);
   }
+  function laco() {
+    if (!vivo) return;
+    requestAnimationFrame(laco);
+    quadros++;
+    const agora = performance.now();
+    // teto de 100 ms: com a pagina escondida o navegador estrangula o rAF, e
+    // sem isto as tropas teleportavam-se meio mapa ao voltar
+    const dt = Math.min(agora - ultimo, 100);
+    ultimo = agora;
+    avancar(dt);
+  }
   setInterval(() => { fps = quadros * 2; quadros = 0; }, 500);
   laco();
 
@@ -1113,6 +1206,8 @@ transformed.y += onda * transformed.x * 0.05;`);
 
   return {
     cena, cam, ctrl, rend, MAPA, THREE,
+    // um quadro a passo FIXO, para gravar video (ver `avancar`)
+    avancar,
     get fps() { return fps; },
     get pecas() { return nInst; },
     get triangulos() { return nTri; },
@@ -1130,6 +1225,21 @@ transformed.y += onda * transformed.x * 0.05;`);
                tiposComMalha: Object.keys(tropaInst),
                viasConhecidas: Object.keys(eixoDe).length,
                ultimoMotivo: motivo };
+    },
+    // a velocidade media das figuras a vista, e a que ritmo o passo esta a
+    // correr por causa dela -- serve para conferir que o pe nao patina
+    get ritmoDoPasso() {
+      let n = 0, soma = 0, esc = 0;
+      for (const [tipo, carne] of Object.entries(animados)) {
+        const mpc = ({ lanceiro: 1.3, arqueiro: 1.3, cavaleiro: 3.2 })[tipo] || 1.3;
+        for (const s of carne) {
+          if (!s.raiz.visible) continue;
+          n++; soma += s.v;
+          esc += Math.min(Math.max(s.v / (mpc / Math.max(s.dur, 0.05)), 0.35), 2.6);
+        }
+      }
+      return n ? { figuras: n, velocidade: soma / n, escala: esc / n }
+               : { figuras: 0, velocidade: 0, escala: 0 };
     },
     get contagemTropas() {
       const r = {};
