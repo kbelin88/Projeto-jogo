@@ -63,9 +63,17 @@ function queixa(msg) {
 }
 
 // o soldado novo entra SO na bancada: o jogo continua com o de sempre
+// ?tipo=arqueiro (ou lanceiro/cavaleiro) poe uma coluna SO desse tipo, para
+// conferir uma figura nova sem depender do sorteio; ?tipo=lanceiro,arqueiro
+// mistura-os em partes iguais
+const _tipos = (new URLSearchParams(location.search).get("tipo") || "")
+  .split(",").map(t => t.trim()).filter(Boolean);
+const _tipo = _tipos.length ? Object.fromEntries(_tipos.map(t => [t, Math.round(20 / _tipos.length)])) : null;
 const mapa = await iniciar(document.getElementById("palco"),
                            { cena: "bancada", velDemo: 1.6,
-                             tropas: { lanceiro: "lanceiro_novo.glb" } });
+                             colunaDemo: _tipo,
+                             tropas: { lanceiro: "lanceiro_novo.glb",
+                                       arqueiro: "arqueiro_novo.glb" } });
 // a camara comeca em cima das duas aldeias, e nao no meio da ilha
 {
   const cs = Object.values(mapa.MAPA.aldeias);

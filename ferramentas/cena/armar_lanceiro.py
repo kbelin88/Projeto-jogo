@@ -117,198 +117,422 @@ for _vv in _ilhas.values():
         continue
     if _vao / _larg > _nota:
         _eleita, _nota = _vv, _vao / _larg
-if _eleita is None:
-    raise SystemExit("SONDA ERRO: nao ha ilha comprida e fina -- a haste mudou")
-
-# o eixo da haste sai da propria ilha (media + direcao principal), e nao de uma
-# votacao as cegas: e a reta que a haste JA e.
-_cen = mathutils.Vector((0, 0, 0))
-for _i in _eleita:
-    _cen += _co[_i]
-_cen /= len(_eleita)
-_M = [[0.0] * 3 for _ in range(3)]
-for _i in _eleita:
-    _u = _co[_i] - _cen
-    for _a in range(3):
-        for _b in range(3):
-            _M[_a][_b] += _u[_a] * _u[_b]
-_eixo = mathutils.Vector((0, 0, 1))
-for _ in range(80):
-    _t = mathutils.Vector([sum(_M[_a][_b] * _eixo[_b] for _b in range(3))
-                           for _a in range(3)])
-    if _t.length < 1e-12:
-        break
-    _t.normalize()
-    _eixo = _t
-if _eixo.z < 0:
-    _eixo = -_eixo
+# ── NEM TODA A FIGURA TEM UMA HASTE ─────────────────────────────────────────
+# O arqueiro nao tem: o arco e CURVO e esta soldado a malha do corpo, entao a
+# maior razao vao/largura e 1,8 -- o proprio corpo. Antes isto era um erro
+# fatal, e estava certo enquanto so havia o lanceiro. Agora segue-se sem arma
+# marcada, e sao as PROVAS que dizem se alguma coisa parte: melhor medir o que
+# acontece do que adivinhar uma regra para uma arma que ainda nao se viu.
+TEM_HASTE = _eleita is not None
+if not TEM_HASTE:
+    print("SONDA lanca: NENHUMA ilha comprida e fina (maior razao %.1f). "
+          "A figura segue sem arma marcada -- ver a prova dos pesos." % _nota)
 
 # ⚠ HA DUAS HASTES, E A QUE SE VE NAO E A ILHA. O ComfyUI gerou a lanca duas
-# vezes: uma vara SOLTA por dentro (a ilha de cima, raio 0,008 da altura) e a
-# que se ve por fora, SOLDADA ao corpo na ilha grande. Marcar so a ilha deixou
-# a de fora presa a perna -- na bancada viam-se duas madeiras no chao, uma certa
-# e uma a seguir o pe direito. Um render das ilhas por cor mostrou isto num
-# olhar: TODA a superficie visivel era da mesma ilha.
+# vezes: uma vara SOLTA por dentro (a ilha eleita, raio 0,008 da altura) e a que
+# se ve por fora, SOLDADA ao corpo na ilha grande. Marcar so a ilha deixou a de
+# fora presa a perna -- na bancada viam-se duas madeiras no chao, uma certa e
+# uma a seguir o pe direito. Um render das ilhas por cor mostrou isto num olhar:
+# TODA a superficie visivel era da mesma ilha.
 #
-# A ilha serve na mesma, mas para outra coisa: da o EIXO exato da lanca, sem
-# palpite nenhum. Com esse eixo, mede-se o resto da malha e a separacao e
-# limpa em toda a altura -- a madeira fica a 0,010-0,014 do eixo, o corpo e a
-# bota a 0,04-0,11. O corte a 0,020 apanha as duas hastes e nenhuma bota.
+# A ilha serve na mesma, mas para outra coisa: da o EIXO exato da haste, sem
+# palpite nenhum. Com esse eixo mede-se o resto da malha, e a separacao e limpa
+# em toda a altura -- a madeira a 0,010-0,014 do eixo, o corpo e a bota a
+# 0,04-0,11. O corte a 0,020 apanha as duas hastes e nenhuma bota.
 #
 # ⚠ NAO PODE HAVER CORTE EM ALTURA. Uma primeira versao so apanhava acima do
 # fundo da vara interna, a pensar que mais abaixo so havia bota -- e a PONTEIRA
 # (o ultimo palmo, o que pousa ao pe da bota) ficou de fora, branca na prova da
-# marca. Era exatamente esse pedaco que andava agarrado ao pe. O raio sozinho
-# chega: a bota mais proxima esta a 0,04 do eixo, o dobro do corte.
-RAIO_LANCA = _hb * 0.020
-_marca = set(_eleita)
-for _i, _q in enumerate(_co):
-    _u = _q - _cen
-    if (_u - _eixo * _u.dot(_eixo)).length < RAIO_LANCA:
-        _marca.add(_i)
+# marca. Era exatamente esse pedaco que andava agarrado ao pe.
+_marca = set()
+if TEM_HASTE:
+    _cen = mathutils.Vector((0, 0, 0))
+    for _i in _eleita:
+        _cen += _co[_i]
+    _cen /= len(_eleita)
+    _M = [[0.0] * 3 for _ in range(3)]
+    for _i in _eleita:
+        _u = _co[_i] - _cen
+        for _a in range(3):
+            for _b in range(3):
+                _M[_a][_b] += _u[_a] * _u[_b]
+    _eixo = mathutils.Vector((0, 0, 1))
+    for _ in range(80):
+        _t = mathutils.Vector([sum(_M[_a][_b] * _eixo[_b] for _b in range(3))
+                               for _a in range(3)])
+        if _t.length < 1e-12:
+            break
+        _t.normalize()
+        _eixo = _t
+    if _eixo.z < 0:
+        _eixo = -_eixo
 
-# ⚠ O CILINDRO TAMBEM APANHA A BIQUEIRA DA BOTA, que o eixo da lanca atravessa
-# rente ao chao. E o erro ao contrario do anterior: em vez de madeira presa ao
-# pe, fica um pedaco de PE preso a mao -- e a bota estica-se e borra a cada
-# passo, que foi o que se viu na bancada.
-# A madeira distingue-se por ser CONTINUA: dentro da marca, a haste e um pedaco
-# unico que atravessa o modelo de alto a baixo, e a biqueira e uma mancha curta
-# e solta. Entao parte-se a marca em pedacos ligados e ficam so os compridos.
-_viz = defaultdict(set)
-for _e in corpo.data.edges:
-    _a, _b = _e.vertices
-    if _a in _marca and _b in _marca:
-        _viz[_a].add(_b)
-        _viz[_b].add(_a)
-_qual, _n = {}, 0
-for _s in _marca:
-    if _s in _qual:
-        continue
-    _n += 1
-    _fila = [_s]
-    _qual[_s] = _n
-    while _fila:
-        _a = _fila.pop()
-        for _b in _viz[_a]:
-            if _b not in _qual:
-                _qual[_b] = _n
-                _fila.append(_b)
-_pedacos = defaultdict(list)
-for _i, _k in _qual.items():
-    _pedacos[_k].append(_i)
-_fora = 0
-for _vv in _pedacos.values():
-    _zz = [_co[_i].z for _i in _vv]
-    if (max(_zz) - min(_zz)) < _hb * 0.08:
-        _marca.difference_update(_vv)
-        _fora += len(_vv)
-print("SONDA lanca: %d pedacos ligados, %d vertices curtos fora (bota)"
-      % (len(_pedacos), _fora))
+    RAIO_LANCA = _hb * 0.020
+    _marca = set(_eleita)
+    for _i, _q in enumerate(_co):
+        _u = _q - _cen
+        if (_u - _eixo * _u.dot(_eixo)).length < RAIO_LANCA:
+            _marca.add(_i)
 
-# ── A PROVA DA MARCA: O QUE VAI SER LANCA, PINTADO ──────────────────────────
-# Sem isto, a marca so se julga depois -- exportar, abrir a bancada, ver uma
-# madeira a mexer com o pe. Aqui pinta-se de vermelho o que foi marcado e
-# renderiza-se ANTES de reduzir: se sobrar madeira cinzenta, ela vai ficar
-# presa a perna, e ve-se aqui em vez de no video.
-if os.environ.get("PROVA_LANCA", "1") == "1":
-    _ca = corpo.data.color_attributes.new(name="MARCA", type="FLOAT_COLOR",
-                                          domain="POINT")
-    for _i in range(len(corpo.data.vertices)):
-        _ca.data[_i].color = ((0.95, 0.15, 0.10, 1.0) if _i in _marca
-                              else (0.72, 0.72, 0.72, 1.0))
-    _mat = bpy.data.materials.new("marca")
-    _mat.use_nodes = True
-    _nt = _mat.node_tree
-    _b = next(n for n in _nt.nodes if n.type == "BSDF_PRINCIPLED")
-    _at = _nt.nodes.new("ShaderNodeVertexColor")
-    _at.layer_name = "MARCA"
-    _nt.links.new(_at.outputs["Color"], _b.inputs["Base Color"])
-    _b.inputs["Roughness"].default_value = 0.9
-    _guarda = list(corpo.data.materials)
-    corpo.data.materials.clear()
-    corpo.data.materials.append(_mat)
-    _ce = bpy.context.scene
-    _luz = bpy.data.lights.new("l", "SUN")
-    _luz.energy = 2.8
-    _ol = bpy.data.objects.new("l", _luz)
-    _ce.collection.objects.link(_ol)
-    _ol.rotation_euler = (math.radians(55), 0, math.radians(25))
-    _ce.world = bpy.data.worlds.new("w")
-    _ce.world.use_nodes = True
-    _ce.world.node_tree.nodes["Background"].inputs["Color"].default_value =         (.93, .93, .93, 1)
-    _cd = bpy.data.cameras.new("c")
-    _cm = bpy.data.objects.new("c", _cd)
-    _ce.collection.objects.link(_cm)
-    _ce.camera = _cm
-    _mira = bpy.data.objects.new("m", None)
-    _ce.collection.objects.link(_mira)
-    _tt = _cm.constraints.new("TRACK_TO")
-    _tt.target = _mira
-    _tt.track_axis = "TRACK_NEGATIVE_Z"
-    _tt.up_axis = "UP_Y"
-    _ce.render.engine = "CYCLES"
-    _ce.cycles.samples = 20
-    _ce.render.resolution_x = _ce.render.resolution_y = 720
-    _ce.view_settings.view_transform = "Standard"
-    _zb = min(q.z for q in _co)
-    for _nome, _mz, _d in (("todo", 0.50, 2.0), ("pes", 0.10, 0.55)):
-        _mira.location = (0, 0, _zb + _hb * _mz)
-        _cm.location = (_hb * _d, 0, _zb + _hb * (_mz + _d * 0.15))
-        _ce.render.filepath = os.path.join(os.getcwd(), "ferramentas", "cena",
-                                           "_saida", "marca_lanca_%s.png" % _nome)
-        bpy.ops.render.render(write_still=True)
-    corpo.data.materials.clear()
-    for _m in _guarda:
-        corpo.data.materials.append(_m)
-    corpo.data.color_attributes.remove(_ca)
-    bpy.data.objects.remove(_ol, do_unlink=True)
-    bpy.data.objects.remove(_cm, do_unlink=True)
-    bpy.data.objects.remove(_mira, do_unlink=True)
-    print("SONDA prova da marca: _saida/marca_lanca_{todo,pes}.png "
-          "(vermelho = vai com a mao)")
+    # ⚠ O CILINDRO TAMBEM APANHA A BIQUEIRA DA BOTA, que o eixo atravessa rente
+    # ao chao. E o erro ao contrario do anterior: em vez de madeira presa ao pe,
+    # fica um pedaco de PE preso a mao -- e a bota estica e borra a cada passo.
+    # A madeira distingue-se por ser CONTINUA: dentro da marca, a haste e um
+    # pedaco unico que atravessa o modelo de alto a baixo, e a biqueira e uma
+    # mancha curta e solta. Entao parte-se a marca em pedacos ligados e ficam so
+    # os compridos.
+    _viz = defaultdict(set)
+    for _e in corpo.data.edges:
+        _a, _b = _e.vertices
+        if _a in _marca and _b in _marca:
+            _viz[_a].add(_b)
+            _viz[_b].add(_a)
+    _qual, _n = {}, 0
+    for _s in _marca:
+        if _s in _qual:
+            continue
+        _n += 1
+        _fila = [_s]
+        _qual[_s] = _n
+        while _fila:
+            _a = _fila.pop()
+            for _b in _viz[_a]:
+                if _b not in _qual:
+                    _qual[_b] = _n
+                    _fila.append(_b)
+    _pedacos = defaultdict(list)
+    for _i, _k in _qual.items():
+        _pedacos[_k].append(_i)
+    _fora = 0
+    for _vv in _pedacos.values():
+        _zz = [_co[_i].z for _i in _vv]
+        if (max(_zz) - min(_zz)) < _hb * 0.08:
+            _marca.difference_update(_vv)
+            _fora += len(_vv)
+    print("SONDA lanca: %d pedacos ligados, %d vertices curtos fora (bota)"
+          % (len(_pedacos), _fora))
 
-_gl = corpo.vertex_groups.new(name="LANCA")
-_gl.add(sorted(_marca), 1.0, "REPLACE")
-print("SONDA lanca: vara solta %d vertices (comprida/fina = %.1f) + haste "
-      "visivel %d = %d no total"
-      % (len(_eleita), _nota, len(_marca) - len(_eleita), len(_marca)))
+# ── A ARMA MARCADA A MAO VENCE QUALQUER REGRA ───────────────────────────────
+# Ha armas que nenhuma regra geometrica apanha. O arco do arqueiro e CURVO, esta
+# colado a mao, e a corda saiu do ComfyUI em dois fios soltos em V, longe das
+# pontas do arco -- uma "corda entre as pontas" apanhou o pulso em vez dela. Em
+# vez de mais palpites, o Lucas marcou a arma no Blender (laco em raio-X, ligado
+# pelo MCP) e a selecao ficou num ficheiro:
+#     ferramentas/cena/marcas/<figura>_<peca>.json
+# com os indices dos vertices da malha ORIGINAL, antes de reduzir. Havendo marca
+# para esta figura, e ela que manda. So vale se o numero de vertices bater: um
+# GLB regerado no ComfyUI tem outros indices, e a marca velha apanharia lixo.
+_nome_fig = os.path.splitext(os.path.basename(ENTRADA))[0].lower()
+_pasta_marcas = os.path.join(os.getcwd(), "ferramentas", "cena", "marcas")
+_mao_marca = set()
+_manga_marca = set()
+_apagar_marca = set()
+if os.path.isdir(_pasta_marcas):
+    import json as _json
+    for _f in sorted(os.listdir(_pasta_marcas)):
+        if not (_f.lower().startswith(_nome_fig + "_") and _f.endswith(".json")):
+            continue
+        _d = _json.load(open(os.path.join(_pasta_marcas, _f), encoding="utf-8"))
+        # a pasta tem marcas de outras coisas (ex.: <figura>_ossos.json, juntas
+        # do esqueleto); arma e so o que traz indices de vertices
+        if "indices_apagar" in _d:
+            if _d.get("vertices_total") != len(corpo.data.vertices):
+                raise SystemExit("SONDA ERRO: a marca %s e de outra malha -- marque de novo" % _f)
+            _apagar_marca |= set(_d["indices_apagar"])
+            print("SONDA marca a mao: %s (%d vertices a apagar)" % (_f, len(_d["indices_apagar"])))
+            continue
+        if "indices_manga" in _d:
+            if _d.get("vertices_total") != len(corpo.data.vertices):
+                raise SystemExit("SONDA ERRO: a marca %s e de outra malha -- marque de novo" % _f)
+            _manga_marca |= set(_d["indices_manga"])
+            print("SONDA marca a mao: %s (%d vertices de manga)" % (_f, len(_d["indices_manga"])))
+            continue
+        if "indices_mao" in _d:
+            if _d.get("vertices_total") != len(corpo.data.vertices):
+                raise SystemExit("SONDA ERRO: a marca %s e de outra malha -- marque de novo" % _f)
+            _mao_marca |= set(_d["indices_mao"])
+            print("SONDA marca a mao: %s (%d vertices de mao)" % (_f, len(_d["indices_mao"])))
+            continue
+        if "indices" not in _d:
+            continue
+        if _d.get("vertices_total") != len(corpo.data.vertices):
+            raise SystemExit("SONDA ERRO: a marca %s foi feita numa malha de %s "
+                             "vertices e esta tem %d -- o GLB mudou, marque de novo"
+                             % (_f, _d.get("vertices_total"), len(corpo.data.vertices)))
+        _marca |= set(_d["indices"])
+        _d_arma = _d
+        if not TEM_HASTE:
+            _eleita, _nota = [], 0.0
+        TEM_HASTE = True
+        print("SONDA marca a mao: %s (%d vertices)" % (_f, len(_d["indices"])))
+
+# ── A MAO QUE PENDE JUNTO AO CASACO ─────────────────────────────────────────
+# A mao esquerda do arqueiro pende encostada a coxa e a barra do casaco. Com a
+# regra "dois ossos mais proximos" ela ficou METADE braco, METADE coxa (os 83
+# vertices para la do pulso tinham todos a coxa, peso medio 0,46), e o casaco ao
+# lado ia com o antebraco: ao girar o braco, mao e casaco esticavam juntos e o
+# Lucas via "a ponta dos dedos presa ao casaco". Nao era cola -- nessa zona ja
+# eram sete pedacos soltos -- era PESO. Pintar o casaco de azul no Weight Paint
+# nao chegou, porque a coxa continuava dentro da mao.
+# O Lucas pintou a mao (Vertex Paint), e ela fica num grupo que atravessa a
+# reducao como a arma: 100% antebraco, nada de coxa.
+if _mao_marca:
+    corpo.vertex_groups.new(name="MAO").add(sorted(_mao_marca), 1.0, "REPLACE")
+# as mangas nao precisam de sair para um objeto seu: sao uma zona larga, e a media
+# que o `Decimate` faz aos pesos so borra a borda -- lida depois com corte em 0,5
+if _manga_marca:
+    corpo.vertex_groups.new(name="MANGA").add(sorted(_manga_marca), 1.0, "REPLACE")
+
+# ── O QUE O LUCAS MANDOU APAGAR ─────────────────────────────────────────────
+# Na mao esquerda do arqueiro, a ponta de um dedo esta FUNDIDA a borda do casaco:
+# a mesma malha. Nenhum peso separa isso -- ao girar o braco, o ponto de fusao ia
+# com o dedo e puxava uma aba inteira do casaco (viu-se na captura do viewport,
+# com o braco aberto: um triangulo do casaco da anca ate aos dedos). Ele pintou o
+# ponto exato (33 vertices) e aqui ele desaparece.
+# Apaga-se DEPOIS de as outras marcas estarem em grupos: apagar vertices muda a
+# numeracao de todos, e so os grupos atravessam isso intactos. A marca da arma,
+# que ainda e uma lista de indices, vai num grupo temporario e volta dele.
+if _apagar_marca:
+    import bmesh
+    _gt = corpo.vertex_groups.new(name="MARCA_TMP_AP")
+    if _marca:
+        _gt.add(sorted(_marca), 1.0, "REPLACE")
+    _bm = bmesh.new()
+    _bm.from_mesh(corpo.data)
+    _bm.verts.ensure_lookup_table()
+    bmesh.ops.delete(_bm, geom=[v for v in _bm.verts if v.index in _apagar_marca],
+                     context="VERTS")
+    _bm.to_mesh(corpo.data)
+    _bm.free()
+    _marca = {v.index for v in corpo.data.vertices
+              if any(g.group == _gt.index and g.weight > 0.5 for g in v.groups)}
+    corpo.vertex_groups.remove(_gt)
+    print("SONDA apagado: %d vertices" % len(_apagar_marca))
+
+# ── O ARCO: MAIOR, E COM UMA CORDA QUE LIGA AS PONTAS ───────────────────────
+# O Lucas viu duas coisas na bancada: o arco era CURTO (1,15 m de ponta a ponta
+# num homem de 2 m -- de longe nao se le) e a corda NAO LIGAVA as pontas. Medido:
+# dentro da marca ha um pedaco grosso (o arco, 5 cm) e quatro fiapos com menos de
+# 1 cm (a corda que o ComfyUI deixou solta). Entao:
+#   1. os fiapos APAGAM-SE;
+#   2. os bracos do arco ESTICAM-SE a partir da pega: cada ponto afasta-se da mao
+#      ao longo do raio que ja tinha, e o que esta junto a mao nao se mexe (a mao
+#      fica do tamanho que era);
+#   3. depois de reduzir, poe-se uma corda NOVA, reta, de ponta a ponta.
+# Vale so para quem tem "arco" na marca -- o lanceiro nao passa por aqui.
+ARCO_CFG = None
+# ⚠ Le-se da marca da ARMA (`_d_arma`), e nao da ultima marca aberta: quando
+# apareceu a marca das juntas dos bracos, era ela a ultima, e o arco deixou de
+# ser esticado sem um erro -- so a linha "SONDA arco" desapareceu do registo.
+if TEM_HASTE and "_d_arma" in dir():
+    ARCO_CFG = _d_arma.get("arco")
+_eixo_arco = None
+if ARCO_CFG:
+    import bmesh
+    _co = [v.co.copy() for v in corpo.data.vertices]
+    _vz = defaultdict(set)
+    for _e in corpo.data.edges:
+        _a, _b = _e.vertices
+        _vz[_a].add(_b)
+        _vz[_b].add(_a)
+    _comp, _n = {}, 0
+    for _s in _marca:
+        if _s in _comp:
+            continue
+        _n += 1
+        _fila = [_s]
+        _comp[_s] = _n
+        while _fila:
+            _a = _fila.pop()
+            for _b in _vz[_a]:
+                if _b in _marca and _b not in _comp:
+                    _comp[_b] = _n
+                    _fila.append(_b)
+    _pd = defaultdict(list)
+    for _i, _k in _comp.items():
+        _pd[_k].append(_i)
+
+    def _eixo_de(ids):
+        c = sum((_co[i] for i in ids), mathutils.Vector()) / len(ids)
+        M = [[0.0] * 3 for _ in range(3)]
+        for i in ids:
+            u = _co[i] - c
+            for a in range(3):
+                for b in range(3):
+                    M[a][b] += u[a] * u[b]
+        e = mathutils.Vector((0.3, 0.3, 0.9))
+        for _ in range(60):
+            t = mathutils.Vector([sum(M[a][b] * e[b] for b in range(3)) for a in range(3)])
+            if t.length < 1e-12:
+                break
+            t.normalize()
+            e = t
+        esp = max(((_co[i] - c) - e * (_co[i] - c).dot(e)).length for i in ids)
+        return c, e, esp
+
+    _corpo_arco = max(_pd.values(), key=len)
+    _fios = []
+    for _vv in _pd.values():
+        if _vv is not _corpo_arco and _eixo_de(_vv)[2] < _hb * 0.015:
+            _fios += _vv
+    _c, _e, _ = _eixo_de(_corpo_arco)
+    _eixo_arco = _e
+    # a pega: onde o arco toca no que NAO esta marcado (a mao, a luva)
+    _borda = [i for i in _corpo_arco if any(j not in _marca for j in _vz[i])]
+    _pega = (sum((_co[i] for i in _borda), mathutils.Vector()) / len(_borda)
+             if _borda else _c)
+    _proj = {i: (_co[i] - _pega).dot(_e) for i in _corpo_arco}
+    _R = _hb * 0.06
+    _alvo = ARCO_CFG.get("comprimento", 0.85) * _hb
+    # ⚠ CADA BRACO ESTICA POR SI. No modelo do ComfyUI os bracos do arco ja
+    # nasceram desiguais: o de cima com 40 cm, o de baixo com 75 (medido da pega a
+    # ponta). Esticados pela mesma razao, continuavam desiguais, e o Lucas viu a
+    # corda mal encaixada na ponta curta. Agora cada um vai a METADE do alvo.
+    _cima = max(_proj.values())
+    _baixo = -min(_proj.values())
+    # ⚠ (16/09) Esticar cada braco POR SI deformou a ponta curta num bloco largo
+    # -- 2,6 vezes estica tambem a largura da ponta. Voltou-se a razao unica; o
+    # braco curto ficou resolvido a mao pelo Lucas (ver "A ARMA QUE O LUCAS
+    # DESENHOU A MAO", mais abaixo).
+    _Fc = _Fb = max(1.0, (_alvo - 2 * _R) / max(_cima + _baixo - 2 * _R, 1e-6))
+    for _i in _corpo_arco:
+        _u = _co[_i] - _pega
+        _dd = _u.length
+        if _dd > _R:
+            _F = _Fc if _proj[_i] > 0 else _Fb
+            corpo.data.vertices[_i].co = _pega + _u * ((_R + (_dd - _R) * _F) / _dd)
+    _vao = _cima + _baixo
+    # os fiapos saem; o grupo guarda a marca atraves da mudanca de indices
+    _gtmp = corpo.vertex_groups.new(name="MARCA_TMP")
+    _gtmp.add(sorted(_marca - set(_fios)), 1.0, "REPLACE")
+    _bm = bmesh.new()
+    _bm.from_mesh(corpo.data)
+    _bm.verts.ensure_lookup_table()
+    _fs = set(_fios)
+    bmesh.ops.delete(_bm, geom=[v for v in _bm.verts if v.index in _fs], context="VERTS")
+    _bm.to_mesh(corpo.data)
+    _bm.free()
+    _marca = {v.index for v in corpo.data.vertices
+              if any(g.group == _gtmp.index and g.weight > 0.5 for g in v.groups)}
+    corpo.vertex_groups.remove(_gtmp)
+    print("SONDA arco: %d vertices de fios soltos apagados; bracos de %.2f e %.2f "
+          "da altura -> os dois a %.2f (x%.2f e x%.2f)"
+          % (len(_fios), _cima / _hb, _baixo / _hb, _alvo / 2 / _hb, _Fc, _Fb))
 
 # ⚠ UM GRUPO DE VERTICES NAO ATRAVESSA O `Decimate` INTEIRO. O redutor junta
-# vertices e faz a MEDIA dos pesos: dos 3037 marcados sobravam 25 acima de 0,5,
-# e a haste voltava a ficar solta. Por isso a lanca sai da malha para um objeto
+# vertices e faz a MEDIA dos pesos: dos 7883 marcados sobravam 25 acima de 0,5,
+# e a haste voltava a ficar solta. Por isso a arma sai da malha para um objeto
 # SEU, cada um reduz-se por si, e depois juntam-se outra vez -- a juncao guarda
 # os grupos tal e qual, e a marca fica exata (peso 1,0) na malha pequena.
-bpy.ops.object.select_all(action="DESELECT")
-corpo.select_set(True)
-bpy.context.view_layer.objects.active = corpo
-bpy.ops.object.mode_set(mode="EDIT")
-bpy.ops.mesh.select_all(action="DESELECT")
-bpy.ops.object.mode_set(mode="OBJECT")
-for _i in _marca:
-    corpo.data.vertices[_i].select = True
-bpy.ops.object.mode_set(mode="EDIT")
-bpy.ops.mesh.separate(type="SELECTED")
-bpy.ops.object.mode_set(mode="OBJECT")
-lanca = [o for o in bpy.context.selected_objects if o is not corpo][0]
-lanca.name = "lanca"
+if TEM_HASTE:
+    _gl = corpo.vertex_groups.new(name="LANCA")
+    _gl.add(sorted(_marca), 1.0, "REPLACE")
+    print("SONDA lanca: vara solta %d vertices (comprida/fina = %.1f) + haste "
+          "visivel %d = %d no total"
+          % (len(_eleita), _nota, len(_marca) - len(_eleita), len(_marca)))
+    bpy.ops.object.select_all(action="DESELECT")
+    corpo.select_set(True)
+    bpy.context.view_layer.objects.active = corpo
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="DESELECT")
+    bpy.ops.object.mode_set(mode="OBJECT")
+    for _i in _marca:
+        corpo.data.vertices[_i].select = True
+    if "MAO" in corpo.vertex_groups:
+        _im = corpo.vertex_groups["MAO"].index
+        for v in corpo.data.vertices:
+            if any(g.group == _im and g.weight > 0.5 for g in v.groups):
+                v.select = True
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.separate(type="SELECTED")
+    bpy.ops.object.mode_set(mode="OBJECT")
+    lanca = [o for o in bpy.context.selected_objects if o is not corpo][0]
+    lanca.name = "lanca"
+    pecas = (corpo, lanca)
+else:
+    pecas = (corpo,)
 
-corpo.data.calc_loop_triangles()
-lanca.data.calc_loop_triangles()
-antes = len(corpo.data.loop_triangles) + len(lanca.data.loop_triangles)
+antes = 0
+for _ob in pecas:
+    _ob.data.calc_loop_triangles()
+    antes += len(_ob.data.loop_triangles)
 if TRIANGULOS and antes > TRIANGULOS:
-    # a mesma razao nos dois, para a haste nao ficar grossa ao pe de um corpo fino
-    for _ob in (corpo, lanca):
+    # a mesma razao em todas, para a haste nao ficar grossa ao pe de um corpo fino
+    for _ob in pecas:
         md = _ob.modifiers.new("reduzir", "DECIMATE")
         md.ratio = TRIANGULOS / antes
         bpy.context.view_layer.objects.active = _ob
         bpy.ops.object.modifier_apply(modifier=md.name)
-bpy.ops.object.select_all(action="DESELECT")
-corpo.select_set(True)
-lanca.select_set(True)
-bpy.context.view_layer.objects.active = corpo
-bpy.ops.object.join()
+if TEM_HASTE:
+    bpy.ops.object.select_all(action="DESELECT")
+    corpo.select_set(True)
+    lanca.select_set(True)
+    bpy.context.view_layer.objects.active = corpo
+    bpy.ops.object.join()
 corpo.data.calc_loop_triangles()
 print("SONDA malha: %d -> %d triangulos" % (antes, len(corpo.data.loop_triangles)))
+
+# ── A CORDA NOVA ────────────────────────────────────────────────────────────
+# So DEPOIS de reduzir: um tubo fino de seis lados, reduzido junto com o resto,
+# desfazia-se numa linha. As pontas saem dos proprios vertices do arco (ja
+# reduzido), nos extremos do eixo; e a corda entra no grupo da arma, para andar
+# com a mao como o arco.
+if ARCO_CFG and ARCO_CFG.get("refazer_corda") and _eixo_arco is not None:
+    import bmesh
+    _ig = corpo.vertex_groups["LANCA"].index
+    _ids = [v.index for v in corpo.data.vertices
+            if any(g.group == _ig and g.weight > 0.5 for g in v.groups)]
+    _pr = {i: corpo.data.vertices[i].co.dot(_eixo_arco) for i in _ids}
+    _mx, _mn = max(_pr.values()), min(_pr.values())
+    _tol = _hb * 0.02
+    _topo = [corpo.data.vertices[i].co for i in _ids if _pr[i] > _mx - _tol]
+    _base = [corpo.data.vertices[i].co for i in _ids if _pr[i] < _mn + _tol]
+    _A = sum(_topo, mathutils.Vector()) / len(_topo)
+    _B = sum(_base, mathutils.Vector()) / len(_base)
+    _eixo_c = (_B - _A).normalized()
+    _p1 = _eixo_c.orthogonal().normalized()
+    _p2 = _eixo_c.cross(_p1).normalized()
+    _raio = _hb * 0.004
+    _bm = bmesh.new()
+    _bm.from_mesh(corpo.data)
+    _dl = _bm.verts.layers.deform.verify()
+    _novos = []
+    _aneis = []
+    for _ponto in (_A, _B):
+        _anel = []
+        for _k in range(6):
+            _ang = _k / 6 * 2 * math.pi
+            _v = _bm.verts.new(_ponto + (_p1 * math.cos(_ang) + _p2 * math.sin(_ang)) * _raio)
+            _v[_dl][_ig] = 1.0
+            _anel.append(_v)
+            _novos.append(_v)
+        _aneis.append(_anel)
+    _faces = []
+    for _k in range(6):
+        _a0, _a1 = _aneis[0][_k], _aneis[0][(_k + 1) % 6]
+        _b0, _b1 = _aneis[1][_k], _aneis[1][(_k + 1) % 6]
+        _faces.append(_bm.faces.new((_a0, _a1, _b1, _b0)))
+    # a cor: pinta-se a corda de linho no atributo de cor que o modelo usa
+    _cor = (0.82, 0.78, 0.66, 1.0)
+    _ca = corpo.data.color_attributes[0] if corpo.data.color_attributes else None
+    if _ca is not None:
+        if _ca.domain == "POINT":
+            _lay = (_bm.verts.layers.float_color.get(_ca.name)
+                    or _bm.verts.layers.color.get(_ca.name))
+            if _lay is not None:
+                for _v in _novos:
+                    _v[_lay] = _cor
+        else:
+            _lay = (_bm.loops.layers.float_color.get(_ca.name)
+                    or _bm.loops.layers.color.get(_ca.name))
+            if _lay is not None:
+                for _f in _faces:
+                    for _l in _f.loops:
+                        _l[_lay] = _cor
+    _bm.to_mesh(corpo.data)
+    _bm.free()
+    corpo.data.calc_loop_triangles()
+    print("SONDA corda nova: de ponta a ponta, %.2f da altura" % ((_B - _A).length / _hb))
 
 # ── MEIA-VOLTA: O NOSSO MAPA OLHA PARA +Y ───────────────────────────────────
 # Medido nas quatro vistas: esta figura olha para -Y.
@@ -321,19 +545,37 @@ corpo.data.transform(mathutils.Matrix.Rotation(math.pi, 4, "Z"))
 # ── A LANCA, LIDA DE VOLTA ──────────────────────────────────────────────────
 # Tem de ser ANTES de medir a altura e as pernas: a haste passa por cima da
 # cabeca e ao lado do corpo, e em qualquer das duas contas mente.
-_ig = corpo.vertex_groups["LANCA"].index
 lanca_idx = set()
-for v in corpo.data.vertices:
-    for g in v.groups:
-        if g.group == _ig and g.weight > 0.5:
-            lanca_idx.add(v.index)
-if len(lanca_idx) < 40:
-    raise SystemExit("SONDA ERRO: a marca da lanca nao sobreviveu ao Decimate "
-                     "(%d vertices)" % len(lanca_idx))
-_zs = [corpo.data.vertices[i].co.z for i in lanca_idx]
-print("SONDA lanca: %d vertices depois de reduzir, de z=%.2f a z=%.2f"
-      % (len(lanca_idx), min(_zs), max(_zs)))
-corpo.vertex_groups.remove(corpo.vertex_groups["LANCA"])
+if TEM_HASTE:
+    _ig = corpo.vertex_groups["LANCA"].index
+    for v in corpo.data.vertices:
+        for g in v.groups:
+            if g.group == _ig and g.weight > 0.5:
+                lanca_idx.add(v.index)
+    if len(lanca_idx) < 40:
+        raise SystemExit("SONDA ERRO: a marca da lanca nao sobreviveu ao "
+                         "Decimate (%d vertices)" % len(lanca_idx))
+    _zs = [corpo.data.vertices[i].co.z for i in lanca_idx]
+    print("SONDA lanca: %d vertices depois de reduzir, de z=%.2f a z=%.2f"
+          % (len(lanca_idx), min(_zs), max(_zs)))
+    corpo.vertex_groups.remove(corpo.vertex_groups["LANCA"])
+mao_idx = set()
+if "MAO" in corpo.vertex_groups:
+    _im = corpo.vertex_groups["MAO"].index
+    mao_idx = {v.index for v in corpo.data.vertices
+               if any(g.group == _im and g.weight > 0.5 for g in v.groups)}
+    corpo.vertex_groups.remove(corpo.vertex_groups["MAO"])
+    print("SONDA mao: %d vertices depois de reduzir" % len(mao_idx))
+manga_idx = set()
+LADOS_PINTADOS = set()
+if "MANGA" in corpo.vertex_groups:
+    _ig2 = corpo.vertex_groups["MANGA"].index
+    manga_idx = {v.index for v in corpo.data.vertices
+                 if any(g.group == _ig2 and g.weight > 0.5 for g in v.groups)}
+    corpo.vertex_groups.remove(corpo.vertex_groups["MANGA"])
+    LADOS_PINTADOS = {("L" if corpo.data.vertices[i].co.x > 0 else "R") for i in manga_idx}
+    print("SONDA mangas: %d vertices depois de reduzir, lados pintados: %s"
+          % (len(manga_idx), ", ".join(sorted(LADOS_PINTADOS))))
 
 # ── A ALTURA DO CORPO, SEM A LANCA ──────────────────────────────────────────
 # A caixa da malha vai ate a PONTA DA LANCA, que passa a cabeca; escalar por
@@ -408,14 +650,53 @@ corpo.data.transform(mathutils.Matrix.Translation((-cx, -cy, -z0)))
 # cima do resultado.
 # A aperto e por rampa: nada na anca, tudo da coxa para baixo. Encolher o corpo
 # todo em x deixava-o magro de ombros.
-APERTO_PERNAS = 0.76
+# ⚠ ALVO, E NAO FATOR. Isto era um 0,76 fixo, afinado a olho para o lanceiro --
+# e no arqueiro, que nasce com as pernas a 39 cm, 0,76 deixava 29 cm, ainda
+# larguissimo, e a passada abria em espargata. Cada figura do ComfyUI vem com o
+# seu proprio afastamento, entao o que tem de ser constante e o RESULTADO: um
+# homem anda com os eixos das pernas a ~0,055 da sua altura (22 cm num de 2 m).
+# O fator sai da divisao, e nunca ALARGA (teto em 1,0) nem esmaga (piso 0,45).
+ALVO_PERNAS = 0.055
+APERTO_PERNAS = min(1.0, max(0.45, ALVO_PERNAS / max(_antes_pernas, 1e-6)))
 _z_anca = (z_cabeca - z0) * 0.52
 _z_coxa = (z_cabeca - z0) * 0.42
 for _v in corpo.data.vertices:
+    # ⚠ A ARMA NAO SE APERTA. A parte de baixo da lanca tambem esta abaixo da
+    # anca, e era encolhida com as pernas: a haste saia com uma CURVA entre 0,9
+    # e 1,1 m (10 cm de desvio em 20 cm, medido no GLB), exatamente na rampa do
+    # aperto. O Lucas viu-a na sala de provas; no original a lanca e reta.
+    if _v.index in lanca_idx:
+        continue
     if _v.co.z >= _z_anca:
         continue
     _t = 1.0 if _v.co.z <= _z_coxa else (_z_anca - _v.co.z) / (_z_anca - _z_coxa)
     _v.co.x *= 1.0 - (1.0 - APERTO_PERNAS) * _t
+
+# ── OS PES NAO ESTAO A PAR, E ISSO NAO SE CONSERTA NA MALHA ─────────────────
+# A pose que vem do ComfyUI nao e neutra: o arqueiro nasce com um pe 64 cm a
+# frente do outro (o lanceiro, 1 cm). A primeira tentativa foi empurrar os
+# vertices de cada perna em y, por rampa -- e RASGOU A TUNICA: a saia e uma peca
+# so, atravessa os dois lados, e meia dela foi para a frente e meia para tras.
+# Ficou muito pior do que o defeito que ia corrigir.
+# O sitio certo e o ESQUELETO: mede-se o y de cada pe e constroi-se a perna
+# desse lado ali, em vez de a supor no meio. Assim o osso corre por dentro do
+# tubo da perna (que e o que faz a deformacao ficar boa) e cada pe baloica a
+# volta do sitio onde ja esta.
+_zb2 = (z_cabeca - z0) * 0.12
+_pes = {}
+for _lado, _sinal in (("esq", -1), ("dir", +1)):
+    _ys = sorted(v.co.y for v in corpo.data.vertices
+                 if v.index not in lanca_idx and v.co.z < _zb2
+                 and v.co.x * _sinal > 0)
+    if len(_ys) >= 8:
+        _pes[_lado] = (_ys[int(len(_ys) * .05)] + _ys[int(len(_ys) * .95)]) / 2
+Y_PE = {"L": 0.0, "R": 0.0}
+if len(_pes) == 2:
+    _mid = (_pes["esq"] + _pes["dir"]) / 2
+    Y_PE = {"L": _pes["dir"] - _mid, "R": _pes["esq"] - _mid}
+    print("SONDA pes: desencontro de %.0f cm na pose de repouso -- os ossos de "
+          "cada perna vao para o sitio dela" % (abs(_pes["dir"] - _pes["esq"])
+                                                / (z_cabeca - z0) * ALTURA_M * 100))
 
 _pj = _pernas_cruas_centrada(0.30) or _pernas_cruas_centrada(0.24)
 FRACAO_PERNA = (_pj[1] - _pj[0]) / 2 / (z_cabeca - z0) if _pj else _antes_pernas * APERTO_PERNAS
@@ -425,6 +706,7 @@ print("SONDA pernas apertadas: %.3f -> %.3f da altura (%.0f cm -> %.0f cm num "
                             FRACAO_PERNA * 2 * ALTURA_M * 100, ALTURA_M))
 corpo.data.transform(mathutils.Matrix.Scale(k, 4))
 H = ALTURA_M
+Y_PE = {_l: _v * k for _l, _v in Y_PE.items()}
 print("SONDA corpo: cabeca a %.3f de %.3f unidades; escala %.3f -> %.2f m"
       % (z_cabeca - z0, max(zs) - z0, k, H))
 
@@ -461,6 +743,82 @@ x_perna = FRACAO_PERNA * H
 x_torno = x_perna * 0.90
 x_anca = x_perna * 0.80          # a anca e mais estreita que a perna em pe
 x_ombro = eixo_das_pernas(0.78, limite=0.30)
+
+# ── OS BRACOS MEDEM-SE PELA BORDA, E NAO PELA MEDIANA ───────────────────────
+# O `x_ombro` acima e a mediana de |x| numa fatia a altura do ombro -- e nessa
+# fatia quase tudo e PEITO e capa. Deu 0,12 m, quando o ombro do arqueiro esta a
+# 0,22-0,27 e o braco a 0,31: o osso do braco corria por DENTRO do peito. Nunca
+# se viu, porque os bracos nunca foram animados; viu-se quando o Lucas posou o
+# braco na sala de provas e o tronco inteiro veio atras, distorcido. A pele e
+# pesada pela distancia ao osso, e o peitoral estava mais perto do osso do braco
+# do que do osso do peito.
+# Os bracos colam-se a capa em quase todas as alturas, entao nao ha vazio para
+# separar montes, como nas pernas. O que e seguro e a BORDA DE FORA: a cada
+# altura, os vertices mais afastados do centro, de cada lado, sao o braco.
+def _junta_braco(sinal, frac, folga):
+    z = H * frac
+    pts = [v.co for v in corpo.data.vertices
+           if v.index not in lanca_idx and abs(v.co.z - z) < H * 0.025
+           and v.co.x * sinal > 0]
+    if len(pts) < 6:
+        return None
+    borda = max(abs(q.x) for q in pts)
+    ponta = [q for q in pts if abs(q.x) > borda - H * folga]
+    return mathutils.Vector((sum(q.x for q in ponta) / len(ponta),
+                             sum(q.y for q in ponta) / len(ponta), z))
+
+
+# ── E O QUE O LUCAS POSICIONOU A MAO VENCE A MEDIDA ─────────────────────────
+# A borda nao sabe distinguir um braco dobrado de uma mao afastada: no lanceiro
+# o "cotovelo" saiu na mao que segura a lanca. O Lucas pos as juntas do braco no
+# sitio, na sala de provas (modo de edicao do esqueleto, olhando de frente e de
+# lado), e elas ficaram em  ferramentas/cena/marcas/<figura>_ossos.json.
+# As posicoes sao do esqueleto EXPORTADO, que ja subiu com as pernas a prumo;
+# aqui ainda nao subiu. Por isso o z guarda-se relativo a cabeca do osso hips,
+# que nesta fase esta sempre em H * 0.50.
+OSSOS_MAO = {}
+_f_ossos = os.path.join(os.getcwd(), "ferramentas", "cena", "marcas",
+                        os.path.splitext(os.path.basename(ENTRADA))[0].lower() + "_ossos.json")
+if os.path.isfile(_f_ossos):
+    import json as _json
+    _od = _json.load(open(_f_ossos, encoding="utf-8"))
+    _dzh = _od["hips_cabeca"][2] - H * 0.50
+
+    def _pt(v):
+        return mathutils.Vector((v[0], v[1], v[2] - _dzh))
+
+    for _lado in ("L", "R"):
+        _u = _od["ossos"].get("upperarm." + _lado)
+        _fa = _od["ossos"].get("forearm." + _lado)
+        if _u and _fa:
+            OSSOS_MAO[_lado] = (_pt(_u["cabeca"]), _pt(_u["cauda"]), _pt(_fa["cauda"]))
+    print("SONDA ossos a mao: %s (%s)" % (os.path.basename(_f_ossos),
+                                           ", ".join(sorted(OSSOS_MAO))))
+
+BRACO = {}
+for _lado, _sinal in (("L", 1.0), ("R", -1.0)):
+    _o = _junta_braco(_sinal, 0.76, 0.05)
+    _c = _junta_braco(_sinal, 0.60, 0.05)
+    _p = _junta_braco(_sinal, 0.47, 0.04)
+    if _o is None or _c is None:
+        continue
+    # o ombro nao e a borda do chumaco: e o sitio onde o braco nasce, um pouco
+    # para dentro. Fica a 3/4 do caminho entre o centro e a borda medida.
+    _o = mathutils.Vector((_o.x * 0.75, _o.y, _o.z))
+    # ⚠ A BORDA PODE SER A MAO, e nao o braco. O lanceiro segura a lanca com a
+    # mao afastada do corpo, e a altura do cotovelo o ponto mais de fora era essa
+    # mao: o cotovelo saiu a 0,54 m do centro. Um braco nao se abre tanto entre
+    # juntas, entao limita-se o salto lateral de cada uma.
+    def _limita(q, ref, maximo):
+        dx = max(-maximo, min(maximo, q.x - ref.x))
+        return mathutils.Vector((ref.x + dx, q.y, q.z))
+    _c = _limita(_c, _o, H * 0.08)
+    if _p is None:
+        _p = _c + (_c - _o) * 0.8
+    _p = _limita(_p, _c, H * 0.06)
+    BRACO[_lado] = (_o, _c, _p)
+    print("SONDA braco %s: ombro x=%+.2f  cotovelo x=%+.2f  pulso x=%+.2f  "
+          "(antes: x=%+.2f)" % (_lado, _o.x, _c.x, _p.x, _sinal * x_ombro))
 print("SONDA pernas: anca x=%.3f perna x=%.3f tornozelo x=%.3f | ombro x=%.3f"
       % (x_anca, x_perna, x_torno, x_ombro))
 # ── A PERNA E UM TUBO: O EIXO E O MEIO DAS DUAS PAREDES ─────────────────────
@@ -506,15 +864,30 @@ osso("chest", (0, 0, H * 0.70), (0, 0, H * 0.80), "spine")
 osso("neck", (0, 0, H * 0.80), (0, 0, H * 0.86), "chest")
 osso("head", (0, 0, H * 0.86), (0, 0, H * 1.00), "neck")
 for lado, s in (("L", 1.0), ("R", -1.0)):
-    osso("thigh." + lado, (s * x_anca, 0, H * 0.50), (s * x_perna, 0, H * 0.27), "hips")
-    osso("lowerleg." + lado, (s * x_perna, 0, H * 0.27), (s * x_torno, 0, H * 0.07),
-         "thigh." + lado)
-    osso("foot." + lado, (s * x_torno, 0, H * 0.07), (s * x_torno, H * 0.09, H * 0.01),
-         "lowerleg." + lado)
-    osso("upperarm." + lado, (s * x_ombro, 0, H * 0.78), (s * x_ombro * 1.1, 0, H * 0.62),
-         "chest")
-    osso("forearm." + lado, (s * x_ombro * 1.1, 0, H * 0.62),
-         (s * x_ombro * 1.1, 0, H * 0.50), "upperarm." + lado)
+    # ⚠ CADA PERNA NO SEU SITIO, EM Y. A anca fica no meio; o joelho e o pe vao
+    # para onde a perna DESSE lado esta de facto (`Y_PE`, medido na malha). Com
+    # os dois no meio, o osso corria fora do tubo da perna que esta avancada, e
+    # a deformacao partia -- e empurrar a malha para os juntar rasgava a tunica.
+    _yp = Y_PE.get(lado, 0.0)
+    osso("thigh." + lado, (s * x_anca, 0, H * 0.50),
+         (s * x_perna, _yp * 0.55, H * 0.27), "hips")
+    osso("lowerleg." + lado, (s * x_perna, _yp * 0.55, H * 0.27),
+         (s * x_torno, _yp, H * 0.07), "thigh." + lado)
+    osso("foot." + lado, (s * x_torno, _yp, H * 0.07),
+         (s * x_torno, _yp + H * 0.09, H * 0.01), "lowerleg." + lado)
+    if lado in OSSOS_MAO:
+        _o, _c, _p = OSSOS_MAO[lado]
+        osso("upperarm." + lado, tuple(_o), tuple(_c), "chest")
+        osso("forearm." + lado, tuple(_c), tuple(_p), "upperarm." + lado)
+    elif lado in BRACO:
+        _o, _c, _p = BRACO[lado]
+        osso("upperarm." + lado, tuple(_o), tuple(_c), "chest")
+        osso("forearm." + lado, tuple(_c), tuple(_p), "upperarm." + lado)
+    else:
+        osso("upperarm." + lado, (s * x_ombro, 0, H * 0.78),
+             (s * x_ombro * 1.1, 0, H * 0.62), "chest")
+        osso("forearm." + lado, (s * x_ombro * 1.1, 0, H * 0.62),
+             (s * x_ombro * 1.1, 0, H * 0.50), "upperarm." + lado)
 bpy.ops.object.mode_set(mode="OBJECT")
 
 # ── A PELE, PESADA POR CODIGO ───────────────────────────────────────────────
@@ -592,15 +965,61 @@ for v in corpo.data.vertices:
 print("SONDA botas: %d vertices presos ao pe (abaixo de %.2f m)"
       % (len(bota_idx), Z_BOTA))
 
+# a arma vai para o braco do LADO onde ela esta (x < 0 e o lado R), e nao para
+# um braco fixo: o lanceiro e o arqueiro calharam a segurar pela direita, o
+# proximo pode nao calhar
+BRACO_ARMA = "upperarm.R"
+if lanca_idx:
+    _mx = sum(corpo.data.vertices[i].co.x for i in lanca_idx) / len(lanca_idx)
+    # vai com o ANTEBRACO, e nao com o braco de cima: e a mao que segura a arma.
+    # (Enquanto os bracos nao eram animados tanto fazia; com as juntas postas pelo
+    # Lucas e os bracos a mexer, o arco tem de seguir a mao.)
+    BRACO_ARMA = "forearm.L" if _mx > 0 else "forearm.R"
+    print("SONDA arma: %d vertices presos a %s" % (len(lanca_idx), BRACO_ARMA))
 pesos = []
 for v in corpo.data.vertices:
     if v.index in lanca_idx:
-        pesos.append({"upperarm.R": 1.0})
+        pesos.append({BRACO_ARMA: 1.0})
         continue
     if v.index in bota_idx:
         pesos.append({bota_idx[v.index]: 1.0})
         continue
-    ds = sorted(((_dist_ao_osso(v.co, a, b), n) for n, a, b in ossos))[:2]
+    if v.index in mao_idx:
+        pesos.append({("forearm.L" if v.co.x > 0 else "forearm.R"): 1.0})
+        continue
+    # ⚠ O TUBO DO BRACO ACABA NO PULSO. Um vertice que nao e mao nem arma so pode
+    # seguir um osso do braco se estiver ENTRE as pontas desse osso; para la do
+    # pulso (e acima do ombro) nao ha braco, ha casaco e peito.
+    _cand = []
+    for n, a, b in ossos:
+        # ⚠ NO LADO QUE O LUCAS PINTOU, SO A MANGA SEGUE O BRACO. O casaco encosta
+        # a manga: 16 vertices seguiam o antebraco com peso ate 0,8 e abriam uma
+        # aba do casaco ao girar o braco para tras. Nenhuma distancia os separava
+        # sem cortar a propria manga -- o olho dele separou.
+        if n.startswith(("upperarm", "forearm")) and n[-1] in LADOS_PINTADOS:
+            if v.index not in manga_idx:
+                continue
+            _ab = b - a
+            _t = (v.co - a).dot(_ab) / max(_ab.length_squared, 1e-9)
+            if _t < -0.05 or _t > 1.02:
+                continue
+            _cand.append((_dist_ao_osso(v.co, a, b), n))
+            continue
+        if n.startswith(("upperarm", "forearm")):
+            _ab = b - a
+            _t = (v.co - a).dot(_ab) / max(_ab.length_squared, 1e-9)
+            if _t < -0.05 or _t > 1.02:
+                continue
+            # ⚠ E O TUBO TEM GROSSURA. O antebraco esquerdo pende PARALELO ao
+            # casaco, encostado, e o casaco ao lado dele esta "entre o ombro e o
+            # pulso" -- uma aba inteira abria-se ao girar o braco para tras.
+            # Medido pela distancia ao eixo do osso: a manga fica ate 8 cm, ha um
+            # vale entre 8 e 10 (4 vertices), e o casaco esta a 10-14 cm (42).
+            # Corta-se no vale.
+            if _dist_ao_osso(v.co, a, b) > H * 0.047:
+                continue
+        _cand.append((_dist_ao_osso(v.co, a, b), n))
+    ds = sorted(_cand)[:2]
     (d1, n1), (d2, n2) = ds[0], ds[1]
     w1 = d2 / max(d1 + d2, 1e-6)
     pesos.append({n1: w1, n2: 1.0 - w1})
@@ -621,7 +1040,7 @@ for e in corpo.data.edges:
 for _ in range(4):
     novos = []
     for i, p_i in enumerate(pesos):
-        if i in lanca_idx or i in bota_idx or not vizinhos[i]:
+        if i in lanca_idx or i in bota_idx or i in mao_idx or not vizinhos[i]:
             novos.append(p_i)
             continue
         soma = dict(p_i)
@@ -631,6 +1050,18 @@ for _ in range(4):
         total = sum(soma.values()) or 1.0
         novos.append({n: w / total for n, w in soma.items() if w / total > 0.02})
     pesos = novos
+
+# ⚠ A MEDIA ENTRE VIZINHOS ESPALHA. A manga e o casaco tocam-se por arestas, e
+# quatro passagens de media levavam peso de braco para o casaco outra vez. No
+# lado pintado, o que nao e manga nem mao perde o braco depois de suavizar.
+if LADOS_PINTADOS:
+    for i, p_i in enumerate(pesos):
+        if i in manga_idx or i in mao_idx or i in lanca_idx:
+            continue
+        limpo = {n: w for n, w in p_i.items()
+                 if not (n.startswith(("upperarm", "forearm")) and n[-1] in LADOS_PINTADOS)}
+        if limpo and len(limpo) != len(p_i):
+            pesos[i] = limpo
 
 for i, p_i in enumerate(pesos):
     total = sum(p_i.values()) or 1.0
@@ -651,6 +1082,126 @@ print("SONDA pele: %d grupos, %d de %d vertices com peso"
       % (len(corpo.vertex_groups), pesados, len(corpo.data.vertices)))
 if pesados < len(corpo.data.vertices) * 0.99:
     raise SystemExit("pele incompleta: o exportador ia escrever uma malha rigida")
+
+# ── A POSE DE REPOUSO FICA COM AS PERNAS A PAR ──────────────────────────────
+# O arqueiro nasce com um pe 60 cm a frente do outro. Deixar os ossos no sitio
+# de cada perna (a correcao anterior) fazia a marcha balancar em volta dessa pose
+# torta: o pe direito ficava SEMPRE a frente, e o Lucas viu "o passo sempre
+# igual, as pernas sempre a abrir para o mesmo lado". Empurrar a malha a mao
+# rasgava a tunica. O que resolve e o que um rigger faria, e foi provado ao vivo
+# no Blender pelo MCP antes de vir para aqui:
+#   1. POSAR as coxas ate a perna ficar a prumo (e o pe a compensar, senao a
+#      biqueira aponta para o chao);
+#   2. APLICAR o esqueleto: a malha fica nessa pose, e a TUNICA vem junto,
+#      deformada pela pele -- suave, sem rasgar;
+#   3. voltar a por os ossos das pernas direitos, e o modificador de novo.
+# Com as pernas a prumo a figura fica mais alta (a passada abaixava a anca), por
+# isso sobe-se tudo ate os pes voltarem ao chao.
+if any(abs(_v) > H * 0.01 for _v in Y_PE.values()):
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode="POSE")
+    for _lado in ("L", "R"):
+        _cx = arm.data.bones["thigh." + _lado]
+        _pe = arm.data.bones["foot." + _lado]
+        _a, _t = _cx.head_local, _pe.head_local
+        _R = (_t - _a).normalized().rotation_difference(
+            mathutils.Vector((_t.x - _a.x, 0.0, _t.z - _a.z)).normalized()).to_matrix()
+        _M = _cx.matrix_local.to_3x3()
+        _pb = arm.pose.bones["thigh." + _lado]
+        _pb.rotation_mode = "QUATERNION"
+        _pb.rotation_quaternion = (_M.inverted() @ _R @ _M).to_quaternion()
+        _Mf = _pe.matrix_local.to_3x3()
+        _pf = arm.pose.bones["foot." + _lado]
+        _pf.rotation_mode = "QUATERNION"
+        _pf.rotation_quaternion = (_Mf.inverted() @ _R.inverted() @ _Mf).to_quaternion()
+    bpy.ops.object.mode_set(mode="OBJECT")
+    bpy.context.view_layer.update()
+    bpy.context.view_layer.objects.active = corpo
+    bpy.ops.object.modifier_apply(modifier=md.name)
+    for _pb in arm.pose.bones:
+        _pb.rotation_quaternion = (1, 0, 0, 0)
+    _dz = -min(v.co.z for v in corpo.data.vertices)
+    corpo.data.transform(mathutils.Matrix.Translation((0, 0, _dz)))
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode="EDIT")
+    _eb = arm.data.edit_bones
+    for _b in _eb:
+        if not _b.name.split(".")[0] in ("thigh", "lowerleg", "foot"):
+            _b.head.z += _dz
+            _b.tail.z += _dz
+    _zh, _za = H * 0.50 + _dz, H * 0.07
+    _zj = _za + (_zh - _za) * (0.20 / 0.43)
+    for _lado, _s in (("L", 1.0), ("R", -1.0)):
+        _eb["thigh." + _lado].head = (_s * x_anca, 0, _zh)
+        _eb["thigh." + _lado].tail = (_s * x_perna, 0, _zj)
+        _eb["lowerleg." + _lado].head = (_s * x_perna, 0, _zj)
+        _eb["lowerleg." + _lado].tail = (_s * x_torno, 0, _za)
+        _eb["foot." + _lado].head = (_s * x_torno, 0, _za)
+        _eb["foot." + _lado].tail = (_s * x_torno, H * 0.09, H * 0.01)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    md = corpo.modifiers.new("esqueleto", "ARMATURE")
+    md.object = arm
+    print("SONDA pose de repouso: pernas postas a prumo pelo esqueleto; "
+          "a figura subiu %.0f cm para os pes voltarem ao chao" % (_dz * 100))
+
+# ── AJUSTES QUE O LUCAS FEZ DE OLHO NA SALA DE PROVAS ───────────────────────
+# Em ferramentas/cena/marcas/<figura>_ajustes.json ficam NUMEROS, e nao malha:
+# um angulo ou uma razao sobrevivem a qualquer refazer do soldado, uma malha
+# guardada nao. Aplicam-se aqui porque este e o espaco em que ele os fez: a pose
+# de repouso final, com os pes no chao e os ossos das pernas direitos.
+_f_aj = os.path.join(os.getcwd(), "ferramentas", "cena", "marcas",
+                     os.path.splitext(os.path.basename(ENTRADA))[0].lower() + "_ajustes.json")
+if os.path.isfile(_f_aj):
+    import json as _json
+    _aj = _json.load(open(_f_aj, encoding="utf-8"))
+    _gi = {g.name: g.index for g in corpo.vertex_groups}
+
+    def _peso(v, nome):
+        return next((g.weight for g in v.groups if g.group == _gi.get(nome, -1)), 0.0)
+
+    # 1. BOTAS VIRADAS PARA A FRENTE. O arqueiro nasceu com a biqueira esquerda
+    #    a fugir para fora; o Lucas girou cada bota em volta do tornozelo (R, Z,
+    #    vista de cima). A bota gira inteira; o cano da perna acima dela gira por
+    #    rampa, para a junta nao rasgar.
+    for _lado, _graus in (_aj.get("girar_bota_graus") or {}).items():
+        _ank = arm.data.bones["foot." + _lado].head_local
+        _z0, _z1 = H * 0.115, H * 0.20
+        _n = 0
+        for v in corpo.data.vertices:
+            _pf = _peso(v, "foot." + _lado)
+            _pl = _peso(v, "lowerleg." + _lado)
+            if _pf > 0.99:
+                _t = 1.0
+            elif _pl > 0.5 and v.co.z < _z1:
+                _t = max(0.0, min(1.0, (_z1 - v.co.z) / (_z1 - _z0)))
+            else:
+                continue
+            _r = mathutils.Matrix.Rotation(math.radians(_graus * _t), 3, "Z")
+            _u = v.co - _ank
+            v.co = _ank + _r @ mathutils.Vector((_u.x, _u.y, 0)) + mathutils.Vector((0, 0, _u.z))
+            _n += 1
+        print("SONDA bota %s girada %+.1f graus (%d vertices)" % (_lado, _graus, _n))
+
+    # 2. COXAS MAIS GROSSAS. Medido: as do arqueiro tinham ~5,8 cm de raio contra
+    #    8-9 no lanceiro. Afastam-se do eixo do osso da coxa, com rampa nas duas
+    #    pontas (anca e joelho) para nao abrir degraus.
+    _k = float(_aj.get("engrossar_coxas", 1.0))
+    if abs(_k - 1.0) > 1e-3:
+        for _lado in ("L", "R"):
+            _b = arm.data.bones["thigh." + _lado]
+            _a, _c = _b.head_local, _b.tail_local
+            _ab = _c - _a
+            _n = 0
+            for v in corpo.data.vertices:
+                if _peso(v, "thigh." + _lado) < 0.6:
+                    continue
+                _t = max(0.0, min(1.0, (v.co - _a).dot(_ab) / _ab.length_squared))
+                _rampa = min(1.0, _t / 0.2, (1.0 - _t) / 0.2)
+                _eixo = _a + _ab * _t
+                _off = v.co - _eixo
+                v.co = _eixo + _off * (1.0 + (_k - 1.0) * max(0.0, _rampa))
+                _n += 1
+            print("SONDA coxa %s engrossada x%.2f (%d vertices)" % (_lado, _k, _n))
 
 # ── A PROVA DOS PESOS: CADA OSSO NUMA COR ───────────────────────────────────
 # Ate aqui os erros de pesagem eram descobertos pela silhueta em movimento -- o
@@ -748,6 +1299,14 @@ def poe(nome, quadro, **campos):
         pb.keyframe_insert(data_path=campo, frame=quadro)
 
 
+_bal_braco, _ang_frente = None, 0.0
+if "_od" in dir() and _od.get("balanco_braco"):
+    _bal_braco = mathutils.Quaternion(_od["balanco_braco"]["rotacao_no_corpo"])
+    # so a parte PARA A FRENTE (a rotacao em torno do eixo lateral x)
+    _dir = _bal_braco.to_matrix() @ mathutils.Vector((0, 0, -1))
+    _ang_frente = abs(math.atan2(_dir.y, -_dir.z))
+    print("SONDA bracos: balanco posado pelo Lucas (%.0f graus no ponto mais a frente)"
+          % math.degrees(_bal_braco.angle))
 for i in range(CICLO + 1):
     q = 1 + i
     t = i / CICLO
@@ -764,6 +1323,28 @@ for i in range(CICLO + 1):
     # "balanco" era um solavanco para a frente duas vezes por passo.
     poe("hips", q, location=(0, abs(math.sin(a)) * SOBE, 0))
     poe("chest", q, rotation_euler=(0, 0, math.sin(a) * math.radians(5)))
+    # ── OS BRACOS BALANCAM (16/09) ──────────────────────────────────────────
+    # O ponto mais a frente foi o Lucas que escolheu, posando o braco na sala de
+    # provas (41 graus a frente, 16 para fora). A rotacao vem gravada no espaco do
+    # CORPO, e nao nos eixos do osso: o importador de glTF roda os ossos por
+    # dentro, e os eixos da sala nao sao os daqui.
+    #   * a frente: a pose dele;  atras: metade, e SO para tras (para fora, ao
+    #     recuar, o braco entrava no corpo);
+    #   * cada braco ao contrario da perna do seu lado;
+    #   * o braco do arco a um terco, para o arco nao sacudir.
+    if _bal_braco is not None:
+        for lado, amp, fase_b in (("L", 1.0, 0.0), ("R", 0.35, math.pi)):
+            _Rq = _bal_braco if lado == "L" else mathutils.Quaternion(
+                (_bal_braco.w, _bal_braco.x, -_bal_braco.y, -_bal_braco.z))
+            _k = -math.sin(a + fase_b) * amp
+            if _k >= 0:
+                _Q = mathutils.Quaternion().slerp(_Rq, _k)
+            else:
+                _Q = mathutils.Quaternion((1, 0, 0), -_ang_frente * 0.5 * -_k)
+            _M = arm.data.bones["upperarm." + lado].matrix_local.to_3x3()
+            arm.pose.bones["upperarm." + lado].rotation_mode = "QUATERNION"
+            poe("upperarm." + lado, q,
+                rotation_quaternion=(_M.inverted() @ _Q.to_matrix() @ _M).to_quaternion())
 acao = arm.animation_data.action
 acao.name = "idle_walk"
 
@@ -832,40 +1413,128 @@ _medir(SENTIDO_COXA, SENTIDO_JOELHO)
 # ver, quadro a quadro, o y do pe em relacao a anca. Positivo = a frente.
 _dep = bpy.context.evaluated_depsgraph_get()
 _linha = []
+_dois = []
 for q in range(1, CICLO + 1, 3):
     bpy.context.scene.frame_set(q)
     _arm = arm.evaluated_get(_dep)
     _pe = _arm.matrix_world @ _arm.pose.bones["foot.L"].tail
     _anca = _arm.matrix_world @ _arm.pose.bones["hips"].head
     _linha.append("%+.2f" % (_pe.y - _anca.y))
-# ── A LANCA ANDA COM A MAO, OU COM O PE? ────────────────────────────────────
-# Este numero e o que faltava. "a ponta do pe esta colada a ponta de baixo da
-# lanca" so se via no video, e eu corrigia as cegas. Agora mede-se: segue-se a
-# MALHA JA DEFORMADA quadro a quadro -- o vertice mais baixo da haste e a ponta
-# da bota -- e ve-se quanto a distancia entre os dois VARIA no ciclo.
-#   * colados (o erro): a haste vai presa ao pe, a distancia nao mexe (~0 cm);
-#   * certos: a haste fica quieta na mao e o pe passa por baixo dela, entao a
-#     distancia abre e fecha varios centimetros a cada passada.
-_baixo = min(lanca_idx, key=lambda i: corpo.data.vertices[i].co.z)
-_dedo = min((v.index for v in corpo.data.vertices if v.index in bota_idx),
-            key=lambda i: corpo.data.vertices[i].co.y)
-_ds = []
-for q in range(1, CICLO + 1, 2):
-    bpy.context.scene.frame_set(q)
-    _mc = corpo.evaluated_get(_dep)
-    _mm = _mc.to_mesh()
-    _ds.append(((_mm.vertices[_baixo].co - _mm.vertices[_dedo].co).length))
-    _mc.to_mesh_clear()
-_var = max(_ds) - min(_ds)
-print("SONDA lanca x bota: distancia %.2f a %.2f m, varia %.1f cm"
-      % (min(_ds), max(_ds), _var * 100))
-if _var < 0.04:
-    print("SONDA AVISO: a haste mal se separa do pe (%.1f cm) -- esta presa a bota"
-          % (_var * 100))
+    _pd = _arm.matrix_world @ _arm.pose.bones["foot.R"].tail
+    _dois.append((_pe.y - _anca.y, _pd.y - _anca.y))
+if TEM_HASTE:
+    # ── A LANCA ANDA COM A MAO, OU COM O PE? ────────────────────────────────────
+    # Este numero e o que faltava. "a ponta do pe esta colada a ponta de baixo da
+    # lanca" so se via no video, e eu corrigia as cegas. Agora mede-se: segue-se a
+    # MALHA JA DEFORMADA quadro a quadro -- o vertice mais baixo da haste e a ponta
+    # da bota -- e ve-se quanto a distancia entre os dois VARIA no ciclo.
+    #   * colados (o erro): a haste vai presa ao pe, a distancia nao mexe (~0 cm);
+    #   * certos: a haste fica quieta na mao e o pe passa por baixo dela, entao a
+    #     distancia abre e fecha varios centimetros a cada passada.
+    _baixo = min(lanca_idx, key=lambda i: corpo.data.vertices[i].co.z)
+    _dedo = min((v.index for v in corpo.data.vertices if v.index in bota_idx),
+                key=lambda i: corpo.data.vertices[i].co.y)
+    _ds = []
+    for q in range(1, CICLO + 1, 2):
+        bpy.context.scene.frame_set(q)
+        _mc = corpo.evaluated_get(_dep)
+        _mm = _mc.to_mesh()
+        _ds.append(((_mm.vertices[_baixo].co - _mm.vertices[_dedo].co).length))
+        _mc.to_mesh_clear()
+    _var = max(_ds) - min(_ds)
+    print("SONDA lanca x bota: distancia %.2f a %.2f m, varia %.1f cm"
+          % (min(_ds), max(_ds), _var * 100))
+    if _var < 0.04:
+        print("SONDA AVISO: a haste mal se separa do pe (%.1f cm) -- esta presa a bota"
+              % (_var * 100))
 
+# ⚠ OS DOIS PES, e nao so um. A prova antiga so olhava o esquerdo, e por isso
+# nao apanhou o arqueiro com o pe direito SEMPRE a frente. Numa marcha certa os
+# dois pes vao a frente e atras por igual: a MEDIA de cada um fica perto de zero
+# e as duas medias ficam iguais.
+_me = sum(a for a, b in _dois) / len(_dois)
+_md2 = sum(b for a, b in _dois) / len(_dois)
+print("SONDA dois pes: media esq %+.2f  dir %+.2f  (diferenca %.0f cm)"
+      % (_me, _md2, abs(_me - _md2) * 100))
+if abs(_me - _md2) > 0.10:
+    print("SONDA AVISO: um pe fica sempre mais a frente que o outro -- a passada "
+          "abre sempre para o mesmo lado")
 print("SONDA pe esquerdo em relacao a anca (m, + e a frente): %s"
       % " ".join(_linha))
 bpy.context.scene.frame_set(1)
+
+# ── A ARMA QUE O LUCAS DESENHOU A MAO ───────────────────────────────────────
+# O arco do ComfyUI nasceu com um braco de 40 cm e outro de 75. O script tentou
+# iguala-los esticando o curto 2,6 vezes, e a ponta deformou-se num bloco largo.
+# O Lucas pegou no arco na sala de provas e puxou a ponta de cima ate onde queria;
+# a peca dele (arco, corda e mao, tudo o que vai rigido com o antebraco) ficou em
+#     ferramentas/cena/marcas/<figura>_arma_editada.json
+# ja no espaco FINAL do soldado. Aqui a arma gerada sai e entra a dele.
+# ⚠ So vale enquanto o corpo sair no mesmo sitio: se as juntas, a escala ou a
+# pose mudarem, a mao dele deixa de bater com o braco. Por isso mede-se a
+# distancia entre o centro da arma gerada e o da dele, e avisa-se.
+_f_arma = os.path.join(os.getcwd(), "ferramentas", "cena", "marcas",
+                       os.path.splitext(os.path.basename(ENTRADA))[0].lower() + "_arma_editada.json")
+if os.path.isfile(_f_arma):
+    import bmesh
+    import json as _json
+    _ae = _json.load(open(_f_arma, encoding="utf-8"))
+    _ig = corpo.vertex_groups[_ae["osso"]].index
+    _velha = [v for v in corpo.data.vertices
+              if any(g.group == _ig and g.weight > 0.99 for g in v.groups)]
+    _cv = (sum((v.co for v in _velha), mathutils.Vector()) / len(_velha)
+           if _velha else mathutils.Vector())
+    _cn = sum((mathutils.Vector(q) for q in _ae["vertices"]), mathutils.Vector()) / len(_ae["vertices"])
+    _bm = bmesh.new()
+    _bm.from_mesh(corpo.data)
+    _bm.verts.ensure_lookup_table()
+    _sai = {v.index for v in _velha}
+    bmesh.ops.delete(_bm, geom=[v for v in _bm.verts if v.index in _sai], context="VERTS")
+    _dl = _bm.verts.layers.deform.verify()
+    _nv = []
+    for q in _ae["vertices"]:
+        _v = _bm.verts.new(q)
+        _v[_dl][_ig] = 1.0
+        _nv.append(_v)
+    _bm.verts.ensure_lookup_table()
+    _ca = corpo.data.color_attributes[0] if corpo.data.color_attributes else None
+    _lay = None
+    _usa_float = True
+    if _ca is not None:
+        _camadas = _bm.loops.layers if _ca.domain == "CORNER" else _bm.verts.layers
+        _lay = _camadas.float_color.get(_ca.name)
+        _usa_float = _lay is not None
+        if _lay is None:
+            _lay = _camadas.color.get(_ca.name)
+    for _fi, _f in enumerate(_ae["faces"]):
+        try:
+            _face = _bm.faces.new([_nv[k] for k in _f])
+        except ValueError:
+            continue
+        # ⚠ sem isto a peca saia FACETADA: as faces novas nascem planas
+        _face.smooth = True
+        if _lay is not None:
+            for _l, _cor in zip(_face.loops, _ae["cores"][_fi]):
+                # ⚠ E ESCURA: a cor foi lida em LINEAR (o que `.color` devolve), mas
+                # a camada de bytes do bmesh guarda sRGB. Converte-se antes de
+                # escrever; na camada de floats vai tal e qual.
+                if not _usa_float:
+                    _cor = [(12.92 * x if x <= 0.0031308 else 1.055 * x ** (1 / 2.4) - 0.055)
+                            if k < 3 else x for k, x in enumerate(_cor)]
+                if _ca.domain == "CORNER":
+                    _l[_lay] = _cor
+                else:
+                    _l.vert[_lay] = _cor
+    _bm.normal_update()
+    _bm.to_mesh(corpo.data)
+    _bm.free()
+    corpo.data.update()
+    print("SONDA arma editada a mao: %s (%d vertices; a gerada tinha %d) | centros a %.1f cm"
+          % (os.path.basename(_f_arma), len(_ae["vertices"]), len(_velha),
+             (_cv - _cn).length * 100))
+    if (_cv - _cn).length > 0.08:
+        print("SONDA AVISO: a arma editada esta longe da mao gerada -- o corpo mudou; "
+              "a peca pode ter de ser refeita na sala")
 
 # ── SAIR ────────────────────────────────────────────────────────────────────
 bpy.ops.object.select_all(action="DESELECT")

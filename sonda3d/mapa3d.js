@@ -732,6 +732,22 @@ transformed.y += onda * transformed.x * 0.05;`);
   // Com uma estrada so (a bancada de duas aldeias), o sorteio acima tem 45% de
   // hipotese de nao pôr coluna nenhuma -- e a pagina abre com o mapa deserto,
   // que parece avaria. Havendo vias, ha sempre pelo menos uma coluna.
+  // ── E NA BANCADA ESCOLHE-SE O QUE MARCHA ────────────────────────────────
+  // Para conferir UMA figura nova, o sorteio atrapalha: sai uma coluna mista e
+  // a figura que interessa pode vir em minoria. `colunaDemo` troca tudo por uma
+  // coluna so, com a composicao pedida (ex.: { arqueiro: 20 }).
+  if (opcoes.colunaDemo) {
+    const chave = Object.keys(eixoDe)[0];
+    if (chave) {
+      const comp = Object.assign({ lanceiro: 0, arqueiro: 0, cavaleiro: 0 },
+                                 opcoes.colunaDemo);
+      const tipo = Object.keys(comp).sort((a, b) => comp[b] - comp[a])[0];
+      colunas.length = 0;
+      colunas.push({ tipo, composicao: comp, via: eixoDe[chave],
+                     tropas: comp.lanceiro + comp.arqueiro + comp.cavaleiro,
+                     dono: "A", t0: 0 });
+    }
+  }
   if (!colunas.length) {
     const chave = Object.keys(eixoDe)[0];
     if (chave) {
