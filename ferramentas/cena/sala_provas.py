@@ -24,7 +24,8 @@ except NameError:
     RAIZ = os.getcwd()
 
 # as figuras que entram na sala, lado a lado (ficheiro, posicao em x)
-FIGURAS = [("sonda3d/lanceiro_novo.glb", -0.9), ("sonda3d/arqueiro_novo.glb", 0.9)]
+FIGURAS = [("sonda3d/lanceiro_novo.glb", -0.9), ("sonda3d/arqueiro_novo.glb", 0.9),
+           ("sonda3d/cavaleiro_novo.glb", 3.4)]
 
 cena = bpy.data.scenes.get("sala_provas")
 if cena is not None:
