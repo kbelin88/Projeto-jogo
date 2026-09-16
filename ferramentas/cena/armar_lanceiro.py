@@ -559,6 +559,26 @@ if TEM_HASTE:
     print("SONDA lanca: %d vertices depois de reduzir, de z=%.2f a z=%.2f"
           % (len(lanca_idx), min(_zs), max(_zs)))
     corpo.vertex_groups.remove(corpo.vertex_groups["LANCA"])
+# ── A ARMA NAO FICA COSIDA A PERNA ──────────────────────────────────────────
+# A ponteira da lanca pousava na bota, e o redutor deixou faces que ligam os dois.
+# Na marcha nunca se viu; na estocada, com a lanca longe da perna, essas faces
+# viraram um triangulo comprido do fundo da haste ate ao pe. Apagam-se so as
+# FACES que misturam arma com corpo abaixo da cintura (as da mao ficam: a mao vai
+# com a arma). Apagar faces, e nao vertices, nao mexe na numeracao.
+if lanca_idx:
+    import bmesh as _bm_mod
+    _zmin = min(v.co.z for v in corpo.data.vertices)
+    _zmax = max(v.co.z for v in corpo.data.vertices)
+    _corte = _zmin + (_zmax - _zmin) * 0.45
+    _b = _bm_mod.new()
+    _b.from_mesh(corpo.data)
+    _ponte = [f for f in _b.faces
+              if any(v.index in lanca_idx for v in f.verts)
+              and any(v.index not in lanca_idx and v.co.z < _corte for v in f.verts)]
+    _bm_mod.ops.delete(_b, geom=_ponte, context="FACES_ONLY")
+    _b.to_mesh(corpo.data)
+    _b.free()
+    print("SONDA arma: %d faces apagadas entre a arma e as pernas" % len(_ponte))
 mao_idx = set()
 if "MAO" in corpo.vertex_groups:
     _im = corpo.vertex_groups["MAO"].index
@@ -1535,6 +1555,100 @@ if os.path.isfile(_f_arma):
     if (_cv - _cn).length > 0.08:
         print("SONDA AVISO: a arma editada esta longe da mao gerada -- o corpo mudou; "
               "a peca pode ter de ser refeita na sala")
+
+# ── AS ANIMACOES DE BATALHA, SIMPLES (16/09) ────────────────────────────────
+# O banco de batalha (sonda3d/encontro.html) procura, alem de "idle_walk":
+#   "alerted_stand" -- parado em guarda;   "hit_spear" -- o golpe.
+# Decisao do Lucas: animacoes SIMPLES nesta fase, feitas aqui sem poses dele --
+# ha mapa por arrumar e video por gravar. O lanceiro estoca; o arqueiro levanta o
+# arco e dispara (a flecha e um efeito da cena, nao do modelo).
+# Cada rotacao escreve-se no espaco do CORPO e converte-se para o osso (como o
+# balanco dos bracos): os eixos dos ossos mudam de figura para figura.
+# ⚠ Cada acao chaveia TODOS os ossos que a marcha mexe, na pose de repouso. Sem
+# isso, ao trocar de animacao no navegador as pernas ficavam congeladas a meio
+# da passada em que a marcha as deixou.
+import mathutils as _mu
+
+_LADO_ARMA = BRACO_ARMA[-1] if "BRACO_ARMA" in dir() else "R"
+_LADO_OUTRO = "L" if _LADO_ARMA == "R" else "R"
+_EH_ARQUEIRO = "arqueiro" in os.path.basename(ENTRADA).lower()
+
+
+def _local(osso, q_corpo):
+    _M = arm.data.bones[osso].matrix_local.to_3x3()
+    return (_M.inverted() @ q_corpo.to_matrix() @ _M).to_quaternion()
+
+
+def _suave(x):
+    x = max(0.0, min(1.0, x))
+    return x * x * (3 - 2 * x)
+
+
+def _curva(t, pontos):
+    """interpola (t, valor) por troços suaves"""
+    for (t0, v0), (t1, v1) in zip(pontos, pontos[1:]):
+        if t0 <= t <= t1:
+            return v0 + (v1 - v0) * _suave((t - t0) / max(t1 - t0, 1e-6))
+    return pontos[-1][1]
+
+
+def _nova_acao(nome, quadros, pose_de):
+    """pose_de(t) -> {osso: {"q": Quaternion no corpo} | {"euler": (x,y,z)} | {"loc": (x,y,z)}}"""
+    guarda = arm.animation_data.action
+    arm.animation_data.action = None
+    for i in range(quadros + 1):
+        q = 1 + i
+        t = i / quadros
+        pose = pose_de(t)
+        for lado in ("L", "R"):
+            for n in ("thigh.", "lowerleg.", "foot."):
+                poe(n + lado, q, rotation_euler=(0, 0, 0))
+        poe("hips", q, location=(0, 0, 0))
+        for n in ("upperarm.L", "upperarm.R", "forearm.L", "forearm.R"):
+            arm.pose.bones[n].rotation_mode = "QUATERNION"
+            d = pose.get(n, {})
+            poe(n, q, rotation_quaternion=_local(n, d.get("q", _mu.Quaternion())))
+        poe("chest", q, rotation_euler=pose.get("chest", {}).get("euler", (0, 0, 0)))
+    nova = arm.animation_data.action
+    nova.name = nome
+    nova.use_fake_user = True
+    arm.animation_data.action = guarda
+    print("SONDA acao '%s': %d quadros" % (nome, quadros))
+
+
+_R = math.radians
+
+
+def _guarda(t):
+    # respiracao: o peito sobe e desce 2 graus; os bracos um pouco a frente
+    return {"chest": {"euler": (math.sin(2 * math.pi * t) * _R(2), 0, 0)},
+            "upperarm." + _LADO_ARMA: {"q": _mu.Quaternion((1, 0, 0), _R(12))},
+            "upperarm." + _LADO_OUTRO: {"q": _mu.Quaternion((1, 0, 0), _R(6))}}
+
+
+def _estocada(t):
+    # guarda -> recua a lanca -> estoca -> volta
+    # ⚠ NEGATIVO estoca. Com +70 o braco subia e a ponta da lanca, que esta de
+    # pe na mao, tombava para as costas: a estocada saia para tras.
+    frente = _curva(t, [(0, 12), (0.30, 30), (0.55, -80), (0.75, -80), (1.0, 12)])
+    torce = _curva(t, [(0, 0), (0.30, 10), (0.55, -14), (0.75, -14), (1.0, 0)])
+    return {"chest": {"euler": (_R(_curva(t, [(0, 0), (0.55, 8), (1.0, 0)])), 0, _R(torce))},
+            "upperarm." + _LADO_ARMA: {"q": _mu.Quaternion((1, 0, 0), _R(frente))},
+            "upperarm." + _LADO_OUTRO: {"q": _mu.Quaternion((1, 0, 0), _R(_curva(t, [(0, 6), (0.55, 25), (1.0, 6)])))}}
+
+
+def _disparo(t):
+    # os dois bracos sobem a frente (arco apontado), seguram, largam e voltam
+    arco = _curva(t, [(0, 12), (0.30, 82), (0.70, 82), (1.0, 12)])
+    corda = _curva(t, [(0, 6), (0.30, 70), (0.62, 70), (0.70, 55), (1.0, 6)])
+    return {"chest": {"euler": (0, 0, _R(_curva(t, [(0, 0), (0.3, 12), (0.7, 12), (1.0, 0)])))},
+            "upperarm." + _LADO_ARMA: {"q": _mu.Quaternion((1, 0, 0), _R(arco))},
+            "upperarm." + _LADO_OUTRO: {"q": _mu.Quaternion((1, 0, 0), _R(corda))}}
+
+
+_nova_acao("alerted_stand", 24, _guarda)
+_nova_acao("hit_spear", 24 if _EH_ARQUEIRO else 18, _disparo if _EH_ARQUEIRO else _estocada)
+bpy.context.scene.frame_set(1)
 
 # ── SAIR ────────────────────────────────────────────────────────────────────
 bpy.ops.object.select_all(action="DESELECT")

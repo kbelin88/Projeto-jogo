@@ -176,6 +176,47 @@ grupo_homem = corpo.vertex_groups["HOMEM"].index
 homem_idx = {v.index for v in corpo.data.vertices
              if any(g.group == grupo_homem and g.weight > 0.5 for g in v.groups)}
 corpo.vertex_groups.remove(corpo.vertex_groups["HOMEM"])
+
+# ── O BRACO DA ESPADA TEM OSSO PROPRIO ──────────────────────────────────────
+# O homem vai rigido, mas o golpe precisa da espada a descer. O braco esta
+# erguido para o lado com a espada: e o que, no homem, fica para fora do tronco
+# (mais de 8,7% da altura do centro) e acima de um terco da altura abaixo do
+# capacete. Visto em imagem antes de usar: cotovelo, mao e lamina, sem tronco
+# nem perna. Gira a volta do ombro.
+_hv = [corpo.data.vertices[i].co for i in homem_idx]
+_hc = sum(_hv, mathutils.Vector()) / len(_hv)
+_ponta = max(_hv, key=lambda q: q.z)
+LADO_ESPADA = 1 if _ponta.x > _hc.x else -1
+_perto = [q for q in _hv if (q.xy - _hc.xy).length < ALTURA * 0.11]
+_capacete = max(q.z for q in _perto)
+espada_idx = {i for i in homem_idx
+              if (corpo.data.vertices[i].co.x - _hc.x) * LADO_ESPADA > ALTURA * 0.087
+              and corpo.data.vertices[i].co.z > _capacete - ALTURA * 0.343}
+_z_ombro = _capacete - ALTURA * 0.15
+_ombro = mathutils.Vector((_hc.x + LADO_ESPADA * ALTURA * 0.094, _hc.y, _z_ombro))
+_mao = min((corpo.data.vertices[i].co for i in espada_idx), key=lambda q: q.z)
+_ponta_espada = max((corpo.data.vertices[i].co for i in espada_idx), key=lambda q: q.z).copy()
+bpy.context.view_layer.objects.active = arm
+bpy.ops.object.mode_set(mode="EDIT")
+_e = arm.data.edit_bones.new("espada")
+_e.head, _e.tail = _ombro, _mao.copy()
+_e.parent = arm.data.edit_bones["cavaleiro"]
+bpy.ops.object.mode_set(mode="OBJECT")
+OSSOS["espada"] = (_ombro.copy(), _mao.copy(), "cavaleiro")
+homem_idx -= espada_idx
+print("SONDA espada: %d vertices (braco e lamina), lado %+d" % (len(espada_idx), LADO_ESPADA))
+# ⚠ O braco gira e o tronco fica: as faces que ligam os dois esticavam numa
+# faixa atras do ombro (viu-se no golpe, de lado). Cortam-se so essas faces --
+# apagar faces nao mexe na numeracao dos vertices.
+_b = bmesh.new()
+_b.from_mesh(corpo.data)
+_ponte = [f for f in _b.faces
+          if any(v.index in espada_idx for v in f.verts)
+          and any(v.index not in espada_idx for v in f.verts)]
+bmesh.ops.delete(_b, geom=_ponte, context="FACES_ONLY")
+_b.to_mesh(corpo.data)
+_b.free()
+print("SONDA espada: %d faces cortadas entre o braco e o tronco" % len(_ponte))
 for g in list(corpo.vertex_groups):
     corpo.vertex_groups.remove(g)
 grupos = {n: corpo.vertex_groups.new(name=n) for n in OSSOS}
@@ -210,6 +251,9 @@ for v in corpo.data.vertices:
 RAIO_PATA = ALTURA * 0.05
 pesos = []
 for v in corpo.data.vertices:
+    if v.index in espada_idx:
+        pesos.append({"espada": 1.0})
+        continue
     if v.index in homem_idx:
         pesos.append({"cavaleiro": 1.0})
         continue
@@ -218,7 +262,7 @@ for v in corpo.data.vertices:
         continue
     cand = []
     for n, (a, b, _) in OSSOS.items():
-        if n == "cavaleiro":
+        if n in ("cavaleiro", "espada"):
             continue
         if n.startswith(("pata_", "casco.")):
             tt = t_seg(v.co, a, b)
@@ -241,12 +285,12 @@ for e in corpo.data.edges:
 for _ in range(4):
     novos = []
     for i, p_i in enumerate(pesos):
-        if i in homem_idx or i in casco_de or not vizinhos[i]:
+        if i in homem_idx or i in espada_idx or i in casco_de or not vizinhos[i]:
             novos.append(p_i)
             continue
         soma = dict(p_i)
         for j in vizinhos[i]:
-            if j in homem_idx:
+            if j in homem_idx or j in espada_idx:
                 continue          # o homem nao empresta peso ao cavalo
             for n, w in pesos[j].items():
                 soma[n] = soma.get(n, 0.0) + w
@@ -255,7 +299,7 @@ for _ in range(4):
     pesos = novos
 # a media espalha: o que esta fora do tubo perde as patas outra vez
 for i, v in enumerate(corpo.data.vertices):
-    if i in homem_idx or i in casco_de:
+    if i in homem_idx or i in espada_idx or i in casco_de:
         continue
     limpo = {}
     for n, w in pesos[i].items():
@@ -263,7 +307,7 @@ for i, v in enumerate(corpo.data.vertices):
             a, b, _ = OSSOS[n]
             if dist_seg(v.co, a, b) > RAIO_PATA * 1.3:
                 continue
-        if n == "cavaleiro":
+        if n in ("cavaleiro", "espada"):
             continue
         limpo[n] = w
     if limpo:
@@ -363,10 +407,76 @@ for i in range(CICLO + 1):
     poe(pg, q, rotation_quaternion=mathutils.Quaternion((1, 0, 0), math.sin(2 * math.pi * t) * math.radians(3)))
     poe(arm.pose.bones["pescoco"], q, rotation_quaternion=mathutils.Quaternion(
         (1, 0, 0), -math.sin(2 * math.pi * t) * math.radians(7)))
+    poe(arm.pose.bones["espada"], q, rotation_quaternion=(1, 0, 0, 0))
     poe(arm.pose.bones["cauda"], q, rotation_quaternion=mathutils.Quaternion(
         (1, 0, 0), math.sin(2 * math.pi * t + 1.0) * math.radians(10)))
 acao = arm.animation_data.action
 acao.name = "gallop"
+acao.use_fake_user = True
+
+# ── PARADO E GOLPE (simples, decisao do Lucas: sem carga) ───────────────────
+# "idle": o cavalo respira e abana a cauda; "hit_sword": a espada recua e desce
+# para a FRENTE. O sentido mede-se: roda-se a ponta da espada em volta do ombro e
+# escolhe-se o sinal que a leva para a frente (+y).
+_eixo_corpo = mathutils.Vector((1, 0, 0))
+_rel = _ponta_espada - OSSOS["espada"][0]
+SINAL_ESPADA = 1.0 if (mathutils.Matrix.Rotation(0.5, 3, _eixo_corpo) @ _rel).y > _rel.y else -1.0
+_M_esp = arm.data.bones["espada"].matrix_local.to_3x3()
+
+
+def _esp_local(graus):
+    qc = mathutils.Quaternion(_eixo_corpo, math.radians(graus) * SINAL_ESPADA)
+    return (_M_esp.inverted() @ qc.to_matrix() @ _M_esp).to_quaternion()
+
+
+def _suave(x):
+    x = max(0.0, min(1.0, x))
+    return x * x * (3 - 2 * x)
+
+
+def _curva(t, pts):
+    for (t0, v0), (t1, v1) in zip(pts, pts[1:]):
+        if t0 <= t <= t1:
+            return v0 + (v1 - v0) * _suave((t - t0) / max(t1 - t0, 1e-6))
+    return pts[-1][1]
+
+
+def _acao(nome, quadros, fn):
+    arm.animation_data.action = None
+    for i in range(quadros + 1):
+        q = 1 + i
+        t = i / quadros
+        for pn in PATAS:
+            poe(arm.pose.bones["pata_cima." + pn], q, rotation_quaternion=(1, 0, 0, 0))
+            poe(arm.pose.bones["pata_meio." + pn], q, rotation_quaternion=(1, 0, 0, 0))
+        poe(pg, q, location=(0, 0, 0))
+        fn(q, t)
+    a = arm.animation_data.action
+    a.name = nome
+    a.use_fake_user = True
+    print("SONDA acao '%s': %d quadros" % (nome, quadros))
+
+
+def _idle(q, t):
+    poe(pg, q, rotation_quaternion=mathutils.Quaternion((1, 0, 0), math.sin(2 * math.pi * t) * math.radians(1)))
+    poe(arm.pose.bones["pescoco"], q, rotation_quaternion=mathutils.Quaternion(
+        (1, 0, 0), math.sin(2 * math.pi * t + 0.8) * math.radians(3)))
+    poe(arm.pose.bones["cauda"], q, rotation_quaternion=mathutils.Quaternion(
+        (0, 0, 1), math.sin(2 * math.pi * t) * math.radians(8)))
+    poe(arm.pose.bones["espada"], q, rotation_quaternion=(1, 0, 0, 0))
+
+
+def _golpe(q, t):
+    poe(pg, q, rotation_quaternion=(1, 0, 0, 0))
+    poe(arm.pose.bones["pescoco"], q, rotation_quaternion=(1, 0, 0, 0))
+    poe(arm.pose.bones["cauda"], q, rotation_quaternion=(1, 0, 0, 0))
+    graus = _curva(t, [(0, 0), (0.30, -25), (0.55, 140), (0.72, 140), (1.0, 0)])
+    poe(arm.pose.bones["espada"], q, rotation_quaternion=_esp_local(graus))
+
+
+_acao("idle", 24, _idle)
+_acao("hit_sword", 18, _golpe)
+arm.animation_data.action = acao
 cena.frame_start, cena.frame_end = 1, CICLO
 bpy.ops.object.mode_set(mode="OBJECT")
 print("SONDA galope: %d quadros, acao '%s'" % (CICLO, acao.name))

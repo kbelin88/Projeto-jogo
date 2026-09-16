@@ -117,16 +117,19 @@ cena.add(marcos);
 //
 // `clonarComOssos` partilha os materiais entre as cópias, portanto pintar um
 // pintava a coluna inimiga também: o material tem de ser clonado por lado.
+// ── OS SOLDADOS NOVOS (16/09) ───────────────────────────────────────────────
+// Os tres do ComfyUI, armados no Blender. ?antigos volta aos de antes.
+const NOVOS = !new URLSearchParams(location.search).has("antigos");
 const glb = {};
 for (const tipo of ["lanceiro", "arqueiro", "cavaleiro"])
   glb[tipo] = await new Promise((ok, mal) =>
-    new GLTFLoader().load("./" + tipo + ".glb", ok, undefined, mal));
+    new GLTFLoader().load("./" + tipo + (NOVOS ? "_novo" : "") + ".glb", ok, undefined, mal));
 
 const PASSO = { lanceiro: /idle_walk/i, arqueiro: /idle_walk/i, cavaleiro: /^gallop$/i };
 const PARADO = { lanceiro: /alerted_stand/i, arqueiro: /alerted_stand/i,
                  cavaleiro: /^idle$/i };
 const GOLPE = { lanceiro: /hit_spear/i, arqueiro: /hit_spear/i,
-                cavaleiro: /^gallop$/i };
+                cavaleiro: NOVOS ? /hit_sword/i : /^gallop$/i };
 const TUNICA = { A: 0x35557f, B: 0x8e3a2c };
 
 function figura(tipo, rei) {
@@ -139,6 +142,11 @@ function figura(tipo, rei) {
     if (o.material && o.material.name === "M_armor_clothe") {
       o.material = o.material.clone();
       o.material.color.setHex(TUNICA[rei]);
+    } else if (NOVOS && rei === "B" && o.material) {
+      // os novos vem todos de azul: o Rei B tinge a figura inteira de vermelho,
+      // que e o que se tem de ler primeiro -- de quem sao
+      o.material = o.material.clone();
+      o.material.color.setHex(0xe08070);
     }
   });
   raiz.scale.setScalar(2.2);
@@ -449,9 +457,17 @@ function montarGuiao() {
   // para no contacto, PASSA — é isso que separa uma carga de um ataque, e é
   // por isso que a cavalaria quebra linhas em vez de as desgastar.
   const cav = dos("B", "cavaleiro");
-  g.push({ t, faz: "grito", texto: "A cavalaria do Rei B carrega." });
-  g.push({ t: t + 0.2, faz: "carregar", quem: cav, quanto: 26, veloc: 20 });
-  g.push({ t: t + 1.5, faz: "atropelar", quem: cav[0], deles: inimigo("B") });
+  g.push({ t, faz: "grito", texto: NOVOS ? "O cavaleiro do Rei B entra na luta."
+                                         : "A cavalaria do Rei B carrega." });
+  if (NOVOS) {
+    // decisao do Lucas: animacoes simples, sem correr para o inimigo -- o
+    // cavaleiro desce a espada no sitio e um lanceiro do outro lado cai
+    g.push({ t: t + 0.4, faz: "bater", quem: cav[0], deles: inimigo("B"), mata: true });
+    g.push({ t: t + 1.8, faz: "bater", quem: cav[0], deles: inimigo("B"), mata: true });
+  } else {
+    g.push({ t: t + 0.2, faz: "carregar", quem: cav, quanto: 26, veloc: 20 });
+    g.push({ t: t + 1.5, faz: "atropelar", quem: cav[0], deles: inimigo("B") });
+  }
   t += 4.0;
   g.push({ t, faz: "fim" });
   g.sort((a, b) => a.t - b.t);
@@ -519,12 +535,21 @@ function tocarGuiao(dt) {
       if (ev.mata && vivos.length) tombar(vivos[0]);
       continue;
     }
-    if (ev.faz === "puxar") { ev.quem.puxa = 0; continue; }
+    if (ev.faz === "puxar") {
+      if (!osso(ev.quem.raiz, "lowerarm.R")) {
+        // modelo novo: levanta o arco com a animacao de disparo
+        if (ev.quem.acao[ev.quem.pose]) ev.quem.acao[ev.quem.pose].fadeOut(0.12);
+        ev.quem.acao.bater.reset().fadeIn(0.12).play();
+        ev.quem.pose = "bater";
+        continue;
+      }
+      ev.quem.puxa = 0; continue;
+    }
     ev.quem.puxa = null;
     const vivos = ev.deles.filter((h) => !h.caido);
     if (!vivos.length) continue;
     const alvo = vivos[Math.floor(Math.random() * vivos.length)];
-    const arco = osso(ev.quem.raiz, "hand.L");
+    const arco = osso(ev.quem.raiz, "hand.L") || osso(ev.quem.raiz, "forearm.R");
     (arco || ev.quem.raiz).getWorldPosition(_mao);
     _mao.y += 1.0;
     const d = alvo.raiz.position.clone();
