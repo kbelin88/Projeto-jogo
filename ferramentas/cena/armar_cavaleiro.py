@@ -138,7 +138,8 @@ ALTURA_SOLDADO_M = 2.0
 # anatomia o dorso ia a 1,78 m, mas a armadura do homem do ComfyUI e volumosa:
 # o capacete batia com o do lanceiro (0,24 m) e os ombros saiam ~35% mais largos,
 # e a figura lia-se grande de mais ao lado dos soldados.
-ALTURA_DORSO_M = ALTURA_SOLDADO_M * 0.89 * 0.75
+# (e depois +10%, porque a 0,75 ficou pequeno -- tambem de olho, na bancada)
+ALTURA_DORSO_M = ALTURA_SOLDADO_M * 0.89 * 0.75 * 1.10
 _z_dorso = OSSOS["dorso"][0].z
 _k2 = ALTURA_DORSO_M / _z_dorso
 corpo.data.transform(mathutils.Matrix.Scale(_k2, 4))
