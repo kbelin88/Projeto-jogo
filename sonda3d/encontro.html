@@ -178,89 +178,73 @@ function pose(h, nome) {
   h.pose = nome;
 }
 
-// a ORDEM é a coluna: quem o Rei põe à frente vai à frente, e vê-se
-// (17/09, decisao do Lucas) os dois Reis na mesma ordem: cavaleiro a frente,
-// lanceiros no meio, arqueiros atras.
-const HOSTE = {
-  A: ["cavaleiro", "lanceiro", "lanceiro", "lanceiro", "arqueiro", "arqueiro"],
-  B: ["cavaleiro", "lanceiro", "lanceiro", "lanceiro", "arqueiro", "arqueiro"],
+// ── AS HOSTES SÃO AS COLUNAS DO MAPA ────────────────────────────────────────
+// (17/09) A bancada tinha uma coluna sua, um homem atrás do outro e a placa
+// antiga por cima -- exatamente o que se passou um dia a tirar do mapa. Agora a
+// formação e as placas vêm do `mapa3d.js`: doze figuras repartidas pela
+// composição, fileiras de três, e uma placa por tipo com o número e o nome na
+// cor do Rei. A única diferença pedida é a ORDEM: cavaleiro à frente, lanceiros
+// no meio, arqueiros atrás.
+const F = mapa.formacao;
+const ORDEM = ["cavaleiro", "lanceiro", "arqueiro"];
+const COMPOSICAO = {
+  A: { cavaleiro: 6, lanceiro: 24, arqueiro: 16 },
+  B: { cavaleiro: 8, lanceiro: 26, arqueiro: 18 },
 };
-// ── MAIS JUNTOS ─────────────────────────────────────────────────────────────
-// Fileiras a 6,2 m e colunas a travar a um quarto de posto uma da outra liam-se
-// como dois grupos a olhar de longe. O Lucas pediu-os perto: fileira a 4,8 m
-// (o cavalo, a escala do jogo, tem ~5,6 m de focinho a cauda) e as duas frentes
-// a 9 m quando param; na luta ainda avancam 2,5 m cada uma.
-const ESPACO_FILA_M = 4.8;
+// as duas cabeças a 9 m quando param; na luta os lanceiros avançam 2,5 m e os
+// cavalos só 1,2 (com mais, os dois cavalos entravam um no outro)
 const FOLGA_FRENTE_M = 9;
 const AVANCO_LUTA_M = 2.5;
-// ⚠ os cavalos avancam MENOS: com 2,5 m cada, as frentes ficavam a <5 m e os dois
-// cavalos (5,6 m cada, a escala do jogo) entravam um no outro. A 1,2 m ficam
-// focinho com focinho, a ~7 m de centro a centro.
 const AVANCO_CAVALO_M = 1.2;
 const exercitos = {};
 for (const rei of ["A", "B"]) {
-  const homens = HOSTE[rei].map((t, i) => {
-    const f = figura(t, rei);
-    f.fila = i;
-    pose(f, "andar");
-    f.acao.andar.time = (i * 0.41) % f.acao.andar.getClip().duration;
-    return f;
-  });
+  const blocos = [];
+  const homens = [];
+  let fundo = 0;
+  for (const bl of F.formacaoDe({ composicao: COMPOSICAO[rei] }, ORDEM)) {
+    const passo = F.passo(bl.tipo), larg = F.largura(bl.tipo);
+    const linhas = Math.ceil(bl.n / F.deFrente);
+    const bloco = { tipo: bl.tipo, homens: [] };
+    for (let k = 0; k < bl.n; k++) {
+      const lin = (k / F.deFrente) | 0;
+      const col = k - lin * F.deFrente;
+      const nesta = Math.min(F.deFrente, bl.n - lin * F.deFrente);
+      const f = figura(bl.tipo, rei);
+      f.atras = fundo + lin * passo;                 // metros atrás da cabeça
+      f.lat = (col - (nesta - 1) / 2) * larg;        // metros para o lado
+      pose(f, "andar");
+      f.acao.andar.time = (homens.length * 0.41) % f.acao.andar.getClip().duration;
+      homens.push(f);
+      bloco.homens.push(f);
+    }
+    blocos.push(bloco);
+    fundo += linhas * passo + F.folgaBlocos;
+  }
   exercitos[rei] = {
-    homens,
+    homens, blocos,
     posto: rei === "A" ? -1 : N_POSTOS,      // fora da estrada, a entrar
     sentido: rei === "A" ? 1 : -1,
     prog: 0,                                  // 0..1 entre o posto e o seguinte
   };
 }
 
-// ── OS NÚMEROS POR CIMA ─────────────────────────────────────────────────────
-// As figuras são um SÍMBOLO DE PROPORÇÃO e não um censo: cinco homens no ecrã
-// valem cinquenta na estrada. Quem diz a verdade é o número, e por isso ele
-// está sempre ao lado — para nunca se poder ler o ecrã e tirar daí um número
-// que o motor não executou. É a regra de sempre, aplicada ao desenho.
-const TROPAS = { A: 46, B: 52 };
-const CURTO = { lanceiro: "L", arqueiro: "A", cavaleiro: "C" };
-
-function placa(rei) {
-  const c = document.createElement("canvas");
-  c.width = 220;
-  c.height = 108;
-  const tex = new THREE.CanvasTexture(c);
+// ── AS PLACAS ───────────────────────────────────────────────────────────────
+// As do mapa: de perto uma por tipo, por cima do seu bloco; de longe uma só com
+// o total. O número é o do motor (aqui, a composição) e cai na proporção das
+// figuras que caem.
+const placasSp = [];
+for (let i = 0; i < 8; i++) {
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: tex, transparent: true, depthTest: false, depthWrite: false }));
-  sp.scale.set(12.5, 6.1, 1);
-  sp.renderOrder = 20;
+    sizeAttenuation: false, depthTest: false, transparent: true, toneMapped: false }));
+  sp.center.set(0.5, 0);
+  sp.renderOrder = 950;
+  sp.visible = false;
   cena.add(sp);
-  return { c, g: c.getContext("2d"), tex, sp, ultimo: null };
+  placasSp.push(sp);
 }
-
-function pintarPlaca(p, rei, n, comp) {
-  const chave = n + "|" + comp;
-  if (p.ultimo === chave) return;
-  p.ultimo = chave;
-  const g = p.g;
-  g.clearRect(0, 0, 220, 108);
-  g.fillStyle = "rgba(14,11,7,.86)";
-  g.strokeStyle = "#6b5836";
-  g.lineWidth = 3;
-  g.beginPath();
-  g.roundRect(3, 3, 214, 102, 12);
-  g.fill();
-  g.stroke();
-  g.fillStyle = "#" + TUNICA[rei].toString(16).padStart(6, "0");
-  g.beginPath();
-  g.roundRect(11, 11, 20, 86, 6);
-  g.fill();
-  g.fillStyle = "#f2e6c6";
-  g.font = "700 58px system-ui, sans-serif";
-  g.textAlign = "center";
-  g.fillText(String(n), 128, 62);
-  g.font = "600 21px system-ui, sans-serif";
-  g.fillStyle = "#c9bb93";
-  g.fillText(comp, 128, 92);
-  p.tex.needsUpdate = true;
-}
+const TROPAS = { A: 0, B: 0 };
+for (const r of ["A", "B"])
+  TROPAS[r] = Object.values(COMPOSICAO[r]).reduce((a, b) => a + b, 0);
 
 // ── O PÓ ────────────────────────────────────────────────────────────────────
 // O que dá PESO a um choque não é a animação, é o chão a levantar-se. Um
@@ -413,7 +397,6 @@ function osso(raiz, nome) {
   return raiz.getObjectByName(nome) || raiz.getObjectByName(nome.replace(".", ""));
 }
 let guiao = null, tGuiao = 0, iGuiao = 0, acabou = null, tFim = 0;
-const placas = { A: null, B: null };
 
 function montarGuiao() {
   const g = [];
@@ -654,30 +637,51 @@ function avancar(dt) {
   moverPoeira(dt);
   if (acabou && (tFim += dt) > 9) recomecar();
 
-  // ── O NÚMERO SEGUE A HOSTE ────────────────────────────────────────────────
-  // Fica sobre o centro dos que estão de pé, e some quando já não há ninguém.
-  // Cada figura vale `TROPAS / figuras` — quando uma cai, o número cai com ela.
+  // ── AS PLACAS SEGUEM OS BLOCOS ────────────────────────────────────────────
+  let nb = 0;
+  const _pc = new THREE.Vector3();
+  const centroDe = (lista) => {
+    _pc.set(0, 0, 0);
+    let cy = -1e9;
+    for (const h of lista) { _pc.add(h.raiz.position); cy = Math.max(cy, h.raiz.position.y); }
+    _pc.divideScalar(lista.length);
+    _pc.y = cy + F.ALT_FIGURA * 1.35;
+    return _pc;
+  };
   for (const rei of ["A", "B"]) {
-    if (!placas[rei]) placas[rei] = placa(rei);
-    const pl = placas[rei];
     const e = exercitos[rei];
     const vivos = e.homens.filter((h) => !h.caido);
-    if (!vivos.length) { pl.sp.visible = false; continue; }
-    pl.sp.visible = true;
-    const porFigura = TROPAS[rei] / e.homens.length;
-    const conta = {};
-    let cx = 0, cy = -1e9, cz = 0;
-    for (const h of vivos) {
-      conta[CURTO[h.tipo]] = (conta[CURTO[h.tipo]] || 0) + 1;
-      cx += h.raiz.position.x;
-      cz += h.raiz.position.z;
-      cy = Math.max(cy, h.raiz.position.y);
+    if (!vivos.length) continue;
+    const px = F.ALT_FIGURA * F.pxPorMetro(cam.position.distanceTo(vivos[0].raiz.position));
+    if (px < F.PX_PLACA_ABRE) {
+      const sp = placasSp[nb++];
+      const total = Math.round(e.blocos.reduce((a, b) =>
+        a + COMPOSICAO[rei][b.tipo] * b.homens.filter((h) => !h.caido).length / b.homens.length, 0));
+      sp.material.map = F.placaGrande(rei, total);
+      sp.material.needsUpdate = true;
+      sp.center.set(0.5, 0);
+      sp.position.copy(centroDe(vivos));
+      sp.scale.set(F.ESC_GRANDE, F.ESC_GRANDE, 1);
+      sp.visible = true;
+      continue;
     }
-    pl.sp.position.set(cx / vivos.length, cy + 13.5, cz / vivos.length);
-    pintarPlaca(pl, rei, Math.round(porFigura * vivos.length),
-                ["L", "A", "C"].filter((k) => conta[k])
-                  .map((k) => conta[k] + " " + k).join("  ·  "));
+    let piso = 0;
+    for (const bl of e.blocos) {
+      const dePe = bl.homens.filter((h) => !h.caido);
+      if (!dePe.length) continue;
+      const sp = placasSp[nb++];
+      sp.material.map = F.placaTipo(rei, bl.tipo,
+        Math.round(COMPOSICAO[rei][bl.tipo] * dePe.length / bl.homens.length));
+      sp.material.needsUpdate = true;
+      // empilham-se no ECRÃ, como no mapa
+      sp.center.set(0.5, -piso * 1.12);
+      piso++;
+      sp.position.copy(centroDe(dePe));
+      sp.scale.set(F.ESC_PEQUENA * 3.4, F.ESC_PEQUENA, 1);
+      sp.visible = true;
+    }
   }
+  for (let i = nb; i < placasSp.length; i++) placasSp[i].visible = false;
 
   for (const rei of ["A", "B"]) {
     const e = exercitos[rei];
@@ -733,10 +737,10 @@ function avancar(dt) {
       // cada homem uma casa atrás do da frente, em metros e não em postos:
       // um posto é uma unidade de TEMPO, e a coluna é uma coisa física
       const m = COMP * (alvo + 0.5) / N_POSTOS
-        - e.sentido * i * ESPACO_FILA_M + e.sentido * h.avanco;
+        - e.sentido * h.atras + e.sentido * h.avanco;
       const rumo = noCaminho(Math.max(2, Math.min(COMP - 2, m)), _p)
         + (e.sentido < 0 ? Math.PI : 0) + (h.fugindo ? Math.PI : 0);
-      const lat = ((i % 2) * 2 - 1) * 1.9;
+      const lat = h.lat;
       _p.x += Math.cos(rumo + Math.PI / 2) * lat;
       _p.z += Math.sin(rumo + Math.PI / 2) * lat;
       h.raiz.position.copy(_p);

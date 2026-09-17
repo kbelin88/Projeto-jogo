@@ -618,10 +618,12 @@ transformed.y += onda * transformed.x * 0.05;`);
                     arqueiro: ["archer", "archers"],
                     cavaleiro: ["knight", "knights"] };
 
-  function formacaoDe(m) {
+  // `ordem` muda so quem vai a frente (a bancada da batalha poe o cavaleiro a
+  // cabeca); a reparticao dos lugares e a mesma
+  function formacaoDe(m, ordem = ORDEM_FORMA) {
     const c = m.composicao;
     if (!c) return [{ tipo: m.tipo || "lanceiro", n: N_FORMA }];
-    const tipos = ORDEM_FORMA.filter((t) => (c[t] || 0) > 0);
+    const tipos = ordem.filter((t) => (c[t] || 0) > 0);
     if (!tipos.length) return [{ tipo: m.tipo || "lanceiro", n: N_FORMA }];
     const total = tipos.reduce((a, t) => a + c[t], 0);
     const bruto = tipos.map((t) => N_FORMA * c[t] / total);
@@ -1236,6 +1238,12 @@ transformed.y += onda * transformed.x * 0.05;`);
     // glTF nem a montagem da cena -- a mesma luz, o mesmo chao, as mesmas
     // pecas, que e a unica maneira de uma comparacao valer alguma coisa.
     get banco() { return banco; },
+    // A FORMACAO E AS PLACAS, para as bancadas: a batalha de estrada tem de
+    // mostrar a MESMA coluna e as MESMAS placas que o mapa, e nao um desenho seu
+    // que volte a discordar (17/09: voltou, com a coluna em fila e a placa antiga)
+    formacao: { formacaoDe, passo: _PASSO, largura: _LARG, deFrente: LARGURA_FORMA,
+                folgaBlocos: 2.8, placaTipo, placaGrande, pxPorMetro,
+                ALT_FIGURA, ESCALA_TROPA, PX_PLACA_ABRE, ESC_PEQUENA, ESC_GRANDE },
     get diagnostico() {
       return { ligadoAoJogo, marchas: marchas.length, figurasAnimadas: nAnim,
                tiposComMalha: Object.keys(tropaInst),
