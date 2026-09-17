@@ -1189,6 +1189,7 @@ for j in range(th):
             _canto(i + b[0], j + b[1])
             beiras.append(((i + a[0], j + a[1]), (i + b[0], j + b[1]), di, dj))
 
+N_GRELHA = len(faces)      # as faces da grelha; daqui para a frente sao paredes
 # ── O PENHASCO E UMA FITA, NAO UMA FILA DE LAMINAS ──────────────────────────
 # Cada troco fazia os SEUS dois vertices de baixo e empurrava-os para fora pela
 # sua propria normal. Numa costa em escada, o troco virado a norte e o virado a
@@ -1379,6 +1380,14 @@ chao.data.materials.append(
     P.material_uv("falesia", rugosidade=0.96, cor_vertice=True))
 for _f in saia:
     chao.data.polygons[_f].material_index = 1
+# ── O CHAO E SUAVE (17/09) ──────────────────────────────────────────────────
+# Saia facetado: cada quadrado de 5 m partido em dois triangulos de sombra
+# plana. No plano nao se nota; numa encosta faz um XADREZ de losangos claros e
+# escuros, que se viu de perto na bancada das montanhas. A grelha passa a suave;
+# as paredes da falesia (depois de N_GRELHA) continuam de arestas vivas -- e a
+# aresta entre as duas fica viva por ser a fronteira de uma face plana.
+for _pl in chao.data.polygons:
+    _pl.use_smooth = _pl.index < N_GRELHA
 _uvc = chao.data.uv_layers.new(name="UVMap")
 _cvc = chao.data.color_attributes.new(name="Col", type="BYTE_COLOR",
                                       domain="CORNER")

@@ -56,6 +56,22 @@ for (const m of (mapa.MAPA.montanhas || [])) {
   b.onclick = () => olhar(m);
   caixa.appendChild(b);
 }
+// a PRAIA: a areia ganhou textura (ferramentas/cena/tex_areia.py); o botao
+// aponta a um ponto da malha da areia, de cima e a meia distancia
+const praia = document.createElement("button");
+praia.textContent = "praia";
+praia.onclick = () => {
+  let areia = null;
+  mapa.cena.traverse((o) => { if (!areia && o.isMesh && /areia/i.test(o.name)) areia = o; });
+  if (!areia) return;
+  const T = mapa.THREE, pos = areia.geometry.attributes.position, v = new T.Vector3();
+  v.fromBufferAttribute(pos, Math.floor(pos.count * 0.5));
+  areia.localToWorld(v);
+  mapa.ctrl.target.copy(v);
+  mapa.cam.position.set(v.x + 90, v.y + 70, v.z + 90);
+  mapa.ctrl.update();
+};
+caixa.appendChild(praia);
 const todas = document.createElement("button");
 todas.textContent = "as tres";
 todas.onclick = () => {
