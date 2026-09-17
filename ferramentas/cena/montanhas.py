@@ -63,7 +63,7 @@ def _suave(t):
     return t * t * (3 - 2 * t)
 
 
-def forma(estilo, dx, dy, raio, semente=1):
+def forma(estilo, dx, dy, raio, semente=1, ang=0.6, escala=1.0):
     """altura (m) de uma montanha centrada em (0, 0); dx, dy em metros.
 
     Perfil CONCAVO -- (1 - r)^2 -- como as montanhas a serio: ingreme no alto,
@@ -76,6 +76,10 @@ def forma(estilo, dx, dy, raio, semente=1):
     wx = (fbm(dx, dy, raio * 0.6, semente + 101, 3) - 0.5) * raio * 0.28
     wy = (fbm(dx, dy, raio * 0.6, semente + 202, 3) - 0.5) * raio * 0.28
     qx, qy = dx + wx, dy + wy
+    return escala * _forma(estilo, qx, qy, raio, semente, ang)
+
+
+def _forma(estilo, qx, qy, raio, semente, ang):
     if estilo == "pico":
         r = np.clip(np.hypot(qx, qy) / raio, 0.0, 1.0)
         base = (1.0 - r) ** 2
@@ -91,7 +95,6 @@ def forma(estilo, dx, dy, raio, semente=1):
         f = fbm(qx, qy, raio * 0.3, semente + 9, 3)
         return 165.0 * base * (0.35 + 0.55 * cr + 0.25 * f)
     if estilo == "cordilheira":
-        ang = 0.6
         ux, uy = math.cos(ang), math.sin(ang)
         ao_longo = qx * ux + qy * uy
         travessa = -qx * uy + qy * ux
@@ -106,6 +109,20 @@ def forma(estilo, dx, dy, raio, semente=1):
         return 230.0 * env * (0.25 + 0.65 * cr) * (0.55 + 0.6 * cumes)
     raise ValueError(estilo)
 
+
+# ── AS SERRAS DA IBERIA, PARA O MAPA INTEIRO ────────────────────────────────
+# Onde ficam, ancoradas as cidades (metros do mapa, y para norte). Nao e
+# geografia exata -- e a Iberia do jogo, que e uma ilha estilizada -- mas cada
+# serra fica entre as cidades que a tem na vida real, e e isso que se le.
+#   (nome, estilo, centro, raio, angulo, escala)
+SERRAS = [
+    ("Pirineus", "cordilheira", (500.0, 715.0), 250.0, -0.12, 1.0),
+    ("Cantabrica", "cordilheira", (-400.0, 780.0), 210.0, 0.05, 0.8),
+    ("Sistema Central", "cordilheira", (-150.0, 400.0), 170.0, -0.3, 0.65),
+    ("Serra Nevada", "pico", (190.0, -430.0), 230.0, 0.0, 1.0),
+    ("Serra Morena", "serra", (-250.0, -170.0), 230.0, -0.5, 1.0),
+    ("Sistema Iberico", "serra", (300.0, 260.0), 200.0, 0.9, 1.0),
+]
 
 ESTILOS = [("pico", 330.0), ("serra", 300.0), ("cordilheira", 300.0)]
 

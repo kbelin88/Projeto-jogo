@@ -33,7 +33,9 @@
 // Nada daqui toca o jogo: le `montanhas.glb` e `montanhas.json`.
 import { iniciar } from "./mapa3d.js";
 
-const mapa = await iniciar(document.getElementById("palco"), { cena: "montanhas" });
+// ?cena=mapa_montanhas abre a Iberia inteira com as montanhas (MONTANHAS=1 sem BANCADA)
+const CENA = new URLSearchParams(location.search).get("cena") || "montanhas";
+const mapa = await iniciar(document.getElementById("palco"), { cena: CENA });
 mapa.atualizar({ turno: 0, aldeias: [], marchas: [] });
 Object.assign(window, { mapa, cena: mapa.cena, cam: mapa.cam, ctrl: mapa.ctrl,
                         MAPA: mapa.MAPA, THREE: mapa.THREE });
@@ -50,9 +52,9 @@ function olhar(m, dist = 900, alto = 380, ang = 0.8) {
 }
 window.olhar = olhar;
 const caixa = document.getElementById("botoes");
-for (const m of (mapa.MAPA.montanhas || [])) {
+for (const [i, m] of (mapa.MAPA.montanhas || []).entries()) {
   const b = document.createElement("button");
-  b.textContent = NOMES[m.estilo] || m.estilo;
+  b.textContent = (NOMES[m.estilo] || m.estilo) + (CENA === "montanhas" ? "" : " " + (i + 1));
   b.onclick = () => olhar(m);
   caixa.appendChild(b);
 }
@@ -78,7 +80,7 @@ todas.onclick = () => {
   const ms = mapa.MAPA.montanhas || [];
   const cx = ms.reduce((s, m) => s + m.p[0], 0) / Math.max(1, ms.length);
   const cy = ms.reduce((s, m) => s + m.p[1], 0) / Math.max(1, ms.length);
-  olhar({ p: [cx, cy] }, 1500, 900, 1.2);
+  olhar({ p: [cx, cy] }, CENA === "montanhas" ? 1500 : 2600, CENA === "montanhas" ? 900 : 1700, 1.2);
 };
 caixa.appendChild(todas);
 todas.onclick();
