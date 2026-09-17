@@ -4915,6 +4915,74 @@
               marcarRecado._t = setTimeout(() => { el.textContent = ""; }, 6000); }
   }
 
+  // a vista geral: com o 3D ligado o canvas plano esta escondido e sai em
+  // branco -- tira-se do WebGL, com os riscos da tela de cima por cima
+  function vistaGeral() {
+    if (!M3D) return canvas.toDataURL("image/png");
+    try {
+      const tela = M3D.rend.domElement;
+      M3D.rend.render(M3D.cena, M3D.cam);
+      const c = document.createElement("canvas");
+      const k = Math.min(1, 1600 / tela.width);
+      c.width = Math.round(tela.width * k); c.height = Math.round(tela.height * k);
+      const g = c.getContext("2d");
+      g.drawImage(tela, 0, 0, c.width, c.height);
+      g.drawImage(telaDasMarcas(), 0, 0, c.width, c.height);
+      return c.toDataURL("image/png");
+    } catch (e) { return ""; }
+  }
+
+  // ── O QUE ESTA DENTRO DO CIRCULO, NO 3D (17/09) ────────────────────────
+  // O `oQueEstaAqui` responde com as pecas do mapa PLANO: aldeia, estrada e a
+  // moita do `mata.json`. Os defeitos do 3D sao outros -- um portao torto, uma
+  // casa enterrada, uma arvore na praia -- e sao pecas do `mapa3d.json`. Aqui
+  // nomeia-se cada uma pelo seu indice em `copias` e `manchas`, que e a linha
+  // exata a corrigir, e em METROS, que e a unidade do forno.
+  function oQueEstaAqui3D(pts) {
+    if (!M3D) return null;
+    const MP = M3D.MAPA;
+    const mm = pts.map((q) => vbParaMetros(q[0], q[1])).filter(Boolean);
+    if (!mm.length) return null;
+    let cx = 0, cy = 0;
+    for (const q of mm) { cx += q[0]; cy += q[1]; }
+    cx /= mm.length; cy /= mm.length;
+    const raio = Math.max(3, ...mm.map((q) => Math.hypot(q[0] - cx, q[1] - cy)));
+    const alt = pts.filter((q) => q.length > 2).map((q) => q[2]);
+    const r1 = (v) => Math.round(v * 10) / 10;
+    const ord = (L, n) => L.sort((a, b) => a.dist - b.dist).slice(0, n);
+    const aldeias = [], estradas = [], pecas = [], matas = [];
+    for (const [slug, a] of Object.entries(MP.aldeias || {})) {
+      const d = Math.hypot(a.p[0] - cx, a.p[1] - cy);
+      if (d <= raio + 60) aldeias.push({ id: slug, dist: r1(d) });
+    }
+    for (const e of (MP.estradas || [])) {
+      let melhor = 1e9;
+      for (let i = 1; i < e.pts.length; i++) {
+        const A = e.pts[i - 1], B = e.pts[i];
+        const vx = B[0] - A[0], vy = B[1] - A[1];
+        const t = Math.max(0, Math.min(1, ((cx - A[0]) * vx + (cy - A[1]) * vy)
+                                          / Math.max(vx * vx + vy * vy, 1e-9)));
+        melhor = Math.min(melhor, Math.hypot(cx - A[0] - t * vx, cy - A[1] - t * vy));
+      }
+      if (melhor <= raio + 6) estradas.push({ id: e.de + "-" + e.para, dist: r1(melhor) });
+    }
+    (MP.copias || []).forEach((c, i) => {
+      const d = Math.hypot(c.p[0] - cx, c.p[1] - cy);
+      if (d <= raio + 3) pecas.push({ i, peca: c.peca, aldeia: c._cid || "", dist: r1(d) });
+    });
+    (MP.manchas || []).forEach((c, i) => {
+      const d = Math.hypot(c.p[0] - cx, c.p[1] - cy);
+      if (d <= raio + 30) matas.push({ i, dist: r1(d) });
+    });
+    return {
+      centro_m: [r1(cx), r1(cy)], raio_m: r1(raio),
+      altura_m: alt.length ? r1(alt.reduce((a, b) => a + b, 0) / alt.length) : null,
+      camara: [r1(M3D.cam.position.x), r1(M3D.cam.position.y), r1(M3D.cam.position.z)],
+      aldeias: ord(aldeias, 4), estradas: ord(estradas, 4),
+      pecas: ord(pecas, 12), manchas: ord(matas, 6),
+    };
+  }
+
   async function marcarGuardar() {
     if (!MARC.marcas.length) { marcarRecado("nada marcado ainda"); return; }
     const nota = document.getElementById("notaMarcas");
@@ -4936,10 +5004,11 @@
           raio: Math.round(Math.max(...m.pts.map((q) => Math.hypot(q[0] - c[0], q[1] - c[1])))),
           pts: m.pts.map((q) => [Math.round(q[0]), Math.round(q[1])]),
           aqui: oQueEstaAqui(c, Math.max(...m.pts.map((q) => Math.hypot(q[0] - c[0], q[1] - c[1])))),
+          aqui3d: oQueEstaAqui3D(m.pts),
           foto: m.foto || "",
         };
       }),
-      imagem: canvas.toDataURL("image/png"),
+      imagem: vistaGeral(),
     };
     try {
       const r = await fetch("/marcas", {

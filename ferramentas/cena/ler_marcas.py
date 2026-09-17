@@ -85,8 +85,23 @@ for chave, lista in grupos:
         raio = m.get("raio")
         print("   [%d] em %s%s" % (n, c, "  raio %d" % raio if raio else ""))
 
+        a3 = m.get("aqui3d")
+        if a3:                                              # marcado no mapa 3D
+            print("        3D: centro %s m  raio %s m  altura %s m  (camara em %s)"
+                  % (a3.get("centro_m"), a3.get("raio_m"), a3.get("altura_m"), a3.get("camara")))
+            for x in a3.get("aldeias") or []:
+                print("        aldeia  %-24s a %6.1f m" % (x["id"], x["dist"]))
+            for x in a3.get("estradas") or []:
+                print("        estrada %-24s a %6.1f m" % (x["id"], x["dist"]))
+            for x in a3.get("pecas") or []:
+                print("        peca    copias[%-4d] %-26s %-10s a %5.1f m"
+                      % (x["i"], x["peca"], x.get("aldeia", ""), x["dist"]))
+            for x in a3.get("manchas") or []:
+                print("        mata    manchas[%-4d] a %5.1f m" % (x["i"], x["dist"]))
+            if not any(a3.get(k) for k in ("aldeias", "estradas", "pecas", "manchas")):
+                print("        (o circulo nao apanhou nenhuma peca: campo, praia ou relevo)")
         aqui = m.get("aqui")
-        if aqui:                                            # formato novo
+        if aqui and not a3:                                 # formato novo
             for rot, lst, uni in (("aldeia", aqui.get("aldeias"), "aldeia"),
                                   ("estrada", aqui.get("estradas"), "estrada"),
                                   ("moita", aqui.get("moitas"), "moita")):
@@ -102,7 +117,7 @@ for chave, lista in grupos:
                     print("        %-7s (+%d dentro do circulo)" % ("", len(lst) - 3))
             if not any((aqui.get(k) or []) for k in ("aldeias", "estradas", "moitas")):
                 print("        (o circulo nao apanhou nenhuma peca)")
-        else:                                               # cadernos antigos
+        elif not a3:                                        # cadernos antigos
             p = m.get("perto") or {}
             if "aldeia" in p or "estrada" in p:
                 for rot in ("aldeia", "estrada"):
