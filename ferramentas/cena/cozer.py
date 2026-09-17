@@ -124,7 +124,7 @@ def rumos_de(cidade):
     return [P.angulo_de_cena(a) for a in saidas]
 
 
-def construir(perfil, semente=11, cidade=None):
+def construir(perfil, semente=11, cidade=None, rumos_m=None):
     """monta uma povoação inteira e devolve o quadro em metros que a enquadra"""
     cfg = PERFIS[perfil]
     raio = cfg["raio"]
@@ -135,7 +135,12 @@ def construir(perfil, semente=11, cidade=None):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     P._mats.clear()
     P.LIXO = None
-    if cidade:
+    if rumos_m is not None:
+        # o mapa 3D: rumos ja no chao, em radianos (ver P.METRICO)
+        # e TODA a estrada tem portao: o teto por tamanho servia o sprite 2D, e
+        # no 3D uma estrada sem portao entra pelo muro (medido: 4 em 74 pontas)
+        portoes_ang = P.portoes_por_estradas(rumos_m, 99) or [math.radians(-64)]
+    elif cidade:
         rumos = rumos_de(cidade)
         portoes_ang = P.escolher_portoes(rumos, PORTOES_POR_TAMANHO[perfil])
     else:
@@ -220,12 +225,18 @@ def construir(perfil, semente=11, cidade=None):
         for i, a0 in enumerate(ocupado):
             a1 = ocupado[(i + 1) % len(ocupado)]
             arcos.append((((a1 - a0) % (2 * math.pi)) or 2 * math.pi, a0))
-        arcos.sort(reverse=True)
-        for k in range(cfg["torres"]):
-            arco, a0 = arcos[k % len(arcos)]
-            quantas = sum(1 for j in range(cfg["torres"]) if j % len(arcos) == k % len(arcos))
-            posto = sum(1 for j in range(k) if j % len(arcos) == k % len(arcos))
-            torres.append(a0 + arco * (posto + 1) / (quantas + 1))
+        # ── CADA TORRE VAI PARA O ARCO QUE FICA MAIS SOZINHO ─────────────
+        # Repartia-se por turnos (1.o arco, 2.o, 1.o, 2.o) sem olhar ao tamanho:
+        # em Lisboa o arco curto, de 57 graus entre os dois portoes, levou duas
+        # torres a 14 m uma da outra, e o de 303 graus levou outras duas (17/09).
+        # Agora cada torre vai para o arco com mais muro POR TORRE.
+        conta = [0] * len(arcos)
+        for _k in range(cfg["torres"]):
+            i = max(range(len(arcos)), key=lambda j: arcos[j][0] / (conta[j] + 1))
+            conta[i] += 1
+        for (arco, a0), q in zip(arcos, conta):
+            for posto in range(q):
+                torres.append(a0 + arco * (posto + 1) / (q + 1))
 
     P.muralha(MURO, TORRE, portoes, raio, torres, z,
               abertura=amb("PORTAO_ABERTO", 0.0))

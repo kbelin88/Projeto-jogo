@@ -1339,6 +1339,13 @@ def proto_ponte(comp=14.0, larg=6.0):
 
 
 PORTOES_CENA = []             # bocas colocadas, em metros: (x, y, z, rumo no mapa)
+# ── NO MAPA 3D OS ANGULOS SAO OS DO CHAO (17/09) ────────────────────────────
+# O `angulo_de_cena` desfaz a isometria do SPRITE 2D. O forno 3D usava a mesma
+# conta, e no 3D nao ha isometria nenhuma: os portoes saiam rodados e achatados.
+# Em Lisboa as estradas saem a 26 e 44 graus e o portao principal estava a 107
+# -- o Lucas marcou-o "portao principal para nenhuma estrada". Com METRICO, o
+# angulo que entra e o que fica, e a boca grava o rumo nos mesmos graus.
+METRICO = False
 
 
 def angulo_de_tela(ang_cena, giro=math.pi / 4, inclina=math.pi / 3):
@@ -1394,6 +1401,38 @@ def escolher_portoes(angulos, quantos):
         escolhidos.append(melhor)
         restantes.remove(melhor)
     return escolhidos
+
+
+def portoes_por_estradas(rumos, quantos, junta=0.55):
+    """os portoes de uma aldeia no mapa 3D: um por MOLHO de estradas.
+
+    Duas estradas que saem quase juntas (menos de 31 graus) entram pelo MESMO
+    portao, posto a meio delas -- e nao no rumo da primeira, que deixava a outra
+    a entrar pelo muro. O portao principal e o do molho com mais estradas.
+    Molhos a mais do que `quantos` ficam sem portao proprio (a estrada vai ao
+    mais proximo).
+    """
+    if not rumos:
+        return []
+    ang = sorted(a % (2 * math.pi) for a in rumos)
+    n = len(ang)
+    # comecar a volta no MAIOR vao, para nenhum molho ficar partido no zero
+    vaos = [((ang[(i + 1) % n] - ang[i]) % (2 * math.pi)) or 2 * math.pi for i in range(n)]
+    ini = (max(range(n), key=lambda i: vaos[i]) + 1) % n
+    ordem = [ang[(ini + i) % n] for i in range(n)]
+    molhos = [[ordem[0]]]
+    for a in ordem[1:]:
+        if (a - molhos[-1][-1]) % (2 * math.pi) < junta:
+            molhos[-1].append(a)
+        else:
+            molhos.append([a])
+    saida = []
+    for m in molhos:
+        sx = sum(math.cos(a) for a in m)
+        sy = sum(math.sin(a) for a in m)
+        saida.append((len(m), math.atan2(sy, sx)))
+    saida.sort(key=lambda t: -t[0])
+    return [a for _n, a in saida[:quantos]]
 
 
 def muralha(muro, torre, portoes, raio, ang_torres,
@@ -1465,7 +1504,7 @@ def muralha(muro, torre, portoes, raio, ang_torres,
         # bocas serve cada estrada sem refazer a conta da projeção.
         fora = raio + pt.dimensions.y * 0.5
         PORTOES_CENA.append((fora * math.cos(ang), fora * math.sin(ang), zg,
-                             angulo_de_tela(ang)))
+                             ang if METRICO else angulo_de_tela(ang)))
         eixo = ang + math.pi / 2
         for lado in (-1, 1):
             hx = gx + math.cos(eixo) * lado * desvio

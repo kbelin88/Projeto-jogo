@@ -138,10 +138,31 @@ if BANCADA:
     if faltam:
         raise SystemExit("BANCADA: nao ha aldeia chamada " + ", ".join(faltam))
     print("SONDA BANCADA: %s" % ", ".join(cidades))
+# ── PARA ONDE SAEM AS ESTRADAS, NO CHAO ─────────────────────────────────────
+# O rumo de cada estrada a sair da aldeia, em metros: para o ponto de controlo
+# da curva autoral se houver (e para onde a fita aponta a sair), senao para a
+# outra aldeia. E destes rumos que saem os portoes (P.METRICO).
+P.METRICO = True
+_VIA0 = {}
+for _e in REDE.get("e", []):
+    if _e.get("via"):
+        _VIA0[tuple(sorted((_e["de"], _e["para"])))] = em_metros(*_e["via"][0])
+
+
+def rumos_metricos(cid):
+    cx, cy = em_metros(REDE["c"][cid]["x"], REDE["c"][cid]["y"])
+    saida = []
+    for outra in REDE["v"][cid]:
+        alvo = _VIA0.get(tuple(sorted((cid, outra)))) \
+            or em_metros(REDE["c"][outra]["x"], REDE["c"][outra]["y"])
+        saida.append(math.atan2(alvo[1] - cy, alvo[0] - cx))
+    return saida
+
+
 for cid in cidades:
     perfil = REDE["c"][cid]["t"]
     P.registar(True)
-    C.construir(perfil, cidade=cid)      # limpa a cena e monta a povoacao
+    C.construir(perfil, cidade=cid, rumos_m=rumos_metricos(cid))   # limpa a cena e monta a povoacao
     reg = P.REGISTO
     P.registar(False)
     # NAO se guarda o objeto: a proxima cidade chama `read_factory_settings` e
@@ -714,8 +735,13 @@ for a, b in LIGACOES:
         a_ = math.radians(rumoGraus)
         return [cx + math.cos(a_) * r, cy + math.sin(a_) * r]
 
-    p0 = boca_para(a, rumo) or na_muralha(a, ax, ay, rumo)
-    p1 = boca_para(b, (rumo + 180) % 360) or na_muralha(b, bx, by, (rumo + 180) % 360)
+    # o portao procura-se pelo rumo com que a estrada SAI (para a curva, se a
+    # houver) -- o mesmo com que o portao foi posto, e nao o de centro a centro
+    _c = VIA_DE.get(tuple(sorted((a, b))))
+    rumo_a = math.degrees(math.atan2((_c or (bx, by))[1] - ay, (_c or (bx, by))[0] - ax))
+    rumo_b = math.degrees(math.atan2((_c or (ax, ay))[1] - by, (_c or (ax, ay))[0] - bx))
+    p0 = boca_para(a, rumo_a) or na_muralha(a, ax, ay, rumo_a)
+    p1 = boca_para(b, rumo_b) or na_muralha(b, bx, by, rumo_b)
     # e ENTRA 6 m para dentro da boca. Acabar exatamente na porta deixa uma
     # costura visivel entre a fita e a peca; entrando um pouco, a estrada passa
     # por baixo do portao e a juncao desaparece.
