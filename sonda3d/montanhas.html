@@ -1,0 +1,69 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Bancada das montanhas</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0d1418; color: #e8dcc0;
+               font: 13px system-ui, sans-serif; overflow: hidden; }
+  #palco { position: fixed; inset: 0; }
+  #hud { position: fixed; top: 12px; left: 12px; z-index: 5; width: 270px;
+         background: rgba(20,15,8,.9); border: 1px solid #6b5836;
+         border-radius: 8px; padding: 10px 12px; }
+  #hud h1 { font-size: 13px; margin: 0 0 8px; letter-spacing: .06em; }
+  #hud p { color: #cbbd94; line-height: 1.45; margin: 8px 0 0; }
+  #hud button { background: #3a2e18; color: #e8dcc0; border: 1px solid #6b5836;
+                border-radius: 5px; padding: 5px 9px; margin: 4px 4px 0 0;
+                cursor: pointer; font: inherit; }
+  #hud button:hover { background: #55401f; }
+  #carga { position: fixed; inset: 0; display: flex; align-items: center;
+           justify-content: center; background: #0d1418; z-index: 9; color: #cbbd94; }
+</style>
+<div id="palco"></div>
+<div id="carga">a montar as montanhas...</div>
+<div id="hud">
+  <h1>BANCADA DAS MONTANHAS</h1>
+  <div id="botoes"></div>
+  <p>Tres estilos esculpidos no mapa de teste (Lisboa e Santarem). Cada botao
+     leva a camara a um. Arrasta para girar, roda para aproximar.</p>
+  <p id="nota"></p>
+</div>
+
+<script type="module">
+// A montra das montanhas de teste. O forno e o do mapa:
+//   BANCADA="lisboa,santarem" MONTANHAS=1 blender -b ... -P ferramentas/cena/exportar_mapa.py
+// Nada daqui toca o jogo: le `montanhas.glb` e `montanhas.json`.
+import { iniciar } from "./mapa3d.js";
+
+const mapa = await iniciar(document.getElementById("palco"), { cena: "montanhas" });
+mapa.atualizar({ turno: 0, aldeias: [], marchas: [] });
+Object.assign(window, { mapa, cena: mapa.cena, cam: mapa.cam, ctrl: mapa.ctrl,
+                        MAPA: mapa.MAPA, THREE: mapa.THREE });
+document.getElementById("carga").remove();
+
+const NOMES = { pico: "pico rochoso", serra: "serra arredondada",
+                cordilheira: "cordilheira" };
+function olhar(m, dist = 900, alto = 380, ang = 0.8) {
+  const T = mapa.THREE;
+  const z = 120;
+  mapa.ctrl.target.set(m.p[0], z, -m.p[1]);
+  mapa.cam.position.set(m.p[0] + Math.cos(ang) * dist, z + alto, -m.p[1] + Math.sin(ang) * dist);
+  mapa.ctrl.update();
+}
+window.olhar = olhar;
+const caixa = document.getElementById("botoes");
+for (const m of (mapa.MAPA.montanhas || [])) {
+  const b = document.createElement("button");
+  b.textContent = NOMES[m.estilo] || m.estilo;
+  b.onclick = () => olhar(m);
+  caixa.appendChild(b);
+}
+const todas = document.createElement("button");
+todas.textContent = "as tres";
+todas.onclick = () => {
+  const ms = mapa.MAPA.montanhas || [];
+  const cx = ms.reduce((s, m) => s + m.p[0], 0) / Math.max(1, ms.length);
+  const cy = ms.reduce((s, m) => s + m.p[1], 0) / Math.max(1, ms.length);
+  olhar({ p: [cx, cy] }, 1500, 900, 1.2);
+};
+caixa.appendChild(todas);
+todas.onclick();
+</script>

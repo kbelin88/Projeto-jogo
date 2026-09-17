@@ -125,7 +125,14 @@ def juntar(reg, dx, dy, cid=None, giro=0.0):
 # so aquelas aldeias, a estrada entre elas, o chao a volta e a mata que la cair.
 # Sem a variavel, o forno e exatamente o de sempre.
 BANCADA = [c.strip() for c in os.environ.get("BANCADA", "").split(",") if c.strip()]
-MARGEM_BANCADA = 320.0          # metros de chao para alem das aldeias
+# ── A BANCADA DAS MONTANHAS (17/09) ─────────────────────────────────────────
+# MONTANHAS=1 (so com BANCADA): o mesmo recorte, mais largo, com tres estilos de
+# montanha esculpidos no campo livre e a ROCHA nas encostas ingremes. Sai em
+# `montanhas.glb`/`montanhas.json` e NAO toca em nada do jogo -- nem no
+# `bancada.*`, nem no `_relevo_final.npy`, que e a regua das estradas.
+MONTANHAS = bool(os.environ.get("MONTANHAS")) and bool(os.environ.get("BANCADA"))
+NOME_SAIDA = "montanhas" if MONTANHAS else "bancada"
+MARGEM_BANCADA = float(os.environ.get("MARGEM", "700" if MONTANHAS else "320"))
 # a oclusao assada custa minutos; na bancada e sempre, no mapa inteiro so a pedido
 ASSAR_OCLUSAO = os.environ.get("OCLUSAO", "1" if os.environ.get("BANCADA") else "0") == "1"
 OC_PIXEIS = int(os.environ.get("OC_PIXEIS", "2048"))
@@ -542,6 +549,63 @@ _p = np.clip(1.0 - _prot / PROTEGE_FADE, 0.0, 1.0)
 _p = _p * _p * (3 - 2 * _p)
 relevo = np.minimum(relevo, _tecto_velho * _p + _tecto_praia * (1 - _p))
 
+# ── AS MONTANHAS DE TESTE ───────────────────────────────────────────────────
+# Tres estilos, para o Lucas escolher olhando:
+#   serra       -- macico arredondado, 170 m, encostas de pasto e rocha so no alto
+#   pico        -- um pico so, 280 m, arestas vincadas: le-se de longe
+#   cordilheira -- cinco cumes em linha, 150-240 m, com colos entre eles
+# Esculpem-se POR CIMA do relevo (o tecto da ilha fica em 150 m e cortava-as),
+# multiplicadas por (1 - _p): onde ha estrada ou aldeia o chao nao se mexe.
+# O sitio de cada uma escolhe-se sozinho: o ponto do recorte mais longe de
+# estradas, aldeias e agua, e a seguinte longe das anteriores.
+MONTES = []
+_h_montes = None          # altura acrescentada pelas montanhas, por celula
+if MONTANHAS:
+    import montanhas as MT                                   # noqa: E402
+
+    # ── A TRANSICAO E LARGA ─────────────────────────────────────────────────
+    # A 1.a versao usava so os 40 m de `_p`: a montanha subia a pique mesmo ao
+    # lado da estrada protegida, e a estrada ficou num FOSSO de rocha. Agora a
+    # montanha so tem altura inteira a 220 m da zona protegida, e a 120 m da agua.
+    _w_prot = np.clip(_prot / 220.0, 0.0, 1.0)
+    _w_agua = np.clip((_dm - 20.0) / 120.0, 0.0, 1.0)
+    _peso = (_w_prot * _w_prot * (3 - 2 * _w_prot)) * (_w_agua * _w_agua * (3 - 2 * _w_agua))
+    _livre = np.minimum(_prot, _dm)                     # metros ate estrada/aldeia/agua
+    _dentro = np.zeros(terra.shape, dtype=bool)
+    if RECT:
+        _dentro = ((_gx >= RECT[0] + 150) & (_gx <= RECT[2] - 150)
+                   & (_gy >= RECT[1] + 150) & (_gy <= RECT[3] - 150)) & terra
+    _h = np.zeros(terra.shape, dtype=np.float32)
+    for _k, (nome, raio_m) in enumerate(MT.ESTILOS):
+        score = np.where(_dentro, _livre, -1e9).astype(np.float32)
+        for _m in MONTES:
+            d = np.hypot(_gx - _m["p"][0], _gy - _m["p"][1]) - _m["raio"] * 0.8 - raio_m * 0.8
+            score = np.where(d < 0, -1e9, np.minimum(score, d + 300.0))
+        jj, ii = np.unravel_index(int(np.argmax(score)), score.shape)
+        cx, cy = float(_gx[0, ii]), float(_gy[jj, 0])
+        forma = MT.forma(nome, _gx - cx, _gy - cy, raio_m, semente=3 + _k)
+        _h = np.maximum(_h, forma.astype(np.float32))
+        MONTES.append({"estilo": nome, "p": [round(cx, 1), round(cy, 1)], "raio": raio_m,
+                       "livre_m": round(float(_livre[jj, ii]), 1)})
+    _h = _h * _peso * terra
+    relevo = relevo + _h
+    _h_montes = _h
+    # o limiar da rocha varia com um ruido lento: um limiar fixo desenha a
+    # fronteira relva/rocha ao longo da grelha de 5 m, em escada
+    _limiar_rocha = np.tan(np.radians(34.0 + 9.0 * (MT.fbm(_gx, _gy, 60.0, 77, 3) - 0.5)))
+    # ── A LINHA DAS ARVORES ─────────────────────────────────────────────────
+    # A mata nao sobe a montanha inteira: manchas com mais de 70 m de montanha
+    # debaixo saem. O pe fica com bosque e o alto fica a nu, como na serra.
+    _antes = len(manchas)
+    manchas = [m for m in manchas
+               if not (0 <= int((m["p"][0] + LX / 2) / px) < tw
+                       and 0 <= int((LY / 2 - m["p"][1]) / py) < th
+                       and _h[int((LY / 2 - m["p"][1]) / py), int((m["p"][0] + LX / 2) / px)] > 70.0)]
+    print("SONDA montanhas: %d manchas de mata acima da linha das arvores removidas"
+          % (_antes - len(manchas)))
+    print("SONDA montanhas: %s" % ", ".join("%s em %s (a %.0f m de estrada/aldeia/agua)"
+                                            % (m["estilo"], m["p"], m["livre_m"]) for m in MONTES))
+
 _bc = terra & (np.roll(~terra, 1, 0) | np.roll(~terra, -1, 0)
                | np.roll(~terra, 1, 1) | np.roll(~terra, -1, 1))
 _praia_nova = _bc & (_p < 0.5) & (_rocha < 0.5)
@@ -661,7 +725,8 @@ for cid, c in centros.items():
 # fora daqui e esqueci-me dos patamares das aldeias -- e a analise acusou 59 m
 # de erro que nao existiam. Quem quiser medir, mede contra o que SAIU, nao
 # contra uma reconstrucao.
-np.save(os.path.join(os.getcwd(), "ferramentas/cena/_relevo_final.npy"), relevo)
+if not MONTANHAS:
+    np.save(os.path.join(os.getcwd(), "ferramentas/cena/_relevo_final.npy"), relevo)
 
 _gy, _gx = np.gradient(relevo, px)
 _d = np.degrees(np.arctan(np.hypot(_gx, _gy)))[terra]
@@ -1063,6 +1128,7 @@ def encostar(vi, vj):
 
 
 verts, faces = [], []
+cor_rocha = {}            # tom da rocha por vertice (margem e, na bancada, encostas)
 saia = []                 # as faces da margem, que sao rocha e nao prado
 uvs_face = {}             # UV por FACE: a margem partilha vertices na esquina
 beiras = []               # (canto A, canto B, di, dj) de cada troco de costa
@@ -1087,6 +1153,25 @@ for j in range(th):
             continue
         faces.append(tuple(_canto(i + di, j + dj)
                            for di, dj in ((0, 0), (1, 0), (1, 1), (0, 1))))
+        # ── A ENCOSTA INGREME E ROCHA (so na bancada das montanhas) ─────────
+        # Acima de ~34 graus a relva nao se agarra: a face vai para a ranhura
+        # da falesia, com a fotografia projetada ao longo do declive.
+        if MONTANHAS and _h_montes[j, i] > 12.0:
+            _q = [verts[k] for k in faces[-1]]
+            _sx = ((_q[1][2] - _q[0][2]) + (_q[2][2] - _q[3][2])) / (2 * px)
+            _sy = ((_q[3][2] - _q[0][2]) + (_q[2][2] - _q[1][2])) / (2 * py)
+            _decl = math.hypot(_sx, _sy)
+            if _decl > _limiar_rocha[j, i]:        # ~34 graus, a variar
+                saia.append(len(faces) - 1)
+                _eixo_u = abs(_sx) < abs(_sy)
+                uvs_face[len(faces) - 1] = dict(
+                    (k, ((verts[k][0] if _eixo_u else verts[k][1]) * 0.8,
+                         verts[k][2] * 0.8 + 0.3 * (verts[k][1] if _eixo_u else verts[k][0])))
+                    for k in faces[-1])
+                for k in faces[-1]:
+                    # mais claro no alto, como pedra seca ao sol
+                    t = max(0.0, min(1.0, verts[k][2] / 260.0))
+                    cor_rocha[k] = (0.78 + 0.32 * t, 0.76 + 0.30 * t, 0.74 + 0.30 * t)
         # ── A MARGEM ────────────────────────────────────────────────────────
         # Sem isto a ilha e uma FOLHA: a terra e o mar encontram-se no mesmo
         # plano e a costa nao se le como costa, le-se como uma mudanca de cor.
@@ -1188,8 +1273,7 @@ def _tom_rocha(ex, ey, ez):
     return (b * (0.94 + 0.10 * t), b * (0.97 + 0.04 * t), b * 1.06)
 
 
-cor_rocha = {}          # so a rocha a le: o prado esta noutra ranhura
-dir_canto, vizinho = {}, {}
+dir_canto, vizinho = {}, {}        # (cor_rocha nasce com a grelha, acima)
 for ca, cb, di, dj in beiras:
     for c in (ca, cb):
         d = dir_canto.setdefault(c, [0.0, 0.0])
@@ -1827,13 +1911,13 @@ if ASSAR_OCLUSAO:
     print("SONDA oclusao: %d superficies em %.1f s (cena esvaziada)"
           % (len(_alvos), time.time() - t_oc), flush=True)
 
-alvo = os.path.join(SAIDA, "bancada.glb" if BANCADA else "pecas.glb")
+alvo = os.path.join(SAIDA, NOME_SAIDA + ".glb" if BANCADA else "pecas.glb")
 bpy.ops.export_scene.gltf(filepath=alvo, export_format="GLB", export_apply=True,
                           export_yup=True, export_cameras=False, export_lights=False)
 print("SONDA biblioteca: %d pecas, %d triangulos, %.1f MB"
       % (len(feitas), tris, os.path.getsize(alvo) / 1e6))
 
-with open(os.path.join(SAIDA, "bancada.json" if BANCADA else "mapa3d.json"), "w", encoding="utf-8") as f:
+with open(os.path.join(SAIDA, NOME_SAIDA + ".json" if BANCADA else "mapa3d.json"), "w", encoding="utf-8") as f:
     json.dump({"m_por_vb": round(M_POR_VB, 4),
                "mapa_m": [round(IB_LARG * M_POR_VB), round(IB_ALT * M_POR_VB)],
                "pecas": {n: legiveis.get(n, n) for n in feitas}, "copias": copias,
@@ -1848,8 +1932,11 @@ with open(os.path.join(SAIDA, "bancada.json" if BANCADA else "mapa3d.json"), "w"
                            for c in centros},
                "mastros": {c: [[m[0], m[1], round(m[2] + patamares.get(c, 0.0), 2),
                                 m[3]] for m in ms]
-                           for c, ms in mastros.items()}}, f, separators=(",", ":"))
-_saiu = "bancada.json" if BANCADA else "mapa3d.json"
+                           for c, ms in mastros.items()},
+               # na bancada das montanhas: onde esta cada estilo, para a pagina
+               # apontar a camara
+               "montanhas": MONTES}, f, separators=(",", ":"))
+_saiu = NOME_SAIDA + ".json" if BANCADA else "mapa3d.json"
 print("SONDA -> sonda3d/%s  (%.0f KB)  em %.1f s"
       % (_saiu, os.path.getsize(os.path.join(SAIDA, _saiu)) / 1024, time.time() - t0))
 
