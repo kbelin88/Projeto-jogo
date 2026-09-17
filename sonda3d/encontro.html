@@ -678,7 +678,6 @@ function avancar(dt) {
       sp.visible = true;
       continue;
     }
-    let piso = 0;
     for (const bl of e.blocos) {
       const dePe = bl.homens.filter((h) => !h.caido);
       if (!dePe.length) continue;
@@ -686,11 +685,9 @@ function avancar(dt) {
       sp.material.map = F.placaTipo(rei, bl.tipo,
         Math.round(COMPOSICAO[rei][bl.tipo] * dePe.length / bl.homens.length));
       sp.material.needsUpdate = true;
-      // empilham-se no ECRÃ, como no mapa
-      sp.center.set(0.5, -piso * 1.12);
-      piso++;
+      sp.center.set(0.5, 0);                // todas a mesma altura, como no mapa
       sp.position.copy(centroDe(dePe));
-      sp.scale.set(F.ESC_PEQUENA * 3.4, F.ESC_PEQUENA, 1);
+      sp.scale.set(F.ESC_PEQUENA * F.PLACA_TIPO_ASPETO, F.ESC_PEQUENA, 1);
       sp.visible = true;
     }
   }

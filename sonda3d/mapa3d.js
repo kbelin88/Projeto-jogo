@@ -237,8 +237,9 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
   // Por omissao, os tres de sempre. Com `{ tropas: { lanceiro: "outro.glb" } }`
   // troca-se um sem tocar nos outros -- e sem apagar o que ja funciona, que e
   // como se experimenta um soldado novo.
-  const TROPAS = Object.assign({ lanceiro: "lanceiro.glb", arqueiro: "arqueiro.glb",
-                                 cavaleiro: "cavaleiro.glb" }, opcoes.tropas || {});
+  // (17/09) os soldados novos do ComfyUI passam a ser os do jogo
+  const TROPAS = Object.assign({ lanceiro: "lanceiro_novo.glb", arqueiro: "arqueiro_novo.glb",
+                                 cavaleiro: "cavaleiro_novo.glb" }, opcoes.tropas || {});
   for (const [tipo, ficheiro] of Object.entries(TROPAS)) {
     const ga = await new Promise((ok) =>
       new GLTFLoader().load(BASE + ficheiro, ok, undefined, () => ok(null)));
@@ -249,9 +250,16 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
     const lista = [];
     for (let i = 0; i < POCO_ANIM; i++) {
       const raiz = clonarComOssos(ga.scene);
+      // materiais PROPRIOS: a mesma figura do poco serve ora o Rei A ora o B,
+      // e a cor muda-se nela (ver `tingir`)
+      const mats = [];
       raiz.traverse((o) => {
         if (o.isMesh) { o.castShadow = true; o.receiveShadow = true;
-                        o.frustumCulled = false; }
+                        o.frustumCulled = false;
+                        if (o.material && o.material.color) {
+                          o.material = o.material.clone();
+                          mats.push([o.material, o.material.color.clone()]);
+                        } }
       });
       raiz.visible = false;
       const mix = new THREE.AnimationMixer(raiz);
@@ -262,7 +270,7 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
       act.time = (i * 0.37) % passo.duration;
       cena.add(raiz);
       // `dur` e `ant` servem para casar o passo com a velocidade (ver adiante)
-      lista.push({ raiz, mix, dur: passo.duration, ant: null, v: 0 });
+      lista.push({ raiz, mix, dur: passo.duration, ant: null, v: 0, mats, dono: "A" });
     }
     animados[tipo] = lista;
   }
@@ -589,6 +597,10 @@ transformed.y += onda * transformed.x * 0.05;`);
   // altura do ecra, portanto 0,085 da uma placa de ~150 px num 1080p
   const ESC_GRANDE = 0.030;
   const ESC_PEQUENA = 0.036;
+  // ── A PLACA DE TIPO E SO O NUMERO (17/09) ───────────────────────────────
+  // Tinha "18 archers": com as figuras animadas o tipo ja se ve nelas, e o nome
+  // triplicava a largura da placa. Fica o numero e a barra na cor do Rei.
+  const PLACA_TIPO_ASPETO = 1.5;
   function pxPorMetro(dist) {
     const h = rend.domElement.clientHeight || 720;
     return (h / (2 * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2))) / Math.max(dist, 1);
@@ -613,10 +625,8 @@ transformed.y += onda * transformed.x * 0.05;`);
   // surpresa.
   const N_FORMA = 12;
   const LARGURA_FORMA = 3;
-  const ORDEM_FORMA = ["lanceiro", "arqueiro", "cavaleiro"];
-  const NOME_EN = { lanceiro: ["spearman", "spearmen"],
-                    arqueiro: ["archer", "archers"],
-                    cavaleiro: ["knight", "knights"] };
+  // (17/09) a ordem aprovada na batalha de estrada: cavaleiro a frente, arqueiros atras
+  const ORDEM_FORMA = ["cavaleiro", "lanceiro", "arqueiro"];
 
   // `ordem` muda so quem vai a frente (a bancada da batalha poe o cavaleiro a
   // cabeca); a reparticao dos lugares e a mesma
@@ -818,13 +828,27 @@ transformed.y += onda * transformed.x * 0.05;`);
     return n;
   }
 
+  // ── A COR DO REI NA FIGURA ─────────────────────────────────────────────
+  // Os soldados novos vem todos de azul, que e o Rei A. O Rei B tinge a figura
+  // inteira de vermelho -- o mesmo tom da bancada da batalha (encontro.html).
+  const TINTA_B = new THREE.Color(0xe08070);
+  function tingir(s, dono) {
+    const quer = dono === "B" ? "B" : "A";
+    if (s.dono === quer) return;
+    s.dono = quer;
+    for (const [mat, orig] of s.mats) {
+      mat.color.copy(orig);
+      if (quer === "B") mat.color.multiply(TINTA_B);
+    }
+  }
+
   let dtQuadro = 16;
   function porTropas(t) {
     const conta = {};
     for (const tipo of Object.keys(tropaInst)) conta[tipo] = 0;
     const vivos = {};
     for (const tipo of Object.keys(animados)) vivos[tipo] = 0;
-    const meter = (tipo, via, metros, rumoExtra, lat, j) => {
+    const meter = (tipo, via, metros, rumoExtra, lat, j, dono) => {
       const lista = tropaInst[tipo];
       const carne = animados[tipo];
       const cheio = !carne || vivos[tipo] >= carne.length;
@@ -843,6 +867,7 @@ transformed.y += onda * transformed.x * 0.05;`);
       if (carne && vivos[tipo] < carne.length) {
         const s = carne[vivos[tipo]++];
         s.raiz.visible = true;
+        tingir(s, dono);
         s.raiz.position.copy(_p);
         // a peca olha para +Y no Blender (e para onde aponta a biqueira), e a
         // exportacao com Y para cima manda isso para -Z: um quarto de volta a
@@ -890,7 +915,7 @@ transformed.y += onda * transformed.x * 0.05;`);
           const nesta = Math.min(LARGURA_FORMA, bl.n - lin * LARGURA_FORMA);
           const atras = (fundo + lin * passo) * (via.inv ? -1 : 1);
           meter(bl.tipo, via, Math.max(0, Math.min(via.comp, cabeca - atras)),
-                rumoExtra, (col - (nesta - 1) / 2) * larg, k);
+                rumoExtra, (col - (nesta - 1) / 2) * larg, k, m.dono);
         }
         fundo += Math.ceil(bl.n / LARGURA_FORMA) * passo + 2.8;
       }
@@ -927,7 +952,6 @@ transformed.y += onda * transformed.x * 0.05;`);
         sp.scale.set(ESC_GRANDE, ESC_GRANDE, 1);
       }
       if (aberta && m.composicao) {
-        let piso = 0;
         for (const bl of blocosDe(via, bruto, m)) {
           if (nb >= estandartes.length) break;
           const quantos = m.composicao[bl.tipo] || 0;
@@ -937,19 +961,14 @@ transformed.y += onda * transformed.x * 0.05;`);
           sp.material.map = placaTipo(m.dono, bl.tipo, quantos);
           sp.material.opacity = 1;
           sp.material.needsUpdate = true;
-          // ── E EMPILHAM-SE NO ECRA, NAO NO MUNDO ─────────────────────────
-          // À distância da troca os blocos estão a dez metros uns dos outros e
-          // as etiquetas, que têm tamanho fixo no ecrã, caem uma em cima da
-          // outra. Afastá-las no MUNDO não resolve -- ao longe esse afastamento
-          // também encolhe. Mexe-se no `center` do sprite, que é em alturas da
-          // própria etiqueta: elas empilham-se sempre, esteja a câmara onde
-          // estiver, e cada uma continua por cima do seu bloco.
-          sp.center.set(0.5, -piso * 1.12);
-          piso++;
+          // ── TODAS A MESMA ALTURA (17/09) ────────────────────────────────
+          // Empilhavam-se uma acima da outra para os nomes nao se taparem. So
+          // com o numero a placa e estreita, e o Lucas quer-nas alinhadas.
+          sp.center.set(0.5, 0);
           noCaminho(via, bl.metros, _p);
           _p.y += ALT_FIGURA * 1.35;
           sp.position.copy(_p);
-          sp.scale.set(ESC_PEQUENA * 3.4, ESC_PEQUENA, 1);
+          sp.scale.set(ESC_PEQUENA * PLACA_TIPO_ASPETO, ESC_PEQUENA, 1);
         }
       }
     }
@@ -1076,12 +1095,12 @@ transformed.y += onda * transformed.x * 0.05;`);
     const chave = "T|" + rei + "|" + tipo + "|" + n;
     if (cacheBand.has(chave)) return cacheBand.get(chave);
     const c = document.createElement("canvas");
-    c.width = 340;
+    c.width = 150;
     c.height = 100;
     const g = c.getContext("2d");
     g.fillStyle = "rgba(12,9,5,.92)";
     g.beginPath();
-    g.roundRect(5, 5, 330, 90, 18);
+    g.roundRect(5, 5, 140, 90, 18);
     g.fill();
     g.lineWidth = 6;
     g.strokeStyle = corForte(rei);
@@ -1090,16 +1109,12 @@ transformed.y += onda * transformed.x * 0.05;`);
     g.beginPath();
     g.roundRect(20, 24, 16, 52, 8);
     g.fill();
-    const par = NOME_EN[tipo] || ["", ""];
+    const txt = String(n);
     g.textBaseline = "middle";
-    g.textAlign = "left";
+    g.textAlign = "center";
     g.fillStyle = "#fff6e4";
-    g.font = "800 52px system-ui, sans-serif";
-    g.fillText(String(n), 52, 52);
-    const larg = g.measureText(String(n)).width;
-    g.font = "600 40px system-ui, sans-serif";
-    g.fillStyle = "#e2d3ac";
-    g.fillText(n === 1 ? par[0] : par[1], 52 + larg + 14, 53);
+    g.font = "800 " + (txt.length > 3 ? 40 : txt.length > 2 ? 48 : 56) + "px system-ui, sans-serif";
+    g.fillText(txt, 90, 53);
     return _guardar(chave, c);
   }
 
@@ -1242,7 +1257,7 @@ transformed.y += onda * transformed.x * 0.05;`);
     // mostrar a MESMA coluna e as MESMAS placas que o mapa, e nao um desenho seu
     // que volte a discordar (17/09: voltou, com a coluna em fila e a placa antiga)
     formacao: { formacaoDe, passo: _PASSO, largura: _LARG, deFrente: LARGURA_FORMA,
-                folgaBlocos: 2.8, placaTipo, placaGrande, pxPorMetro,
+                folgaBlocos: 2.8, placaTipo, placaGrande, pxPorMetro, PLACA_TIPO_ASPETO,
                 ALT_FIGURA, ESCALA_TROPA, PX_PLACA_ABRE, ESC_PEQUENA, ESC_GRANDE },
     get diagnostico() {
       return { ligadoAoJogo, marchas: marchas.length, figurasAnimadas: nAnim,
