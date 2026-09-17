@@ -46,7 +46,13 @@ import { GLTFLoader } from "./vendor/loaders/GLTFLoader.js";
 import { clone as clonarComOssos } from "./vendor/utils/SkeletonUtils.js";
 import { mergeGeometries } from "./vendor/utils/BufferGeometryUtils.js";
 
-const mapa = await iniciar(document.getElementById("palco"));
+// ?mapa=bancada poe a batalha no mapa de teste (Lisboa e Santarem), que e onde
+// se confere tudo antes do mapa grande
+const NA_BANCADA = new URLSearchParams(location.search).get("mapa") === "bancada";
+const mapa = await iniciar(document.getElementById("palco"), NA_BANCADA
+  ? { cena: "bancada", tropas: { lanceiro: "lanceiro_novo.glb", arqueiro: "arqueiro_novo.glb",
+                                 cavaleiro: "cavaleiro_novo.glb" } }
+  : {});
 const { cena, cam, ctrl, MAPA } = mapa;
 Object.assign(window, { mapa, cena, cam, ctrl, MAPA, THREE });
 mapa.atualizar({ turno: 0, aldeias: [], marchas: [] });   // as tropas são estas
@@ -61,8 +67,15 @@ mapa.atualizar({ turno: 0, aldeias: [], marchas: [] });   // as tropas são esta
 // Os postos são repartidos por FRAÇÃO da estrada e não por metros, porque o
 // que tem de ser igual entre os dois lados é o TEMPO: dois exércitos à mesma
 // velocidade, um de cada ponta, hão de encontrar-se num posto e não entre dois.
-const via = MAPA.estradas.find((e) => (e.de === "madrid" && e.para === "toledo")
-                                   || (e.de === "toledo" && e.para === "madrid"));
+const via = NA_BANCADA ? MAPA.estradas[0]
+  : MAPA.estradas.find((e) => (e.de === "madrid" && e.para === "toledo")
+                           || (e.de === "toledo" && e.para === "madrid"));
+if (NA_BANCADA) {
+  const nomeDe = (slug) => (MAPA.aldeias[slug] && MAPA.aldeias[slug].nome) || slug;
+  const bs = document.querySelectorAll("#hud p:first-of-type b");
+  bs[0].textContent = nomeDe(via.de);
+  bs[1].textContent = nomeDe(via.para);
+}
 const pts = via.pts;
 const acum = [0];
 for (let i = 1; i < pts.length; i++)
