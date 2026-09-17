@@ -189,9 +189,9 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
   const raio = new THREE.Raycaster();
   const centroEcra = new THREE.Vector2(0, 0);
   function ancorarAlvo() {
-    if (!malhaChao) return;
+    if (!malhaChao.length) return;
     raio.setFromCamera(centroEcra, cam);
-    const bate = raio.intersectObject(malhaChao, false);
+    const bate = raio.intersectObjects(malhaChao, false);
     if (!bate.length) return;
     const p = bate[0].point;
     const d = cam.position.distanceTo(p);
@@ -279,7 +279,11 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
                                             : m.geometry.attributes.position.count) / 3;
 
   let nTri = 0, nInst = 0;
-  let malhaChao = null;
+  // ⚠ o chao sao VARIAS malhas: o glTF parte uma malha por material, e desde
+  // que o prado ganhou fotografia saem `chao_1` e `chao_2`. Guardava-se so a
+  // ultima (a pequena), e o raio falhava em quase todo o mapa: o lapis das
+  // marcas nao riscava e o pivo da camara nao ancorava (17/09).
+  const malhaChao = [];
   // ── AS TRES MALHAS QUE NAO SE INSTANCIAM ────────────────────────────────
   // Tudo o resto e uma peca repetida aos milhares; estas tres existem uma vez e
   // entram por nome. O `chao_aldeia` e o disco de terra batida dentro da
@@ -289,7 +293,7 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
   for (const nome of ["chao", "estradas", "chao_aldeia", "areia", "rocha_topo",
                       "campos", "cercas", "pedras"])
     for (const ch of (banco[nome] || [])) {
-      if (nome === "chao") malhaChao = ch;
+      if (nome === "chao") malhaChao.push(ch);
       ch.receiveShadow = true;
       ch.castShadow = false;
       // ── A OCLUSAO TAMBEM PINTA, E NAO SO ESCURECE O AMBIENTE ────────────
@@ -1295,12 +1299,12 @@ transformed.y += onda * transformed.x * 0.05;`);
     // do terreno, e se batesse na copa de uma arvore ficaria pendurada no ar
     // assim que a camara rodasse.
     mundoDoEcra(px, py) {
-      if (!malhaChao) return null;
+      if (!malhaChao.length) return null;
       const r = rend.domElement.getBoundingClientRect();
       const rc = new THREE.Raycaster();
       rc.setFromCamera(new THREE.Vector2(
         (px / r.width) * 2 - 1, -(py / r.height) * 2 + 1), cam);
-      const bate = rc.intersectObject(malhaChao, false);
+      const bate = rc.intersectObjects(malhaChao, false);
       return bate.length ? bate[0].point.clone() : null;
     },
     ecraDoMundo(v) {
