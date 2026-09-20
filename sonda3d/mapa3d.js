@@ -278,6 +278,138 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
   const contaTri = (m) => (m.geometry.index ? m.geometry.index.count
                                             : m.geometry.attributes.position.count) / 3;
 
+  // ── A TEXTURA DEIXA DE SE REPETIR (20/09) ───────────────────────────────
+  // O chao e a rocha eram UMA fotografia em ladrilho: a 2,8 km de mapa, o mesmo
+  // desenho repetia-se centenas de vezes e via-se a grelha -- "milhoes de
+  // quadrados iguais", nas palavras do Lucas. Isto nao se resolve com uma
+  // fotografia melhor; resolve-se em COMO ela e lida.
+  //
+  // Duas coisas, as duas no shader (nao no forno -- o glTF nao leva grafos de
+  // nos, mas o material chega ca e o three deixa-nos mexer-lhe):
+  //
+  //   1. LADRILHO POR HEXAGONOS. Em vez de uma leitura, tres -- cada uma com um
+  //      deslocamento ao acaso, sorteado pelo hexagono em que o ponto cai -- e
+  //      mistura-se pelas distancias aos tres cantos. O ladrilho deixa de ter
+  //      compasso: e a mesma fotografia, mas nunca no mesmo sitio.
+  //      (Heitz & Neyret; aqui na versao curta, de tres amostras.)
+  //   2. MANCHAS GRANDES. Um ruido lento em METROS do mundo, a clarear e a
+  //      escurecer por zonas de centenas de metros -- rocha que apanha sol,
+  //      rocha de sombra, erva mais seca. E o que tira o ar de chapa uniforme
+  //      quando se olha de cima.
+  //
+  // ⚠ As amostras levam a DERIVADA do uv original (`texture2DGradEXT`). Sem
+  // isso, cada hexagono escolhe o seu nivel de mipmap e as fronteiras aparecem
+  // como linhas desfocadas.
+  const GLSL_SL = `
+uniform float slCelula;      // tamanho do hexagono, em ladrilhos
+uniform float slMacro;       // forca das manchas grandes
+uniform float slMacroM;      // tamanho das manchas, em metros
+varying vec3 vMundoSL;
+#ifdef texture2DGradEXT
+  #define SL_AMOSTRA(t, uv, dx, dy) texture2DGradEXT(t, uv, dx, dy)
+#else
+  #define SL_AMOSTRA(t, uv, dx, dy) texture2D(t, uv)
+#endif
+vec2 slHash(vec2 p) {
+  p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+  return fract(sin(p) * 43758.5453);
+}
+float slRuido(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = slHash(i).x, b = slHash(i + vec2(1.0, 0.0)).x;
+  float c = slHash(i + vec2(0.0, 1.0)).x, d = slHash(i + vec2(1.0, 1.0)).x;
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+vec4 slLer(sampler2D tex, vec2 uv) {
+  vec2 s = vec2(uv.x * slCelula + uv.y * slCelula * 0.5, uv.y * slCelula * 1.1547005);
+  vec2 base = floor(s);
+  vec3 t = vec3(fract(s), 0.0);
+  t.z = 1.0 - t.x - t.y;
+  vec3 w; vec2 v1, v2, v3;
+  if (t.z > 0.0) {
+    w = vec3(t.z, t.y, t.x);
+    v1 = base; v2 = base + vec2(0.0, 1.0); v3 = base + vec2(1.0, 0.0);
+  } else {
+    w = vec3(-t.z, 1.0 - t.y, 1.0 - t.x);
+    v1 = base + vec2(1.0, 1.0); v2 = base + vec2(1.0, 0.0); v3 = base + vec2(0.0, 1.0);
+  }
+  // pesos ao cubo: a mistura fica curta e nao borra a fotografia no meio
+  w = w * w * w;
+  w /= (w.x + w.y + w.z);
+  vec2 dx = dFdx(uv), dy = dFdy(uv);
+  return SL_AMOSTRA(tex, uv + slHash(v1), dx, dy) * w.x
+       + SL_AMOSTRA(tex, uv + slHash(v2), dx, dy) * w.y
+       + SL_AMOSTRA(tex, uv + slHash(v3), dx, dy) * w.z;
+}
+float slManchas() {
+  vec2 q = vMundoSL.xz / slMacroM;
+  return slRuido(q) * 0.62 + slRuido(q * 2.7 + 11.3) * 0.38;
+}
+`;
+
+  function semLadrilho(mat, { celula = 0.55, macro = 0.20, macroM = 260.0 } = {}) {
+    if (!mat || mat.userData.semLadrilho) return mat;
+    mat.userData.semLadrilho = true;
+    const antes = mat.onBeforeCompile;
+    mat.onBeforeCompile = (sh, rend) => {
+      if (antes) antes(sh, rend);
+      sh.uniforms.slCelula = { value: celula };
+      sh.uniforms.slMacro = { value: macro };
+      sh.uniforms.slMacroM = { value: macroM };
+      // guardados para se poderem AFINAR ao vivo (ver `afinarLadrilho`): sem
+      // isto, cada tentativa custava um recarregamento da pagina
+      mat.userData.sl = sh.uniforms;
+      sh.vertexShader = "varying vec3 vMundoSL;\n" + sh.vertexShader.replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
+  vMundoSL = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
+      // ⚠ NO `onBeforeCompile` OS PEDACOS AINDA NAO ESTAO ABERTOS: o shader
+      // tem `#include <map_fragment>`, e nao o `texture2D( map, ... )` que esta
+      // la dentro. Trocar pelo texto do texture2D nao apanhava nada -- so as
+      // manchas entravam, e a repeticao ficava igual (medido em 20/09). Abre-se
+      // o pedaco a mao (THREE.ShaderChunk), troca-se dentro, e substitui-se.
+      const abrir = (nome, de, para) => {
+        const txt = THREE.ShaderChunk[nome];
+        if (!txt) return;
+        sh.fragmentShader = sh.fragmentShader.replace(
+          "#include <" + nome + ">", txt.split(de).join(para));
+      };
+      abrir("map_fragment", "texture2D( map, vMapUv )", "slLer( map, vMapUv )");
+      abrir("normal_fragment_maps", "texture2D( normalMap, vNormalMapUv )",
+            "slLer( normalMap, vNormalMapUv )");
+      abrir("roughnessmap_fragment", "texture2D( roughnessMap, vRoughnessMapUv )",
+            "slLer( roughnessMap, vRoughnessMapUv )");
+      sh.fragmentShader = GLSL_SL + sh.fragmentShader
+        .replace("#include <color_fragment>", `#include <color_fragment>
+  {
+    float m = slManchas();
+    // a mancha clareia e escurece, e de caminho aquece o claro e arrefece o
+    // escuro: duas rochas diferentes leem-se melhor do que a mesma com brilhos
+    vec3 tom = vec3(1.0 + 0.05 * (m - 0.5), 1.0, 1.0 - 0.05 * (m - 0.5));
+    diffuseColor.rgb *= (1.0 + slMacro * (m - 0.5) * 2.0) * tom;
+  }`);
+    };
+    mat.needsUpdate = true;
+    matsSL.push(mat);
+    return mat;
+  }
+  const matsSL = [];
+  // afina os tres numeros em todos os materiais de uma vez, sem recarregar
+  function afinarLadrilho(vals = {}) {
+    for (const m of matsSL) {
+      const u = m.userData.sl;
+      if (!u) continue;
+      if (vals.celula !== undefined) u.slCelula.value = vals.celula;
+      if (vals.macro !== undefined) u.slMacro.value = vals.macro;
+      if (vals.macroM !== undefined) u.slMacroM.value = vals.macroM;
+    }
+    return matsSL.map((m) => m.name + ": " + JSON.stringify({
+      celula: m.userData.sl && m.userData.sl.slCelula.value,
+      macro: m.userData.sl && m.userData.sl.slMacro.value,
+      macroM: m.userData.sl && m.userData.sl.slMacroM.value }));
+  }
+
   let nTri = 0, nInst = 0;
   // ⚠ o chao sao VARIAS malhas: o glTF parte uma malha por material, e desde
   // que o prado ganhou fotografia saem `chao_1` e `chao_2`. Guardava-se so a
@@ -316,7 +448,11 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
         };
         ch.material.needsUpdate = true;
       }
+      // a rocha e o prado sao os que mais se repetem: um ladrilho de 13 m numa
+      // falesia de 2 km lia-se como papel de parede
+      if (nome === "chao") semLadrilho(ch.material);
       if (nome === "areia") {
+        semLadrilho(ch.material, { celula: 0.5, macro: 0.12, macroM: 120.0 });
         // um desvio pequeno: chega para vencer a relva onde ela sobe mais
         // que os 20 cm, e fica abaixo do da estrada
         ch.material.polygonOffset = true;
@@ -1257,6 +1393,7 @@ transformed.y += onda * transformed.x * 0.05;`);
     // glTF nem a montagem da cena -- a mesma luz, o mesmo chao, as mesmas
     // pecas, que e a unica maneira de uma comparacao valer alguma coisa.
     get banco() { return banco; },
+    afinarLadrilho,
     // A FORMACAO E AS PLACAS, para as bancadas: a batalha de estrada tem de
     // mostrar a MESMA coluna e as MESMAS placas que o mapa, e nao um desenho seu
     // que volte a discordar (17/09: voltou, com a coluna em fila e a placa antiga)
