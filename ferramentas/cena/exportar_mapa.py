@@ -1204,6 +1204,7 @@ def encostar(vi, vj):
 verts, faces = [], []
 cor_rocha = {}            # tom da rocha por vertice (margem e, na bancada, encostas)
 saia = []                 # as faces da margem, que sao rocha e nao prado
+encostas = []             # as faces ingremes das montanhas: pedra de montanha
 uvs_face = {}             # UV por FACE: a margem partilha vertices na esquina
 beiras = []               # (canto A, canto B, di, dj) de cada troco de costa
 indice = {}
@@ -1236,7 +1237,7 @@ for j in range(th):
             _sy = ((_q[3][2] - _q[0][2]) + (_q[2][2] - _q[1][2])) / (2 * py)
             _decl = math.hypot(_sx, _sy)
             if _decl > _limiar_rocha[j, i]:        # ~34 graus, a variar
-                saia.append(len(faces) - 1)
+                encostas.append(len(faces) - 1)
                 _eixo_u = abs(_sx) < abs(_sy)
                 uvs_face[len(faces) - 1] = dict(
                     (k, ((verts[k][0] if _eixo_u else verts[k][1]) * 0.8,
@@ -1452,8 +1453,16 @@ chao.data.materials.append(
 # costa e um tapete recortado.
 chao.data.materials.append(
     P.material_uv("falesia", rugosidade=0.96, cor_vertice=True))
+# ── E AS MONTANHAS TEM PEDRA PROPRIA ────────────────────────────────────────
+# A ranhura 1 e a falesia da COSTA (estratos, ladrilho de 13 m); a 2 e a pedra
+# de montanha, com ladrilho de 3,7 m. Sao paredes diferentes e leem-se
+# diferente -- foi a decisao do Lucas em 20/09.
+chao.data.materials.append(
+    P.material_uv("rocha_monte", rugosidade=0.94, cor_vertice=True))
 for _f in saia:
     chao.data.polygons[_f].material_index = 1
+for _f in encostas:
+    chao.data.polygons[_f].material_index = 2
 # ── O CHAO E SUAVE (17/09) ──────────────────────────────────────────────────
 # Saia facetado: cada quadrado de 5 m partido em dois triangulos de sombra
 # plana. No plano nao se nota; numa encosta faz um XADREZ de losangos claros e

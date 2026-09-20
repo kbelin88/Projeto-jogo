@@ -47,6 +47,7 @@ COR = {
     "colmo2":     (0.205, 0.132, 0.048, 1),
     "pedra":      (0.185, 0.172, 0.150, 1),
     "falesia":    (0.120, 0.115, 0.104, 1),
+    "rocha_monte": (0.120, 0.115, 0.104, 1),
     "areia":      (0.420, 0.345, 0.215, 1),
     "prado":      (0.115, 0.170, 0.055, 1),   # o chao do mapa (11/09)   # praias (11/09): a coisa clara da costa
     "folha":      (0.036, 0.076, 0.020, 1),
@@ -193,6 +194,13 @@ FICHEIRO = {
     # um ladrilho de 3 m repete vinte vezes e le-se como papel de parede.
     # A 9 m os estratos tem tamanho de estratos.
     "falesia":    ("falesia", 13.0, 1.0),
+    # ── A PEDRA DAS MONTANHAS (20/09) ────────────────────────────────────
+    # A MESMA fotografia da falesia, com o ladrilho 3,5x menor. O defeito dos
+    # "quadrados todos iguais" era o TAMANHO, e nao a fotografia: a 13 m os
+    # estratos tem a altura de uma casa e leem-se como tijolos; a 3,7 m leem-se
+    # como rocha. Provado lado a lado com uma pedra de fora (`aerial_rocks_02`),
+    # que ao pe desta sai bege e sem relevo -- escolha do Lucas, 20/09.
+    "rocha_monte": ("falesia", 3.7, 1.0),
     # sem a pasta, `material_uv` cai na cor chapada de COR["areia"]
     "areia":      ("areia", 3.0, 0.4),
     # o mesmo ladrilho da relva, mas em 7 m: o chao tem 2,8 km e a
