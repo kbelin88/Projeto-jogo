@@ -1204,7 +1204,7 @@ def encostar(vi, vj):
 verts, faces = [], []
 cor_rocha = {}            # tom da rocha por vertice (margem e, na bancada, encostas)
 saia = []                 # as faces da margem, que sao rocha e nao prado
-encostas = []             # as faces ingremes das montanhas: pedra de montanha
+encostas = []           # (sem uso desde 21/09: a rocha e decidida no pixel)
 uvs_face = {}             # UV por FACE: a margem partilha vertices na esquina
 beiras = []               # (canto A, canto B, di, dj) de cada troco de costa
 indice = {}
@@ -1228,25 +1228,11 @@ for j in range(th):
             continue
         faces.append(tuple(_canto(i + di, j + dj)
                            for di, dj in ((0, 0), (1, 0), (1, 1), (0, 1))))
-        # ── A ENCOSTA INGREME E ROCHA (so na bancada das montanhas) ─────────
-        # Acima de ~34 graus a relva nao se agarra: a face vai para a ranhura
-        # da falesia, com a fotografia projetada ao longo do declive.
-        if MONTANHAS and _h_montes[j, i] > 12.0:
-            _q = [verts[k] for k in faces[-1]]
-            _sx = ((_q[1][2] - _q[0][2]) + (_q[2][2] - _q[3][2])) / (2 * px)
-            _sy = ((_q[3][2] - _q[0][2]) + (_q[2][2] - _q[1][2])) / (2 * py)
-            _decl = math.hypot(_sx, _sy)
-            if _decl > _limiar_rocha[j, i]:        # ~34 graus, a variar
-                encostas.append(len(faces) - 1)
-                _eixo_u = abs(_sx) < abs(_sy)
-                uvs_face[len(faces) - 1] = dict(
-                    (k, ((verts[k][0] if _eixo_u else verts[k][1]) * 0.8,
-                         verts[k][2] * 0.8 + 0.3 * (verts[k][1] if _eixo_u else verts[k][0])))
-                    for k in faces[-1])
-                for k in faces[-1]:
-                    # mais claro no alto, como pedra seca ao sol
-                    t = max(0.0, min(1.0, verts[k][2] / 260.0))
-                    cor_rocha[k] = (0.78 + 0.32 * t, 0.76 + 0.30 * t, 0.74 + 0.30 * t)
+        # ── A ENCOSTA INGREME JA NAO E MARCADA AQUI (21/09) ────────────────
+        # Marcava-se a face inteira como rocha acima de ~34 graus, e a beira
+        # saia aos degraus de 5 m -- o "recortado". Agora a mistura relva/rocha
+        # e feita NO PIXEL, no navegador (`mapa3d.js`, slRocha), pelo declive e
+        # com ruido na fronteira. O chao volta a ter uma ranhura so.
         # ── A MARGEM ────────────────────────────────────────────────────────
         # Sem isto a ilha e uma FOLHA: a terra e o mar encontram-se no mesmo
         # plano e a costa nao se le como costa, le-se como uma mudanca de cor.
@@ -1453,16 +1439,8 @@ chao.data.materials.append(
 # costa e um tapete recortado.
 chao.data.materials.append(
     P.material_uv("falesia", rugosidade=0.96, cor_vertice=True))
-# ── E AS MONTANHAS TEM PEDRA PROPRIA ────────────────────────────────────────
-# A ranhura 1 e a falesia da COSTA (estratos, ladrilho de 13 m); a 2 e a pedra
-# de montanha, com ladrilho de 3,7 m. Sao paredes diferentes e leem-se
-# diferente -- foi a decisao do Lucas em 20/09.
-chao.data.materials.append(
-    P.material_uv("rocha_monte", rugosidade=0.94, cor_vertice=True))
 for _f in saia:
     chao.data.polygons[_f].material_index = 1
-for _f in encostas:
-    chao.data.polygons[_f].material_index = 2
 # ── O CHAO E SUAVE (17/09) ──────────────────────────────────────────────────
 # Saia facetado: cada quadrado de 5 m partido em dois triangulos de sombra
 # plana. No plano nao se nota; numa encosta faz um XADREZ de losangos claros e

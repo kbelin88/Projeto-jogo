@@ -304,7 +304,14 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
 uniform float slCelula;      // tamanho do hexagono, em ladrilhos
 uniform float slMacro;       // forca das manchas grandes
 uniform float slMacroM;      // tamanho das manchas, em metros
+uniform sampler2D slTexRocha;   // a fotografia da pedra (a da falesia)
+uniform float slEscalaRocha;    // ladrilhos por metro da pedra
+uniform float slLimiar;         // declive a que comeca a rocha (0 = plano)
+uniform float slBorda;          // largura da passagem relva -> rocha
+uniform float slRuidoBorda;     // quanto o ruido desmancha a linha
+uniform float slForcaRocha;     // 0 = so relva (para comparar), 1 = normal
 varying vec3 vMundoSL;
+varying vec3 vNorSL;
 #ifdef texture2DGradEXT
   #define SL_AMOSTRA(t, uv, dx, dy) texture2DGradEXT(t, uv, dx, dy)
 #else
@@ -346,9 +353,40 @@ float slManchas() {
   vec2 q = vMundoSL.xz / slMacroM;
   return slRuido(q) * 0.62 + slRuido(q * 2.7 + 11.3) * 0.38;
 }
+// ── A ROCHA E LIDA PELOS TRES EIXOS (21/09) ─────────────────────────────────
+// A fotografia era projetada DE CIMA (o uv vem de x,y do mundo). Numa parede a
+// pique isso estica a imagem ao longo da queda -- e o ar de plastico escorrido
+// dos penhascos. Aqui le-se pelos tres planos e mistura-se pela normal: a
+// parede recebe a projecao que lhe fica de frente, e nada estica.
+vec3 slTriplanar(sampler2D tex, float escala) {
+  vec3 p = vMundoSL * escala;
+  vec3 n = abs(normalize(vNorSL));
+  n = pow(n, vec3(4.0));                 // 4: a mistura fica curta, sem borrao
+  n /= max(n.x + n.y + n.z, 1e-4);
+  vec3 c = vec3(0.0);
+  if (n.x > 0.02) c += slLer(tex, vec2(p.z, p.y)).rgb * n.x;
+  if (n.y > 0.02) c += slLer(tex, vec2(p.x, p.z)).rgb * n.y;
+  if (n.z > 0.02) c += slLer(tex, vec2(p.x, p.y)).rgb * n.z;
+  return c;
+}
+// ── E A FRONTEIRA E NO PIXEL, NAO NA FACE ───────────────────────────────────
+// Antes, cada quadrado de 5 m era TODO relva ou TODO rocha -- e a beira saia
+// aos degraus, que e o "recortado" de que o Lucas se queixa. Aqui cada ponto
+// decide sozinho, pelo declive, com um ruido a desmanchar a linha: a fronteira
+// deixa de ter a forma da grelha.
+// devolve 1 onde e rocha
+float slRocha() {
+  float decl = 1.0 - clamp(abs(normalize(vNorSL).y), 0.0, 1.0);   // 0 = plano
+  float n = slRuido(vMundoSL.xz / 26.0) * 0.6 + slRuido(vMundoSL.xz / 7.0) * 0.4;
+  return smoothstep(slLimiar - slBorda, slLimiar + slBorda, decl + (n - 0.5) * slRuidoBorda);
+}
 `;
 
-  function semLadrilho(mat, { celula = 0.55, macro = 0.20, macroM = 260.0 } = {}) {
+  // `texRocha` e a fotografia da pedra e `forcaRocha` liga a mistura por declive
+  // (0 nas areias e nos caminhos, que nao tem penhasco nenhum)
+  function semLadrilho(mat, { celula = 0.55, macro = 0.20, macroM = 260.0,
+                              texRocha = null, escalaRocha = 0.27, limiar = 0.20,
+                              borda = 0.10, ruidoBorda = 0.55, forcaRocha = 0.0 } = {}) {
     if (!mat || mat.userData.semLadrilho) return mat;
     mat.userData.semLadrilho = true;
     const antes = mat.onBeforeCompile;
@@ -357,13 +395,21 @@ float slManchas() {
       sh.uniforms.slCelula = { value: celula };
       sh.uniforms.slMacro = { value: macro };
       sh.uniforms.slMacroM = { value: macroM };
+      sh.uniforms.slTexRocha = { value: texRocha };
+      sh.uniforms.slEscalaRocha = { value: escalaRocha };
+      sh.uniforms.slLimiar = { value: limiar };
+      sh.uniforms.slBorda = { value: borda };
+      sh.uniforms.slRuidoBorda = { value: ruidoBorda };
+      sh.uniforms.slForcaRocha = { value: forcaRocha };
       // guardados para se poderem AFINAR ao vivo (ver `afinarLadrilho`): sem
       // isto, cada tentativa custava um recarregamento da pagina
       mat.userData.sl = sh.uniforms;
-      sh.vertexShader = "varying vec3 vMundoSL;\n" + sh.vertexShader.replace(
-        "#include <begin_vertex>",
-        `#include <begin_vertex>
-  vMundoSL = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
+      sh.vertexShader = "varying vec3 vMundoSL;\nvarying vec3 vNorSL;\n"
+        + sh.vertexShader
+          .replace("#include <begin_vertex>", `#include <begin_vertex>
+  vMundoSL = (modelMatrix * vec4(transformed, 1.0)).xyz;`)
+          .replace("#include <beginnormal_vertex>", `#include <beginnormal_vertex>
+  vNorSL = normalize(mat3(modelMatrix) * objectNormal);`);
       // ⚠ NO `onBeforeCompile` OS PEDACOS AINDA NAO ESTAO ABERTOS: o shader
       // tem `#include <map_fragment>`, e nao o `texture2D( map, ... )` que esta
       // la dentro. Trocar pelo texto do texture2D nao apanhava nada -- so as
@@ -382,6 +428,27 @@ float slManchas() {
             "slLer( roughnessMap, vRoughnessMapUv )");
       sh.fragmentShader = GLSL_SL + sh.fragmentShader
         .replace("#include <color_fragment>", `#include <color_fragment>
+  // ── A ROCHA ENTRA AQUI, E NAO NO MAPA ─────────────────────────────────
+  // Depois da cor de vertice, de proposito: a cor de vertice do chao e o
+  // verde da regiao (seco/humido), e multiplicada pela pedra pintava a
+  // rocha de verde. Assim a relva leva a cor da regiao e a rocha nao.
+  if (slForcaRocha > 0.0) {
+    float t = slRocha() * slForcaRocha;
+    if (t > 0.002) {
+      vec3 pedra = slTriplanar(slTexRocha, slEscalaRocha);
+      // a pedra nao e toda do mesmo tom: mais clara no alto e ao sol.
+      // ⚠ as tres leituras do hexagono e as tres do triplanar sao MEDIAS: a
+      // fotografia chega ca com menos contraste do que tem. Devolve-se-lho.
+      float alto = clamp(vMundoSL.y / 160.0, 0.0, 1.0);
+      // ⚠ AQUI A COR JA ESTA EM LUZ LINEAR, nao em sRGB: dar contraste a volta
+      // de 0,5 (o cinzento do meio em sRGB) esmaga tudo e a pedra sai QUEIMADA,
+      // vermelha escura -- foi o que aconteceu a primeira vez (21/09). O meio,
+      // em luz linear, anda pelos 0,16.
+      pedra = max(vec3(0.0), (pedra - 0.16) * 1.15 + 0.16);
+      pedra *= vec3(1.04 + 0.22 * alto);
+      diffuseColor.rgb = mix(diffuseColor.rgb, pedra, t);
+    }
+  }
   {
     float m = slManchas();
     // a mancha clareia e escurece, e de caminho aquece o claro e arrefece o
@@ -403,6 +470,11 @@ float slManchas() {
       if (vals.celula !== undefined) u.slCelula.value = vals.celula;
       if (vals.macro !== undefined) u.slMacro.value = vals.macro;
       if (vals.macroM !== undefined) u.slMacroM.value = vals.macroM;
+      if (vals.escalaRocha !== undefined && u.slEscalaRocha) u.slEscalaRocha.value = vals.escalaRocha;
+      if (vals.limiar !== undefined && u.slLimiar) u.slLimiar.value = vals.limiar;
+      if (vals.borda !== undefined && u.slBorda) u.slBorda.value = vals.borda;
+      if (vals.ruidoBorda !== undefined && u.slRuidoBorda) u.slRuidoBorda.value = vals.ruidoBorda;
+      if (vals.forcaRocha !== undefined && u.slForcaRocha) u.slForcaRocha.value = vals.forcaRocha;
     }
     return matsSL.map((m) => m.name + ": " + JSON.stringify({
       celula: m.userData.sl && m.userData.sl.slCelula.value,
@@ -416,6 +488,7 @@ float slManchas() {
   // ultima (a pequena), e o raio falhava em quase todo o mapa: o lapis das
   // marcas nao riscava e o pivo da camara nao ancorava (17/09).
   const malhaChao = [];
+  const porTratar = [];      // as malhas do chao, tratadas em conjunto no fim
   // ── AS TRES MALHAS QUE NAO SE INSTANCIAM ────────────────────────────────
   // Tudo o resto e uma peca repetida aos milhares; estas tres existem uma vez e
   // entram por nome. O `chao_aldeia` e o disco de terra batida dentro da
@@ -450,7 +523,7 @@ float slManchas() {
       }
       // a rocha e o prado sao os que mais se repetem: um ladrilho de 13 m numa
       // falesia de 2 km lia-se como papel de parede
-      if (nome === "chao") semLadrilho(ch.material);
+      if (nome === "chao") porTratar.push(ch);
       if (nome === "areia") {
         semLadrilho(ch.material, { celula: 0.5, macro: 0.12, macroM: 120.0 });
         // um desvio pequeno: chega para vencer a relva onde ela sobe mais
@@ -475,6 +548,25 @@ float slManchas() {
       cena.add(ch);
       nTri += contaTri(ch);
     }
+
+  // ── O CHAO TRATA-SE NO FIM ──────────────────────────────────────────────
+  // Porque a relva precisa da fotografia da PEDRA (e a pedra da relva) e so
+  // aqui se sabe que malhas do chao existem: o glTF parte-o por material.
+  {
+    const rocha = porTratar.find((m) => /falesia|rocha/i.test(m.material.name));
+    const texRocha = rocha ? rocha.material.map : null;
+    for (const ch of porTratar) {
+      const eRocha = ch === rocha;
+      semLadrilho(ch.material, {
+        texRocha,
+        // 3,7 m de ladrilho na encosta: o tamanho que o Lucas escolheu em 20/09
+        escalaRocha: 1 / 3.7,
+        // as paredes da COSTA ja sao rocha inteira e tem o seu proprio UV
+        // torcido: nelas a mistura por declive nao tem nada que decidir
+        forcaRocha: eRocha ? 0.0 : 1.0,
+      });
+    }
+  }
 
   const quantas = {};
   const soma = (n) => { quantas[n] = (quantas[n] || 0) + 1; };
