@@ -638,7 +638,6 @@
 </style>
 </head>
 <body>
-<canvas id="map"></canvas>
 
 
 <div id="barraMarcas">
@@ -917,46 +916,17 @@
   };
   const lerp = (a, b, t) => a + (b - a) * t;
 
-  // ---------- Configuração de render ----------
-  const TILE = 32;          // pixels de mundo por coordenada
-  let MIN_SCALE = 0.55;     // zoom máximo afastado (folga p/ ver todo o teatro)
-  // ZOOM (07/09): subiu de 4.0 para 9.0. E aqui que esta a sensacao de tamanho
-  // que o Lucas pediu — na vista de mapa inteiro uma aldeia nao pode crescer
-  // muito (ver `largCels` abaixo), mas aproximar passou a ir ao dobro. As pecas
-  // aguentam: a ilha e 2430 px e um sprite de aldeia tem uns 700.
-  const MAX_SCALE = 9.0;    // zoom máximo aproximado (vilas detalhadas)
-
-  // ---------- Canvas ----------
-  const canvas = document.getElementById("map");
-  const ctx = canvas.getContext("2d");
-  let DPR = Math.min(window.devicePixelRatio || 1, 2);
-  let VW = 0, VH = 0;
-
-  function resize() {
-    DPR = Math.min(window.devicePixelRatio || 1, 2);
-    VW = window.innerWidth; VH = window.innerHeight;
-    canvas.width = Math.floor(VW * DPR);
-    canvas.height = Math.floor(VH * DPR);
-    canvas.style.width = VW + "px";
-    canvas.style.height = VH + "px";
-    draw();
-  }
-  window.addEventListener("resize", resize);
-
-  // ---------- Câmera ----------
-  // ===== PELE v4 =========================================================
-  // Ligada por ?aldeia=v4 no endereco. Sem o parametro o jogo corre como sempre.
-  // A DECLARACAO VIVE AQUI, NO TOPO, e nao junto do codigo que a usa mais: a
-  // ilha e carregada por volta da linha 1040 e o `const` so existe a partir da
-  // linha onde e declarado — declarada la em baixo, o jogo estourava com
-  // "Cannot access 'ALDEIA_V4' before initialization" e a tela ficava marrom.
-  const ALDEIA_V4 = (typeof location !== "undefined" &&
-                     /(\?|&)aldeia=v4(&|$)/.test(location.search));
-
-  // worldX -> screenX:  sx = wx * scale + panX
-  let scale = 1.6;
-  let panX = 0, panY = 0;
-
+  // ── O CANVAS E A CAMARA PLANA SAIRAM (22/09) ───────────────────────────
+  // Viviam aqui o `<canvas id="map">`, o seu contexto 2D, o `scale`, o `panX`,
+  // o `panY`, o `TILE`, os limites de zoom, o `SX`/`SY` e o `resize` que
+  // dimensionava tudo isso. Era a camara do desenhador apagado: ninguem a
+  // mexia (o arrasto e o zoom sao da camara 3D desde 11/09) e ninguem pintava
+  // no que ela media.
+  //
+  // O ultimo a precisar dela era o caderno de marcas, que tinha um caminho 2D
+  // de reserva em cada funcao. Um caminho de reserva que nunca corre e um
+  // caminho que nao se sabe se funciona -- e este nem funcionava: media com uma
+  // camara parada no sitio onde a pagina abriu.
 
   // ---------- MAPA DA IBERIA (mapa autoral) ----------
   // As cidades vem em px do viewBox do world-iberia ('130 144 1429 886'), nao
@@ -1087,82 +1057,11 @@
   // (terreno, ruido, lagos, cellData, TRIBES, villageName e lerp agora vivem
   //  em world.js — desestruturados no topo. Nada de geracao de terreno aqui.)
 
-  // ---------- Helpers de desenho ----------
+  // ── OS TILES PROCEDURAIS SAIRAM (22/09) ────────────────────────────────
+  // Arvore, pinheiro e montanha desenhados a mao em circulos e poligonos, mais
+  // os quatro ajudantes de primitiva que escreviam no contexto 2D. Eram o
+  // fallback de quando ainda nao havia sprites -- duas gerações de mapa atras.
 
-
-
-  // ---------- Tiles de terreno (árvore, pinheiro, montanha) ----------
-  // Shapes/cores EXATAMENTE como fornecidos no SVG (viewBox 0..160), porém
-  // desenhados direto no canvas — sem depender de carregamento de imagem.
-  const VB = 160;            // espaço de coordenadas dos tiles
-  const ANCHOR_X = 80;       // âncora de chão (onde o tile "toca" o solo)
-  const ANCHOR_Y = 124;
-
-  // helpers de primitiva (coords locais 0..160)
-  function _circle(cx, cy, r, fill, a) {
-    ctx.globalAlpha = a == null ? 1 : a;
-    ctx.fillStyle = fill;
-    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
-    ctx.globalAlpha = 1;
-  }
-  function _ellipse(cx, cy, rx, ry, fill, a) {
-    ctx.globalAlpha = a == null ? 1 : a;
-    ctx.fillStyle = fill;
-    ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.globalAlpha = 1;
-  }
-  function _rect(x, y, w, h, fill) { ctx.fillStyle = fill; ctx.fillRect(x, y, w, h); }
-  function _poly(pts, fill) {
-    ctx.fillStyle = fill;
-    ctx.beginPath(); ctx.moveTo(pts[0], pts[1]);
-    for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1]);
-    ctx.closePath(); ctx.fill();
-  }
-
-  const tileShapes = {
-    arvore() {
-      _ellipse(80, 120, 34, 10, "#4f7a30", 0.4);
-      _rect(74, 92, 12, 32, "#6b4a2b");
-      _circle(80, 78, 40, "#3f6b25");
-      _circle(58, 86, 26, "#4a7d2c");
-      _circle(102, 86, 26, "#4a7d2c");
-      _circle(80, 62, 30, "#558a33");
-      _circle(68, 74, 16, "#66a03d", 0.7);
-    },
-    pinheiro() {
-      _ellipse(80, 124, 26, 9, "#4f7a30", 0.4);
-      _rect(76, 96, 8, 30, "#5c4326");
-      _poly([80, 40, 108, 98, 52, 98], "#2f5a22");
-      _poly([80, 54, 102, 104, 58, 104], "#3a6b29");
-      _poly([80, 68, 98, 110, 62, 110], "#467e31");
-    },
-    montanha() {
-      _ellipse(80, 126, 50, 12, "#5a4d3a", 0.35);
-      _poly([80, 46, 132, 124, 28, 124], "#8a7a63");
-      _poly([80, 46, 106, 124, 54, 124], "#9c8c73");
-      _poly([80, 46, 96, 80, 64, 80], "#e8e4dc");
-      _poly([80, 46, 90, 72, 70, 72], "#ffffff");
-      _poly([116, 108, 132, 124, 100, 124], "#73654f");
-    },
-  };
-
-  // Desenha um tile com âncora de chão em (gx,gy), tamanho 'size' (px), rotação em rad
-  // ── O KIT DE SPRITES SAIU (22/09) ──────────────────────────────────────
-  // Onze imagens de assets/sprites (bosque, serra, castelo, torre, leito...)
-  // mais os dois brasoes, carregadas a cada abertura da pagina para um
-  // desenhador que foi apagado. O que as usava — `spriteAldeia`,
-  // `drawVillage`, `desenharEstradasV4` — ja nao existe.
-  //
-  // As pecas do mapa de hoje sao 3D e vem do forno (`pecas.glb`); os brasoes
-  // que aparecem no placar sao <image> no SVG do HTML, nao estes <img>.
-
-  // ---------- Render principal ----------
-  // ===== PINTURA DE TERRITORIO: area de influencia de cada rei =====
-  // Cada aldeia com dono tinge os tiles ao redor (raio em tiles); o dono
-  // mais proximo vence. Recalcula so quando o turno/posse muda.
-  const RAIO_INF = 4;
-  const infCache = { stamp: "", mapa: new Map() };
-  const COR_INF = { A: "70,110,220", B: "216,74,74" };
   const GLIFO = { lanceiro: "\uD83D\uDEE1", arqueiro: "\uD83C\uDFF9", cavaleiro: "\uD83D\uDC0E" }; // escudo/arco/cavalo
 
   // ── O DESENHO E DO MAPA 3D (22/09) ─────────────────────────────────────
@@ -1309,7 +1208,6 @@
     // do jogo esta acima disso, portanto a ordem no DOM nao decide nada. Era
     // `insertBefore` por causa do canvas plano, que ja nao pinta.
     document.body.appendChild(palco);
-    canvas.style.visibility = "hidden";
     import("./sonda3d/mapa3d.js")
       .then((m) => m.iniciar(palco))
       .then((mapa) => {
@@ -1421,7 +1319,6 @@
   }
 
   // ---------- HUD ----------
-  let mouseSX = VW / 2, mouseSY = VH / 2;
 
   // ---------- Interação ----------
   let dragging = false, lastX = 0, lastY = 0, moved = 0;
@@ -1537,24 +1434,6 @@
   }
   window.addEventListener("mousemove", atualizarHover);
 
-  function zoomAt(sx, sy, factor) {
-    const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale * factor));
-    // mantém o ponto sob o cursor fixo
-    const wx = (sx - panX) / (TILE * scale);
-    const wy = (sy - panY) / (TILE * scale);
-    scale = newScale;
-    panX = sx - wx * TILE * scale;
-    panY = sy - wy * TILE * scale;
-    draw();
-  }
-
-  canvas.addEventListener("wheel", (e) => {
-    usuarioAssumiuCamera();
-    e.preventDefault();
-    const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
-    zoomAt(e.clientX, e.clientY, factor);
-  }, { passive: false });
-
   // ── O ZOOM MEXE A CAMARA DO MAPA 3D ──────────────────────────────────
   // Chamavam o `zoomAt`, que mudava um `scale` que nenhum pixel obedece desde
   // 11/09: dois botoes visiveis, clicaveis, e sem efeito nenhum. Agora
@@ -1576,12 +1455,11 @@
   // ============================================================
   const COR = { A: "#3b6bd8", B: "#d83b3b", neutra: "#d9d2bd" };
 
-  // TROCA DE DONO DERRETENDO (25/08) — peca 2 do escalonamento da virada de
-  // turno. A cor da aldeia lerpa da antiga para a nova em vez de piscar, e so
-  // COMECA depois do combate estourar, para o olho ver causa antes de efeito.
-  // Guarda so id -> {de, para, t0}; nada disto toca o estado do jogo.
-  const TROCA_MS = 420, TROCA_ATRASO = 400;
-  let trocasDono = new Map();
+  // ⚠ Vivia aqui a TROCA DE DONO DERRETENDO: a cor da aldeia lerpava da antiga
+  // para a nova em vez de piscar. Pintava-a o `drawVillage`, que saiu em 22/09
+  // com o resto do desenho plano -- e a memoria continuou a ser escrita a cada
+  // conquista para ninguem. O equivalente no mapa 3D e a bandeira a trocar, que
+  // o proprio mapa faz; a cena da conquista esta no plano.
   const corBase = (dono) => (dono === null ? COR.neutra : COR[dono]);
 
   let game = null;        // estado da partida (engine)
@@ -1810,20 +1688,6 @@
 
   // ===== REPRODUCAO: aplica um frame gravado ao estado visivel =====
   function aplicarFrame(fr) {
-    // quem MUDOU de dono neste quadro: guarda a cor antiga para a aldeia
-    // derreter da cor de quem perdeu para a de quem ganhou (ver corDaAldeia).
-    if (game && game.aldeias && !REDUZ_MOV) {
-      const antes = new Map(game.aldeias.map((a) => [a.id, a.dono]));
-      const t0 = performance.now() + TROCA_ATRASO;
-      for (const a of fr.aldeias) {
-        const de = antes.get(a.id);
-        if (de !== undefined && de !== a.dono) {
-          trocasDono.set(a.id, { de, t0 });
-          // a torre pega fogo agora e fica com a cicatriz para sempre
-          if (!capitalIds.has(a.id)) aldeiasEmChamas.set(a.id, performance.now());
-        }
-      }
-    }
     // guarda quem estava chegando ANTES de o quadro trocar: o exercito que
     // conquista some do estado, mas e ele que tem de aparecer plantando.
     chegandoAntes = (game && game.movimentos) ? game.movimentos.filter((m) => m.turnosRestantes <= 1) : [];
@@ -2195,12 +2059,6 @@
   // um efeito de mapa -- e DOM, e continua a ver-se.
   let caboAnt = null;
   let camAuto = true;    // no replay: false = usuario assumiu a camera
-  function usuarioAssumiuCamera() {
-    if (!emReplay || !camAuto) return;
-    camAuto = false;
-    const b = document.getElementById("grepCam");
-    if (b) b.classList.remove("ativo");
-  }
   // (x, y) em coordenadas do MAPA, como o resto do jogo fala. A conversao para
   // metros e a mesma do caderno de marcas -- calibrada por duas aldeias
   // medidas, nunca por constantes copiadas do exportador.
@@ -2252,8 +2110,7 @@
     pause();
     limparFeeds();
     fecharCartao();
-    trocasDono = new Map(); rolagens.clear();
-    aldeiasEmChamas = new Map();
+    rolagens.clear();
     emReplay = false;
     rep = null;
     replay = { versaoDiag: 1, frames: [] }; // schema versionado (spec, secao 3)
@@ -3134,58 +2991,11 @@
   let decoClearCache = { sig: "", set: null };
 
 
-  // ===== ESTRADAS DE VERDADE (ladrilho de sprite) =====
-  // O caminho vem desenhado NA DIAGONAL dentro do PNG, e o traçado nao passa
-  // pelo centro da imagem. Estes numeros saem de PCA sobre os pixels opacos de
-  // cada sprite: `ang` e o angulo do eixo do caminho, (cx,cy) o centro do
-  // traçado, `along` a extensao util ao longo dele. Sem corrigir os tres, o
-  // ladrilho sai torto e com emenda.
-  const ESTRADA_SPR = {
-    estrada_reta:  { ang: -29.41, cx: 77.5, cy: 47.8, along: 165, cels: 2.0 },
-    estrada_reta2: { ang:  29.64, cx: 71.4, cy: 45.1, along: 188, cels: 2.0 },
-  };
-  // Passo entre ladrilhos, em fracao do comprimento util. 0.55 medido na
-  // bancada: acima de ~0.7 o caminho ABRE BURACOS (o `along` vem de PCA e
-  // inclui pixels de canto, entao a ponta do sprite afina antes do fim);
-  // abaixo de ~0.45 so gasta desenho e a repeticao comeca a aparecer.
-  const ESTRADA_SOBREPOR = 0.55;
-
-  // As 41 estradas do world-iberia, desenhadas do arquivo (nao derivadas).
-  // Cada estrada e LADRILHADA com o sprite do kit, peca a peca, girado para
-  // acompanhar a direcao do trecho. Via de contorno sai menor e mais apagada
-  // (caminho secundario). Em zoom muito afastado o ladrilho vira sujeira:
-  // ===== ESTRADAS v4 =====================================================
-  // O jogo empilha sprites de pedra ao longo do traco; ao longe eles viram uma
-  // corrente de contas, e ao perto repetem-se. Aqui a estrada e DESENHADA, em
-  // quatro passadas, e cada uma faz uma coisa:
-  //
-  //   1. SOMBRA deslocada para baixo — e o que assenta a estrada no chao em vez
-  //      de a deixar colada por cima dele;
-  //   2. ENCAIXE escuro — a valeta, a beira gasta; da espessura ao leito;
-  //   3. LEITO de terra batida;
-  //   4. VEIO claro ao meio — onde as rodas passam, o chao fica mais pisado e
-  //      mais claro. E este risco fino que faz o olho ler "caminho" em vez de
-  //      "faixa castanha".
-  //
-  // Cada passada e desenhada para TODAS as estradas antes da seguinte comecar.
-  // Se fosse estrada a estrada, o encaixe de uma passaria por cima do leito da
-  // vizinha e cada cruzamento ficaria com uma cicatriz escura.
-  const _V4_CACHE = new Map();          // traco suavizado, por par de cidades
-
-
-
-
-
-
-
-  // ── A MATA DO MAPA PLANO SAIU (22/09) ──────────────────────────────────
-  // `assets/sprites/mata.json` e seis PNG de bosque, carregados a cada abertura
-  // para o desenhador apagado. A mata que se ve hoje sao 22 mil copias no mapa
-  // 3D, espalhadas pelo forno -- outro ficheiro, outra fonte.
-  //
-  // Com ela sai tambem a parte "moitas" do `oQueEstaAqui`, que nomeava a linha
-  // do `mata.json` a corrigir. O `oQueEstaAqui3D` ja nomeia as manchas do mapa
-  // que existe, que e onde a correcao tem de ser feita.
+  // ── AS ESTRADAS DESENHADAS SAIRAM (22/09) ──────────────────────────────
+  // Duas geracoes delas: o ladrilho de sprite (com os angulos do traco tirados
+  // por PCA sobre os pixeis de cada PNG) e a v4, em quatro passadas -- sombra,
+  // encaixe, leito e veio claro ao meio. As de hoje sao geometria no mapa 3D,
+  // assadas pelo forno a partir da mesma rede do `world-iberia.js`.
 
   // ===== CADERNO DE MARCAS =================================================
   // Ligado por ?marcar no endereco, ou pela tecla M.
@@ -3281,7 +3091,7 @@
     MARC.ligado = v === undefined ? !MARC.ligado : v;
     const b = document.getElementById("barraMarcas");
     if (b) b.style.display = MARC.ligado ? "flex" : "none";
-    canvas.style.cursor = MARC.ligado ? "crosshair" : "";
+    if (M3D) M3D.rend.domElement.style.cursor = MARC.ligado ? "crosshair" : "";
     if (M3D) {
       const t = telaDasMarcas();
       // so apanha o rato enquanto o lapis esta ligado: de resto tem de deixar
@@ -3293,49 +3103,36 @@
     if (typeof draw === "function") draw();
   }
 
-  // tela -> viewBox do mapa. E o inverso exato de SX/SY, e e o que torna uma
-  // marca independente do zoom e do arrasto: gravada em coordenadas do MAPA,
-  // ela fica onde foi posta mesmo que a camera mude.
+  // ── ONDE O RATO ESTA, EM COORDENADAS DO MAPA ──────────────────────────
+  // Um risco e gravado em viewBox, nao em pixeis: e isso que o faz continuar a
+  // apontar o mesmo sitio depois de girar ou afastar a camara.
   //
-  // ── O RISCO SAIA LONGE DO RATO ────────────────────────────────────────
-  // Havia aqui um `* (canvas.width / r.width)` — converter para pixeis do
-  // BUFFER. Parece a coisa certa a fazer e e a coisa errada: o `draw` comeca
-  // com `ctx.setTransform(DPR,0,0,DPR,0,0)`, portanto tudo o que se desenha
-  // esta em pixeis de CSS, e o `panX`/`panY` tambem (nascem de `VW/2`). Num
-  // ecra com DPR 2 a marca caia ao DOBRO da distancia do canto — perto do
-  // canto superior esquerdo quase acertava, e piorava a medida que o rato se
-  // afastava. Aqui em teste o DPR era 1 e o defeito nao aparecia.
-  // A regra: converter para o espaco em que se DESENHA, nao para o buffer.
+  // O ponto sai do CHAO debaixo do cursor -- um raio ate ao terreno --, e a
+  // altura guarda-se a parte, que e o que permite voltar a projeta-lo quando a
+  // camara mexe sem tornar a perguntar ao terreno.
   function marcarPonto(ev) {
-    // ── COM O 3D, O PONTO E O SITIO DO CHAO DEBAIXO DO CURSOR ───────────
-    // Nao ha `panX` nem `scale`: ha uma camara em orbita. O raio ate ao
-    // terreno da o sitio a serio, e esse converte-se para coordenadas do mapa
-    // -- as mesmas de sempre, para o resto do caderno nao dar por nada.
-    if (M3D) {
-      const r = M3D.rend.domElement.getBoundingClientRect();
-      const p = M3D.mundoDoEcra(ev.clientX - r.left, ev.clientY - r.top);
-      if (!p) return null;
-      const vb = metrosParaVb(p.x, -p.z);
-      // a altura fica guardada a parte: e o que permite voltar a projetar o
-      // risco quando a camara gira, sem tornar a perguntar ao terreno
-      return vb ? [vb[0], vb[1], p.y] : null;
-    }
-    const r = canvas.getBoundingClientRect();
-    const tx = ev.clientX - r.left;
-    const ty = ev.clientY - r.top;
-    const cs = TILE * scale;
-    return [((tx - panX) / cs) * IB2div() + IB.ox,
-            ((ty - panY) / cs) * IB2div() + IB.oy];
+    if (!M3D) return null;
+    const r = M3D.rend.domElement.getBoundingClientRect();
+    const p = M3D.mundoDoEcra(ev.clientX - r.left, ev.clientY - r.top);
+    if (!p) return null;
+    const vb = metrosParaVb(p.x, -p.z);
+    return vb ? [vb[0], vb[1], p.y] : null;
   }
 
   // CONFERIR SEM O RATO. Leva um ponto do ecra a coordenadas do mapa e traz de
   // volta; se o erro nao for ~0, a marca vai sair longe do ponteiro. Existe
-  // porque o defeito do DPR so aparecia em ecras com DPR != 1 — e o meu, aqui,
-  // e 1: sem esta funcao eu so posso RACIOCINAR sobre o bug, nao medi-lo.
+  // porque ha defeitos de conversao que so aparecem em certos ecras -- o do
+  // DPR, em 2026-09, so se via com DPR != 1, e o desta maquina e 1: sem esta
+  // funcao eu so podia RACIOCINAR sobre o bug, nao medi-lo.
   function marcarConferir(sx, sy) {
-    const r = canvas.getBoundingClientRect();
-    const p = marcarPonto({ clientX: r.left + sx, clientY: r.top + sy });
-    return [SX(p[0]) - sx, SY(p[1]) - sy];
+    if (!M3D) return null;
+    const p = marcarPonto({ clientX: sx, clientY: sy });
+    if (!p) return null;
+    const V = new M3D.THREE.Vector3();
+    const mm = vbParaMetros(p[0], p[1]);
+    V.set(mm[0], p[2] || 0, -mm[1]);
+    const e = M3D.ecraDoMundo(V);
+    return [e.x - sx, e.y - sy];
   }
   if (typeof window !== "undefined") window.MARC.conferir = marcarConferir;
 
@@ -3400,30 +3197,12 @@
       const g = c.getContext("2d");
       g.drawImage(tela, sx, sy, sw, sh, 0, 0, c.width, c.height);
       const marcasTela = telaDasMarcas();
-      g.drawImage(marcasTela, Math.round(x0 * DPR), Math.round(y0 * DPR),
-                  Math.round((x1 - x0) * DPR), Math.round((y1 - y0) * DPR),
+      g.drawImage(marcasTela, Math.round(x0 * DPR_TELA), Math.round(y0 * DPR_TELA),
+                  Math.round((x1 - x0) * DPR_TELA), Math.round((y1 - y0) * DPR_TELA),
                   0, 0, c.width, c.height);
       return c.toDataURL("image/png");
     }
-    const cs = TILE * scale;
-    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-    for (const q of pts) {
-      const ex = panX + celX(q[0]) * cs, ey = panY + celY(q[1]) * cs;
-      x0 = Math.min(x0, ex); y0 = Math.min(y0, ey);
-      x1 = Math.max(x1, ex); y1 = Math.max(y1, ey);
-    }
-    const folga = Math.max(70, ((x1 - x0) + (y1 - y0)) * 0.30);
-    x0 -= folga; y0 -= folga; x1 += folga; y1 += folga;
-    // o recorte sai do BUFFER, que esta em pixeis de dispositivo — daqui o DPR
-    const sx = Math.max(0, Math.round(x0 * DPR)), sy = Math.max(0, Math.round(y0 * DPR));
-    const sw = Math.min(canvas.width - sx, Math.round((x1 - x0) * DPR));
-    const sh = Math.min(canvas.height - sy, Math.round((y1 - y0) * DPR));
-    if (sw < 8 || sh < 8) return "";
-    const k = Math.min(1, 720 / sw);
-    const c = document.createElement("canvas");
-    c.width = Math.round(sw * k); c.height = Math.round(sh * k);
-    c.getContext("2d").drawImage(canvas, sx, sy, sw, sh, 0, 0, c.width, c.height);
-    return c.toDataURL("image/png");
+    return "";                       // sem mapa nao ha fotografia
   }
 
   // A NOTA E DE CADA RISCO, nao do caderno.
@@ -3494,16 +3273,20 @@
   // a tela por cima do 3D redesenha-se a cada quadro: a camara mexe-se e os
   // riscos tem de mexer-se com ela, senao deixam de apontar o que apontavam
   const _v3m = { x: 0, y: 0, z: 0 };
+  // a tela das marcas e um canvas 2D por cima do WebGL: tem de ser desenhada em
+  // pixeis de dispositivo para os riscos nao sairem serrilhados. E a unica
+  // coisa nesta pagina que ainda precisa do DPR.
+  const DPR_TELA = Math.min((typeof window !== "undefined" && window.devicePixelRatio) || 1, 2);
   function desenharMarcas3D() {
     if (!M3D) return;
     const t = telaDasMarcas();
     const L = Math.round(window.innerWidth), A = Math.round(window.innerHeight);
-    if (t.width !== L * DPR || t.height !== A * DPR) {
-      t.width = L * DPR; t.height = A * DPR;
+    if (t.width !== L * DPR_TELA || t.height !== A * DPR_TELA) {
+      t.width = L * DPR_TELA; t.height = A * DPR_TELA;
       t.style.width = L + "px"; t.style.height = A + "px";
     }
     const g = t.getContext("2d");
-    g.setTransform(DPR, 0, 0, DPR, 0, 0);
+    g.setTransform(DPR_TELA, 0, 0, DPR_TELA, 0, 0);
     g.clearRect(0, 0, L, A);
     if (!MARC.marcas.length && !MARC.a_riscar) return;
     const V = new M3D.THREE.Vector3();
@@ -3584,7 +3367,7 @@
   // a vista geral: com o 3D ligado o canvas plano esta escondido e sai em
   // branco -- tira-se do WebGL, com os riscos da tela de cima por cima
   function vistaGeral() {
-    if (!M3D) return canvas.toDataURL("image/png");
+    if (!M3D) return "";
     try {
       const tela = M3D.rend.domElement;
       M3D.rend.render(M3D.cena, M3D.cam);
@@ -3750,58 +3533,13 @@
   })();
 
 
-  function IB2div() { return IB ? IB.div : 1; }
 
 
-  // ===== ESTADOS DA TORRE (25/08) =====
-  // A aldeia nao-capital passa a ser a torre de madeira, em tres estados:
-  //   base      -> nunca foi tomada
-  //   chamas    -> esta sendo tomada AGORA (janela curta, so no replay/jogo)
-  //   queimada  -> ja foi tomada alguma vez (cicatriz permanente)
-  // Nada disto e estado de jogo: e memoria do DESENHO, reconstruida enquanto se
-  // assiste. O motor nao sabe que a torre queimou, e nao precisa saber.
-  // 25/08: a cicatriz NAO e mais permanente. Era, e no meio da partida o mapa
-  // inteiro ficava preto — toda torre ja tinha sido tomada alguma vez. O ciclo
-  // agora fecha: base -> chamas -> queimada -> base, e a aldeia volta ao normal.
-  const CHAMAS_MS = 1800, QUEIMADA_MS = 1000;
-  let aldeiasEmChamas = new Map();   // id -> t0 do incendio
-  // Sprite e largura da aldeia, num lugar so: baseVisualIB e o desenho TEM de
-  // concordar, senao a ancora sai do lugar (o erro que ja mordeu 3x).
-  // ===== POVOACOES v4 (cozidas no Blender, ferramentas/cena/cozer.py) =====
-  // Ligado por ?aldeia=v4 no endereco. Sem o parametro o jogo corre como sempre
-  // — isto e um estudo, nao uma mudanca.
-  //
-  // UMA PECA POR CIDADE, e nao uma por tamanho. A razao e o PORTAO: ele tem de
-  // dar para a estrada, e cada cidade tem as suas (de duas a seis). Como efeito
-  // secundario as 24 povoacoes ficam todas diferentes, o que resolve sozinho o
-  // problema de vinte e quatro copias iguais.
-  //
-  // A COR e a do Rei que a possui, e muda quando a aldeia troca de maos: as tres
-  // versoes (neutra / azul / vermelha) sao o MESMO desenho com outro pano nos
-  // mastros. Trocar de sprite e trocar de dono, sem repintar nada.
-  const V4 = {};                       // cache de <img>, carregadas sob pedido
-  // A ANCORA VEM DO MANIFESTO, NAO DE UM PALPITE.
-  // O jogo assenta um sprite pelo FUNDO da imagem. O chao da aldeia nao esta no
-  // fundo — o disco isometrico continua para baixo dele — portanto o ponto que
-  // tem de cair na posicao da cidade esta a uns 40% da altura, e varia de peca
-  // para peca (medido: de 0,366 a 0,514). Sem este numero a aldeia flutua acima
-  // do cruzamento das estradas, que foi o que aconteceu no primeiro teste.
-  // Um ficheiro para as 24: as tres cores partilham o mesmo desenho.
-  let V4_MAN = null;
-  if (ALDEIA_V4 && typeof fetch === "function") {
-    fetch("assets/sprites/aldeias_v4.json")
-      .then((r) => r.json())
-      .then((m) => { V4_MAN = m; if (typeof draw === "function") draw(); })
-      .catch(() => { V4_MAN = {}; });
-  }
-
-  // o motor guarda o dono como null / "A" / "B" — as mesmas chaves do COR
-  const V4_COR = { A: "azul", B: "vermelha" };
-
-
-
-
-
+  // ── A TORRE EM CHAMAS E AS POVOACOES v4 SAIRAM (22/09) ─────────────────
+  // A torre trocava de sprite ao ser tomada (base -> chamas -> queimada ->
+  // base) e as 24 povoacoes eram PNG assados no Blender, assentes pela ancora
+  // do manifesto. Sao duas peles atras da que se joga: hoje a aldeia e uma
+  // peca 3D e a conquista pede uma cena no mapa, que esta no plano.
 
   // ===== FOG OF WAR: A CAMARA DO REI (P4, 17/08) =========================
   //  So LEITURA e so pixels. Nao toca no estado, no prompt nem no motor: o
@@ -4379,8 +4117,7 @@
   function reiniciarReplay() {
     if (!rep) return;
     rep.idx = 0; limparFeeds(); limparBanners(); fecharCartao();
-    trocasDono = new Map(); rolagens.clear(); // sem transicao herdada do que ja passou
-    aldeiasEmChamas = new Map();
+    rolagens.clear();            // sem transicao herdada do que ja passou
     camAuto = true; document.getElementById("grepCam").classList.add("ativo");
     playing = false;
     repFrac = 0;
@@ -4404,7 +4141,6 @@
   });
 
   // ---------- Início ----------
-  resize();
   novaPartida();
 
 
