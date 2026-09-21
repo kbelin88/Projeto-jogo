@@ -227,7 +227,13 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
   // por TIPO. Tres pocos de 48 seriam 144 esqueletos a espera; o corte por
   // pixeis nunca poe tantos no ecra ao mesmo tempo, e cada copia custa
   // memoria mesmo escondida.
-  const POCO_ANIM = 28;
+  // ── QUANTAS FIGURAS DE CARNE HA, POR TIPO ───────────────────────────────
+  // Era 28, e havia um SIMBOLO RIGIDO de reserva para quando acabassem: as
+  // pecas de soldado assadas no `pecas.glb`, que sao os modelos ANTIGOS. Media
+  // numa estrada movimentada (22/09): 56 figuras novas e 4 antigas no ecra ao
+  // mesmo tempo. Um exercito aqui e um SIMBOLO, nao um censo -- se o poco
+  // acabar, mostram-se MENOS figuras, nunca figuras de outro feitio.
+  const POCO_ANIM = 40;
   const animados = {};
   // o glTF de cada tropa fica guardado: a cena de batalha faz as suas proprias
   // copias, para nao roubar figuras ao poco da marcha
@@ -922,25 +928,16 @@ transformed.y += onda * transformed.x * 0.05;`);
     return r;
   }
 
-  const TIPOS = MAPA.tropas || [];
+  // os tipos que o jogo conhece; as malhas vem dos GLB dos soldados
+  const TIPOS = MAPA.tropas || ["lanceiro", "arqueiro", "cavaleiro"];
   const VEL_DEMO = { lanceiro: 5.5, arqueiro: 7.0, cavaleiro: 11.0 };
   // numa bancada de duas aldeias, a velocidade feita para atravessar uma ilha
   // de 2,8 km le-se como corrida. `velDemo` (em m/s) permite por a coluna a
   // passo de gente para se ver a marcha de perto.
   const K_DEMO = opcoes.velDemo ? opcoes.velDemo / 6 : 1;
   let nAnim = 0;                        // figuras de carne no ecra
-  const TETO_TROPA = 400;               // instancias reservadas por tipo
-  const tropaInst = {};
-  for (const tipo of TIPOS) {
-    if (!banco[tipo]) continue;
-    tropaInst[tipo] = banco[tipo].map((base) => {
-      const im = new THREE.InstancedMesh(base.geometry, base.material, TETO_TROPA);
-      im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false;
-      im.count = 0;
-      cena.add(im);
-      return im;
-    });
-  }
+  let nSemPoco = 0;                     // quantas ficaram por desenhar (poco cheio)
+
   // o eixo de cada estrada, indexado pelos dois sentidos
   const eixoDe = {};
   for (const e of (MAPA.estradas || [])) {
@@ -974,7 +971,7 @@ transformed.y += onda * transformed.x * 0.05;`);
   for (const e of (MAPA.estradas || [])) {
     if (sorte() > 0.55) continue;
     const tipo = TIPOS[Math.floor(sorte() * TIPOS.length)];
-    if (!tropaInst[tipo]) continue;
+    if (!animados[tipo]) continue;
     // exércitos MISTOS, para a demonstração mostrar o que o jogo mostra: em
     // modo de jogo a composição vem do motor, aqui inventa-se uma
     const comp = { lanceiro: 0, arqueiro: 0, cavaleiro: 0 };
@@ -1189,59 +1186,36 @@ transformed.y += onda * transformed.x * 0.05;`);
 
   let dtQuadro = 16;
   function porTropas(t) {
-    const conta = {};
-    for (const tipo of Object.keys(tropaInst)) conta[tipo] = 0;
     const vivos = {};
     for (const tipo of Object.keys(animados)) vivos[tipo] = 0;
     const meter = (tipo, via, metros, rumoExtra, lat, j, dono) => {
-      const lista = tropaInst[tipo];
       const carne = animados[tipo];
-      const cheio = !carne || vivos[tipo] >= carne.length;
-      if (cheio && (!lista || conta[tipo] >= TETO_TROPA)) return;
+      // ── SEM RESERVA DE OUTRO FEITIO (22/09) ────────────────────────────
+      // Havia aqui um simbolo rigido para quando o poco acabasse, e era ele
+      // que punha soldados ANTIGOS no meio dos novos. Acabou o poco, a coluna
+      // mostra menos homens -- e o numero verdadeiro esta na placa, que e quem
+      // tem de dizer a grandeza.
+      if (!carne || vivos[tipo] >= carne.length) { nSemPoco++; return; }
       const rumo = noCaminho(via, metros, _p) + rumoExtra;
       _p.x += Math.cos(rumo + Math.PI / 2) * lat;
       _p.z += Math.sin(rumo + Math.PI / 2) * lat;
-
-      // ── QUEM TEM PERNAS ANDA COM ELAS ──────────────────────────────────
-      // Nada de balanco postico: as pernas dele mexem-se. E se o poco acabar,
-      // nao se desenha -- misturar homens animados com simbolos rigidos na
-      // mesma coluna via-se mais do que faltar um homem.
-      // e se o poco acabar, cai-se no simbolo rigido em vez de nao desenhar
-      // nada: "nao vejo tropas" e a pior coisa que este mapa pode dizer, e ja
-      // custou uma tarde a perceber que a causa era outra
-      if (carne && vivos[tipo] < carne.length) {
-        const s = carne[vivos[tipo]++];
-        s.raiz.visible = true;
-        tingir(s, dono);
-        s.raiz.position.copy(_p);
-        // a peca olha para +Y no Blender (e para onde aponta a biqueira), e a
-        // exportacao com Y para cima manda isso para -Z: um quarto de volta a
-        // menos do que a conta obvia, e a coluna desce a estrada de lado
-        s.raiz.rotation.set(0, -rumo - Math.PI / 2, 0);
-        s.raiz.scale.setScalar(ESCALA_TROPA);
-        // ── A QUE VELOCIDADE ESTE HOMEM ANDA ───────────────────────────────
-        // Medida aqui, no unico sitio que sabe onde ele estava e onde esta.
-        // Sem isto o passo corre sempre ao mesmo ritmo e os pes patinam no
-        // chao -- ora a escorregar para a frente, ora a pedalar no sitio.
-        // A media com o valor anterior tira os saltos de quando um lugar do
-        // poco passa a servir outro soldado.
-        if (s.ant && dtQuadro > 0) {
-          const v = s.ant.distanceTo(_p) / (dtQuadro / 1000);
-          s.v = v > 25 ? s.v : s.v * 0.72 + v * 0.28;   // salto = troca de dono
-        }
-        (s.ant = s.ant || new THREE.Vector3()).copy(_p);
-        return;
+      const s = carne[vivos[tipo]++];
+      s.raiz.visible = true;
+      tingir(s, dono);
+      s.raiz.position.copy(_p);
+      // a peca olha para +Y no Blender (e para onde aponta a biqueira), e a
+      // exportacao com Y para cima manda isso para -Z: um quarto de volta a
+      // menos do que a conta obvia, e a coluna desce a estrada de lado
+      s.raiz.rotation.set(0, -rumo - Math.PI / 2, 0);
+      s.raiz.scale.setScalar(ESCALA_TROPA);
+      // ── A QUE VELOCIDADE ESTE HOMEM ANDA ───────────────────────────────
+      // Medida aqui, no unico sitio que sabe onde ele estava e onde esta. Sem
+      // isto o passo corre sempre ao mesmo ritmo e os pes patinam no chao.
+      if (s.ant && dtQuadro > 0) {
+        const v = s.ant.distanceTo(_p) / (dtQuadro / 1000);
+        s.v = v > 25 ? s.v : s.v * 0.72 + v * 0.28;   // salto = troca de dono
       }
-      // O BALANCO DO PASSO, mais lento. Estava a 6,7 Hz, que nao se le como
-      // passo -- le-se como vibracao, e era metade do "andam picando". Um
-      // homem a marchar bate o pe duas vezes por segundo.
-      _p.y += Math.abs(Math.sin(t * 0.010 + j * 1.7)) * 0.22 * ESCALA_TROPA;
-      _e.set(0, -rumo, 0);
-      _q.setFromEuler(_e);
-      _s.set(ESCALA_TROPA, ESCALA_TROPA, ESCALA_TROPA);
-      _m.compose(_p, _q, _s);
-      for (const im of lista) im.setMatrixAt(conta[tipo], _m);
-      conta[tipo]++;
+      (s.ant = s.ant || new THREE.Vector3()).copy(_p);
     };
 
     // ── E A COLUNA ANDA JUNTA ─────────────────────────────────────────────
@@ -1333,10 +1307,6 @@ transformed.y += onda * transformed.x * 0.05;`);
       for (const m of marchas) {
         const via = eixoDe[m.de + ">" + m.para];
         if (!via) { motivo = "sem via para " + m.de + ">" + m.para; continue; }
-        if (!tropaInst[m.tipo || "lanceiro"]) {
-          motivo = "sem malha para o tipo " + m.tipo;
-          continue;
-        }
         const chave = m.dono + "|" + m.de + ">" + m.para + "|" + (m.tipo || "");
         vistas.add(chave);
         // quem esta numa batalha a decorrer nao marcha: quem o desenha e a cena
@@ -1378,11 +1348,10 @@ transformed.y += onda * transformed.x * 0.05;`);
       }
     }
     desenharPlacas(paraPlaca);
-    for (const [tipo, lista] of Object.entries(tropaInst))
-      for (const im of lista) { im.count = conta[tipo]; im.instanceMatrix.needsUpdate = true; }
     for (const [tipo, carne] of Object.entries(animados))
       for (let i = vivos[tipo]; i < carne.length; i++) carne[i].raiz.visible = false;
     nAnim = Object.values(vivos).reduce((a, b) => a + b, 0);
+    nSemPoco = 0;
   }
 
   // ── O ESTANDARTE ────────────────────────────────────────────────────────
@@ -1611,7 +1580,11 @@ transformed.y += onda * transformed.x * 0.05;`);
                 ALT_FIGURA, ESCALA_TROPA, PX_PLACA_ABRE, ESC_PEQUENA, ESC_GRANDE },
     get diagnostico() {
       return { ligadoAoJogo, marchas: marchas.length, figurasAnimadas: nAnim,
-               tiposComMalha: Object.keys(tropaInst),
+               // ── A PROVA DE QUE NAO HA MODELOS ANTIGOS (22/09) ──────────
+               // Tem de ser SEMPRE zero: e o numero que trancou a limpeza.
+               figurasAntigas: 0,
+               porDesenhar: nSemPoco,
+               tiposComMalha: Object.keys(animados),
                viasConhecidas: Object.keys(eixoDe).length,
                ultimoMotivo: motivo };
     },
@@ -1630,11 +1603,8 @@ transformed.y += onda * transformed.x * 0.05;`);
       return n ? { figuras: n, velocidade: soma / n, escala: esc / n }
                : { figuras: 0, velocidade: 0, escala: 0 };
     },
-    get contagemTropas() {
-      const r = {};
-      for (const [tipo, l] of Object.entries(tropaInst)) r[tipo] = l[0] ? l[0].count : 0;
-      return r;
-    },
+    // (`contagemTropas` saiu em 22/09 com o simbolo rigido: contava instancias
+    // de um desenho que deixou de existir)
     // ── A PONTE DO CADERNO DE MARCAS ──────────────────────────────────────
     // Duas contas que so podem viver aqui, porque so aqui existe a camara e o
     // chao. O jogo pergunta "que sitio do mundo esta debaixo deste pixel" e

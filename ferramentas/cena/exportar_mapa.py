@@ -261,12 +261,12 @@ usadas_mata = {r["peca"] for b in bosques for r in b}
 bpy.ops.wm.read_factory_settings(use_empty=True)
 P._mats.clear(); P.LIXO = None
 cena = bpy.context.scene.collection
-# AS TROPAS entram na biblioteca sem estarem em `copias`: nao ha nenhuma
-# COLOCADA no mapa, porque quem as coloca e o jogo, a cada turno. O que sai
-# daqui e so a peca; onde ela vai parar e assunto do motor.
-TROPAS = {"lanceiro": (P.proto_lanceiro, ()),
-          "arqueiro": (P.proto_arqueiro, ()),
-          "cavaleiro": (P.proto_cavaleiro, ())}
+# ── AS TROPAS JA NAO SAO ASSADAS AQUI (22/09) ──────────────────────────────
+# A biblioteca levava tres pecas de soldado (`proto_lanceiro` e companhia), os
+# modelos ANTIGOS, que serviam de reserva rigida no navegador. Desde que as
+# tropas sao os GLB do ComfyUI (`lanceiro_novo.glb`...), essa reserva so punha
+# soldados de outro feitio no meio dos novos -- medido: 56 novos e 4 antigos no
+# ecra ao mesmo tempo. A reserva acabou; as pecas tambem.
 usadas = sorted({c["peca"] for c in copias} | usadas_mata)
 feitas, faltam = [], []
 for nome in usadas:
@@ -286,14 +286,6 @@ for nome in usadas:
     ob.data.name = nome
     cena.objects.link(ob)
     feitas.append(nome)
-for nome, (fn, args) in TROPAS.items():
-    ob = fn(*args)
-    for col in list(ob.users_collection):
-        col.objects.unlink(ob)
-    ob.name = ob.data.name = nome
-    cena.objects.link(ob)
-    feitas.append(nome)
-print("SONDA tropas: %s" % ", ".join(TROPAS))
 if faltam:
     print("SONDA AVISO: sem receita para %s" % faltam)
 
@@ -1992,7 +1984,9 @@ with open(os.path.join(SAIDA, NOME_SAIDA + ".json" if (BANCADA or MONTANHAS) els
                "mapa_m": [round(IB_LARG * M_POR_VB), round(IB_ALT * M_POR_VB)],
                "pecas": {n: legiveis.get(n, n) for n in feitas}, "copias": copias,
                "arranjos": bosques, "manchas": manchas,
-               "estradas": eixos, "tropas": list(TROPAS),
+               "estradas": eixos,
+               # os tipos que o jogo conhece; as MALHAS vem dos GLB dos soldados
+               "tropas": ["lanceiro", "arqueiro", "cavaleiro"],
                # o NOME e o TAMANHO de cada povoacao, para o mapa poder
                # rotula-las sem ter de ir buscar o world-iberia outra vez
                "aldeias": {c: {"p": centros[c],

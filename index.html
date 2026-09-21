@@ -2005,22 +2005,19 @@
         setInterval(() => {
           if (!M3D) return;
           const d = M3D.diagnostico;
-          const t = M3D.contagemTropas;
           const alt = Math.round(M3D.ctrl.getDistance());
           cx.innerHTML = "<b style='color:#f0d9a0;font-size:15px'>" + M3D.fps
             + "</b> fps &nbsp; camara a " + alt + " m<br>"
             + M3D.pecas.toLocaleString("pt") + " pecas &middot; "
             + (M3D.triangulos / 1e6).toFixed(1) + "M triangulos<br>"
             + d.marchas + " marcha(s) &middot; "
-            // ── AS DE CARNE CONTAM TAMBEM ─────────────────────────────────
-            // `contagemTropas` conta so os SIMBOLOS RIGIDOS instanciados. Desde
-            // que as tropas passaram a ser malhas com ossos, esse numero e zero
-            // quase sempre -- e o mostrador dizia "0 figuras no ecra" com vinte
-            // e quatro homens a marchar a frente dos olhos. Este contador existe
-            // precisamente para distinguir "nao ha tropas" de "ha e nao se
-            // veem"; a mentir, faz o contrario do que foi feito para fazer.
-            + (d.figurasAnimadas + t.lanceiro + t.arqueiro + t.cavaleiro)
-            + " figuras no ecra"
+            // ── UM SO DESENHO DE TROPA (22/09) ────────────────────────────
+            // Havia aqui a soma com os simbolos rigidos, que eram os soldados
+            // ANTIGOS. Agora ha um desenho so; quando o poco acaba, mostram-se
+            // MENOS figuras -- e e isso que `porDesenhar` diz, para nao voltar
+            // a haver um mostrador a mentir sobre o que esta no ecra.
+            + d.figurasAnimadas + " figuras no ecra"
+            + (d.porDesenhar ? " (+" + d.porDesenhar + " sem lugar no poco)" : "")
             // vermelho SO para o que e defeito. "sem marchas" no turno 0 e a
             // verdade, nao um alarme -- e um mostrador que grita por tudo
             // ensina a ignora-lo.
