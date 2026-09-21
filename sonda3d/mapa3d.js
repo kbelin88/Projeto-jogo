@@ -1102,22 +1102,82 @@ transformed.y += onda * transformed.x * 0.05;`);
     }
     return batalhas;
   }
+  // ── A CAMARA VAI VER A BATALHA ──────────────────────────────────────────
+  // Medido numa partida burro x burro (21/09): 49 combates de estrada em 23
+  // turnos, e nenhum no enquadramento -- a camara olhava para outro sitio e a
+  // cena passava-se fora do ecra. Aqui ela desliza para o primeiro combate e
+  // fica; so vai a outro quando este acabar. Se a mao mexer nos controlos, a
+  // camara e de quem a mexeu: cinco segundos de silencio antes de voltar a
+  // mandar nela.
+  let toqueCam = 0;
+  ctrl.addEventListener("start", () => { toqueCam = performance.now(); });
+  let camCena = null;                 // { alvo, ate }
+  let seguirCena = true;
+  function irVer(p, segundos) {
+    if (!seguirCena || performance.now() - toqueCam < 5000) return;
+    if (camCena && performance.now() < camCena.ate) return;   // ja esta a ver uma
+    // ⚠ O TEMPO DA CAMARA E O DA CENA. Com um tempo fixo de 9 s ela ficava
+    // pregada ao sitio depois de a batalha ter acabado -- gravei uma partida
+    // inteira a olhar para uma aldeia vazia enquanto se lutava noutro lado.
+    camCena = { alvo: p.clone(), ate: performance.now() + (segundos + 1.2) * 1000 };
+    // ⚠ SALTA SE ESTIVER LONGE. A 1.a versao deslizava sempre, e a cena (3,5 s)
+    // acabava antes de a camara chegar -- gravei quinze segundos de partida e
+    // nao se via uma batalha (21/09). De perto desliza, que e o que se quer ao
+    // ver um combate ao lado de outro.
+    if (cam.position.distanceTo(p) > 260) {
+      ctrl.target.copy(p);
+      cam.position.copy(p).add(new THREE.Vector3(34, 26, 34));
+      ctrl.update();
+    }
+  }
+  function moverCamCena(dts) {
+    // acabada esta, vai ver outra que esteja a decorrer (os combates vem em
+    // rajadas: 49 numa partida de 23 turnos, medido em 21/09)
+    if (!camCena && batalhas && seguirCena && performance.now() - toqueCam > 5000) {
+      const onde = batalhas.ondeEsta();
+      if (onde && onde.falta > 1.0) irVer(onde.pos, onde.falta);
+    }
+    if (!camCena) return;
+    if (performance.now() - toqueCam < 5000) { camCena = null; return; }
+    const k = 1 - Math.pow(0.02, Math.min(dts, 0.1) / 0.9);
+    ctrl.target.lerp(camCena.alvo, k);
+    // de lado e de cima, a distancia de quem ve uma escaramuca
+    const quer = camCena.alvo.clone().add(new THREE.Vector3(34, 26, 34));
+    cam.position.lerp(quer, k);
+    if (performance.now() > camCena.ate) camCena = null;
+  }
+
   const _pb = new THREE.Vector3();
   function abrirBatalha(ev) {
     const via = eixoDe[ev.de + ">" + ev.para];
     if (!via || !Object.keys(fontesGlb).length) return null;
-    const t = Math.max(0, Math.min(1, ev.t === undefined ? 0.5 : ev.t));
+    // ── SO O QUE SE VE ────────────────────────────────────────────────────
+    // Na vista de mapa inteiro uma batalha tem dez pixeis e nao se le; montar
+    // dezasseis figuras com esqueleto para isso e pagar caro por nada.
+    // ⚠ NUNCA NA PONTA DO TRECHO. O encontro pode dar-se a porta de uma aldeia,
+    // e ai a cena montava-se DENTRO da muralha, por cima das casas (visto numa
+    // partida burro x burro, 21/09). A batalha afasta-se para a estrada; o
+    // resultado e o do motor na mesma -- o que muda e onde se filma.
+    const t = Math.max(0.12, Math.min(0.88, ev.t === undefined ? 0.5 : ev.t));
     const rumo = noCaminho(via, via.inv ? (1 - t) * via.comp : t * via.comp, _pb);
-    return asBatalhas().abrir({
+    // com a camara a ir ver, o corte por distancia deixa de fazer sentido: ela
+    // vai la ter. So se corta se o jogador tiver tomado a camara e estiver longe.
+    if (!seguirCena && cam.position.distanceTo(_pb) > 1400) return null;
+    const feita = asBatalhas().abrir({
       id: ev.id || (ev.turno + "|" + ev.de + ">" + ev.para + "|" + ev.vencedor),
       pos: _pb.clone(), rumo: via.inv ? rumo + Math.PI : rumo,
       vencedor: ev.vencedor, perdedor: ev.perdedor,
       compVenc: ev.compVenc || {}, compPerd: ev.compPerd || {},
       totalVenc: ev.totalVenc || 1, baixasVenc: ev.baixasVenc || 0,
+      // (a camara so vai ver a primeira; as outras correm onde estao)
       // a cena tem de caber DENTRO do turno: um turno pode levar 5 s com o
       // jogador burro e tres minutos com um raciocinador (ver `msPorTurno`)
-      segundos: ev.segundos || Math.max(3.5, Math.min(9.0, msPorTurno / 1000 * 0.7)),
+      // nunca abaixo de 5 s: mais curto que isso e a cena acaba antes de se ter
+      // olhado para ela
+      segundos: ev.segundos || Math.max(5.0, Math.min(9.0, msPorTurno / 1000 * 0.7)),
     });
+    if (feita) irVer(_pb, feita.dur || 5);
+    return feita;
   }
 
   let dtQuadro = 16;
@@ -1463,6 +1523,7 @@ transformed.y += onda * transformed.x * 0.05;`);
     // custa nada, e sao 48 poços por tipo
     const dts = dtQuadro / 1000;
     if (batalhas) batalhas.passo(dts);
+    moverCamCena(dts);
     // ── O PASSO SEGUE A MARCHA ────────────────────────────────────────────
     // Um ciclo do lanceiro cobre ~0,7 m de chao. Se a coluna anda a 1,4 m/s,
     // o ciclo tem de correr ao dobro -- senao ve-se o homem a deslizar. Os
@@ -1592,6 +1653,8 @@ transformed.y += onda * transformed.x * 0.05;`);
     parar(v) { parado = !!v; },
     // uma batalha a pedido, para conferir sem partida nenhuma
     batalhaDeTeste(ev) { return abrirBatalha(ev); },
+    // a camara automatica das batalhas; desliga-se para gravar a mao
+    seguirBatalhas(v) { seguirCena = !!v; if (!v) camCena = null; return seguirCena; },
     get batalhasAtivas() { return batalhas ? batalhas.diagnostico : []; },
     redimensionar: tamanho,
     destruir() { vivo = false; rend.dispose(); hospedeiro.removeChild(tela); },

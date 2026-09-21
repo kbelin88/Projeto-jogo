@@ -27,6 +27,11 @@ const POR_LADO = 8;              // figuras por hoste: um símbolo, não um cens
 const FOLGA_M = 9.0;             // metros entre as duas frentes
 const FILA_M = 4.6;              // entre fileiras
 const LARG_M = 3.2;              // entre homens da mesma fileira
+// ⚠ QUANTAS AO MESMO TEMPO. Medido numa partida burro x burro (21/09): em 23
+// turnos abriram-se 59 combates de estrada. A 16 figuras com esqueleto cada,
+// isso sao ~950 bonecos animados -- a placa nao aguenta e nem se veem todos.
+// Fica um punhado; as mais velhas fecham para dar lugar as novas.
+const MAX_VIVAS = 4;
 
 export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
   const vivas = [];
@@ -187,9 +192,23 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
       Math.round(hostes.venc.homens.length * (b.baixasVenc || 0) / totalVenc));
     const ba = { pos: b.pos.clone(), dir, lado, hostes, t: 0,
                  dur: b.segundos || 7.0, perdeVenc, proxTiro: 0.4, proxGolpe: 1.0,
+                 nasceu: (typeof performance !== "undefined" ? performance.now() : Date.now()),
                  tombados: { venc: 0, perd: 0 } };
     vivas.push(ba);
+    while (vivas.length > MAX_VIVAS) fechar(vivas.shift());
     return ba;
+  }
+
+  function fechar(ba) {
+    for (const quem of ["venc", "perd"]) {
+      for (const f of ba.hostes[quem].homens) {
+        cena.remove(f.raiz);
+        f.mix.stopAllAction();
+        f.raiz.traverse((o) => {
+          if (o.isMesh && o.material && o.material.dispose) o.material.dispose();
+        });
+      }
+    }
   }
 
   const _mao = new THREE.Vector3();
@@ -266,14 +285,12 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
         }
       }
 
-      if (u >= 1) {
-        for (const quem of ["venc", "perd"]) {
-          for (const f of ba.hostes[quem].homens) {
-            cena.remove(f.raiz);
-            f.mix.stopAllAction();
-            f.raiz.traverse((o) => { if (o.isMesh && o.material && o.material.dispose) o.material.dispose(); });
-          }
-        }
+      // ⚠ E PELO RELOGIO TAMBEM: com a pagina escondida o navegador estrangula
+      // o rAF e o `dt` deixa de correr -- as cenas ficavam abertas para sempre,
+      // e foi assim que se acumularam 59 (21/09).
+      const agora = (typeof performance !== "undefined" ? performance.now() : Date.now());
+      if (u >= 1 || agora - ba.nasceu > ba.dur * 1000 + 12000) {
+        fechar(ba);
         vivas.splice(i, 1);
       }
     }
@@ -284,6 +301,12 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
     abrir,
     passo,
     get ativas() { return vivas.length; },
+    // onde esta a batalha mais nova a decorrer -- e para la que a camara vai
+    ondeEsta() {
+      if (!vivas.length) return null;
+      const b = vivas[vivas.length - 1];
+      return { pos: b.pos.clone(), falta: Math.max(0, b.dur - b.t) };
+    },
     // para conferir de fora sem partida nenhuma
     get diagnostico() {
       return vivas.map((b) => ({ t: Math.round(b.t * 10) / 10, dur: b.dur,
