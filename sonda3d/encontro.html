@@ -5,7 +5,7 @@
   html, body { margin: 0; height: 100%; background: #0d1418; color: #e8dcc0;
                font: 13px system-ui, sans-serif; overflow: hidden; }
   #palco { position: fixed; inset: 0; }
-  #hud { position: fixed; top: 12px; left: 12px; z-index: 5; width: 320px;
+  #hud { position: fixed; top: 12px; left: 12px; z-index: 5; width: 300px;
          background: rgba(20,15,8,.92); border: 1px solid #6b5836;
          border-radius: 8px; padding: 11px 13px; }
   #hud h1 { font-size: 13px; margin: 0 0 8px; letter-spacing: .06em; }
@@ -26,9 +26,8 @@
 <div id="carga">a montar o encontro...</div>
 <div id="hud">
   <h1>O ENCONTRO NA ESTRADA</h1>
-  <p>A estrada entre <b>Madrid</b> e <b>Toledo</b> tem <b id="np">?</b> postos.
-     Duas colunas avançam de posto em posto e param no mesmo — que é onde a
-     batalha há de acontecer.</p>
+  <p>Duas colunas descem a mesma estrada e encontram-se a meio. A marcha e a
+     batalha são as <b>do jogo</b> — esta página só as põe a correr sem partida.</p>
   <div>
     <button data-c="ver">ver o encontro</button>
     <button data-c="lado">ver de lado</button>
@@ -40,802 +39,140 @@
 <div id="med"></div>
 
 <script type="module">
-import { iniciar, COR_REI } from "./mapa3d.js";
-import * as THREE from "./vendor/three.module.js";
-import { GLTFLoader } from "./vendor/loaders/GLTFLoader.js";
-import { clone as clonarComOssos } from "./vendor/utils/SkeletonUtils.js";
-import { mergeGeometries } from "./vendor/utils/BufferGeometryUtils.js";
+// ── A BANCADA DA BATALHA ────────────────────────────────────────────────────
+// Até 22/09 esta página tinha o guião da batalha escrito OUTRA VEZ: 841 linhas
+// com formação, flechas, golpes, tombos e debandada — um segundo desenho, ao
+// lado do `batalha.js` que corre no jogo. Afinava-se um e o outro ficava para
+// trás: a debandada (que o motor não tem) viveu aqui dias depois de a cena do
+// jogo já aniquilar o perdedor.
+//
+// Agora a página não sabe lutar. Ela move duas marchas pelo `mapa3d` e, quando
+// se encontram, manda o MESMO evento que o motor manda (`combate_estrada`). O
+// que se vê aqui é, linha por linha, o que se vê numa partida.
+import { iniciar } from "./mapa3d.js";
 
-// ?mapa=bancada poe a batalha no mapa de teste (Lisboa e Santarem), que e onde
-// se confere tudo antes do mapa grande
 const NA_BANCADA = new URLSearchParams(location.search).get("mapa") === "bancada";
-const mapa = await iniciar(document.getElementById("palco"), NA_BANCADA
-  ? { cena: "bancada", tropas: { lanceiro: "lanceiro_novo.glb", arqueiro: "arqueiro_novo.glb",
-                                 cavaleiro: "cavaleiro_novo.glb" } }
-  : {});
-const { cena, cam, ctrl, MAPA } = mapa;
-Object.assign(window, { mapa, cena, cam, ctrl, MAPA, THREE });
-mapa.atualizar({ turno: 0, aldeias: [], marchas: [] });   // as tropas são estas
-
-// ── A ESTRADA COM POSTOS ────────────────────────────────────────────────────
-// ── PORQUE É QUE A ESTRADA PRECISA DE POSTOS ────────────────────────────────
-// Duas colunas em rota de colisão numa linha contínua ou se atravessam ou
-// param num sítio arbitrário, e as duas coisas leem-se mal. Com postos, o
-// encontro é uma condição EXATA — mesmo posto, sentidos opostos — e acontece
-// num LUGAR, que é o que a câmara precisa para haver cena.
-//
-// Os postos são repartidos por FRAÇÃO da estrada e não por metros, porque o
-// que tem de ser igual entre os dois lados é o TEMPO: dois exércitos à mesma
-// velocidade, um de cada ponta, hão de encontrar-se num posto e não entre dois.
-const via = NA_BANCADA ? MAPA.estradas[0]
-  : MAPA.estradas.find((e) => (e.de === "madrid" && e.para === "toledo")
-                           || (e.de === "toledo" && e.para === "madrid"));
-if (NA_BANCADA) {
-  const nomeDe = (slug) => (MAPA.aldeias[slug] && MAPA.aldeias[slug].nome) || slug;
-  const bs = document.querySelectorAll("#hud p:first-of-type b");
-  bs[0].textContent = nomeDe(via.de);
-  bs[1].textContent = nomeDe(via.para);
-}
-const pts = via.pts;
-const acum = [0];
-for (let i = 1; i < pts.length; i++)
-  acum.push(acum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
-const COMP = acum[acum.length - 1];
-
-const _p = new THREE.Vector3();
-function noCaminho(metros, saida) {
-  const d = Math.max(0, Math.min(COMP - 0.01, metros));
-  let i = 1;
-  while (i < acum.length - 1 && acum[i] < d) i++;
-  const t = (d - acum[i - 1]) / Math.max(acum[i] - acum[i - 1], 1e-6);
-  const a = pts[i - 1], b = pts[i];
-  saida.set(a[0] + (b[0] - a[0]) * t, a[2] + (b[2] - a[2]) * t,
-            -(a[1] + (b[1] - a[1]) * t));
-  return Math.atan2(-(b[1] - a[1]), b[0] - a[0]);
-}
-
-const N_POSTOS = 7;                       // ímpar: há um posto no MEIO da estrada
-const postos = [];
-for (let i = 0; i < N_POSTOS; i++) {
-  const m = COMP * (i + 0.5) / N_POSTOS;
-  const v = new THREE.Vector3();
-  const rumo = noCaminho(m, v);
-  postos.push({ m, v: v.clone(), rumo });
-}
-document.getElementById("np").textContent = N_POSTOS;
-
-// o marco: um prumo de pedra à beira da estrada. Faz duas coisas — diz onde é
-// um posto, e faz uma estrada LER-SE COMO UMA SÓ, que é o defeito de que o
-// Lucas se queixa há meses (duas estradas a passar a vinte metros uma da outra
-// parecem a mesma, e dois exércitos em estradas diferentes parecem atravessar-se)
-const geoMarco = new THREE.CylinderGeometry(0.55, 0.85, 3.2, 5);
-const matMarco = new THREE.MeshStandardMaterial({ color: 0x9a9384, roughness: 0.95 });
-const marcos = new THREE.InstancedMesh(geoMarco, matMarco, N_POSTOS);
-marcos.castShadow = marcos.receiveShadow = true;
-const _m4 = new THREE.Matrix4();
-postos.forEach((p, i) => {
-  const lado = new THREE.Vector3(Math.cos(p.rumo + Math.PI / 2), 0,
-                                 Math.sin(p.rumo + Math.PI / 2)).multiplyScalar(7.5);
-  _m4.makeTranslation(p.v.x + lado.x, p.v.y + 1.6, p.v.z + lado.z);
-  marcos.setMatrixAt(i, _m4);
-});
-cena.add(marcos);
-
-// ── AS DUAS COLUNAS ─────────────────────────────────────────────────────────
-// ── E PORQUE É QUE ELAS TÊM DE TER COR DE REI ───────────────────────────────
-// Até aqui as tropas distinguiam-se por TIPO: ocre o lanceiro, verde o
-// arqueiro, vermelho o cavaleiro. Num encontro isso não chega — o que se tem
-// de ler primeiro é DE QUEM SÃO, e só depois o que são. A túnica passa a levar
-// a cor do Rei; a silhueta continua a dizer o tipo.
-//
-// `clonarComOssos` partilha os materiais entre as cópias, portanto pintar um
-// pintava a coluna inimiga também: o material tem de ser clonado por lado.
-// ── OS SOLDADOS NOVOS (16/09) ───────────────────────────────────────────────
-// Os tres do ComfyUI, armados no Blender. ?antigos volta aos de antes.
-const NOVOS = !new URLSearchParams(location.search).has("antigos");
-const glb = {};
-for (const tipo of ["lanceiro", "arqueiro", "cavaleiro"])
-  glb[tipo] = await new Promise((ok, mal) =>
-    new GLTFLoader().load("./" + tipo + (NOVOS ? "_novo" : "") + ".glb", ok, undefined, mal));
-
-const PASSO = { lanceiro: /idle_walk/i, arqueiro: /idle_walk/i, cavaleiro: /^gallop$/i };
-const PARADO = { lanceiro: /alerted_stand/i, arqueiro: /alerted_stand/i,
-                 cavaleiro: /^idle$/i };
-const GOLPE = { lanceiro: /hit_spear/i, arqueiro: /hit_spear/i,
-                cavaleiro: NOVOS ? /hit_sword/i : /^gallop$/i };
-const TUNICA = { A: 0x35557f, B: 0x8e3a2c };
-
-function figura(tipo, rei) {
-  const g = glb[tipo];
-  const raiz = clonarComOssos(g.scene);
-  raiz.traverse((o) => {
-    if (!o.isMesh) return;
-    o.castShadow = o.receiveShadow = true;
-    o.frustumCulled = false;
-    if (o.material && o.material.name === "M_armor_clothe") {
-      o.material = o.material.clone();
-      o.material.color.setHex(TUNICA[rei]);
-    } else if (NOVOS && rei === "B" && o.material) {
-      // os novos vem todos de azul: o Rei B tinge a figura inteira de vermelho,
-      // que e o que se tem de ler primeiro -- de quem sao
-      o.material = o.material.clone();
-      o.material.color.setHex(0xe08070);
-    }
-  });
-  raiz.scale.setScalar(2.2);
-  const mix = new THREE.AnimationMixer(raiz);
-  const dos = {};
-  for (const [nome, padrao] of [["andar", PASSO[tipo]], ["parar", PARADO[tipo]],
-                                ["bater", GOLPE[tipo]]]) {
-    const cl = g.animations.find((a) => padrao.test(a.name))
-      || g.animations.find((a) => /walk/i.test(a.name)) || g.animations[0];
-    dos[nome] = mix.clipAction(cl);
-  }
-  // o golpe é UMA vez e volta à guarda; se fosse em ciclo o homem ficava a
-  // esfaquear o ar depois de o inimigo já ter caído
-  dos.bater.setLoop(THREE.LoopOnce, 1);
-  dos.bater.clampWhenFinished = true;
-  cena.add(raiz);
-  return { raiz, mix, acao: dos, tipo, pose: null, avanco: 0, avancoAlvo: 0,
-           golpe: dos.bater.getClip().duration };
-}
-
-// ── UMA POSE DE CADA VEZ ────────────────────────────────────────────────────
-// Trocar de animação à mão em cinco sítios diferentes foi o que me deu, na
-// primeira tentativa, um morto a continuar em guarda enquanto tombava. Passa
-// tudo por aqui, e quem já está na pose pedida não faz nada.
-function pose(h, nome) {
-  if (h.pose === nome || !h.acao[nome]) return;
-  if (h.acao[h.pose]) h.acao[h.pose].fadeOut(0.2);
-  h.acao[nome].reset().fadeIn(0.2).play();
-  h.pose = nome;
-}
-
-// ── AS HOSTES SÃO AS COLUNAS DO MAPA ────────────────────────────────────────
-// (17/09) A bancada tinha uma coluna sua, um homem atrás do outro e a placa
-// antiga por cima -- exatamente o que se passou um dia a tirar do mapa. Agora a
-// formação e as placas vêm do `mapa3d.js`: doze figuras repartidas pela
-// composição, fileiras de três, e uma placa por tipo com o número e o nome na
-// cor do Rei. A única diferença pedida é a ORDEM: cavaleiro à frente, lanceiros
-// no meio, arqueiros atrás.
-const F = mapa.formacao;
-const ORDEM = ["cavaleiro", "lanceiro", "arqueiro"];
-const COMPOSICAO = {
-  A: { cavaleiro: 6, lanceiro: 24, arqueiro: 16 },
-  B: { cavaleiro: 8, lanceiro: 26, arqueiro: 18 },
-};
-// as duas cabeças a 9 m quando param; na luta os lanceiros avançam 2,5 m e os
-// cavalos só 1,2 (com mais, os dois cavalos entravam um no outro)
-const FOLGA_FRENTE_M = 9;
-const AVANCO_LUTA_M = 2.5;
-const AVANCO_CAVALO_M = 1.2;
-const exercitos = {};
-for (const rei of ["A", "B"]) {
-  const blocos = [];
-  const homens = [];
-  let fundo = 0;
-  for (const bl of F.formacaoDe({ composicao: COMPOSICAO[rei] }, ORDEM)) {
-    const passo = F.passo(bl.tipo), larg = F.largura(bl.tipo);
-    const linhas = Math.ceil(bl.n / F.deFrente);
-    const bloco = { tipo: bl.tipo, homens: [] };
-    for (let k = 0; k < bl.n; k++) {
-      const lin = (k / F.deFrente) | 0;
-      const col = k - lin * F.deFrente;
-      const nesta = Math.min(F.deFrente, bl.n - lin * F.deFrente);
-      const f = figura(bl.tipo, rei);
-      f.atras = fundo + lin * passo;                 // metros atrás da cabeça
-      f.lat = (col - (nesta - 1) / 2) * larg;        // metros para o lado
-      pose(f, "andar");
-      f.acao.andar.time = (homens.length * 0.41) % f.acao.andar.getClip().duration;
-      homens.push(f);
-      bloco.homens.push(f);
-    }
-    blocos.push(bloco);
-    fundo += linhas * passo + F.folgaBlocos;
-  }
-  exercitos[rei] = {
-    homens, blocos,
-    posto: rei === "A" ? -1 : N_POSTOS,      // fora da estrada, a entrar
-    sentido: rei === "A" ? 1 : -1,
-    prog: 0,                                  // 0..1 entre o posto e o seguinte
-  };
-}
-
-// ── AS PLACAS ───────────────────────────────────────────────────────────────
-// As do mapa: de perto uma por tipo, por cima do seu bloco; de longe uma só com
-// o total. O número é o do motor (aqui, a composição) e cai na proporção das
-// figuras que caem.
-const placasSp = [];
-for (let i = 0; i < 8; i++) {
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({
-    sizeAttenuation: false, depthTest: false, transparent: true, toneMapped: false }));
-  sp.center.set(0.5, 0);
-  sp.renderOrder = 950;
-  sp.visible = false;
-  cena.add(sp);
-  placasSp.push(sp);
-}
-const TROPAS = { A: 0, B: 0 };
-for (const r of ["A", "B"])
-  TROPAS[r] = Object.values(COMPOSICAO[r]).reduce((a, b) => a + b, 0);
-
-// ── O PÓ ────────────────────────────────────────────────────────────────────
-// O que dá PESO a um choque não é a animação, é o chão a levantar-se. Um
-// punhado de manchas a crescer e a apagar-se em menos de um segundo faz mais
-// pela pancada do que qualquer coisa que eu saiba animar.
-const _cp = document.createElement("canvas");
-_cp.width = _cp.height = 64;
-{
-  const g = _cp.getContext("2d");
-  const r = g.createRadialGradient(32, 32, 2, 32, 32, 31);
-  r.addColorStop(0, "rgba(190,176,146,.85)");
-  r.addColorStop(0.55, "rgba(176,162,132,.35)");
-  r.addColorStop(1, "rgba(170,156,126,0)");
-  g.fillStyle = r;
-  g.fillRect(0, 0, 64, 64);
-}
-const texPo = new THREE.CanvasTexture(_cp);
-const POS = [];
-for (let i = 0; i < 40; i++) {
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: texPo, transparent: true, depthWrite: false, opacity: 0 }));
-  sp.visible = false;
-  cena.add(sp);
-  POS.push({ sp, t: 9, dur: 1 });
-}
-let iPo = 0;
-
-function poeira(x, y, z, quantos, tamanho) {
-  for (let k = 0; k < quantos; k++) {
-    const p = POS[iPo = (iPo + 1) % POS.length];
-    p.t = 0;
-    p.dur = 0.6 + Math.random() * 0.5;
-    p.r0 = tamanho * (0.5 + Math.random() * 0.4);
-    p.r1 = p.r0 * 2.6;
-    p.sp.position.set(x + (Math.random() - 0.5) * tamanho,
-                      y + 0.4 + Math.random() * 0.6,
-                      z + (Math.random() - 0.5) * tamanho);
-    p.sp.visible = true;
-  }
-}
-
-function moverPoeira(dt) {
-  for (const p of POS) {
-    if (p.t >= p.dur) { p.sp.visible = false; continue; }
-    p.t += dt;
-    const u = Math.min(1, p.t / p.dur);
-    const r = p.r0 + (p.r1 - p.r0) * u;
-    p.sp.scale.set(r, r, 1);
-    p.sp.position.y += dt * 0.9;
-    p.sp.material.opacity = 0.75 * (1 - u) * (1 - u);
-  }
-}
-
-// ── A SALVA ─────────────────────────────────────────────────────────────────
-// ── PORQUE É QUE ISTO É BARATO ──────────────────────────────────────────────
-// O motor resolve o combate por números: quando a cena começa, o resultado JÁ
-// ESTÁ DECIDIDO. Não há física, não há deteção de acertos, não há IA nenhuma —
-// há um GUIÃO. Cada flecha sabe em quem vai acertar antes de sair da corda, e
-// cada queda tem hora marcada.
-//
-// É a diferença entre ENCENAR um resultado, que é código, e SIMULAR uma
-// batalha, que é impossível com o que temos. E é como os antigos o faziam,
-// não por esperteza: por não terem outra hipótese.
-const N_FLECHAS = 140;
-// EXAGERADA, e de propósito. Uma flecha à escala destes homens tem cinco
-// centímetros de grossura e não se vê a trinta metros. O Age of Empires faz o
-// mesmo: a flecha não é um objeto, é um SINAL de que há combate.
-const _gh = new THREE.CylinderGeometry(0.055, 0.085, 2.4, 4);
-const _gp = new THREE.ConeGeometry(0.16, 0.40, 4);
-_gp.translate(0, 1.40, 0);
-const _gf = new THREE.BoxGeometry(0.02, 0.42, 0.30);
-_gf.translate(0, -1.00, 0);
-const flechas = new THREE.InstancedMesh(
-  mergeGeometries([_gh, _gp, _gf]),
-  new THREE.MeshStandardMaterial({ color: 0x6d5738, roughness: 0.92 }), N_FLECHAS);
-flechas.castShadow = true;
-flechas.frustumCulled = false;
-flechas.count = 0;
-cena.add(flechas);
-
-// gravidade exagerada, e de propósito: as figuras estão a 2,2x, e com os 9,8
-// do mundo real a flecha fazia um arco de bala perdida em vez de um arco de
-// arco. O que se quer é que se VEJA subir e cair.
-const GRAV = -30;
-const voo = [];
-const _o3 = new THREE.Vector3(), _d3 = new THREE.Vector3();
-const _q3 = new THREE.Quaternion(), _s3 = new THREE.Vector3(1, 1, 1);
-const _m3 = new THREE.Matrix4(), _cima = new THREE.Vector3(0, 1, 0);
-
-function lancar(origem, destino, vitima) {
-  const dist = origem.distanceTo(destino);
-  // ── O ARCO TEM DE SER ALTO ──────────────────────────────────────────────
-  // Com um tempo de voo curto a flecha vai quase a direito, chega deitada e
-  // fica no chão como um pau caído. O que se lê como salva é a subida: as
-  // flechas contra o céu e a queda a pique. Portanto o tempo de voo é
-  // ESCOLHIDO alto, e a velocidade sai da conta -- não o contrário.
-  const tv = 0.8 + dist / 32;
-  const v = destino.clone().sub(origem).divideScalar(tv);
-  v.y -= 0.5 * GRAV * tv;              // a conta do tiro: v = (D-O)/t - ½gt
-  voo.push({ o: origem.clone(), v, t: 0, tv, cravada: -1, vitima });
-  if (voo.length > N_FLECHAS) voo.shift();
-}
-
-function moverFlechas(dt) {
-  for (const f of voo) {
-    if (f.cravada >= 0) { f.cravada += dt; continue; }
-    f.t += dt;
-    if (f.t >= f.tv) {
-      f.t = f.tv;
-      f.cravada = 0;
-      // a queda acontece quando a FLECHA CHEGA, não quando é disparada: é o
-      // que faz o espectador ligar as duas coisas
-      if (f.vitima && !f.vitima.caido) tombar(f.vitima);
-    }
-  }
-  // as cravadas ficam no chão um bocado: um campo a encher-se de flechas diz
-  // "aqui houve uma batalha" melhor do que qualquer efeito
-  while (voo.length && voo[0].cravada > 9) voo.shift();
-  let n = 0;
-  for (const f of voo) {
-    const t = f.t;
-    _o3.set(f.o.x + f.v.x * t, f.o.y + f.v.y * t + 0.5 * GRAV * t * t,
-            f.o.z + f.v.z * t);
-    _d3.set(f.v.x, f.v.y + GRAV * t, f.v.z).normalize();
-    _q3.setFromUnitVectors(_cima, _d3);
-    _m3.compose(_o3, _q3, _s3);
-    flechas.setMatrixAt(n++, _m3);
-  }
-  flechas.count = n;
-  flechas.instanceMatrix.needsUpdate = true;
-}
-
-function tombar(h) {
-  h.caido = { t: 0 };
-  for (const a of Object.values(h.acao)) a.fadeOut(0.15);
-}
-
-// ── O GUIÃO ─────────────────────────────────────────────────────────────────
-// Escrito de uma vez, no instante em que as duas hostes travam. Depois só se
-// toca. Quando houver motor, é ele que escreve isto — e a cena não muda nada.
-const _mao = new THREE.Vector3();
-
-// ── O PONTO QUE NUNCA SE VÊ FALHAR ──────────────────────────────────────────
-// O glTF guarda os ossos como `hand.L`, e o carregador do three TIRA O PONTO ao
-// montar a cena: lá dentro chamam-se `handL`. Procurar por `hand.L` devolve
-// `undefined` — e `undefined` aqui não dá erro nenhum, dá uma flecha a sair dos
-// pés do arqueiro e um braço que nunca puxa a corda. Duas coisas que eu tinha
-// escrito e que nunca chegaram a acontecer.
-function osso(raiz, nome) {
-  return raiz.getObjectByName(nome) || raiz.getObjectByName(nome.replace(".", ""));
-}
-let guiao = null, tGuiao = 0, iGuiao = 0, acabou = null, tFim = 0;
-
-function montarGuiao() {
-  const g = [];
-  const inimigo = (rei) => exercitos[rei === "A" ? "B" : "A"].homens;
-  const dos = (rei, tipo) => exercitos[rei].homens.filter((h) => h.tipo === tipo);
-  const POR_ARQUEIRO = 3;
-  let t = 1.0;
-
-  // ── AS BAIXAS SÃO CONTADAS, NÃO SORTEADAS ────────────────────────────────
-  // Seis figuras por lado, e o guião gasta exatamente seis: o Rei A perde
-  // quatro (uma flecha, dois golpes, um atropelo) e o Rei B perde duas. Fica
-  // com dois homens de pé para fugir — na primeira versão perdia os seis e a
-  // debandada não tinha ninguém para debandar, o que dá uma batalha que acaba
-  // com um campo vazio em vez de com uma derrota.
-  //
-  // ── A VAGA É A BATIDA DA CENA ─────────────────────────────────────────────
-  // E não é invenção da animação: é a mecânica. Quando o Rei manda um ataque
-  // composto, escolhe a ORDEM das tropas, e essa ordem é exatamente isto — os
-  // arqueiros a abrir, os lanceiros a fechar, a cavalaria a decidir. Uma
-  // batalha sem vagas é uma trapalhada sem forma; com vagas tem princípio,
-  // meio e fim de graça, e cada tempo lê-se porque é um tipo contra outro.
-  for (let vaga = 0; vaga < 3; vaga++) {
-    for (const rei of ["A", "B"]) {
-      dos(rei, "arqueiro").forEach((h, k) => {
-        const q = t + k * 0.24;
-        g.push({ t: q, faz: "puxar", quem: h });
-        for (let f = 0; f < POR_ARQUEIRO; f++)
-          g.push({ t: q + 0.70 + f * 0.13, faz: "atirar", quem: h,
-                   deles: inimigo(rei),
-                   mata: f === 0 && k === 0
-                     && ((rei === "B" && vaga === 2) || (rei === "A" && vaga === 1)) });
-      });
-    }
-    t += 3.4;
-
-    for (const rei of ["A", "B"])
-    {
-      g.push({ t, faz: "carregar", quem: dos(rei, "lanceiro"), quanto: AVANCO_LUTA_M });
-      g.push({ t, faz: "carregar", quem: dos(rei, "cavaleiro"), quanto: AVANCO_CAVALO_M });
-    }
-    t += 1.3;
-    for (let k = 0; k < 3; k++)
-      for (const rei of ["A", "B"])
-        dos(rei, "lanceiro").forEach((h, j) => {
-          g.push({ t: t + k * 0.95 + j * 0.17, faz: "bater", quem: h,
-                   deles: inimigo(rei),
-                   mata: k === 2 && j === 0
-                     && (rei === "B" ? vaga < 2 : vaga === 1) });
-        });
-    t += 3.4;
-    for (const rei of ["A", "B"])
-      g.push({ t, faz: "carregar", quem: dos(rei, "lanceiro"), quanto: 0 });
-    t += 2.2;
-  }
-
-  // ── A CARGA ───────────────────────────────────────────────────────────────
-  // A vaga que decide. O cavaleiro do Rei B atravessa a linha inteira: não
-  // para no contacto, PASSA — é isso que separa uma carga de um ataque, e é
-  // por isso que a cavalaria quebra linhas em vez de as desgastar.
-  const cav = dos("B", "cavaleiro");
-  g.push({ t, faz: "grito", texto: NOVOS ? "O cavaleiro do Rei B entra na luta."
-                                         : "A cavalaria do Rei B carrega." });
-  if (NOVOS) {
-    // decisao do Lucas: animacoes simples, sem correr para o inimigo -- o
-    // cavaleiro desce a espada no sitio e um lanceiro do outro lado cai
-    // os dois cavaleiros descem a espada; so o do Rei B derruba alguem -- as
-    // baixas continuam contadas (A perde quatro, B perde duas)
-    const cavA = dos("A", "cavaleiro");
-    g.push({ t: t + 0.4, faz: "bater", quem: cav[0], deles: inimigo("B"), mata: true });
-    if (cavA.length) g.push({ t: t + 0.9, faz: "bater", quem: cavA[0], deles: inimigo("A"), mata: false });
-    g.push({ t: t + 1.8, faz: "bater", quem: cav[0], deles: inimigo("B"), mata: false });
-  } else {
-    g.push({ t: t + 0.2, faz: "carregar", quem: cav, quanto: 26, veloc: 20 });
-    g.push({ t: t + 1.5, faz: "atropelar", quem: cav[0], deles: inimigo("B") });
-  }
-  t += 4.0;
-  g.push({ t, faz: "fim" });
-  g.sort((a, b) => a.t - b.t);
-  return g;
-}
-
-function tocarGuiao(dt) {
-  tGuiao += dt;
-  while (iGuiao < guiao.length && guiao[iGuiao].t <= tGuiao) {
-    const ev = guiao[iGuiao++];
-    if (ev.faz === "carregar") {
-      for (const h of ev.quem) {
-        if (h.caido) continue;
-        h.avancoAlvo = ev.quanto;
-        h.veloc = ev.veloc || 6;
-      }
-      continue;
-    }
-    if (ev.faz === "grito") { estado.innerHTML = ev.texto; continue; }
-    if (ev.faz === "atropelar") {
-      // quem é atropelado cai onde está: a carga não escolhe, varre
-      const vivos = ev.deles.filter((h) => !h.caido);
-      if (vivos.length) {
-        const q = vivos[Math.floor(Math.random() * vivos.length)];
-        poeira(q.raiz.position.x, q.raiz.position.y, q.raiz.position.z, 5, 3.4);
-        tombar(q);
-      }
-      continue;
-    }
-    if (ev.faz === "fim") {
-      // ── QUEM PERDE, FOGE ────────────────────────────────────────────────
-      // Uma batalha sem fim não é uma batalha, é um moinho. O lado com menos
-      // homens de pé quebra e desce a estrada por onde veio; o outro fica a
-      // ocupar o posto, que é o que se estava a disputar desde o princípio.
-      const vivosDe = (r) => exercitos[r].homens.filter((h) => !h.caido).length;
-      const perde = vivosDe("A") <= vivosDe("B") ? "A" : "B";
-      const ganha = perde === "A" ? "B" : "A";
-      for (const h of exercitos[perde].homens) {
-        if (h.caido) continue;
-        h.fugindo = true;
-        h.avancoAlvo = -260;
-        h.veloc = 11;
-      }
-      for (const h of exercitos[ganha].homens) {
-        if (!h.caido) { h.avancoAlvo = 2.4; h.veloc = 3; }
-      }
-      acabou = ganha;
-      const restam = Math.round(TROPAS[ganha] / exercitos[ganha].homens.length
-                                * vivosDe(ganha));
-      estado.innerHTML = "O <b>Rei " + ganha + "</b> ficou com o posto. "
-        + "Restam-lhe <b>" + restam + "</b> tropas; o Rei " + perde
-        + " quebrou e desce a estrada.";
-      continue;
-    }
-    if (ev.quem.caido) continue;
-    if (ev.faz === "bater") {
-      // o golpe e a queda são o MESMO instante: é isso que os liga aos olhos
-      // de quem vê. Com meio segundo entre eles já parecem duas coisas.
-      if (ev.quem.acao[ev.quem.pose]) ev.quem.acao[ev.quem.pose].fadeOut(0.12);
-      ev.quem.acao.bater.reset().fadeIn(0.12).play();
-      ev.quem.pose = "bater";
-      const _q = ev.quem.raiz.position;
-      poeira(_q.x, _q.y, _q.z, 2, 2.0);
-      const vivos = ev.deles.filter((h) => !h.caido && h.tipo === "lanceiro");
-      if (ev.mata && vivos.length) tombar(vivos[0]);
-      continue;
-    }
-    if (ev.faz === "puxar") {
-      if (!osso(ev.quem.raiz, "lowerarm.R")) {
-        // modelo novo: levanta o arco com a animacao de disparo
-        if (ev.quem.acao[ev.quem.pose]) ev.quem.acao[ev.quem.pose].fadeOut(0.12);
-        ev.quem.acao.bater.reset().fadeIn(0.12).play();
-        ev.quem.pose = "bater";
-        continue;
-      }
-      ev.quem.puxa = 0; continue;
-    }
-    ev.quem.puxa = null;
-    const vivos = ev.deles.filter((h) => !h.caido);
-    if (!vivos.length) continue;
-    const alvo = vivos[Math.floor(Math.random() * vivos.length)];
-    const arco = osso(ev.quem.raiz, "hand.L") || osso(ev.quem.raiz, "forearm.R");
-    (arco || ev.quem.raiz).getWorldPosition(_mao);
-    _mao.y += 1.0;
-    const d = alvo.raiz.position.clone();
-    if (ev.mata) {
-      d.y += 2.4;                       // ao peito: esta flecha tem nome
-      lancar(_mao, d, alvo);
-    } else {
-      d.x += (Math.random() - 0.5) * 9;
-      d.z += (Math.random() - 0.5) * 9;
-      d.y += 0.1;                       // ao chão à volta dele
-      lancar(_mao, d, null);
-    }
-  }
-}
-
-// ── O AVANÇO, DE POSTO EM POSTO ─────────────────────────────────────────────
-const T_POSTO = 1.9;                         // segundos para vencer um posto
-let travados = false, relogio = 0, disputado = (N_POSTOS - 1) >> 1;
-const _euler = new THREE.Euler();
-const _qPuxa = new THREE.Quaternion();
-const _eixoPuxa = new THREE.Vector3(1, 0, 0);
+const mapa = await iniciar(document.getElementById("palco"),
+  NA_BANCADA ? { cena: "bancada" } : {});
+const { MAPA, THREE, cam, ctrl } = mapa;
+Object.assign(window, { mapa, MAPA, THREE, cam, ctrl });
+document.getElementById("carga").remove();
 const estado = document.getElementById("estado");
 
-function ondeParam(e) {
-  // o posto para onde este exército quer ir a seguir
-  return e.posto + e.sentido;
+// a estrada: Madrid–Toledo no mapa do jogo, a única da bancada
+const via = NA_BANCADA ? MAPA.estradas[0]
+  : (MAPA.estradas.find((e) => (e.de === "madrid" && e.para === "toledo")
+                            || (e.de === "toledo" && e.para === "madrid"))
+     || MAPA.estradas[0]);
+
+// as duas hostes, com composição de verdade
+const HOSTE = {
+  A: { lanceiro: 24, arqueiro: 12, cavaleiro: 6 },
+  B: { lanceiro: 18, arqueiro: 10, cavaleiro: 4 },
+};
+const soma = (o) => o.lanceiro + o.arqueiro + o.cavaleiro;
+const T_ENCONTRO = 0.5;          // onde se encontram, ao longo do troço
+const PASSO_T = 0.05;            // ~10 s de marcha até ao choque
+
+let t = 0, lutou = false, fim = 0, depois = 0;
+
+// ⚠ DEPOIS DO CHOQUE SO HA UMA COLUNA. No motor o perdedor e ANIQUILADO: a
+// marcha dele deixa de existir no estado, e o vencedor segue caminho com menos
+// homens. A bancada tem de mentir o menos possivel, senao volta a ensinar-nos
+// uma batalha que o jogo nao tem.
+function marchas() {
+  if (lutou) {
+    const resta = { lanceiro: 17, arqueiro: 10, cavaleiro: 6 };   // 42 - 9 baixas
+    return [{ de: via.de, para: via.para, t: Math.min(0.98, T_ENCONTRO + depois),
+              dono: "A", tipo: "lanceiro", composicao: resta, tropas: soma(resta) }];
+  }
+  const avanco = T_ENCONTRO * t;
+  return [
+    { de: via.de, para: via.para, t: avanco,
+      dono: "A", tipo: "lanceiro", composicao: HOSTE.A, tropas: soma(HOSTE.A) },
+    { de: via.para, para: via.de, t: avanco,
+      dono: "B", tipo: "lanceiro", composicao: HOSTE.B, tropas: soma(HOSTE.B) },
+  ];
 }
 
-function avancar(dt) {
-  relogio += dt;
-  const A = exercitos.A, B = exercitos.B;
-  if (!travados) {
-    // ── A CONDIÇÃO DE ENCONTRO ──────────────────────────────────────────
-    // Não é distância, é POSTO. Ou pedem o mesmo posto, ou já se cruzaram —
-    // as duas dizem a mesma coisa: daqui não passam. Medir por distância era
-    // voltar ao problema de origem, em que dois exércitos a vinte metros um
-    // do outro (em estradas diferentes!) pareciam estar a lutar.
-    const proxA = ondeParam(A), proxB = ondeParam(B);
-    if (proxA >= proxB) {
-      travados = true;
-      // ── E O POSTO DISPUTADO É O SÍTIO ───────────────────────────────
-      // Parar cada um no seu posto deixava-os a oitenta metros de distância,
-      // que no ecrã não é um confronto: é um desencontro. Os dois avançam
-      // PARA o posto que ambos pediram e travam a poucos passos um do
-      // outro. O lugar da batalha é o posto, não o meio-termo entre dois.
-      disputado = proxA;
-      for (const e of [A, B])
-        e.parada = disputado - e.sentido * (FOLGA_FRENTE_M / 2) / (COMP / N_POSTOS);
-      estado.innerHTML = "Travaram no posto <b>" + (disputado + 1) + "</b> de "
-        + N_POSTOS + " &mdash; é aqui que a batalha acontece.";
-    } else {
-      for (const e of [A, B]) {
-        e.prog += dt / T_POSTO;
-        while (e.prog >= 1) { e.prog -= 1; e.posto += e.sentido; }
-      }
+// o evento é o do motor: o perdedor sai inteiro, o vencedor perde uma fração
+function eventoDoChoque() {
+  return {
+    tipo: "combate_estrada", turno: 1, id: "bancada|" + Date.now(),
+    de: via.de, para: via.para, t: T_ENCONTRO,
+    vencedor: "A", perdedor: "B",
+    compVenc: HOSTE.A, compPerd: HOSTE.B,
+    totalVenc: soma(HOSTE.A), baixasVenc: 9, segundos: 9,
+  };
+}
+
+function passo(dt) {
+  if (!lutou) {
+    t = Math.min(1, t + dt * PASSO_T / T_ENCONTRO);
+    mapa.atualizar({ turno: 1, aldeias: [], marchas: marchas() });
+    if (t >= 1) {
+      lutou = true;
+      mapa.atualizar({ turno: 1, aldeias: [], marchas: marchas(),
+                       eventos: [eventoDoChoque()] });
+      estado.innerHTML = "Encontraram-se. O Rei <b>A</b> vence; o Rei <b>B</b> "
+        + "perde o exército inteiro — como o motor resolve.";
     }
   } else {
-    for (const e of [A, B]) {
-      const onde = e.posto + e.sentido * e.prog;
-      const falta = e.parada - onde;
-      if (Math.abs(falta) > 0.012) {
-        e.prog += Math.sign(falta) * e.sentido * Math.min(Math.abs(falta),
-                                                          dt / T_POSTO);
-      } else if (!e.pronto) {
-        e.pronto = true;                        // chegou: põe-se em guarda
-        for (const h of e.homens) pose(h, "parar");
-      }
-    }
-    if (A.pronto && B.pronto) {
-      if (!guiao) {
-        guiao = montarGuiao();
-        estado.innerHTML = "Travaram no posto <b>" + (disputado + 1) + "</b> de "
-          + N_POSTOS + ". Guião escrito: <b>"
-          + guiao.filter((e) => e.faz === "atirar").length + "</b> tiros, <b>"
-          + guiao.filter((e) => e.mata).length + "</b> com nome.";
-      }
-      tocarGuiao(dt);
-    }
-  }
-  moverFlechas(dt);
-  moverPoeira(dt);
-  if (acabou && (tFim += dt) > 9) recomecar();
-
-  // ── AS PLACAS SEGUEM OS BLOCOS ────────────────────────────────────────────
-  let nb = 0;
-  const _pc = new THREE.Vector3();
-  const centroDe = (lista) => {
-    _pc.set(0, 0, 0);
-    let cy = -1e9;
-    for (const h of lista) { _pc.add(h.raiz.position); cy = Math.max(cy, h.raiz.position.y); }
-    _pc.divideScalar(lista.length);
-    _pc.y = cy + F.ALT_FIGURA * 1.35;
-    return _pc;
-  };
-  for (const rei of ["A", "B"]) {
-    const e = exercitos[rei];
-    const vivos = e.homens.filter((h) => !h.caido);
-    if (!vivos.length) continue;
-    const px = F.ALT_FIGURA * F.pxPorMetro(cam.position.distanceTo(vivos[0].raiz.position));
-    if (px < F.PX_PLACA_ABRE) {
-      const sp = placasSp[nb++];
-      const total = Math.round(e.blocos.reduce((a, b) =>
-        a + COMPOSICAO[rei][b.tipo] * b.homens.filter((h) => !h.caido).length / b.homens.length, 0));
-      sp.material.map = F.placaGrande(rei, total);
-      sp.material.needsUpdate = true;
-      sp.center.set(0.5, 0);
-      sp.position.copy(centroDe(vivos));
-      sp.scale.set(F.ESC_GRANDE, F.ESC_GRANDE, 1);
-      sp.visible = true;
-      continue;
-    }
-    for (const bl of e.blocos) {
-      const dePe = bl.homens.filter((h) => !h.caido);
-      if (!dePe.length) continue;
-      const sp = placasSp[nb++];
-      sp.material.map = F.placaTipo(rei, bl.tipo,
-        Math.round(COMPOSICAO[rei][bl.tipo] * dePe.length / bl.homens.length));
-      sp.material.needsUpdate = true;
-      sp.center.set(0.5, 0);                // todas a mesma altura, como no mapa
-      sp.position.copy(centroDe(dePe));
-      sp.scale.set(F.ESC_PEQUENA * F.PLACA_TIPO_ASPETO, F.ESC_PEQUENA, 1);
-      sp.visible = true;
-    }
-  }
-  for (let i = nb; i < placasSp.length; i++) placasSp[i].visible = false;
-
-  for (const rei of ["A", "B"]) {
-    const e = exercitos[rei];
-    const alvo = e.posto + e.sentido * e.prog;
-    e.homens.forEach((h, i) => {
-      // ── QUEM CAI FICA ONDE CAIU ───────────────────────────────────────
-      // Não há animação de morte, e não faz falta: a esta escala uma queda
-      // para a frente em meio segundo lê-se perfeitamente. O tocador PÁRA,
-      // senão o morto continuava em guarda enquanto tomba.
-      if (h.caido) {
-        h.caido.t = Math.min(1, h.caido.t + dt / 0.65);
-        const u = h.caido.t;
-        _euler.set(-(Math.PI / 2) * u * u * (3 - 2 * u), h.raiz.rotation.y, 0, "YXZ");
-        h.raiz.quaternion.setFromEuler(_euler);
-        h.raiz.position.y = h.chao - 0.5 * u;
-        return;
-      }
-      h.mix.update(dt);
-      // ── O AVANÇO DA VAGA ──────────────────────────────────────────────
-      // A linha de guarda é o lugar de cada um; a vaga que ataca sai dela e
-      // volta. Guardar isto como um DESVIO à linha (e não como uma posição
-      // nova) é o que faz o recuo ser de graça: manda-se o desvio a zero.
-      if (travados) {
-        const dAv = h.avancoAlvo - h.avanco;
-        if (Math.abs(dAv) > 0.03) {
-          h.avanco += Math.sign(dAv) * Math.min(Math.abs(dAv),
-                                                (h.veloc || 6) * dt);
-          // o cavalo levanta pó; o homem a pé não levanta nada que se veja
-          if (h.tipo === "cavaleiro" && Math.abs(dAv) > 1) {
-            h.po = (h.po || 0) + dt;
-            if (h.po > 0.10) {
-              h.po = 0;
-              poeira(h.raiz.position.x, h.raiz.position.y,
-                     h.raiz.position.z, 1, 3.2);
-            }
-          }
-          if (h.pose !== "bater") pose(h, "andar");
-        } else if (h.pose === "andar") {
-          pose(h, "parar");
-        }
-        if (h.pose === "bater"
-            && (h.acao.bater.paused || h.acao.bater.time >= h.golpe - 1e-3))
-          pose(h, "parar");
-      }
-      // a corda a ser puxada: o braço direito recua enquanto o tiro se prepara.
-      // Aplica-se DEPOIS do tocador, senão a animação escrevia por cima.
-      if (h.puxa !== null && h.puxa !== undefined) {
-        h.puxa = Math.min(0.7, h.puxa + dt);
-        const b = osso(h.raiz, "lowerarm.R");
-        if (b) b.quaternion.multiply(
-          _qPuxa.setFromAxisAngle(_eixoPuxa, -1.25 * (h.puxa / 0.7)));
-      }
-      // cada homem uma casa atrás do da frente, em metros e não em postos:
-      // um posto é uma unidade de TEMPO, e a coluna é uma coisa física
-      const m = COMP * (alvo + 0.5) / N_POSTOS
-        - e.sentido * h.atras + e.sentido * h.avanco;
-      const rumo = noCaminho(Math.max(2, Math.min(COMP - 2, m)), _p)
-        + (e.sentido < 0 ? Math.PI : 0) + (h.fugindo ? Math.PI : 0);
-      const lat = h.lat;
-      _p.x += Math.cos(rumo + Math.PI / 2) * lat;
-      _p.z += Math.sin(rumo + Math.PI / 2) * lat;
-      h.raiz.position.copy(_p);
-      h.chao = _p.y;
-      // ── OS TRÊS EIXOS, E NÃO SÓ O DE CIMA ─────────────────────────────
-      // A queda escreve no `quaternion`, e o three mantém `rotation` em passo
-      // com ele: quem tombou fica com `rotation.x` a meio π. Repor só o eixo
-      // vertical deixava, ao recomeçar a batalha, meia hoste a marchar deitada
-      // de costas -- de pé para o motor, no chão para quem olha.
-      //
-      // A peça olha para +Y no Blender, que a exportação manda para -Z: daí o
-      // quarto de volta a menos do que a conta óbvia.
-      h.raiz.rotation.set(0, -rumo - Math.PI / 2, 0);
-    });
+    depois += dt * PASSO_T;                       // o vencedor segue caminho
+    mapa.atualizar({ turno: 1, aldeias: [], marchas: marchas() });
+    if (!mapa.batalhas.length && (fim += dt) > 3) recomecar();
   }
 }
 
-let ultimo = performance.now();
-function passo() {
-  requestAnimationFrame(passo);
-  const agora = performance.now();
-  const dt = Math.min((agora - ultimo) / 1000, 0.1);
-  ultimo = agora;
-  avancar(dt);
+function recomecar() {
+  t = 0; lutou = false; fim = 0; depois = 0;
+  estado.innerHTML = "As duas colunas descem a estrada.";
+  mapa.atualizar({ turno: 1, aldeias: [], marchas: marchas() });
 }
-window.avancar = avancar;      // para conferir com o painel escondido
-window.ex = exercitos;
-window.diag = () => ({ flechas: flechas.count, noAr: voo.filter((f) => f.cravada < 0).length,
-  caidos: [...exercitos.A.homens, ...exercitos.B.homens].filter((h) => h.caido).length,
-  guiao: guiao ? guiao.length : 0, i: iGuiao, t: Math.round(tGuiao) });
-document.getElementById("carga").remove();
-passo();
 
-// ── AS CÂMARAS ──────────────────────────────────────────────────────────────
-// a camara enquadra o POSTO DISPUTADO -- que e onde a cena esta, e nao o
-// meio geometrico da estrada
+// ── A CÂMARA ────────────────────────────────────────────────────────────────
+function pontoDoChoque() {
+  const pts = via.pts;
+  const q = pts[Math.floor(pts.length * T_ENCONTRO)];
+  return new THREE.Vector3(q[0], q[2], -q[1]);
+}
 function olhar(de, alto, dist) {
-  const q = postos[Math.max(0, Math.min(N_POSTOS - 1, disputado))];
-  ctrl.target.copy(q.v).add(new THREE.Vector3(0, 3, 0));
-  cam.position.set(q.v.x + Math.cos(q.rumo + de) * dist, q.v.y + alto,
-                   q.v.z + Math.sin(q.rumo + de) * dist);
+  const p = pontoDoChoque();
+  ctrl.target.copy(p).add(new THREE.Vector3(0, 3, 0));
+  cam.position.set(p.x + Math.cos(de) * dist, p.y + alto, p.z + Math.sin(de) * dist);
   ctrl.update();
 }
-// ── E DEPOIS RECOMEÇA ───────────────────────────────────────────────────────
-// A bancada fica a andar sozinha: acabada a batalha, espera uns segundos e as
-// duas hostes voltam a descer a estrada. É para se poder deixar aberta e ver a
-// coisa inteira mais do que uma vez sem lhe tocar.
-function recomecar() {
-  travados = false;
-  guiao = null; iGuiao = 0; tGuiao = 0; acabou = null; tFim = 0;
-  voo.length = 0;
-  flechas.count = 0;
-  for (const p of POS) { p.t = 9; p.sp.visible = false; }
-  estado.innerHTML = "&nbsp;";
-  for (const rei of ["A", "B"]) {
-    const e = exercitos[rei];
-    e.posto = rei === "A" ? -1 : N_POSTOS;
-    e.prog = 0;
-    e.pronto = false;
-    for (const h of e.homens) {
-      h.caido = null; h.puxa = null; h.avanco = 0; h.avancoAlvo = 0;
-      h.fugindo = false; h.veloc = 6;
-      pose(h, "andar");
-    }
-  }
-}
-
 for (const b of document.querySelectorAll("#hud button")) {
   b.onclick = () => {
     const c = b.dataset.c;
     if (c === "outra") { recomecar(); return; }
-    if (c === "ver") olhar(Math.PI / 2 + 0.55, 15, 48);
-    if (c === "lado") olhar(Math.PI / 2, 9, 56);
-    if (c === "alto") olhar(0, 95, 45);
+    if (c === "ver") olhar(0.9, 26, 48);
+    if (c === "lado") olhar(0.0, 12, 56);
+    if (c === "alto") olhar(0.0, 95, 45);
   };
 }
-olhar(Math.PI / 2 + 0.55, 15, 48);
+
+recomecar();
+olhar(0.9, 26, 48);
+
+let ultimo = performance.now();
+(function laco() {
+  requestAnimationFrame(laco);
+  const agora = performance.now();
+  const dt = Math.min((agora - ultimo) / 1000, 0.1);
+  ultimo = agora;
+  passo(dt);
+})();
+// um passo fixo, para gravar vídeo como se grava o mapa
+window.avancar = (dt) => { passo(dt / 1000); mapa.avancar(dt); };
 
 const med = document.getElementById("med");
 setInterval(() => {
+  const bs = mapa.batalhas;
+  const d = mapa.diagnostico;
   med.innerHTML = "<b>" + mapa.fps + "</b> fps<br>"
-    + (exercitos.A.homens.length + exercitos.B.homens.length) + " figuras animadas<br>"
-    + N_POSTOS + " postos em " + Math.round(COMP) + " m<br>"
-    + flechas.count + " flechas no ar e no chão<br>"
-    + [...exercitos.A.homens, ...exercitos.B.homens].filter((h) => h.caido).length
-    + " caídos" + (acabou ? "<br>venceu o Rei " + acabou : "");
+    + d.figurasAnimadas + " figuras na marcha<br>"
+    + bs.length + " cena(s) de batalha"
+    + (bs[0] ? "<br>caidos: " + (bs[0].figuras - bs[0].dePe) : "");
 }, 500);
 </script>
