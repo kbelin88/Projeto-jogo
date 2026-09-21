@@ -36,6 +36,13 @@ const MAX_VIVAS = 4;
 export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
   const vivas = [];
   const feitas = new Set();
+  // ── QUEM ESTA A LUTAR NAO ESTA A MARCHAR ──────────────────────────────────
+  // O mapa desenhava as duas colunas do motor POR CIMA da cena de batalha: via-se
+  // os dois exercitos a atravessarem-se um pelo outro enquanto, ao lado, dezasseis
+  // figuras lutavam. Foi o que o Lucas apanhou no replay (22/09). Enquanto a cena
+  // corre, estas marchas nao se desenham -- a cena E a marcha delas.
+  const emLuta = new Set();
+  const chaveLuta = (dono, de, para) => dono + "|" + de + ">" + para;
 
   // ── AS FLECHAS ────────────────────────────────────────────────────────────
   // Um lote só, partilhado por todas as batalhas: uma salva é um SINAL de que
@@ -190,7 +197,12 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
     const totalVenc = b.totalVenc || 1;
     const perdeVenc = Math.min(hostes.venc.homens.length - 1,
       Math.round(hostes.venc.homens.length * (b.baixasVenc || 0) / totalVenc));
-    const ba = { pos: b.pos.clone(), dir, lado, hostes, t: 0,
+    const chaves = [];
+    for (const dono of [b.vencedor, b.perdedor]) {
+      chaves.push(chaveLuta(dono, b.de, b.para), chaveLuta(dono, b.para, b.de));
+    }
+    for (const c of chaves) emLuta.add(c);
+    const ba = { chaves, pos: b.pos.clone(), dir, lado, hostes, t: 0,
                  dur: b.segundos || 7.0, perdeVenc, proxTiro: 0.4, proxGolpe: 1.0,
                  nasceu: (typeof performance !== "undefined" ? performance.now() : Date.now()),
                  tombados: { venc: 0, perd: 0 } };
@@ -200,6 +212,7 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
   }
 
   function fechar(ba) {
+    for (const c of (ba.chaves || [])) emLuta.delete(c);
     for (const quem of ["venc", "perd"]) {
       for (const f of ba.hostes[quem].homens) {
         cena.remove(f.raiz);
@@ -301,6 +314,8 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
     abrir,
     passo,
     get ativas() { return vivas.length; },
+    // o mapa pergunta isto antes de desenhar cada marcha
+    aLutar(dono, de, para) { return emLuta.has(chaveLuta(dono, de, para)); },
     // onde esta a batalha mais nova a decorrer -- e para la que a camara vai
     ondeEsta() {
       if (!vivas.length) return null;

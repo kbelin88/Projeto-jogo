@@ -1165,6 +1165,7 @@ transformed.y += onda * transformed.x * 0.05;`);
     if (!seguirCena && cam.position.distanceTo(_pb) > 1400) return null;
     const feita = asBatalhas().abrir({
       id: ev.id || (ev.turno + "|" + ev.de + ">" + ev.para + "|" + ev.vencedor),
+      de: ev.de, para: ev.para,
       pos: _pb.clone(), rumo: via.inv ? rumo + Math.PI : rumo,
       vencedor: ev.vencedor, perdedor: ev.perdedor,
       compVenc: ev.compVenc || {}, compPerd: ev.compPerd || {},
@@ -1332,6 +1333,8 @@ transformed.y += onda * transformed.x * 0.05;`);
         }
         const chave = m.dono + "|" + m.de + ">" + m.para + "|" + (m.tipo || "");
         vistas.add(chave);
+        // quem esta numa batalha a decorrer nao marcha: quem o desenha e a cena
+        if (batalhas && batalhas.aLutar(m.dono, m.de, m.para)) continue;
         const tt = tSuave(chave, m.t, dtQuadro);
         const bruto = via.inv ? (1 - tt) * via.comp : tt * via.comp;
         const rumoExtra = via.inv ? Math.PI : 0;
