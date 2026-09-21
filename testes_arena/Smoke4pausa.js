@@ -65,6 +65,9 @@ global.fetch = (url, opts) => {
 };
 
 global.Engine = require(process.cwd() + "/engine.js");
+// o caderno de marcas saiu do index.html em 22/09; sem isto o smoke corria
+// com o esboco de reserva e deixava de cobrir uma linha dele.
+global.Marcas = require(process.cwd() + "/marcas.js");
 const fs = require("fs");
 const html = fs.readFileSync("index.html", "utf-8");
 __idsHtml = new Set([...html.slice(0, html.lastIndexOf("<script>")).matchAll(/id=\"([^\"]+)\"/g)].map((m) => m[1]));

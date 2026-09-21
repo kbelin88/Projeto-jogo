@@ -53,6 +53,9 @@ global.fetch = () => Promise.reject(new Error("sem rede no smoke"));
 
 // carrega world/engine como no browser (UMD cai no module.exports; injeta como globals)
 global.Engine = require(process.cwd() + "/engine.js");
+// o caderno de marcas saiu do index.html em 22/09; sem isto o smoke corria
+// com o esboco de reserva e deixava de cobrir uma linha dele.
+global.Marcas = require(process.cwd() + "/marcas.js");
 
 // executa o script inline do index.html
 const fs = require("fs");

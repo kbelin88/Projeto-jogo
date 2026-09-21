@@ -55,6 +55,7 @@ t("o script roda ate o fim sem lancar (pega TDZ e nome sumido)", () => {
     // modulos de verdade: e o contrato que o index consome
     Iberia: require(path.join(RAIZ, "world-iberia.js")),
     Engine: require(path.join(RAIZ, "engine.js")),
+    Marcas: require(path.join(RAIZ, "marcas.js")),
     document: janela,
     navigator: dublê(),
     location: { protocol: "http:", href: "http://localhost/index.html" },
