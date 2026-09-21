@@ -27,6 +27,7 @@ import * as THREE from "./vendor/three.module.js";
 import { GLTFLoader } from "./vendor/loaders/GLTFLoader.js";
 import { OrbitControls } from "./vendor/controls/OrbitControls.js";
 import { clone as clonarComOssos } from "./vendor/utils/SkeletonUtils.js";
+import { criarBatalhas } from "./batalha.js";
 
 const BASE = new URL(".", import.meta.url).href;
 
@@ -228,6 +229,9 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
   // memoria mesmo escondida.
   const POCO_ANIM = 28;
   const animados = {};
+  // o glTF de cada tropa fica guardado: a cena de batalha faz as suas proprias
+  // copias, para nao roubar figuras ao poco da marcha
+  const fontesGlb = {};
   // o cavaleiro nao anda: galopa. E o esqueleto dele e o do CAVALO, com o
   // homem congelado em cima, portanto o passo tem outro nome -- por isso a
   // animacao se procura por tropa e nao por um padrao so
@@ -273,6 +277,7 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
       lista.push({ raiz, mix, dur: passo.duration, ant: null, v: 0, mats, dono: "A" });
     }
     animados[tipo] = lista;
+    fontesGlb[tipo] = ga;
   }
 
   const contaTri = (m) => (m.geometry.index ? m.geometry.index.count
@@ -310,6 +315,7 @@ uniform float slLimiar;         // declive a que comeca a rocha (0 = plano)
 uniform float slBorda;          // largura da passagem relva -> rocha
 uniform float slRuidoBorda;     // quanto o ruido desmancha a linha
 uniform float slForcaRocha;     // 0 = so relva (para comparar), 1 = normal
+uniform float slTriplanarProprio; // 1 = a PROPRIA fotografia lida pelos tres eixos
 varying vec3 vMundoSL;
 varying vec3 vNorSL;
 #ifdef texture2DGradEXT
@@ -386,7 +392,8 @@ float slRocha() {
   // (0 nas areias e nos caminhos, que nao tem penhasco nenhum)
   function semLadrilho(mat, { celula = 0.55, macro = 0.20, macroM = 260.0,
                               texRocha = null, escalaRocha = 0.27, limiar = 0.20,
-                              borda = 0.10, ruidoBorda = 0.55, forcaRocha = 0.0 } = {}) {
+                              borda = 0.10, ruidoBorda = 0.55, forcaRocha = 0.0,
+                              triplanarProprio = false } = {}) {
     if (!mat || mat.userData.semLadrilho) return mat;
     mat.userData.semLadrilho = true;
     const antes = mat.onBeforeCompile;
@@ -401,6 +408,7 @@ float slRocha() {
       sh.uniforms.slBorda = { value: borda };
       sh.uniforms.slRuidoBorda = { value: ruidoBorda };
       sh.uniforms.slForcaRocha = { value: forcaRocha };
+      sh.uniforms.slTriplanarProprio = { value: triplanarProprio ? 1.0 : 0.0 };
       // guardados para se poderem AFINAR ao vivo (ver `afinarLadrilho`): sem
       // isto, cada tentativa custava um recarregamento da pagina
       mat.userData.sl = sh.uniforms;
@@ -421,7 +429,12 @@ float slRocha() {
         sh.fragmentShader = sh.fragmentShader.replace(
           "#include <" + nome + ">", txt.split(de).join(para));
       };
-      abrir("map_fragment", "texture2D( map, vMapUv )", "slLer( map, vMapUv )");
+      // ── O PENHASCO LE A SUA PROPRIA PEDRA PELOS TRES EIXOS ──────────────
+      // Numa parede a pique, o uv de cima estica a fotografia ao longo da
+      // queda. Nas outras superficies (prado, areia, caminhos) o uv do forno e
+      // o certo -- ali o triplanar so tiraria o desenho do sitio.
+      abrir("map_fragment", "texture2D( map, vMapUv )",
+            "mix(slLer( map, vMapUv ), vec4(slTriplanar(map, slEscalaRocha), 1.0), slTriplanarProprio)");
       abrir("normal_fragment_maps", "texture2D( normalMap, vNormalMapUv )",
             "slLer( normalMap, vNormalMapUv )");
       abrir("roughnessmap_fragment", "texture2D( roughnessMap, vRoughnessMapUv )",
@@ -557,13 +570,17 @@ float slRocha() {
     const texRocha = rocha ? rocha.material.map : null;
     for (const ch of porTratar) {
       const eRocha = ch === rocha;
+      // ── SO OS PENHASCOS DA COSTA (21/09, decisao do Lucas) ───────────────
+      // A mistura relva/rocha por declive ficou provada na bancada das
+      // montanhas, mas as montanhas nao entram nesta fase: no mapa do jogo ela
+      // so punha pedra em encostas que hoje sao de relva. Fica GUARDADA
+      // (`forcaRocha: 1`) e o que vai para o jogo e o triplanar na parede da
+      // costa, que e onde a fotografia estica.
       semLadrilho(ch.material, {
         texRocha,
-        // 3,7 m de ladrilho na encosta: o tamanho que o Lucas escolheu em 20/09
-        escalaRocha: 1 / 3.7,
-        // as paredes da COSTA ja sao rocha inteira e tem o seu proprio UV
-        // torcido: nelas a mistura por declive nao tem nada que decidir
-        forcaRocha: eRocha ? 0.0 : 1.0,
+        escalaRocha: 1 / 13.0,           // o ladrilho da falesia, em metros
+        forcaRocha: 0.0,
+        triplanarProprio: eRocha,
       });
     }
   }
@@ -1074,6 +1091,35 @@ transformed.y += onda * transformed.x * 0.05;`);
     }
   }
 
+  // ── A BATALHA DE ESTRADA ────────────────────────────────────────────────
+  // Nasce quando o motor manda um `combate_estrada` (ver `atualizar`). A cena
+  // esta no `batalha.js`; aqui so se lhe diz ONDE e com que numeros.
+  let batalhas = null;
+  function asBatalhas() {
+    if (!batalhas) {
+      batalhas = criarBatalhas({ cena, fontes: fontesGlb, escala: ESCALA_TROPA,
+                                 formacao: { formacaoDe } });
+    }
+    return batalhas;
+  }
+  const _pb = new THREE.Vector3();
+  function abrirBatalha(ev) {
+    const via = eixoDe[ev.de + ">" + ev.para];
+    if (!via || !Object.keys(fontesGlb).length) return null;
+    const t = Math.max(0, Math.min(1, ev.t === undefined ? 0.5 : ev.t));
+    const rumo = noCaminho(via, via.inv ? (1 - t) * via.comp : t * via.comp, _pb);
+    return asBatalhas().abrir({
+      id: ev.id || (ev.turno + "|" + ev.de + ">" + ev.para + "|" + ev.vencedor),
+      pos: _pb.clone(), rumo: via.inv ? rumo + Math.PI : rumo,
+      vencedor: ev.vencedor, perdedor: ev.perdedor,
+      compVenc: ev.compVenc || {}, compPerd: ev.compPerd || {},
+      totalVenc: ev.totalVenc || 1, baixasVenc: ev.baixasVenc || 0,
+      // a cena tem de caber DENTRO do turno: um turno pode levar 5 s com o
+      // jogador burro e tres minutos com um raciocinador (ver `msPorTurno`)
+      segundos: ev.segundos || Math.max(3.5, Math.min(9.0, msPorTurno / 1000 * 0.7)),
+    });
+  }
+
   let dtQuadro = 16;
   function porTropas(t) {
     const conta = {};
@@ -1416,6 +1462,7 @@ transformed.y += onda * transformed.x * 0.05;`);
     // os tocadores so andam para os que estao a vista: um mixer parado nao
     // custa nada, e sao 48 poços por tipo
     const dts = dtQuadro / 1000;
+    if (batalhas) batalhas.passo(dts);
     // ── O PASSO SEGUE A MARCHA ────────────────────────────────────────────
     // Um ciclo do lanceiro cobre ~0,7 m de chao. Se a coluna anda a 1,4 m/s,
     // o ciclo tem de correr ao dobro -- senao ve-se o homem a deslizar. Os
@@ -1543,6 +1590,9 @@ transformed.y += onda * transformed.x * 0.05;`);
                atras: q.z > 1 };
     },
     parar(v) { parado = !!v; },
+    // uma batalha a pedido, para conferir sem partida nenhuma
+    batalhaDeTeste(ev) { return abrirBatalha(ev); },
+    get batalhasAtivas() { return batalhas ? batalhas.diagnostico : []; },
     redimensionar: tamanho,
     destruir() { vivo = false; rend.dispose(); hospedeiro.removeChild(tela); },
 
@@ -1551,6 +1601,12 @@ transformed.y += onda * transformed.x * 0.05;`);
       ligadoAoJogo = true;
       marchas = estado.marchas || [];
       relogioDoTurno(estado.turno);
+      // ── OS COMBATES DE ESTRADA ────────────────────────────────────────────
+      // Chegam ja com o trecho e a fracao (o jogo converte), porque o evento do
+      // motor traz o sitio em coordenadas do MAPA 2D e aqui anda-se em metros.
+      for (const ev of (estado.eventos || [])) {
+        if (ev && ev.tipo === "combate_estrada") abrirBatalha(ev);
+      }
 
       // as bandeiras: cada aldeia entra na lista do seu dono
       const conta = { A: 0, B: 0, null: 0 };
