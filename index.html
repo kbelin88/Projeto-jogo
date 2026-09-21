@@ -1224,28 +1224,6 @@
     IB.arte = lona;
   }
 
-  // Oceano sem fim. Desenhado no referencial da IMAGEM (mesma origem, mesma
-  // escala), entao a agua de fora nao "nada" quando a camera anda ou aproxima
-  // — ela se move junto com o mapa, como agua de verdade faria.
-  function pintarMarIB() {
-    const cs = TILE * scale;
-    if (IB.padraoMar && IB.marTex.naturalWidth) {
-      // px de tela por px da TEXTURA (escala independente da arte da ilha —
-      // IB.marTilePx e quantos px de tela um ladrilho ocupa no zoom scale=1).
-      const k = (IB.marTilePx / IB.marTex.naturalWidth) * scale;
-      ctx.save();
-      ctx.translate(panX, panY);
-      ctx.scale(k, k);
-      ctx.fillStyle = IB.padraoMar;
-      ctx.fillRect(-panX / k, -panY / k, VW / k, VH / k);
-      ctx.restore();
-      return;
-    }
-    const g = ctx.createLinearGradient(0, panY, 0, panY + IB.imgCels.h * cs);
-    for (const [t, cor] of IB.mar) g.addColorStop(t, cor);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, VW, VH);
-  }
   function ajustarZoomMinimoIB() {
     if (!IB) return;
     // o piso e uma FRACAO do cover: com mar infinito, afastar alem do cover
@@ -1262,67 +1240,13 @@
   const SX = (v) => celX(v) * (TILE * scale) + panX + (IB ? 0 : TILE * scale / 2);
   const SY = (v) => celY(v) * (TILE * scale) + panY + (IB ? 0 : TILE * scale / 2);
 
-  // Prende a câmera às bordas do mundo: o mapa sempre preenche a tela toda
-  function clampPan() {
-    const cs = TILE * scale;
-    const wpx = (IB ? IB.imgCels.w : WORLD) * cs, wpy = (IB ? IB.imgCels.h : WORLD) * cs;
-    if (IB) {
-      // FOLGA alem da imagem. Sem ela a borda do mapa so chega ate a borda da
-      // TELA — e como os paineis laterais tem 320px, Barcelona e as aldeias
-      // das pontas ficavam presas embaixo deles, sem como puxar (visto em
-      // jogo 03/08). Com a folga, a beirada do mapa alcanca o meio da tela.
-      // So e possivel porque fora da imagem tem oceano, nao vazio.
-      const fx = Math.max(360, VW * 0.30), fy = Math.max(140, VH * 0.22);
-      const loX = Math.min(-fx, VW - wpx - fx), hiX = Math.max(fx, VW - wpx + fx);
-      const loY = Math.min(-fy, VH - wpy - fy), hiY = Math.max(fy, VH - wpy + fy);
-      panX = Math.max(loX, Math.min(hiX, panX));
-      panY = Math.max(loY, Math.min(hiY, panY));
-      return;
-    }
-    panX = wpx >= VW ? Math.min(0, Math.max(VW - wpx, panX)) : (VW - wpx) / 2;
-    panY = wpy >= VH ? Math.min(0, Math.max(VH - wpy, panY)) : (VH - wpy) / 2;
-  }
 
   // (terreno, ruido, lagos, cellData, TRIBES, villageName e lerp agora vivem
   //  em world.js — desestruturados no topo. Nada de geracao de terreno aqui.)
 
   // ---------- Helpers de desenho ----------
 
-  // Cor de grama com variação suave (T1/E4): paleta da DIRECAO_DE_ARTE —
-  // patch escuro #8f9d6e -> base #9aa878 -> patch claro #a4b283.
-  // Mesmo vnoise de antes (manchas grandes), so a tinta mudou.
-  function grassColor(x, y) {
-    const v = vnoise(x, y, 21, 0.07);          // manchas grandes e suaves
-    const t = vnoise(x, y, 22, 0.30) * 0.30;   // textura leve
-    const m = Math.min(1, v * 0.78 + t);
-    // grama v2 (pele v2): verde mais vivo/vicoso (era oliva dessaturado).
-    // Calibravel no olho: escuro rgb(120,150,85) -> claro rgb(150,180,110).
-    const rr = Math.floor(lerp(120, 150, m));
-    const g = Math.floor(lerp(150, 180, m));
-    const b = Math.floor(lerp(85, 110, m));
-    return `rgb(${rr},${g},${b})`;
-  }
 
-  // Caminho de blob orgânico (arredondado/irregular) — caller define fillStyle e dá fill()
-  function blobPath(cx, cy, r, seed) {
-    const N = 16;
-    const pts = [];
-    for (let i = 0; i < N; i++) {
-      const a = (i / N) * Math.PI * 2;
-      const wob = 0.78 + hash(seed, i + 1, 88) * 0.34;
-      pts.push([cx + Math.cos(a) * r * wob, cy + Math.sin(a) * r * wob]);
-    }
-    const mid = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
-    ctx.beginPath();
-    const m0 = mid(pts[N - 1], pts[0]);
-    ctx.moveTo(m0[0], m0[1]);
-    for (let i = 0; i < N; i++) {
-      const cur = pts[i], nxt = pts[(i + 1) % N];
-      const m = mid(cur, nxt);
-      ctx.quadraticCurveTo(cur[0], cur[1], m[0], m[1]);
-    }
-    ctx.closePath();
-  }
 
   // ---------- Tiles de terreno (árvore, pinheiro, montanha) ----------
   // Shapes/cores EXATAMENTE como fornecidos no SVG (viewBox 0..160), porém
@@ -1406,137 +1330,14 @@
       SPR[nome] = img;
     }
   })();
-  function desenharSprite(img, xc, yBase, larg, alpha) {
-    const alt = larg * img.height / img.width;   // proporcao natural do sprite
-    if (alpha != null && alpha < 1) { ctx.save(); ctx.globalAlpha = alpha; }
-    ctx.drawImage(img, xc - larg / 2, yBase - alt, larg, alt); // ancora: base-centro
-    if (alpha != null && alpha < 1) ctx.restore();
-  }
 
   // PECA B (pele v2): sprite tingido na cor do dono, cacheado uma vez por cor.
   // A tinta e aplicada num buffer proprio com "source-atop" — pinta SO onde ha
   // pixel do sprite, sem vazar no terreno (um multiply direto no mapa vazaria).
   const _tintCache = {};
-  function spriteTintado(img, col) {
-    const key = (img.src || "") + "|" + col;
-    let c = _tintCache[key];
-    if (!c) {
-      c = document.createElement("canvas");
-      c.width = img.width; c.height = img.height;
-      const g = c.getContext("2d");
-      g.drawImage(img, 0, 0);
-      g.globalCompositeOperation = "source-atop"; // clipa a tinta ao sprite
-      g.globalAlpha = 0.35;                        // calibravel no olho
-      g.fillStyle = col;
-      g.fillRect(0, 0, c.width, c.height);
-      _tintCache[key] = c;
-    }
-    return c;
-  }
 
-  function drawTile(type, gx, gy, size, rot) {
-    const fn = tileShapes[type]; if (!fn) return;
-    const k = size / VB;
-    ctx.save();
-    ctx.translate(gx, gy);
-    if (rot) ctx.rotate(rot);
-    ctx.scale(k, k);
-    ctx.translate(-ANCHOR_X, -ANCHOR_Y); // (80,124) local -> (gx,gy) tela
-    fn();
-    ctx.restore();
-  }
 
-  // Casinha com telhado de duas águas
-  function house(hx, hy, hw, hh, roof) {
-    ctx.fillStyle = "#e8d6ac";                 // parede
-    ctx.fillRect(hx - hw / 2, hy - hh, hw, hh);
-    ctx.strokeStyle = "rgba(90,60,30,.5)"; ctx.lineWidth = Math.max(1, hw * 0.05);
-    ctx.strokeRect(hx - hw / 2, hy - hh, hw, hh);
-    ctx.fillStyle = roof;                      // telhado
-    ctx.beginPath();
-    ctx.moveTo(hx - hw * 0.62, hy - hh);
-    ctx.lineTo(hx, hy - hh - hw * 0.55);
-    ctx.lineTo(hx + hw * 0.62, hy - hh);
-    ctx.closePath(); ctx.fill();
-  }
 
-  // Vilarejo fortificado detalhado em (px,py), tamanho s, cor da tribo
-  function drawVillage(px, py, s, color) {
-    // sombra
-    ctx.fillStyle = "rgba(0,0,0,.20)";
-    ctx.beginPath();
-    ctx.ellipse(px, py + s * 0.78, s * 1.1, s * 0.42, 0, 0, Math.PI * 2);
-    ctx.fill();
-    // montinho de terra
-    ctx.fillStyle = "#caa86a";
-    ctx.beginPath();
-    ctx.ellipse(px, py + s * 0.62, s * 1.05, s * 0.42, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#bb9858";
-    ctx.beginPath();
-    ctx.ellipse(px, py + s * 0.6, s * 0.82, s * 0.32, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // muralha de pedra ao redor (anel)
-    ctx.lineWidth = s * 0.18; ctx.strokeStyle = "#897f70";
-    ctx.beginPath(); ctx.ellipse(px, py + s * 0.5, s * 0.9, s * 0.46, 0, 0, Math.PI * 2); ctx.stroke();
-    ctx.lineWidth = s * 0.07; ctx.strokeStyle = "#aaa193";
-    ctx.beginPath(); ctx.ellipse(px, py + s * 0.5, s * 0.9, s * 0.46, 0, 0, Math.PI * 2); ctx.stroke();
-
-    // casas internas
-    const roofs = ["#9c3b2a", "#b5532f", "#7a3320", "#a8472b"];
-    house(px - s * 0.46, py + s * 0.56, s * 0.42, s * 0.34, roofs[0]);
-    house(px + s * 0.48, py + s * 0.52, s * 0.40, s * 0.30, roofs[1]);
-    house(px - s * 0.02, py + s * 0.66, s * 0.36, s * 0.26, roofs[2]);
-
-    // torre central (keep)
-    ctx.fillStyle = "#cabfac";
-    ctx.fillRect(px - s * 0.27, py - s * 0.55, s * 0.54, s * 0.95);
-    ctx.fillStyle = "#b3a892";
-    ctx.fillRect(px - s * 0.27, py - s * 0.66, s * 0.54, s * 0.13);
-    // ameias
-    ctx.fillStyle = "#938974";
-    for (let i = 0; i < 3; i++)
-      ctx.fillRect(px - s * 0.27 + i * s * 0.21, py - s * 0.78, s * 0.12, s * 0.13);
-    // janelas
-    ctx.fillStyle = "#5a4326";
-    ctx.fillRect(px - s * 0.14, py - s * 0.35, s * 0.1, s * 0.16);
-    ctx.fillRect(px + s * 0.04, py - s * 0.35, s * 0.1, s * 0.16);
-    // portão
-    ctx.fillStyle = "#5a3a1a";
-    ctx.fillRect(px - s * 0.1, py + s * 0.06, s * 0.2, s * 0.34);
-
-    // mastro + bandeira da tribo (grande, com contorno p/ destacar a cor do time)
-    const poleTop = py - s * 1.9;
-    ctx.strokeStyle = "#3a2a18"; ctx.lineWidth = Math.max(1.5, s * 0.07);
-    ctx.beginPath(); ctx.moveTo(px, py - s * 0.85); ctx.lineTo(px, poleTop); ctx.stroke();
-    // ponta dourada do mastro
-    ctx.fillStyle = "#e8cf86";
-    ctx.beginPath(); ctx.arc(px, poleTop, Math.max(1.5, s * 0.08), 0, Math.PI * 2); ctx.fill();
-
-    // banner (galhardete) grande com recorte em "rabo de andorinha"
-    const fw = s * 0.95, fh = s * 0.72;
-    ctx.beginPath();
-    ctx.moveTo(px, poleTop);
-    ctx.lineTo(px + fw, poleTop);
-    ctx.lineTo(px + fw * 0.72, poleTop + fh * 0.5);  // entalhe
-    ctx.lineTo(px + fw, poleTop + fh);
-    ctx.lineTo(px, poleTop + fh);
-    ctx.closePath();
-    ctx.fillStyle = color; ctx.fill();
-    // faixa de brilho clara no topo (dá volume)
-    ctx.fillStyle = "rgba(255,255,255,.28)";
-    ctx.fillRect(px + s * 0.04, poleTop + fh * 0.1, fw * 0.6, fh * 0.18);
-    // contorno escuro forte (visível contra qualquer terreno)
-    ctx.lineWidth = Math.max(1, s * 0.06); ctx.strokeStyle = "rgba(20,12,4,.7)";
-    ctx.beginPath();
-    ctx.moveTo(px, poleTop);
-    ctx.lineTo(px + fw, poleTop);
-    ctx.lineTo(px + fw * 0.72, poleTop + fh * 0.5);
-    ctx.lineTo(px + fw, poleTop + fh);
-    ctx.lineTo(px, poleTop + fh);
-    ctx.closePath(); ctx.stroke();
-  }
 
   // ---------- Render principal ----------
   // ===== PINTURA DE TERRITORIO: area de influencia de cada rei =====
@@ -1544,299 +1345,48 @@
   // mais proximo vence. Recalcula so quando o turno/posse muda.
   const RAIO_INF = 4;
   const infCache = { stamp: "", mapa: new Map() };
-  function mapaInfluencia() {
-    if (!game) return infCache.mapa;
-    const stamp = game.turno + "|" + game.aldeias.map((a) => a.dono || "n").join("");
-    if (stamp === infCache.stamp) return infCache.mapa;
-    const m = new Map();
-    for (const a of game.aldeias) {
-      if (!a.dono) continue;
-      for (let dy = -RAIO_INF; dy <= RAIO_INF; dy++) {
-        for (let dx = -RAIO_INF; dx <= RAIO_INF; dx++) {
-          const d2 = dx * dx + dy * dy;
-          if (d2 > RAIO_INF * RAIO_INF) continue;
-          const x = a.x + dx, y = a.y + dy;
-          if (x < 0 || y < 0 || x >= WORLD || y >= WORLD) continue;
-          const k = x + "," + y;
-          const atual = m.get(k);
-          if (!atual || d2 < atual.d2) m.set(k, { dono: a.dono, d2 });
-        }
-      }
-    }
-    infCache.stamp = stamp; infCache.mapa = m;
-    return m;
-  }
   const COR_INF = { A: "70,110,220", B: "216,74,74" };
   const GLIFO = { lanceiro: "\uD83D\uDEE1", arqueiro: "\uD83C\uDFF9", cavaleiro: "\uD83D\uDC0E" }; // escudo/arco/cavalo
 
+  // ── O DESENHO E DO MAPA 3D (22/09) ─────────────────────────────────────
+  // Esta funcao pintava a ilha, o mar, as estradas, 380 bosques, 24 aldeias e
+  // uma grelha de coordenadas num canvas plano. Desde 11/09 o 3D e o default e
+  // essa pintura saia logo na primeira linha: 1031 linhas de desenho que nunca
+  // chegavam ao ecra, medidas por alcance a partir daqui.
+  //
+  // O que resta e o que o 3D NAO faz: o HUD (que e DOM) e a ponte (que e
+  // dados). O `draw()` continua a ser chamado nos mesmos sitios -- uma mudanca
+  // de estado, um turno, um passo de replay -- porque e o unico ponto que
+  // garante que o mapa ve o estado NOVO sem esperar pelos 250 ms do laco.
   function draw() {
-    // ── COM O 3D LIGADO, O 2D NAO PINTA ──────────────────────────────────
-    // O canvas estava so ESCONDIDO -- e um canvas escondido continua a
-    // desenhar. Cada quadro pintava a ilha, o mar, as estradas, 380 bosques e
-    // 24 aldeias para ninguem ver, ao lado de uma cena 3D de 8 milhoes de
-    // triangulos. Era esse o peso ao mexer a camara.
-    // O HUD e a ponte continuam: um e DOM, a outra e dados.
-    if (M3D) {
-      updateHUD();
-      try { empurrarPara3D(); }
-      catch (e) { if (!erro3D) { erro3D = e; console.error("ponte 3D:", e); } }
-      return;
-    }
-    clampPan();
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    ctx.clearRect(0, 0, VW, VH);
-
-    // MAPA DA IBERIA: o fundo e a imagem limpa; o motor desenha o resto por
-    // cima lendo o world-iberia. Nada de terreno procedural aqui.
-    if (IB) {
-      pintarMarIB();                                  // oceano sem fim
-      if (IB.pronto) {
-        const cs0 = TILE * scale;
-        ctx.imageSmoothingEnabled = true;
-        ctx.drawImage(IB.arte || IB.img, panX, panY, IB.imgCels.w * cs0, IB.imgCels.h * cs0);
-      }
-      desenharEstradasIberia();
-      // A MATA VEM DEPOIS DAS ESTRADAS e antes das aldeias: as arvores estao em
-      // pe, as estradas estao no chao, e a aldeia e o que interessa ver.
-      if (typeof desenharMataV4 === "function") desenharMataV4();
-      drawGame();
-      if (ED.ativo) desenharAlcasEditor();
-      desenharMarcas();
-      return;
-    }
-
-    // céu/fundo de água profunda
-    ctx.fillStyle = "#6fa867";
-    ctx.fillRect(0, 0, VW, VH);
-
-    const cs = TILE * scale; // tamanho da célula na tela
-
-    // região visível em coordenadas de mundo
-    const x0 = Math.floor((-panX) / cs) - 1;
-    const y0 = Math.floor((-panY) / cs) - 1;
-    const x1 = Math.ceil((VW - panX) / cs) + 1;
-    const y1 = Math.ceil((VH - panY) / cs) + 1;
-
-    const cx0 = Math.max(0, x0), cy0 = Math.max(0, y0);
-    const cx1 = Math.min(WORLD, x1), cy1 = Math.min(WORLD, y1);
-
-    // Nível de detalhe (baseado no tamanho da célula em pixels)
-    const detailed = cs > 20;    // desenha vilas e árvores
-    const showNames = cs > 42;   // mostra nomes das vilas
-    const gridView = cs < 13;    // visão de grade (mapa afastado)
-
-    // 1) grama (variação suave; sem xadrez). Em zoom afastado usa blocos maiores.
-    const gstep = cs < 18 ? 2 : 1;
-    for (let y = cy0; y < cy1; y += gstep) {
-      for (let x = cx0; x < cx1; x += gstep) {
-        ctx.fillStyle = grassColor(x, y);
-        ctx.fillRect(x * cs + panX, y * cs + panY, cs * gstep + 1, cs * gstep + 1);
-      }
-    }
-
-    // 1a-bis) graos de pergaminho (T1/E4): pontos 1px #4a4433 alpha .10,
-    // ~1 a cada 14 celulas, hash deterministico — papel envelhecido, nao ruido.
-    ctx.fillStyle = "rgba(74,68,51,.10)";
-    for (let y = cy0; y < cy1; y += gstep) {
-      for (let x = cx0; x < cx1; x += gstep) {
-        if (hash(x, y, 97) >= 0.072) continue;
-        const gx = x * cs + panX + hash(x, y, 98) * cs;
-        const gy = y * cs + panY + hash(x, y, 99) * cs;
-        ctx.fillRect(gx, gy, 1, 1);
-      }
-    }
-
-    // 1a-ter) colinas (T5/E4): 2-3 linhas de contorno ABERTAS a pena,
-    // tinta #7d8a5f, 1 grupo a cada ~2 telas (hash por grade de 40 cel).
-    // Relevo sugerido, nunca preenchido — cartografia, nao paisagem.
-    const CG = 40;
-    const hg0x = Math.floor(cx0 / CG) - 1, hg1x = Math.floor(cx1 / CG) + 1;
-    const hg0y = Math.floor(cy0 / CG) - 1, hg1y = Math.floor(cy1 / CG) + 1;
-    ctx.strokeStyle = "#7d8a5f"; ctx.lineWidth = 1;
-    for (let hx = hg0x; hx <= hg1x; hx++) {
-      for (let hy = hg0y; hy <= hg1y; hy++) {
-        if (hash(hx, hy, 301) >= 0.30) continue;
-        const bcx = (hx + 0.25 + hash(hx, hy, 302) * 0.5) * CG;
-        const bcy = (hy + 0.25 + hash(hx, hy, 303) * 0.5) * CG;
-        const nlin = 2 + (hash(hx, hy, 304) < 0.5 ? 0 : 1);
-        for (let i = 0; i < nlin; i++) {
-          const larg = (2.2 + hash(hx, hy, 305 + i) * 1.6) * cs;
-          const lx = bcx * cs + panX + (hash(hx, hy, 310 + i) - 0.5) * cs * 2;
-          const ly = bcy * cs + panY + i * cs * 0.55;
-          ctx.beginPath();
-          ctx.moveTo(lx - larg / 2, ly);
-          ctx.quadraticCurveTo(lx, ly - cs * (0.85 - i * 0.18), lx + larg / 2, ly);
-          ctx.stroke();
-        }
-      }
-    }
-
-    // 1a-quinquies) ESTRADAS (motor #1): a rede REAL do jogo (game.estradas),
-    // por baixo de agua/decoracao/vilas. Agora os exercitos ANDAM por ela — a
-    // malha faz sentido no mapa. Cada aresta uma vez (a<b). Terra batida.
-    if (game && game.estradas && game.estradas.adj && !gridView) {
-      const adj = game.estradas.adj;
-      const byId = {}; for (const v of game.aldeias) byId[v.id] = v;
-      ctx.lineCap = "round"; ctx.lineJoin = "round";
-      for (let pass = 0; pass < 2; pass++) {
-        ctx.strokeStyle = pass === 0 ? "rgba(120,96,58,0.42)" : "rgba(198,170,118,0.75)";
-        ctx.lineWidth = pass === 0 ? Math.max(2.5, cs * 0.26) : Math.max(1.2, cs * 0.13);
-        ctx.beginPath();
-        for (const aId in adj) {
-          const av = byId[aId]; if (!av) continue;
-          for (const bId of adj[aId]) {
-            if (bId <= +aId) continue;               // cada aresta uma vez
-            const bv = byId[bId]; if (!bv) continue;
-            const ax = (av.x + 0.5) * cs + panX, ay = (av.y + 0.5) * cs + panY;
-            const bx = (bv.x + 0.5) * cs + panX, by = (bv.y + 0.5) * cs + panY;
-            if (Math.max(ax, bx) < 0 || Math.min(ax, bx) > VW ||
-                Math.max(ay, by) < 0 || Math.min(ay, by) > VH) continue;
-            ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
-          }
-        }
-        ctx.stroke();
-      }
-    }
-
-    // 1b) LAGOS removidos do mapa (feedback Lucas 19/07): poluiam. isWater/
-    // lakeInfo seguem no motor (aldeias nao nascem na agua), mas nao sao mais
-    // desenhados — paisagem limpa. Rios ficam para uma etapa de motor.
-
-    // (2) A DECORACAO DE TERRENO SAIU EM 22/09 com o mapa procedural: eram
-    // florestas e montanhas lidas do `cellData` do `world.js`. A mata da Iberia
-    // e desenhada pelo mapa 3D, que e o que o jogo usa.
-
-    // 3) vilas — SOMENTE as 50 aldeias da partida (cenário procedural escondido).
-    //    A cor segue o DONO (azul A / vermelho B / tom neutro).
-    for (let y = cy0; y < cy1; y++) {
-      for (let x = cx0; x < cx1; x++) {
-        // so as aldeias da partida: o cenario procedural que punha vilas de
-        // fundo saiu com o `world.js`
-        const gv = game ? game.byCell.get(x + "," + y) : null;
-        if (!gv) continue;
-        const sx = x * cs + panX, sy = y * cs + panY;
-        const cor = gv.dono === null ? COR.neutra : COR[gv.dono];
-
-        if (gridView) {
-          const r = Math.max(2, cs * 0.28);
-          ctx.fillStyle = cor;
-          ctx.fillRect(sx + cs / 2 - r, sy + cs / 2 - r, r * 2, r * 2);
-          ctx.strokeStyle = "rgba(0,0,0,.5)"; ctx.lineWidth = 1;
-          ctx.strokeRect(sx + cs / 2 - r, sy + cs / 2 - r, r * 2, r * 2);
-        } else if (detailed) {
-          drawVillage(sx + cs * 0.5, sy + cs * 0.48, cs * 0.34, cor);
-          if (showNames && gv) {
-            const fs = Math.max(9, cs * 0.13);
-            ctx.font = `bold ${fs}px "Trebuchet MS", sans-serif`;
-            ctx.textAlign = "center";
-            const name = gv.nome;
-            const tw = ctx.measureText(name).width;
-            ctx.fillStyle = "rgba(30,20,10,.7)";
-            ctx.fillRect(sx + cs * 0.5 - tw / 2 - 3, sy + cs * 0.78, tw + 6, fs + 4);
-            ctx.fillStyle = "#ffe9b0";
-            ctx.fillText(name, sx + cs * 0.5, sy + cs * 0.78 + fs);
-          }
-        } else {
-          const r = cs * 0.22;
-          ctx.fillStyle = "#b9a489";
-          ctx.fillRect(sx + cs / 2 - r, sy + cs / 2 - r * 0.6, r * 2, r * 1.4);
-          ctx.fillStyle = cor;
-          ctx.fillRect(sx + cs / 2 - r, sy + cs / 2 - r * 0.6, r * 2, r * 0.4);
-        }
-      }
-    }
-
-    // 4) grade de coordenadas (aparece ao afastar)
-    if (cs < 28) {
-      const alpha = Math.min(1, (28 - cs) / 16);
-      ctx.strokeStyle = `rgba(20,12,4,${0.35 * alpha})`;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      for (let x = cx0; x <= cx1; x++) {
-        const sx = Math.round(x * cs + panX) + 0.5;
-        ctx.moveTo(sx, 0); ctx.lineTo(sx, VH);
-      }
-      for (let y = cy0; y <= cy1; y++) {
-        const sy = Math.round(y * cs + panY) + 0.5;
-        ctx.moveTo(0, sy); ctx.lineTo(VW, sy);
-      }
-      ctx.stroke();
-
-      // rótulos de coordenadas (a cada N células para não poluir)
-      const step = cs < 22 ? 5 : 1;
-      ctx.fillStyle = `rgba(255,233,176,${0.9 * alpha})`;
-      ctx.font = "10px Verdana";
-      ctx.textAlign = "left";
-      for (let x = cx0; x <= cx1; x++) {
-        if (x % step !== 0) continue;
-        ctx.fillText(x, x * cs + panX + 2, 12);
-      }
-      ctx.textAlign = "right";
-      for (let y = cy0; y <= cy1; y++) {
-        if (y % step !== 0) continue;
-        ctx.fillText(y, VW - 4, y * cs + panY + 12);
-      }
-    }
-
-    // FUNDO SILENCIADO: um veu neutro sobre o terreno abaixa o contraste
-    // da decoracao (arvores/montanhas) p/ a camada de batalha dominar.
-    if (game) {
-      const cine = document.body.classList.contains("replay") ||
-                   document.body.classList.contains("cinema");
-      ctx.fillStyle = `rgba(28,22,12,${cine ? 0.16 : 0.10})`;
-      ctx.fillRect(0, 0, VW, VH);
-    }
-
-    // ===== TERRITORIO: tingir a area de influencia dos reis =====
-    if (game) {
-      const inf = mapaInfluencia();
-      for (const [k, v] of inf) {
-        const [tx, ty] = k.split(",").map(Number);
-        if (tx < cx0 || tx >= cx1 || ty < cy0 || ty >= cy1) continue;
-        const perto = v.d2 <= 2;
-        ctx.fillStyle = `rgba(${COR_INF[v.dono]},${perto ? 0.30 : 0.18})`;
-        ctx.fillRect(tx * cs + panX, ty * cs + panY, cs + 1, cs + 1);
-      }
-    }
-
-    // vinheta sutil: escurece as bordas, foca o teatro
-    const vg = ctx.createRadialGradient(VW / 2, VH / 2, Math.min(VW, VH) * 0.50,
-                                        VW / 2, VH / 2, Math.max(VW, VH) * 0.78);
-    vg.addColorStop(0, "rgba(0,0,0,0)");
-    vg.addColorStop(1, "rgba(18,11,4,.26)");
-    ctx.fillStyle = vg;
-    ctx.fillRect(0, 0, VW, VH);
-
-    drawGame();   // camada do motor por cima do mapa
     updateHUD();
+    if (!M3D) return;
+    try { empurrarPara3D(); }
+    catch (e) { if (!erro3D) { erro3D = e; console.error("ponte 3D:", e); } }
   }
 
-  // ===== O MAPA 3D ==========================================================
-  // O 3D e o DEFAULT desde 11/09: abrir o jogo pelo `python servir.py` tem de
-  // dar o jogo que existe hoje, e nao o de antes. O canvas 2D sozinho continua
-  // a um parametro de distancia: ?mapa=2d. (O ?mapa=3d antigo continua a
-  // valer, porque qualquer coisa que nao seja 2d e 3D.)
+  // ===== O MAPA ============================================================
+  // O mapa do jogo E o 3D, e nao ha outro. Foi o default desde 11/09, com o
+  // canvas plano a um `?mapa=2d` de distancia -- e esse canvas continuou a
+  // correr meses depois de deixar de pintar seja o que for.
   //
-  // So liga num navegador de verdade (`location.search` e string): o stub de
-  // Node dos testes nao tem `search`, e ali o jogo corre no caminho 2D como
-  // sempre correu -- o test_index_carrega continua a provar o mesmo script.
+  // ── ISTO NAO E UM SEGUNDO RULESET, E AGORA NEM SEQUER E UMA ESCOLHA ────
+  // O CLAUDE.md proibe um segundo ruleset selecionavel em tempo de execucao
+  // (em agosto tres partidas pagas correram com as regras erradas enquanto o
+  // log dizia o contrario). O renderizador nunca foi uma regra -- mas a licao
+  // daquele caso vale na mesma: uma coisa que PODE nao estar ligada, mais cedo
+  // ou mais tarde nao esta. Havia um caminho de desenho inteiro que ninguem
+  // via e ninguem conferia. Deixou de haver.
   //
-  // ── ISTO NAO E UM SEGUNDO RULESET ──────────────────────────────────────
-  // O CLAUDE.md proibe um segundo ruleset selecionavel em tempo de execucao, e
-  // com razao: em agosto tres partidas pagas correram com as regras erradas
-  // enquanto o log dizia o contrario. Mas isso e sobre REGRAS. Aqui nao ha
-  // regra nenhuma: o motor calcula o mesmo, o log diz o mesmo, o replay e o
-  // mesmo. Muda so por onde se olha. Um renderizador alternativo nao pode
-  // mentir sobre a partida porque nao participa dela.
+  // Se o 3D nao carregar, o jogo DIZ e para. Nao ha mapa de reserva, e fingir
+  // que ha seria pior do que a falha.
   //
-  // ── E O 2D CONTINUA A CORRER ───────────────────────────────────────────
-  // O canvas nao e desligado, so escondido. E ele que continua a fazer o
-  // hit-test do rato, o hover e o editor -- e enquanto o 3D nao souber fazer
-  // tudo o que o 2D faz, tirar o 2D seria trocar uma coisa completa por uma
-  // incompleta.
-  const MAPA_3D = (typeof location !== "undefined" &&
-                   typeof location.search === "string" &&
-                   !/(\?|&)mapa=2d(&|$)/.test(location.search));
+  // ── E NO NODE NAO HA ECRA NENHUM ──────────────────────────────────────
+  // Os testes correm este mesmo script num DOM de mentira, sem WebGL e sem
+  // modulos. Nao ha aqui uma escolha de renderizador: ha um sitio onde HA ecra
+  // e um sitio onde nao ha. O motor, o HUD e o log correm nos dois.
+  const HA_ECRA = typeof location !== "undefined"
+               && typeof location.search === "string";
   let M3D = null;
 
   // exposta de proposito: quando a ponte nao empurra nada, e preciso poder
@@ -1935,11 +1485,14 @@
     return saida;
   }
 
-  if (MAPA_3D) {
+  if (HA_ECRA) {
     const palco = document.createElement("div");
     palco.id = "palco3d";
     palco.style.cssText = "position:fixed;inset:0;z-index:0";
-    document.body.insertBefore(palco, document.body.firstChild);
+    // appendChild e nao insertBefore: o palco tem `z-index:0` e toda a interface
+    // do jogo esta acima disso, portanto a ordem no DOM nao decide nada. Era
+    // `insertBefore` por causa do canvas plano, que ja nao pinta.
+    document.body.appendChild(palco);
     canvas.style.visibility = "hidden";
     import("./sonda3d/mapa3d.js")
       .then((m) => m.iniciar(palco))
@@ -2036,12 +1589,18 @@
         })();
       })
       .catch((e) => {
-        // FALHA VISIVEL. Um carregamento que morre em silencio ja custou um dia
-        // a este projeto (o mapa-ajustes.js a dar 404). Se o 3D nao carregar, o
-        // 2D volta e diz-se porque.
-        canvas.style.visibility = "";
+        // FALHA VISIVEL E FINAL. Um carregamento que morre em silencio ja custou
+        // um dia a este projeto (o mapa-ajustes.js a dar 404). Dantes caia-se no
+        // canvas plano; hoje nao ha para onde cair, e dizer isso e melhor do que
+        // um ecra preto sem explicacao.
+        //
+        // No Node dos testes o `import()` nao resolve, cai-se aqui, e o jogo
+        // corre sem mapa -- que e o que os smokes sempre precisaram: o motor, o
+        // HUD e o log, sem desenho nenhum.
         console.error("mapa 3d nao carregou:", e);
-        alert("o mapa 3D nao carregou (ver a consola). O jogo segue em 2D.");
+        if (typeof alert === "function")
+          alert("o mapa 3D nao carregou (ver a consola). "
+              + "Nao ha mapa de reserva: " + e);
       });
   }
 
@@ -2061,45 +1620,6 @@
   const ED = { ativo: false, pegou: null, offX: 0, offY: 0 };
   const ED_DICA = "arraste a cidade \u00b7 SHIFT+arraste move so o desenho \u00b7 clique na estrada p/ curvar \u00b7 direito apaga";
 
-  // Alcas do editor: um ponto no chao de cada cidade (o x,y de verdade, que e
-  // o que se arrasta) e um losango em cada curva de estrada. So aparecem com o
-  // modo ligado — o mapa fica limpo o resto do tempo.
-  function desenharAlcasEditor() {
-    if (!game) return;
-    ctx.save();
-    // realce do que esta sob o cursor: some a duvida sobre o que vai ser pego
-    const sob = ED.pegou ? null : edSobreCidade(mouseSX, mouseSY);
-    for (const a of game.aldeias) {
-      const x = SX(a.x), y = SY(a.y);
-      const vivo = (ED.pegou && ED.pegou.tipo === "cidade" && ED.pegou.ald === a) || sob === a;
-      if (vivo) {
-        const cs = TILE * scale, cap = capitalIds.has(a.id);
-        const larg = cs * (cap ? 3.2 : 2.4);
-        const spr = cap ? SPR.castelo : SPR.aldeia_neutra;
-        const alt = alturaSprite(spr && spr.pronto ? spr : null, larg, Math.max(20, cs * 0.59));
-        const yB = baseVisualIB(a);
-        ctx.lineWidth = 2; ctx.strokeStyle = "rgba(255,238,150,.9)";
-        ctx.setLineDash([5, 4]);
-        ctx.strokeRect(x - larg / 2, yB - alt, larg, alt + 6);
-        ctx.setLineDash([]);
-        ctx.beginPath(); ctx.moveTo(x, yB); ctx.lineTo(x, y); ctx.stroke();
-      }
-      ctx.beginPath(); ctx.arc(x, y, vivo ? 6 : 4, 0, Math.PI * 2);
-      ctx.fillStyle = vivo ? "#fff3b0" : "rgba(255,238,150,.95)"; ctx.fill();
-      ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(40,32,18,.9)"; ctx.stroke();
-    }
-    for (const k in IB.vias) {
-      for (const q of IB.vias[k]) {
-        const x = SX(q[0]), y = SY(q[1]);
-        ctx.beginPath();
-        ctx.moveTo(x, y - 6); ctx.lineTo(x + 6, y); ctx.lineTo(x, y + 6); ctx.lineTo(x - 6, y);
-        ctx.closePath();
-        ctx.fillStyle = "rgba(150,215,255,.95)"; ctx.fill();
-        ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(20,40,60,.9)"; ctx.stroke();
-      }
-    }
-    ctx.restore();
-  }
 
   function edSobreCidade(sx, sy) {
     if (!game) return null;
@@ -2805,13 +2325,8 @@
       }
     }
 
-    registrarEfeitosTurno(fr.turno);
     updateGameHUD();
     const venc = Engine.checarVitoria(game);
-    if (venc && venc !== "empate" && !REDUZ_MOV) {
-      efeitos.push({ fim: true, t0: performance.now(), dur: 3500, cor: COR[venc] });
-      ligarAnimacao();
-    }
     if (venc) mostrarBanner("\ud83c\udfc6 " + (venc === "empate" ? "EMPATE" : "VIT\u00d3RIA DO REI " + venc), "#d9a441");
     draw();
   }
@@ -2855,14 +2370,6 @@
   // composicao do estandarte que planta na aldeia conquistada (o exercito ja
   // nao existe no quadro novo — foi consumido pela conquista).
   let chegandoAntes = [];
-  // Exercito DESPACHADO neste quadro aparece do nada quando o turno vira. Em
-  // vez de surgir pronto, entra esmaecendo no comeco da janela — foi o pedido
-  // do Lucas: "aparece tudo novo ao mesmo tempo, quebra o ritmo".
-  function alphaEntrada(m) {
-    if (!emReplay || !m || m.turnosTotal == null) return 1;
-    if (m.turnosRestantes !== m.turnosTotal) return 1; // ja estava em marcha
-    return Math.max(0, Math.min(1, repFrac / 0.35));
-  }
 
   function atualizarProgresso() {
     if (!rep) return;
@@ -2877,9 +2384,7 @@
     camAuto = true;
     document.getElementById("grepCam").classList.add("ativo");
     limparFeeds();
-    efeitos = [];
     limparBanners();
-    apontarCamera(WORLD / 2, WORLD / 2, Math.max(MIN_SCALE, VW / (WORLD * TILE)));
     playing = true;
     while (emReplay && runId === meuRun) {
       atualizarProgresso();
@@ -3079,102 +2584,48 @@
 
   // turno burro-vs-burro: so registra quando ha combate (evita inundar o feed)
 
-  // ===== EFEITOS DE MAPA (anel de impacto / pulso de conquista) =====
-  let efeitos = [];
-  let caboAnt = null;      // E2: proporcao anterior do cabo (fantasma da perda)
-  let efeitoLoop = false;
-  const EFEITO_DUR = 900; // ms
-  // batidas da conquista, em ms depois da virada do quadro (ver registrarEfeitosTurno)
-  const PLANTA_MS = 340, ANEL_ATRASO = 150, DANO_ATRASO = 300;
-
-  function registrarEfeitosTurno(tn) {
-    if (REDUZ_MOV) return;
-    for (const e of game.log) {
-      if (e.turno !== tn) continue;
-      if (e.tipo === "combate_estrada") {
-        // CENA DO CHOQUE EM CAMPO ABERTO (28/08). Antes era o anel generico de
-        // 900 ms na cor do vencedor — o mesmo efeito de um assalto qualquer,
-        // para o unico evento do jogo que apaga um exercito INTEIRO. Nas duas
-        // partidas do video houve 16 e o Lucas nao viu nenhum.
-        //
-        // Duas batidas, e nenhuma delas e anel ou numero flutuante: em 25/08 o
-        // Lucas tirou os dois da conquista ("circulos piscando e numero de
-        // tropas mortas poluem o momento"). A cena usa o vocabulario que ficou
-        // — objetos no mapa, nao HUD:
-        //   0 ms    CHOQUE: raios curtos nas DUAS cores (houve dois, nao um)
-        //   350 ms  QUEDA: o estandarte do perdedor tomba e afunda
-        // O vencedor nao precisa de efeito: ele ja retoma a marcha menor,
-        // porque o tamanho do estandarte E a forca.
-        const ag = performance.now();
-        efeitos.push({ choqueEstrada: true, x: e.x, y: e.y, t0: ag, dur: 460,
-          corA: COR[e.atacante] || "#ffd56b", corB: COR[e.defensor] || "#ffd56b" });
-        efeitos.push({ quedaEstandarte: true, x: e.x, y: e.y, t0: ag + 350, dur: 1150,
-          dono: e.perdedorDono, tropas: e.perdedorTropas });
-        continue;
-      }
-      if (e.tipo !== "combate") continue;
-      const a = game.aldeias.find((v) => v.id === e.alvoId);
-      if (!a) continue;
-      // COREOGRAFIA DA CONQUISTA (25/08), depois da limpeza:
-      //   0 ms   o estandarte PLANTA na aldeia e a torre pega FOGO
-      //   400 ms a bandeira derrete para a cor nova (TROCA_ATRASO)
-      //   500 ms os numeros do topo rolam (ROLA_ATRASO)
-      //   1.8 s  o fogo apaga e a torre fica queimada
-      //   2.8 s  a torre volta ao estado base
-      const agr = performance.now();
-      // 25/08: o ANEL de conquista, o choque de combate e o NUMERO DE BAIXAS
-      // sairam (pedido do Lucas: "circulos piscando e numero de tropas mortas
-      // ... poluem o momento"). O que conta a conquista agora e o estandarte
-      // plantando e a torre pegando fogo — dois sinais, no lugar de cinco.
-      if (e.conquista) {
-        const ex = chegandoAntes.find((m) => m.dono === e.atacante && m.destinoId === a.id);
-        efeitos.push({ plantar: true, aldeiaId: a.id, x: a.x, y: a.y,
-          dono: e.atacante, tropas: ex ? ex.tropas : null,
-          t0: agr, dur: PLANTA_MS });
-      }
-    }
-    if (efeitos.length && !efeitoLoop) { efeitoLoop = true; requestAnimationFrame(tickEfeitos); }
-  }
-  // ===== CAMERA CINEMATOGRAFICA (so no replay) =====
-  let camAlvo = null;    // { panX, panY, scale }
+  // ===== A CAMARA DO REPLAY =================================================
+  // ── O QUE SAIU DAQUI, E PORQUE (22/09) ──────────────────────────────────
+  // Vivia aqui um sistema de EFEITOS DE MAPA: o estandarte a plantar na aldeia
+  // conquistada, o choque em duas batidas do combate de estrada, o pulso do
+  // fim de partida. Todos eram objetos numa lista que o `drawGame` pintava no
+  // canvas plano -- e o canvas plano deixou de pintar em 11/09.
+  //
+  // Durante onze dias esta funcao continuou a ENCHER a lista, o `tickEfeitos`
+  // continuou a pedir quadros para a animar, e nada disso chegava ao ecra.
+  // Nao havia erro nenhum a dar: so trabalho a ser feito para ninguem. E o
+  // modo de falha que este projeto ja apanhou tres vezes (o `mapa-ajustes.js`
+  // a dar 404, o ruleset por checkbox, as figuras antigas no meio das novas):
+  // uma coisa que corre e nao se ve.
+  //
+  // O combate de estrada JA TEM cena a serio -- com soldados, flechas e
+  // tombos -- no `sonda3d/batalha.js`. A conquista de aldeia ainda nao tem, e
+  // esta no plano (`PLANO_BATALHAS_E_ALDEIAS.md`): quando tiver, nasce no mapa
+  // 3D como a outra nasceu, e nao aqui.
+  //
+  // O que fica e a CAMARA, porque essa tem para onde ir: em vez de mexer um
+  // `panX` que ninguem pinta, mexe o mapa 3D.
+  // a proporcao anterior do cabo de guerra: e dela que sai o "fantasma" da
+  // perda na barra do topo. Vivia no bloco dos efeitos de mapa, mas nunca foi
+  // um efeito de mapa -- e DOM, e continua a ver-se.
+  let caboAnt = null;
   let camAuto = true;    // no replay: false = usuario assumiu a camera
   function usuarioAssumiuCamera() {
     if (!emReplay || !camAuto) return;
-    camAuto = false; camAlvo = null;
+    camAuto = false;
     const b = document.getElementById("grepCam");
     if (b) b.classList.remove("ativo");
   }
-  function apontarCamera(cx, cy, alvoScale) {
-    if (emReplay && !camAuto) return; // usuario esta no comando
-    if (REDUZ_MOV) { scale = alvoScale; centerOn(cx, cy); draw(); return; }
-    const sNovo = Math.max(MIN_SCALE, Math.min(MAX_SCALE, alvoScale));
-    camAlvo = {
-      scale: sNovo,
-      panX: VW / 2 - (cx + 0.5) * TILE * sNovo,
-      panY: VH / 2 - (cy + 0.5) * TILE * sNovo,
-    };
-    ligarAnimacao();
-  }
-  function passoCamera() {
-    if (!camAlvo) return false;
-    const f = 0.10; // suavizacao
-    scale += (camAlvo.scale - scale) * f;
-    panX += (camAlvo.panX - panX) * f;
-    panY += (camAlvo.panY - panY) * f;
-    const perto = Math.abs(camAlvo.scale - scale) < 0.002 &&
-      Math.abs(camAlvo.panX - panX) < 0.6 && Math.abs(camAlvo.panY - panY) < 0.6;
-    if (perto) { scale = camAlvo.scale; panX = camAlvo.panX; panY = camAlvo.panY; camAlvo = null; }
-    return true;
-  }
-
-  function tickEfeitos() {
-    const camAtiva = passoCamera();
-    if (!efeitos.length && !camAtiva) { efeitoLoop = false; return; }
-    draw();
-    requestAnimationFrame(tickEfeitos);
-  }
-  function ligarAnimacao() {
-    if (!efeitoLoop) { efeitoLoop = true; requestAnimationFrame(tickEfeitos); }
+  // (x, y) em coordenadas do MAPA, como o resto do jogo fala. A conversao para
+  // metros e a mesma do caderno de marcas -- calibrada por duas aldeias
+  // medidas, nunca por constantes copiadas do exportador.
+  function apontarCamera(cx, cy, aproximar) {
+    if (emReplay && !camAuto) return;      // usuario esta no comando
+    if (!M3D) return;
+    const m = vbParaMetros(cx, cy);
+    if (!m) return;
+    M3D.apontar(m[0], -m[1], { dist: aproximar >= 1.8 ? 160 : 420,
+                               saltar: !!REDUZ_MOV });
   }
 
   // ===== BANNERS DE EVENTO (fila; um de cada vez) =====
@@ -3232,7 +2683,6 @@
     pause();
     limparFeeds();
     fecharCartao();
-    efeitos = [];
     trocasDono = new Map(); rolagens.clear();
     aldeiasEmChamas = new Map();
     emReplay = false;
@@ -3274,7 +2724,6 @@
   function passoTurno() {
     if (!game || Engine.checarVitoria(game)) { pause(); return; }
     Engine.rodarTurno(game, null);
-    registrarEfeitosTurno(game.turno);
     cronicaEventos(game.turno);
     gravarFrame();
     updateGameHUD();
@@ -3969,7 +3418,6 @@
         " nao respondeu:\n\n" + eRede +
         "\n\nOs turnos com erro NAO contam nas metricas. Play retoma de onde parou."), 0);
     }
-    registrarEfeitosTurno(game.turno);
     if (rA) cronicaTurnoLado("A", game.turno, rA.diag);
     if (rB) cronicaTurnoLado("B", game.turno, rB.diag);
     cronicaEventos(game.turno);
@@ -4095,114 +3543,11 @@
     if (b) b.textContent = "▶ Play";
   }
 
-  // torreao de pedra com bandeira do dono (aldeias de rei)
-  function desenharTorreao(sx, sy, r, col) {
-    const w = r * 1.05, h = r * 0.80, x = sx - w / 2, y = sy - h * 0.28;
-    ctx.lineWidth = Math.max(1, r * 0.07); ctx.strokeStyle = "rgba(20,12,4,.85)";
-    ctx.fillStyle = "#6e5c46";                       // corpo de pedra
-    ctx.fillRect(x, y, w, h); ctx.strokeRect(x, y, w, h);
-    ctx.fillStyle = "#7d6a51";                       // ameias
-    const d = w / 5;
-    for (let i = 0; i < 3; i++) ctx.fillRect(x + d * (2 * i) * 0.85 + d * 0.15, y - h * 0.22, d, h * 0.22);
-    ctx.fillStyle = "#241a10";                       // porta
-    ctx.beginPath(); ctx.arc(sx, y + h, r * 0.18, Math.PI, 0); ctx.fill();
-    ctx.strokeStyle = "#3a2c1c"; ctx.lineWidth = Math.max(1, r * 0.08); // mastro
-    ctx.beginPath(); ctx.moveTo(sx, y - h * 0.20); ctx.lineTo(sx, y - h * 0.78); ctx.stroke();
-    ctx.fillStyle = col;                             // bandeira do rei
-    ctx.beginPath();
-    ctx.moveTo(sx, y - h * 0.78); ctx.lineTo(sx + r * 0.52, y - h * 0.62); ctx.lineTo(sx, y - h * 0.46);
-    ctx.closePath(); ctx.fill();
-    ctx.lineWidth = 1; ctx.strokeStyle = "rgba(20,12,4,.6)"; ctx.stroke();
-  }
 
-  // bandeira do time fincada sobre a aldeia DOMINADA (pele v2, 18/07):
-  // no mapa limpo e o unico sinal de posse. Mastro + flamula triangular.
-  // footY = pe do mastro; h = altura; col = cor do time.
-  // FLAMULA sem haste (25/08): a torre nova ja traz o mastro desenhado; repintar
-  // uma haste por cima criava um mastro duplo, torto em relacao ao da arte.
-  function desenharFlamula(x, topo, h, col) {
-    ctx.fillStyle = col;
-    ctx.beginPath();
-    ctx.moveTo(x, topo);
-    ctx.lineTo(x + h * 0.95, topo + h * 0.26);
-    ctx.lineTo(x, topo + h * 0.52);
-    ctx.closePath(); ctx.fill();
-    ctx.lineWidth = Math.max(1, h * 0.06); ctx.strokeStyle = "rgba(20,12,4,.65)"; ctx.stroke();
-  }
 
-  function desenharBandeira(x, footY, h, col) {
-    const topo = footY - h;
-    ctx.lineWidth = Math.max(1.5, h * 0.09); ctx.strokeStyle = "rgba(30,20,8,.85)";
-    ctx.beginPath(); ctx.moveTo(x, footY); ctx.lineTo(x, topo); ctx.stroke();
-    ctx.fillStyle = col;                              // flamula
-    ctx.beginPath();
-    ctx.moveTo(x, topo);
-    ctx.lineTo(x + h * 0.60, topo + h * 0.15);
-    ctx.lineTo(x, topo + h * 0.30);
-    ctx.closePath(); ctx.fill();
-    ctx.lineWidth = 1; ctx.strokeStyle = "rgba(20,12,4,.6)"; ctx.stroke();
-  }
 
-  // cabana com telhado de palha (aldeias neutras)
-  function desenharCabana(sx, sy, r) {
-    const w = r * 0.95, h = r * 0.55, x = sx - w / 2, y = sy - h * 0.1;
-    ctx.lineWidth = Math.max(1, r * 0.07); ctx.strokeStyle = "rgba(20,12,4,.8)";
-    ctx.fillStyle = "#7a6248";
-    ctx.fillRect(x, y, w, h); ctx.strokeRect(x, y, w, h);
-    ctx.fillStyle = "#9a7d45";                       // telhado
-    ctx.beginPath();
-    ctx.moveTo(x - w * 0.12, y); ctx.lineTo(sx, y - h * 0.85); ctx.lineTo(x + w * 1.12, y);
-    ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = "#241a10";                       // porta
-    ctx.fillRect(sx - r * 0.10, y + h * 0.35, r * 0.20, h * 0.65);
-  }
 
-  // escudo do exercito em marcha (E2): peca na cor do rei — le-se
-  // "tropa no tabuleiro", nao projetil. Arte heraldica de verdade e E5;
-  // aqui e o slot minimo: escudo chapado + contorno.
-  function desenharEscudo(x, y, r, col) {
-    const w = r * 1.7, h = r * 2.1;
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(x - w / 2, y - h * 0.42);
-    ctx.lineTo(x + w / 2, y - h * 0.42);
-    ctx.quadraticCurveTo(x + w / 2, y + h * 0.12, x, y + h * 0.58);
-    ctx.quadraticCurveTo(x - w / 2, y + h * 0.12, x - w / 2, y - h * 0.42);
-    ctx.closePath();
-    ctx.fillStyle = col; ctx.fill();
-    ctx.lineWidth = Math.max(1.5, r * 0.16); ctx.strokeStyle = "rgba(20,12,4,.8)";
-    ctx.stroke();
-    ctx.lineWidth = Math.max(1, r * 0.09); ctx.strokeStyle = "rgba(255,255,255,.35)";
-    ctx.beginPath();                                  // filete interno: relevo
-    ctx.moveTo(x - w * 0.34, y - h * 0.30);
-    ctx.lineTo(x + w * 0.34, y - h * 0.30);
-    ctx.stroke();
-    ctx.restore();
-  }
 
-  // ESTANDARTE do exercito em marcha (23/08, pedido do Lucas): troca o escudo
-  // liso pelo MESMO brasao do placar do topo — e o rei que marcha, nao um
-  // tipo de tropa (um icone de cavaleiro sozinho mentiria se o grupo fosse
-  // misto). A faixinha embaixo, nas mesmas 3 cores do placar (lanceiro/
-  // arqueiro/cavaleiro), mostra a composicao real de relance, sem numero.
-  // Cai pro escudo liso enquanto o brasao ainda nao carregou.
-  function desenharEstandarte(x, y, r, lado, tropas) {
-    const img = SPR["brasao_" + lado.toLowerCase()];
-    if (!img || !img.pronto) { desenharEscudo(x, y, r, COR[lado]); return; }
-    const larg = r * 1.5, alt = larg * img.height / img.width;
-    ctx.drawImage(img, x - larg / 2, y - alt / 2, larg, alt);
-    if (!tropas) return; // sem composicao (ex.: plantada sem o exercito de origem): so o brasao
-    const L = tropas.lanceiro || 0, Aq = tropas.arqueiro || 0, C = tropas.cavaleiro || 0;
-    const tot = L + Aq + C;
-    if (tot <= 0) return;
-    const fh = Math.max(2, r * 0.22), fy = y + alt / 2 + 1;
-    let fx = x - larg / 2;
-    for (const [n, cor] of [[L, ESP_COR.lanceiro], [Aq, ESP_COR.arqueiro], [C, ESP_COR.cavaleiro]]) {
-      const w = larg * n / tot;
-      if (w > 0.4) { ctx.fillStyle = cor; ctx.fillRect(fx, fy, w, fh); }
-      fx += w;
-    }
-  }
 
   // desenha aldeias do jogo (cor do dono) + exercitos em transito
   // ---- TERRITORIO DE TRANSMISSAO: influencia pintada + CONTORNO ----
@@ -4214,43 +3559,11 @@
   // O codigo fica (pode voltar como "nome so quando vira noticia").
   const NOMES_AMBIENTE = false;
   let territCache = { chave: "", cels: null };
-  function territorioCelulas() {
-    const chave = game.turno + ":" + game.aldeias.map((a) => a.dono || "n").join("");
-    if (territCache.chave === chave) return territCache.cels;
-    const cels = new Map(); // "x,y" -> { dono, d2 } (dono mais proximo vence)
-    const R = 4;
-    for (const a of game.aldeias) {
-      if (a.dono === null) continue;
-      for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
-        const d2 = dx * dx + dy * dy;
-        if (d2 > R * R + 2) continue; // canto cortado: borda organica
-        const k = (a.x + dx) + "," + (a.y + dy);
-        const atual = cels.get(k);
-        if (!atual || d2 < atual.d2) cels.set(k, { dono: a.dono, d2 });
-      }
-    }
-    territCache = { chave, cels };
-    return cels;
-  }
 
   // PELE v2 (18/07): celulas "limpas" no entorno de cada aldeia — nelas a
   // decoracao (bosque/serra) NAO nasce, senao arvore/montanha brotam por cima
   // do predio. Posicoes das aldeias sao fixas na partida -> cache por assinatura.
   let decoClearCache = { sig: "", set: null };
-  function decoClear() {
-    if (!game) return null;
-    const sig = game.aldeias.map((a) => a.x + "_" + a.y).join(";");
-    if (decoClearCache.sig === sig) return decoClearCache.set;
-    const set = new Set();
-    for (const a of game.aldeias) {
-      const cap = capitalIds.has(a.id);           // castelo ocupa mais que aldeia
-      const rx = 2, up = cap ? 3 : 2, down = 1;   // sprite sobe -> folga maior p/ cima
-      for (let dy = -up; dy <= down; dy++)
-        for (let dx = -rx; dx <= rx; dx++) set.add((a.x + dx) + "," + (a.y + dy));
-    }
-    decoClearCache = { sig, set };
-    return set;
-  }
 
   // MOTOR #1 (render): pontos (em celulas) do caminho de um exercito e o ponto
   // atual pela fracao de progresso — o exercito ANDA pela estrada, nao pela reta.
@@ -4321,169 +3634,11 @@
   // vizinha e cada cruzamento ficaria com uma cicatriz escura.
   const _V4_CACHE = new Map();          // traco suavizado, por par de cidades
 
-  function _catmull(pts, n) {
-    // O traco passa PELOS pontos e nao corta as esquinas. Ligar os pontos com
-    // retas deixa um canto visivel em cada no, e o canto e o que mais denuncia
-    // que aquilo foi desenhado por um computador.
-    if (pts.length < 3) return pts;
-    const ext = [pts[0]].concat(pts, [pts[pts.length - 1]]);
-    const out = [];
-    for (let i = 0; i + 3 < ext.length; i++) {
-      const [p0, p1, p2, p3] = [ext[i], ext[i + 1], ext[i + 2], ext[i + 3]];
-      for (let k = 0; k < n; k++) {
-        const t = k / n, t2 = t * t, t3 = t2 * t;
-        out.push([
-          0.5 * (2 * p1[0] + (-p0[0] + p2[0]) * t
-                 + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2
-                 + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3),
-          0.5 * (2 * p1[1] + (-p0[1] + p2[1]) * t
-                 + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2
-                 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3)]);
-      }
-    }
-    out.push(pts[pts.length - 1]);
-    return out;
-  }
 
-  function _serpentear(pts, amp) {
-    // Uma estrada medieval contorna o que lhe aparece a frente. Reta perfeita
-    // entre duas aldeias e a marca mais visivel de traco automatico.
-    // As PONTAS ficam quietas: se a curva chegasse ate ao fim, a estrada nascia
-    // ao lado da porta da aldeia.
-    if (pts.length < 4) return pts;
-    let sAcum = 0;
-    return pts.map((pt, i) => {
-      if (i) sAcum += Math.hypot(pt[0] - pts[i - 1][0], pt[1] - pts[i - 1][1]);
-      const j0 = Math.max(0, i - 1), j1 = Math.min(pts.length - 1, i + 1);
-      const dx = pts[j1][0] - pts[j0][0], dy = pts[j1][1] - pts[j0][1];
-      const L = Math.max(Math.hypot(dx, dy), 1e-6);
-      const k = Math.min(1, Math.min(i, pts.length - 1 - i) / (pts.length * 0.22));
-      const d = (Math.sin(sAcum * 0.020) * 0.7 + Math.sin(sAcum * 0.047 + 1.1) * 0.3) * amp * k;
-      return [pt[0] - dy / L * d, pt[1] + dx / L * d];
-    });
-  }
 
-  function _fita(pts, meia, ondula, semente) {
-    // A ESTRADA E UM POLIGONO, NAO UM TRACO.
-    // Um `stroke` tem largura constante, e duas bordas perfeitamente paralelas
-    // leem-se como fita adesiva por melhor que seja a cor — foi exatamente o que
-    // aconteceu na primeira versao. Aqui a meia-largura varia ao longo do
-    // caminho, portanto as beiras ficam irregulares, que e como uma estrada de
-    // terra e: mais larga onde as carrocas se cruzam, mais estreita onde a mata
-    // aperta.
-    const esq = [], dir = [];
-    for (let i = 0; i < pts.length; i++) {
-      const j0 = Math.max(0, i - 1), j1 = Math.min(pts.length - 1, i + 1);
-      const dx = pts[j1][0] - pts[j0][0], dy = pts[j1][1] - pts[j0][1];
-      const L = Math.max(Math.hypot(dx, dy), 1e-6);
-      const nx = -dy / L, ny = dx / L;
-      const w = meia * (1 + ondula * (Math.sin(i * 0.63 + semente) * 0.6
-                                      + Math.sin(i * 1.71 + semente * 2.3) * 0.4));
-      esq.push([pts[i][0] + nx * w, pts[i][1] + ny * w]);
-      dir.push([pts[i][0] - nx * w, pts[i][1] - ny * w]);
-    }
-    return esq.concat(dir.reverse());
-  }
 
-  function _preencher(poli, dy) {
-    ctx.beginPath();
-    ctx.moveTo(poli[0][0], poli[0][1] + dy);
-    for (let i = 1; i < poli.length; i++) ctx.lineTo(poli[i][0], poli[i][1] + dy);
-    ctx.closePath();
-    ctx.fill();
-  }
 
-  // ── ONDE UMA ESTRADA ACABA ────────────────────────────────────────────
-  // Acabava no CENTRO da aldeia, e por isso desaparecia por baixo da peca sem
-  // se ligar a nada — era esse o "nao parece encaixado". Agora acaba na BOCA do
-  // portao que aponta para o rumo dela. O cozedor grava as bocas com o rumo que
-  // tem NO MAPA, portanto aqui e so escolher a mais alinhada; se nenhuma servir
-  // (uma aldeia com seis estradas so tem tres portoes), cai no centro, como
-  // antes.
-  function bocaV4(a, rumoGraus) {
-    const man = V4_MAN && V4_MAN[a.slug];
-    if (!man || !man.bocas || !man.bocas.length) return null;
-    const img = spriteV4(a);
-    if (!img) return null;
-    let melhor = null, dif = 999;
-    for (const b of man.bocas) {
-      let d = Math.abs(((b.rumo - rumoGraus + 540) % 360) - 180);
-      if (d < dif) { dif = d; melhor = b; }
-    }
-    if (dif > 42) return null;              // nenhum portao serve este rumo
-    const k = capitalIds.has(a.id) ? 4.6 : 3.8;
-    const larg = (TILE * scale) * k;
-    const alt = larg * img.height / img.width;
-    const dl = (IB && IB.desloc[a.slug]) || [0, 0];
-    const cs = TILE * scale;
-    const x0 = SX(a.x) + dl[0] / IB2div() * cs - larg / 2;
-    const y0 = SY(a.y) + dl[1] / IB2div() * cs + man.ancora_y * alt - alt;
-    return [x0 + melhor.x * larg, y0 + melhor.y * alt];
-  }
 
-  function desenharEstradasV4(porSlug, contorno, cs) {
-    const tracos = [];
-    let n = 0;
-    for (const e of Iberia.ESTRADAS) {
-      const a = porSlug[e.de], b = porSlug[e.para];
-      if (!a || !b) continue;
-      const chave = e.de + "|" + e.para + "|" + Math.round(scale * 1000) + "|"
-                  + Math.round(panX) + "|" + Math.round(panY);
-      let pts = _V4_CACHE.get(chave);
-      if (!pts) {
-        const rumo = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
-        const ini = bocaV4(a, (rumo + 360) % 360) || [SX(a.x), baseVisualIB(a)];
-        const fim = bocaV4(b, (rumo + 540) % 360) || [SX(b.x), baseVisualIB(b)];
-        const cru = [ini];
-        for (const w of pontosVia(a.slug, b.slug)) cru.push([SX(w[0]), SY(w[1])]);
-        cru.push(fim);
-        pts = _serpentear(_catmull(cru, 10), Math.max(2, cs * 0.22));
-        if (_V4_CACHE.size > 400) _V4_CACHE.clear();
-        _V4_CACHE.set(chave, pts);
-      }
-      tracos.push({ pts, sec: contorno.has([e.de, e.para].slice().sort().join("|")),
-                    sem: (n++) * 1.7 });
-    }
-
-    ctx.save();
-    // MAIS LARGAS (07/09). A largura "certa" de uma estrada de 6 m, na escala a
-    // que as aldeias sao desenhadas, dava uma linha de dois pixeis — correta e
-    // ilegivel. Um mapa de jogo exagera as estradas de proposito, porque elas
-    // sao INFORMACAO: e por elas que as tropas andam. Passou de 0.30 para 0.70.
-    const base = Math.max(6.0, cs * 0.70);
-    // O LEITO E PREENCHIDO COM UMA FOTOGRAFIA DE GRAVILHA, nao com uma cor.
-    // Uma faixa de cor chapada le-se como fita adesiva por melhor que seja o
-    // tom — foi o que a primeira versao fez. `createPattern` repete um ladrilho
-    // de 192 px de graca; o `setTransform` prende-o ao MAPA em vez do ecra,
-    // senao a gravilha desliza por baixo das estradas quando se arrasta a vista.
-    let leito = "rgba(176,150,104,1)";
-    if (SPR.leito && SPR.leito.pronto) {
-      const pat = ctx.createPattern(SPR.leito, "repeat");
-      if (pat && pat.setTransform && typeof DOMMatrix === "function") {
-        const k = Math.max(0.25, Math.min(2.0, cs / 46));
-        pat.setTransform(new DOMMatrix().translate(panX, panY).scale(k));
-      }
-      if (pat) leito = pat;
-    }
-    // (cor, meia-largura relativa, ondulacao da beira, deslocamento vertical)
-    const PASSADAS = [
-      ["rgba(24,18,10,.30)", 0.78, 0.16, Math.max(1.2, cs * 0.075)],  // sombra
-      ["rgba(48,36,22,.85)", 0.62, 0.20, 0],                          // encaixe
-      [leito, 0.44, 0.24, 0],                                         // leito
-      ["rgba(226,206,164,.42)", 0.15, 0.44, 0],                       // veio do meio
-    ];
-    // CADA PASSADA PERCORRE TODAS AS ESTRADAS ANTES DA SEGUINTE COMECAR. Se
-    // fosse estrada a estrada, o encaixe escuro de uma passaria por cima do
-    // leito claro da vizinha e cada cruzamento ficaria com uma cicatriz.
-    for (const [cor, k, ond, dy] of PASSADAS) {
-      ctx.fillStyle = cor;
-      for (const t of tracos) {
-        const meia = Math.max(0.6, base * k * (t.sec ? 0.70 : 1));
-        _preencher(_fita(t.pts, meia, ond, t.sem), dy);
-      }
-    }
-    ctx.restore();
-  }
 
   // ===== MATA v4 ==========================================================
   // Bosques espalhados por `ferramentas/cena/espalhar_mata.py`, a partir do
@@ -4507,25 +3662,6 @@
     }
   }
 
-  function desenharMataV4() {
-    if (!MATA || !IB) return;
-    const cs = TILE * scale;
-    if (cs < 3) return;                 // ao longe a mata so faria sujeira
-    // A LISTA JA VEM ORDENADA DE NORTE PARA SUL. Quem esta mais a sul desenha-se
-    // por cima; sem isso um bosque do fundo tapa outro da frente e a mata perde
-    // a profundidade toda.
-    for (const m of MATA) {
-      const img = MATA_SPR[m.s];
-      if (!img || !img.pronto) continue;
-      const x = SX(m.x), y = SY(m.y);
-      if (x < -80 || y < -80 || x > VW + 80 || y > VH + 80) continue;
-      const larg = cs * 1.95 * m.e;
-      const alt = larg * img.height / img.width;
-      // as pecas sao assentes pelo CENTRO da mancha, nao pelo fundo da imagem —
-      // e por isso a ancora vale ~0,35 e nao 0
-      ctx.drawImage(img, x - larg / 2, y - alt * 0.65, larg, alt);
-    }
-  }
 
   // ===== CADERNO DE MARCAS =================================================
   // Ligado por ?marcar no endereco, ou pela tecla M.
@@ -4856,12 +3992,6 @@
     }, 4, 16);
   }
 
-  function desenharMarcas() {
-    if (!MARC.marcas.length && !MARC.a_riscar) return;
-    const cs = TILE * scale;
-    pintarMarcas(ctx, (p) => [panX + celX(p[0]) * cs, panY + celY(p[1]) * cs],
-                 Math.max(2, cs * 0.065), Math.max(13, cs * 0.30));
-  }
 
   // A QUE PECA PERTENCE UMA MARCA. E isto que transforma "um risco em (812,533)"
   // em "a estrada Madrid-Toledo": sem esta linha eu teria de ir procurar no mapa
@@ -5099,85 +4229,7 @@
      console.warn("caderno de marcas indisponivel:", e && e.message);
    }
   })();
-  // abaixo de 8px por celula cai no traco simples.
-  function desenharEstradasIberia() {
-    if (!IB || !game) return;
-    const cs = TILE * scale;
-    const porSlug = {};
-    for (const a of game.aldeias) porSlug[a.slug] = a;
-    const contorno = new Set((Iberia.MAPA.viasDeContorno || [])
-      .map((par) => par.slice().sort().join("|")));
-    if (ALDEIA_V4) { desenharEstradasV4(porSlug, contorno, cs); return; }
-    const pecas = ["estrada_reta", "estrada_reta2"].filter((n) => SPR[n] && SPR[n].pronto);
-    if (!pecas.length || cs < 8) { desenharEstradasTraco(porSlug, contorno, cs); return; }
 
-    ctx.save();
-    let n = 0;
-    for (const e of Iberia.ESTRADAS) {
-      let a = porSlug[e.de], b = porSlug[e.para];
-      if (!a || !b) continue;
-      // sempre da esquerda para a direita: assim o sprite nunca sai de cabeca
-      // para baixo (o giro ficaria alem de +-90 graus).
-      if (SX(a.x) > SX(b.x)) { const t = a; a = b; b = t; }
-      const sec = contorno.has([e.de, e.para].slice().sort().join("|"));
-      // poligonal: cidade, curvas do editor, cidade
-      const pts = [{ x: SX(a.x), y: baseVisualIB(a) }];
-      for (const w of pontosVia(a.slug, b.slug)) pts.push({ x: SX(w[0]), y: SY(w[1]) });
-      pts.push({ x: SX(b.x), y: baseVisualIB(b) });
-      ctx.globalAlpha = sec ? 0.72 : 1;
-      let i = 0;
-      for (let g = 0; g + 1 < pts.length; g++) {
-        const ax = pts[g].x, ay = pts[g].y, bx = pts[g + 1].x, by = pts[g + 1].y;
-        const dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy);
-        if (L < 1) continue;
-        const th = Math.atan2(dy, dx);
-        let t = 0;
-        while (t < L) {
-          const nome = pecas[(n + i) % pecas.length];
-          const spr = SPR[nome], m = ESTRADA_SPR[nome];
-          const k = (m.cels * cs) / spr.width * (sec ? 0.72 : 1);
-          const passo = m.along * k * ESTRADA_SOBREPOR;
-          const meio = Math.min(t + passo / 2, L);
-          ctx.save();
-          ctx.translate(ax + dx * meio / L, ay + dy * meio / L);
-          ctx.rotate(th - m.ang * Math.PI / 180);
-          ctx.scale(k, k);
-          ctx.drawImage(spr, -m.cx, -m.cy);
-          ctx.restore();
-          t += passo; i++;
-          if (i > 400) break;               // guarda contra passo degenerado
-        }
-      }
-      n++;
-    }
-    ctx.globalAlpha = 1;
-    ctx.restore();
-  }
-
-  // Plano B (zoom afastado ou sprite ainda carregando): leito claro com borda
-  // escura, em duas passadas para o cruzamento nao cortar.
-  function desenharEstradasTraco(porSlug, contorno, cs) {
-    ctx.save();
-    ctx.lineCap = "round"; ctx.lineJoin = "round";
-    for (const passada of [0, 1]) {
-      for (const e of Iberia.ESTRADAS) {
-        const a = porSlug[e.de], b = porSlug[e.para];
-        if (!a || !b) continue;
-        const sec = contorno.has([e.de, e.para].slice().sort().join("|"));
-        const larg = Math.max(4, cs * (sec ? 0.24 : 0.34));
-        if (passada === 0) { ctx.strokeStyle = "rgba(62,48,32,.42)"; ctx.lineWidth = larg; ctx.setLineDash([]); }
-        else { ctx.strokeStyle = sec ? "#c2ac81" : "#d9c49a"; ctx.lineWidth = Math.max(2, larg * 0.62);
-               ctx.setLineDash(sec ? [cs * 0.30, cs * 0.24] : []); }
-        ctx.beginPath();
-        ctx.moveTo(SX(a.x), baseVisualIB(a));
-        for (const w of pontosVia(a.slug, b.slug)) ctx.lineTo(SX(w[0]), SY(w[1]));
-        ctx.lineTo(SX(b.x), baseVisualIB(b));
-        ctx.stroke();
-      }
-    }
-    ctx.setLineDash([]);
-    ctx.restore();
-  }
 
   function IB2div() { return IB ? IB.div : 1; }
 
@@ -5185,20 +4237,6 @@
     return spr ? larg * spr.height / spr.width : r * 2;
   }
 
-  // Onde a cidade ASSENTA na tela, ja contando o levante do sprite (IB.levanta).
-  // As estradas tem de terminar exatamente aqui: mirando na ancora crua elas
-  // passavam por BAIXO das aldeias (11px numa aldeia, 20px numa capital).
-  // Y VISUAL de um efeito: a aldeia e desenhada LEVANTADA (baseVisualIB + desloc),
-  // mas anel, pulso e dano miravam a ancora CRUA — ficavam ~0.7 tile abaixo do
-  // desenho. Mesmo erro que ja mordeu as estradas e o hover (CLAUDE.md 6).
-  // Efeito de estrada (combate_estrada) nao tem aldeia: fica no ponto cru.
-  function ancoraEfeito(e) {
-    if (e.aldeiaId == null || !IB) return { x: SX(e.x), y: SY(e.y) };
-    const a = game.aldeias.find((v) => v.id === e.aldeiaId);
-    if (!a) return { x: SX(e.x), y: SY(e.y) };
-    const dl = (IB.desloc[a.slug]) || [0, 0], cs2 = TILE * scale;
-    return { x: SX(a.x) + dl[0] / IB2div() * cs2, y: baseVisualIB(a) + dl[1] / IB2div() * cs2 };
-  }
   // ===== ESTADOS DA TORRE (25/08) =====
   // A aldeia nao-capital passa a ser a torre de madeira, em tres estados:
   //   base      -> nunca foi tomada
@@ -5253,9 +4291,6 @@
   // o motor guarda o dono como null / "A" / "B" — as mesmas chaves do COR
   const V4_COR = { A: "azul", B: "vermelha" };
 
-  function corDoDono(a) {
-    return V4_COR[a.dono] || "neutra";
-  }
 
   function spriteV4(a) {
     if (typeof Image === "undefined") return null;
@@ -5315,322 +4350,6 @@
     return SY(a.y) - alturaSprite(e.spr, e.larg, Math.max(20, cs * 0.59)) * IB.levanta;
   }
 
-  function drawGame() {
-    if (!game) return;
-    const cs = TILE * scale;
-
-    // AREA DE INFLUENCIA removida (pele v2, feedback Lucas 18/07): o veu de
-    // territorio poluia o mapa. O placar/cabo-de-guerra no topo carrega o jogo;
-    // o mapa vira paisagem. territorioCelulas() segue definida caso volte.
-
-    for (const a of game.aldeias) {
-      let sx = SX(a.x); const sy = SY(a.y);
-      if (sx < -60 || sy < -60 || sx > VW + 60 || sy > VH + 60) continue;
-      const col = corDaAldeia(a);
-      const r = Math.max(20, cs * 0.59);
-      const ehCapital = capitalIds.has(a.id); // so a capital inicial e castelo (aldeia tomada nao)
-
-      // PELE v2 (feedback Lucas 18/07): MAPA LIMPO. Fora anel, numero de
-      // tropas e selo — o placar no topo carrega a leitura do jogo. So a
-      // CAPITAL do rei e castelo (o alvo da partida = tomar o castelo inimigo);
-      // aldeia barbara dominada segue aldeia, marcada por BANDEIRA do time.
-      // Sprite base-centro; fallback procedural quando ainda nao carregou.
-      const escolha = spriteAldeia(a);
-      const sprB = escolha.spr, larg = escolha.larg, ehTorre = escolha.torre;
-      // Iberia: (x,y) JA e a ancora da base (o ponto marcado na calibracao),
-      // entao o sprite assenta exatamente ali. No procedural, (x,y) e o centro
-      // da celula e o sprite desce meio raio para "pisar" nela.
-      // IB.levanta: quanto o sprite sobe alem da ancora, em fracao da propria
-      // altura. Botao de GOSTO (feedback Lucas 03/08) — a ancora geometrica e
-      // 0; subir um pouco assenta melhor a cidade no relevo.
-      const dl = (IB && IB.desloc[a.slug]) || [0, 0];
-      const yBase = (IB ? baseVisualIB(a) : sy + r * 0.5) + dl[1] / IB2div() * (TILE * scale);
-      sx += IB ? dl[0] / IB2div() * (TILE * scale) : 0;
-      // ASSENTO: quanto da altura do sprite fica ABAIXO do ponto que assenta na
-      // cidade. Vive AQUI, fora do `if`, porque o bloco da bandeira mais abaixo
-      // tambem precisa dele — declarar dentro do ramo e usar fora foi o erro que
-      // deixou o mapa sem aldeias duas vezes seguidas.
-      const _assento = (escolha.assento != null && sprB)
-        ? alturaSprite(sprB, larg, r) * escolha.assento : 0;
-      if (sprB) {
-        // Sprite CRU, sempre: quem marca a posse e a BANDEIRA, nao a tinta.
-        // (feedback Lucas 03/08: a capital tingida virava um bloco azul ou
-        // vermelho e comia o desenho do castelo.)
-        desenharSprite(sprB, sx, yBase + _assento, larg);
-      } else if (r >= 15) {                          // fallback procedural
-        if (ehCapital) desenharTorreao(sx, sy, r, col);
-        else desenharCabana(sx, sy, r);
-      }
-
-      // BANDEIRA do time: a UNICA marca de posse, tanto na capital quanto na
-      // aldeia tomada. Na capital ela sobe um pouco mais (o castelo e alto).
-      const alt = alturaSprite(sprB, larg, r);
-
-      // ── AS PECAS v4 TRAZEM OS MASTROS NO MANIFESTO ──────────────────────
-      // O pano NAO e assado no sprite: sao 24 povoacoes e o pano e o unico eixo
-      // que multiplica por numero de Reis (24 x 7 = 168 renders numa expansao,
-      // todos iguais menos um trapo). O cozedor grava onde ficaram os mastros,
-      // em fracao do sprite, e a flamula e desenhada aqui — como sempre foi.
-      // A ESCALA DO PANO NAO E A REAL: um estandarte de 1,7 m num sprite que
-      // vale 79 m dava 2 px no zoom de jogo. Desenha-se maior de proposito,
-      // porque a bandeira nao esta ali para ser realista, esta para dizer de
-      // quem e a aldeia.
-      // A TORRE JA TEM MASTRO no desenho (medido: ponta em 48.4% da largura, no
-      // topo do quadro). Entao ali se hasteia so a FLAMULA, sem repintar haste.
-      // Castelo e o fallback antigo seguem com a bandeira inteira.
-      // `bFootY` e `bH` sao usados MAIS ABAIXO (o numero da guarnicao assenta na
-      // ponta da bandeira), portanto vivem fora dos ramos.
-      let bFootY = ehTorre ? (yBase - alt * 0.995) : (yBase - alt * (ehCapital ? 0.92 : 0.55));
-      let bH = r * (ehCapital ? 1.5 : 1.25);
-      if (escolha.assento != null) {
-        const man = V4_MAN && V4_MAN[a.slug];
-        const x0 = sx - larg / 2, y0 = yBase + _assento - alt;
-        bFootY = y0 + alt * 0.10;              // a guarnicao fica sobre a peca
-        if (man && a.dono !== null && man.mastros) {
-          const h = Math.max(5, larg * 0.085);
-          for (const m of man.mastros) {
-            desenharFlamula(x0 + m.x * larg, y0 + m.y * alt - h * 0.52, h, col);
-          }
-        }
-      } else if (ehTorre) {
-        if (a.dono !== null) desenharFlamula(sx - larg * 0.016, bFootY, bH * 0.62, col);
-      } else if (a.dono !== null) {
-        // capital: hasteia no alto do castelo (0.92); aldeia: no telhado (0.55)
-        desenharBandeira(sx, bFootY, bH, col);
-      }
-
-      // GUARNICAO (23/08, pedido do Lucas): numero de tropas NA aldeia, no
-      // topo da bandeira (aldeia neutra usa o mesmo ponto, sem haste — nao ha
-      // bandeira pra hastear). So aparece ao aproximar (cs>8, mesmo limiar do
-      // numero da tropa em marcha): a visao geral do mapa continua limpa.
-      if (cs > 8) {
-        const totG = a.tropas.lanceiro + a.tropas.arqueiro + a.tropas.cavaleiro;
-        const fm = Math.max(14, cs * 0.32);
-        ctx.font = `bold ${fm}px serif`; ctx.textAlign = "center";
-        ctx.lineWidth = Math.max(2, fm * 0.22); ctx.strokeStyle = "rgba(20,12,4,.85)";
-        // 25/08: o numero flutuava longe demais. Na torre ele se prende ao topo
-        // da FLAMULA (que e baixa), nao a altura da bandeira antiga; nos demais,
-        // encosta mais na haste.
-        const yNum = ehTorre ? (bFootY - 5) : (bFootY - bH - 2);
-        ctx.strokeText(String(totG), sx, yNum);
-        ctx.fillStyle = a.dono === null ? "#e8dfc8" : (a.dono === "A" ? "#bcd0ff" : "#ffc4c4");
-        ctx.fillText(String(totG), sx, yNum);
-      }
-
-      // NOME DA CIDADE (23/08): so aparece ao aproximar o zoom — mapa limpo por
-      // padrao (feedback 18/07), o zoom revela. Mesma tecnica do mapa procedural
-      // antigo (caixa escura translucida + texto creme, cs>42): sem a caixa o
-      // texto se perde no terreno pintado. Limiar relativo ao MIN_SCALE (a
-      // "visao do teatro inteiro"), nao um cs absoluto, porque MIN_SCALE varia
-      // com o mapa/tela — 1.15x o zoom minimo ja e "aproximou pra olhar" (Lucas
-      // pediu 23/08 pra persistir com um pouco menos de zoom que o 1.5x inicial).
-      if (a.nome && scale > MIN_SCALE * 1.15) {
-        const fs = Math.max(9, Math.min(15, cs * 0.16));
-        ctx.font = `bold ${fs}px "Trebuchet MS", sans-serif`;
-        ctx.textAlign = "center";
-        const nameY = yBase + fs * 0.35;
-        const tw = ctx.measureText(a.nome).width;
-        ctx.fillStyle = "rgba(30,20,10,.72)";
-        ctx.fillRect(sx - tw / 2 - 4, nameY - fs, tw + 8, fs + 6);
-        ctx.fillStyle = ehCapital ? "#ffe9b0" : "#f2e8d4";
-        ctx.fillText(a.nome, sx, nameY);
-      }
-    }
-
-    for (const m of game.movimentos) {
-      const o = game.aldeias.find((a) => a.id === m.origemId);
-      const d = game.aldeias.find((a) => a.id === m.destinoId);
-      if (!o || !d) continue;
-      // repFrac (23/08): 0 no jogo ao vivo (comportamento identico a antes) —
-      // so o replay avanca repFrac de 0 a 1 entre um quadro e o proximo, pra
-      // a tropa ANDAR pela estrada em vez de saltar de turno em turno no
-      // video. Ver animarEntreQuadros().
-      const prog = progMarcha(m);
-      const pts = pontosCaminho(m);                       // motor #1: segue a estrada
-      const p = pts ? pontoNaRota(pts, prog) : { x: lerp(o.x, d.x, prog), y: lerp(o.y, d.y, prog), seg: 0 };
-      const mx = SX(p.x);
-      const my = SY(p.y);
-      const dx = SX(d.x), dy = SY(d.y);
-      const col = COR[m.dono];
-      // tropa recem-despachada entra esmaecendo (ver alphaEntrada)
-      const aEnt = alphaEntrada(m);
-      if (aEnt <= 0.02) continue;
-      ctx.save();
-      ctx.globalAlpha = aEnt;
-
-      // ALERTA DE ATAQUE (E2): a 1 turno de chegar, halo na COR DO
-      // ATACANTE marca o alvo — a ameaca tem dono, o desfecho fica em
-      // aberto. Decisao de 16/07: previsao de resultado tira a tensao
-      // do espectador (a conta do motor saiu da UI; segue no eval).
-      // 25/08: o CIRCULO de alerta de ataque saiu (decisao do Lucas: "nao gosto
-      // dele"). Ele marcava o alvo com um anel na cor do atacante, mas a chegada
-      // ja e contada pelo estandarte marchando e depois plantando — o anel era
-      // ruido a mais no momento mais cheio da tela.
-
-      // FORCA COMO TAMANHO: area do marcador ~ forca (comparavel de relance)
-      const Fm = Engine.forcaDe(m.tropas, game.config);
-      // piso subiu de 3 pra 9 (23/08): o escudo vetorial antigo ainda dava pra
-      // ver com raio 3px, mas o estandarte (imagem PNG) some nesse tamanho —
-      // "o estandarte sumiu" era isso, nao um bug de carregamento.
-      // dobrado de novo (23/08, pedido do Lucas) — desta vez o TETO tambem,
-      // senao ele clampa o piso e o aumento nao aparece de verdade.
-      const r = Math.min(cs * 0.9, Math.max(36, cs * 0.56 * Math.sqrt(Fm / 50)));
-
-      // HIERARQUIA DE SETAS (Etapa 1): ataque = traco cheio, peso pela
-      // forca, mais firme a 1 turno do impacto; reforco proprio =
-      // pontilhado quase invisivel. Num turno com 15 marchas, so as que
-      // importam gritam — o espectador ve DE ONDE, PARA ONDE e QUANTO.
-      const ehAtaque = d && d.dono !== m.dono;
-      ctx.save();
-      ctx.beginPath(); ctx.moveTo(mx, my);              // motor #1: rota restante pela estrada
-      if (pts) { for (let i = p.seg + 1; i < pts.length; i++) ctx.lineTo(SX(pts[i].x), SY(pts[i].y)); }
-      else ctx.lineTo(dx, dy);
-      if (ehAtaque) {
-        // E2: rota de ataque = pontilhado PRETO fino, do ponto atual ao
-        // alvo. A cor mora no escudo; a linha so aponta. Firma a 1 turno.
-        ctx.globalAlpha = m.turnosRestantes === 1 ? 0.60 : 0.42;
-        ctx.lineWidth = Math.max(1, cs * 0.045);
-        ctx.setLineDash([Math.max(2, cs * 0.12), Math.max(4, cs * 0.22)]);
-        ctx.strokeStyle = "rgba(12,9,4,.9)";
-      } else {
-        ctx.globalAlpha = 0.13;
-        ctx.lineWidth = 1;
-        ctx.setLineDash([4, 7]);
-        ctx.strokeStyle = col;
-      }
-      ctx.stroke();
-      ctx.restore();
-      desenharEstandarte(mx, my, r, m.dono, m.tropas); // E2: a tropa e uma peca, nao um ponto
-
-      // rotulo do exercito: so o NUMERO da forca, de perto (de longe o
-      // TAMANHO do marcador ja conta). O glifo do tipo dominante saiu
-      // (23/08, pedido do Lucas) — a faixinha do estandarte ja mostra a
-      // composicao real, sem mentir feito um icone unico numa tropa mista.
-      if (cs > 8) { // limiar bem mais baixo (23/08): aparece com zoom mais afastado
-        const rot = String(Fm);
-        const fm = Math.max(18, cs * 0.42); // metade do tamanho anterior (23/08, pedido do Lucas)
-        ctx.font = `bold ${fm}px serif`; ctx.textAlign = "center";
-        ctx.lineWidth = Math.max(2, fm * 0.24); ctx.strokeStyle = "rgba(20,12,4,.85)";
-        ctx.strokeText(rot, mx, my - r - 4);
-        ctx.fillStyle = col === COR.A ? "#bcd0ff" : "#ffc4c4";
-        ctx.fillText(rot, mx, my - r - 4);
-      }
-      ctx.restore(); // fecha o save do alphaEntrada
-    }
-
-    // ===== EFEITOS: anel, pulso de conquista, dano flutuante, fim =====
-    const agora = performance.now();
-    efeitos = efeitos.filter((e) => agora - e.t0 < (e.dur || EFEITO_DUR));
-    for (const e of efeitos) {
-      const p = (agora - e.t0) / (e.dur || EFEITO_DUR);      // 0 -> 1
-
-      if (e.fim) { // FIM DE PARTIDA: o mapa escurece e o vencedor domina a tela
-        ctx.globalAlpha = Math.min(0.38, p * 1.2);
-        ctx.fillStyle = "#0d0903";
-        ctx.fillRect(0, 0, VW, VH);
-        ctx.globalAlpha = Math.min(0.20, p * 0.6);
-        ctx.fillStyle = e.cor;
-        ctx.fillRect(0, 0, VW, VH);
-        ctx.globalAlpha = 1;
-        continue;
-      }
-      if (p < 0) continue; // batida atrasada: ainda nao e a vez deste efeito
-
-      if (e.plantar) { // ESTANDARTE PLANTANDO: encolhe e assenta na aldeia
-        const _p = ancoraEfeito(e);
-        const k = p * p * (3 - 2 * p);                 // suaviza nas duas pontas
-        const rBase = Math.max(26, cs * 0.62);
-        const rr = rBase * (1 - 0.55 * k);             // 1.0 -> 0.45
-        ctx.save();
-        ctx.globalAlpha = 1 - k;
-        desenharEstandarte(_p.x, _p.y - rBase * 0.25 * (1 - k), rr, e.dono, e.tropas);
-        ctx.restore();
-        continue;
-      }
-
-      if (e.choqueEstrada) { // 1a batida: raios curtos, metade em cada cor
-        const _c = ancoraEfeito(e);
-        const raioC = Math.max(10, cs * 0.5) * (1 + p * 1.1);
-        ctx.globalAlpha = (1 - p) * 0.85;
-        ctx.lineWidth = Math.max(2, cs * 0.07);
-        for (let k = 0; k < 8; k++) {
-          const ak = k * Math.PI / 4 + 0.2;
-          ctx.strokeStyle = k % 2 ? e.corB : e.corA;   // alterna: dois exercitos
-          ctx.beginPath();
-          ctx.moveTo(_c.x + Math.cos(ak) * raioC * 0.45, _c.y + Math.sin(ak) * raioC * 0.45);
-          ctx.lineTo(_c.x + Math.cos(ak) * raioC * (0.45 + 0.55 * (1 - p)),
-                     _c.y + Math.sin(ak) * raioC * (0.45 + 0.55 * (1 - p)));
-          ctx.stroke();
-        }
-        ctx.globalAlpha = 1;
-        continue;
-      }
-
-      if (e.quedaEstandarte) { // 2a batida: o estandarte do perdedor tomba
-        const _q = ancoraEfeito(e);
-        const k = p * p;                                // acelera a queda
-        const rB = Math.max(24, cs * 0.58);
-        ctx.save();
-        ctx.globalAlpha = Math.max(0, 1 - k * 1.15);
-        ctx.translate(_q.x, _q.y + rB * 0.55 * k);      // afunda
-        ctx.rotate(k * 1.15);                            // tomba de lado
-        desenharEstandarte(0, 0, rB * (1 - 0.18 * k), e.dono, e.tropas);
-        ctx.restore();
-        ctx.globalAlpha = 1;
-        continue;
-      }
-
-      if (e.dano) { // numero de dano flutuante: sobe e esmaece
-        const _a = ancoraEfeito(e), ex2 = _a.x, ey2 = _a.y;
-        const fd = Math.max(11, cs * 0.30);
-        ctx.globalAlpha = 1 - p;
-        ctx.font = `bold ${fd}px Verdana`; ctx.textAlign = "center";
-        ctx.lineWidth = Math.max(2, fd * 0.25); ctx.strokeStyle = "rgba(20,12,4,.9)";
-        const yy = ey2 - cs * 0.6 - p * cs * 0.9;
-        ctx.strokeText(e.dano, ex2, yy);
-        ctx.fillStyle = e.cor;
-        ctx.fillText(e.dano, ex2, yy);
-        ctx.globalAlpha = 1;
-        continue;
-      }
-      const _ae = ancoraEfeito(e), ex = _ae.x, ey = _ae.y;
-      const raio = Math.max(8, cs * 0.45) * (1 + p * 1.6);
-      ctx.globalAlpha = (1 - p) * 0.9;
-      ctx.lineWidth = Math.max(2, cs * 0.08);
-      ctx.strokeStyle = e.cor;
-      ctx.beginPath(); ctx.arc(ex, ey, raio, 0, Math.PI * 2); ctx.stroke();
-      if (e.conq) {  // conquista: pulso preenchido + SEGUNDO anel em eco —
-        // a explosao de cor NO lugar substitui o banner com nome orfao
-        ctx.globalAlpha = (1 - p) * 0.30;
-        ctx.fillStyle = e.cor;
-        ctx.beginPath(); ctx.arc(ex, ey, raio * 0.75, 0, Math.PI * 2); ctx.fill();
-        const p2 = Math.max(0, p - 0.22) / 0.78; // eco atrasado
-        if (p2 > 0) {
-          ctx.globalAlpha = (1 - p2) * 0.55;
-          ctx.lineWidth = Math.max(1.5, cs * 0.05);
-          ctx.beginPath(); ctx.arc(ex, ey, Math.max(8, cs * 0.45) * (1 + p2 * 2.4), 0, Math.PI * 2); ctx.stroke();
-        }
-      } else if (!e.dano) { // combate sem conquista: choque — 6 raios curtos
-        ctx.globalAlpha = (1 - p) * 0.7;
-        ctx.lineWidth = Math.max(1.5, cs * 0.06);
-        for (let k = 0; k < 6; k++) {
-          const ak = k * Math.PI / 3 + 0.35;
-          ctx.beginPath();
-          ctx.moveTo(ex + Math.cos(ak) * raio * 0.55, ey + Math.sin(ak) * raio * 0.55);
-          ctx.lineTo(ex + Math.cos(ak) * raio * (0.55 + 0.45 * (1 - p)), ey + Math.sin(ak) * raio * (0.55 + 0.45 * (1 - p)));
-          ctx.stroke();
-        }
-      }
-      ctx.globalAlpha = 1;
-    }
-
-    // NEVOA POR CIMA DE TUDO (P4, 17/08): quando o espectador escolhe "olhos de
-    // Rei A/B", pinta o que aquele Rei NAO ve. Vai no fim do drawGame de
-    // proposito — e uma camada de camara sobre o mapa ja desenhado, e nao um
-    // filtro no desenho: assim nao ha risco de esquecer de esconder algo novo
-    // que venha a ser desenhado antes (bandeira, sprite, seta, efeito).
-    desenharNevoaDoRei();
-  }
 
   // ===== FOG OF WAR: A CAMARA DO REI (P4, 17/08) =========================
   //  So LEITURA e so pixels. Nao toca no estado, no prompt nem no motor: o
@@ -5643,88 +4362,6 @@
     const el = document.getElementById("gvisao");
     const v = el ? el.value : "";
     return (v === "A" || v === "B") ? v : null;
-  }
-  function desenharNevoaDoRei() {
-    const me = reiObservado();
-    if (!me || !game || game.config.fogOfWar !== true) return;
-    const cs = TILE * scale;
-    const vis = Engine.visiveisPara(game, me);
-    const mem = (game.visto && game.visto[me]) || {};
-
-    // 1) veu sobre o mapa inteiro, com "buracos" onde o Rei ve. Um unico
-    //    caminho com duas subtrajetorias e regra even-odd: barato e sem costura.
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, 0, VW, VH);
-    for (const a of game.aldeias) {
-      if (!vis.has(a.id)) continue;
-      const raio = Math.max(34, cs * 1.5);
-      ctx.moveTo(SX(a.x) + raio, SY(a.y));
-      ctx.arc(SX(a.x), SY(a.y), raio, 0, Math.PI * 2, true);
-    }
-    ctx.fillStyle = "rgba(6,10,20,.62)";
-    ctx.fill("evenodd");
-    ctx.restore();
-
-    // 2) aldeias LEMBRADAS (viu antes, nao ve agora): marca com o turno do
-    //    ultimo avistamento. E a informacao com que o Rei esta a decidir —
-    //    ver isto ao lado do mapa real explica meia partida.
-    for (const a of game.aldeias) {
-      if (vis.has(a.id)) continue;
-      const v = mem[a.id];
-      const sx = SX(a.x), sy = SY(a.y);
-      if (sx < -40 || sy < -40 || sx > VW + 40 || sy > VH + 40) continue;
-      if (v) {
-        const idade = game.turno - v.turno;
-        const corDono = v.dono === null ? COR.neutra : COR[v.dono];
-        ctx.save();
-        ctx.globalAlpha = 0.85;
-        ctx.setLineDash([Math.max(3, cs * 0.14), Math.max(3, cs * 0.14)]);
-        ctx.lineWidth = Math.max(1.5, cs * 0.06);
-        ctx.strokeStyle = corDono;
-        ctx.beginPath(); ctx.arc(sx, sy, Math.max(12, cs * 0.5), 0, Math.PI * 2); ctx.stroke();
-        ctx.restore();
-        if (cs > 14) {
-          const f = Math.max(9, cs * 0.24);
-          ctx.save();
-          ctx.font = `${f}px serif`; ctx.textAlign = "center";
-          ctx.lineWidth = Math.max(2, f * 0.3); ctx.strokeStyle = "rgba(8,6,2,.9)";
-          ctx.strokeText("T" + v.turno, sx, sy - Math.max(14, cs * 0.62));
-          ctx.fillStyle = "rgba(226,216,190,.92)";
-          ctx.fillText("T" + v.turno, sx, sy - Math.max(14, cs * 0.62));
-          ctx.restore();
-        }
-      } else if (cs > 16) {
-        // NUNCA explorada: interrogacao. O Rei sabe que ha uma cidade ali
-        // (a rede de estradas e publica) e nao sabe de quem nem com o que.
-        const f = Math.max(11, cs * 0.34);
-        ctx.save();
-        ctx.font = `bold ${f}px serif`; ctx.textAlign = "center";
-        ctx.globalAlpha = 0.5;
-        ctx.lineWidth = Math.max(2, f * 0.26); ctx.strokeStyle = "rgba(8,6,2,.9)";
-        ctx.strokeText("?", sx, sy + f * 0.35);
-        ctx.fillStyle = "rgba(226,216,190,.9)";
-        ctx.fillText("?", sx, sy + f * 0.35);
-        ctx.restore();
-      }
-    }
-
-    // 3) etiqueta de canto: sem isto o espectador nao sabe que esta a ver
-    //    uma camara subjetiva, e le o mapa escuro como se fosse o jogo.
-    const nVis = game.aldeias.filter((a) => vis.has(a.id)).length;
-    const nLembra = game.aldeias.filter((a) => !vis.has(a.id) && mem[a.id]).length;
-    const nNunca = game.aldeias.length - nVis - nLembra;
-    const txt = `olhos do Rei ${me} — ve ${nVis} · lembra ${nLembra} · nunca viu ${nNunca}`;
-    ctx.save();
-    ctx.font = "bold 15px serif"; ctx.textAlign = "left";
-    const w = ctx.measureText(txt).width + 22;
-    ctx.fillStyle = "rgba(10,8,4,.72)";
-    ctx.fillRect(14, VH - 42, w, 28);
-    ctx.strokeStyle = COR[me]; ctx.lineWidth = 2;
-    ctx.strokeRect(14, VH - 42, w, 28);
-    ctx.fillStyle = "rgba(233,224,200,.96)";
-    ctx.fillText(txt, 25, VH - 22);
-    ctx.restore();
   }
 
   // ===== PAINEIS LATERAIS DE ESPECTADOR (fatia 1: so render) ============
@@ -5912,7 +4549,6 @@
   window.ajustarDepoimento = ajustarDepoimento;   // exposta para poder ser testada de fora
 
   function elTxt(id, txt) { const e = document.getElementById(id); if (e) e.textContent = txt; }
-  function elLarg(id, pct) { const e = document.getElementById(id); if (e) e.style.width = pct + "%"; }
 
   // ROLAGEM DE NUMERO (25/08) — o numero CONTA ate o valor novo em vez de
   // saltar. E a peca 1 do escalonamento da virada de turno: o combate estoura
@@ -6258,7 +4894,6 @@
     camAuto = false;
     const g = document.getElementById("grepCam");
     if (g) g.classList.remove("ativo");
-    camAlvo = null;
     scale = (VW / (IB.imgCels.w * TILE)) * ZOOM_GRAVACAO;
     centerOn(IB.foco.x, IB.foco.y);
     panY += VH * DESCE_GRAVACAO;   // o foco fica alto de mais sem isto
@@ -6350,7 +4985,7 @@
   // so entao dar o play — antes, ao voltar, a partida ja recomecava sozinha.
   function reiniciarReplay() {
     if (!rep) return;
-    rep.idx = 0; limparFeeds(); limparBanners(); fecharCartao(); efeitos = [];
+    rep.idx = 0; limparFeeds(); limparBanners(); fecharCartao();
     trocasDono = new Map(); rolagens.clear(); // sem transicao herdada do que ja passou
     aldeiasEmChamas = new Map();
     camAuto = true; document.getElementById("grepCam").classList.add("ativo");
@@ -6365,7 +5000,6 @@
   document.getElementById("grepCam").addEventListener("click", () => {
     camAuto = !camAuto;
     document.getElementById("grepCam").classList.toggle("ativo", camAuto);
-    if (!camAuto) camAlvo = null;
   });
   document.getElementById("grepSair").addEventListener("click", sairReplay);
   // os dois modos "Rei B = modelo" sao mutuamente exclusivos

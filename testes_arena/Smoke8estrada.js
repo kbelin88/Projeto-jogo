@@ -62,7 +62,10 @@ const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
 const canais = [
   ["log .txt do browser (registrarEventosTurno)", /function registrarEventosTurno\(\)[\s\S]*?\n  \}/],
   ["cronica de jogo (cronicaEventos)", /function cronicaEventos\(tn\)[\s\S]*?\n  \}/],
-  ["efeitos de mapa (registrarEfeitosTurno)", /function registrarEfeitosTurno\(tn\)[\s\S]*?\n  \}/],
+  // ⚠ ERA "efeitos de mapa (registrarEfeitosTurno)". Esse canal pintava o
+  // choque no canvas plano e foi apagado em 22/09 com o resto do desenho 2D;
+  // a cena a serio esta no mapa 3D e e conferida na seccao (C).
+  ["ponte para o mapa 3D (eventosDeEstrada)", / {2}function eventosDeEstrada\(\)[\s\S]*?\n {2}\}/],
 ];
 for (const [nome, re] of canais) {
   const bloco = (html.match(re) || [])[0];
@@ -83,17 +86,28 @@ ok("camera aponta ao PONTO da estrada, nao a uma aldeia inexistente",
   !!camera && /combate_estrada[\s\S]{0,120}apontarCamera\(\s*alvoCam\.x/.test(camera));
 
 // ---------- (C) a cena, e o que ela NAO pode ser ----------
-console.log("\n=== (C) a cena do choque ===");
-const efeitos = (html.match(/function registrarEfeitosTurno\(tn\)[\s\S]*?\n  \}/) || [])[0] || "";
-ok("duas batidas: choque e queda do estandarte",
-  /choqueEstrada/.test(efeitos) && /quedaEstandarte/.test(efeitos));
-ok("a queda vem DEPOIS do choque (batida atrasada)", /quedaEstandarte[\s\S]{0,160}t0: ag \+ \d+/.test(efeitos));
-ok("o desenho das duas batidas existe",
-  /if \(e\.choqueEstrada\)/.test(html) && /if \(e\.quedaEstandarte\)/.test(html));
+// ⚠ A CENA MUDOU DE SITIO EM 22/09. Era um par de efeitos no canvas plano
+// (`choqueEstrada` + `quedaEstandarte`, duas batidas pintadas pelo `drawGame`);
+// esse canvas deixou de pintar em 11/09 e foi apagado em 22/09. Hoje o choque e
+// a cena a serio, com soldados, no `sonda3d/batalha.js` — e o caminho que
+// interessa trancar e o que LEVA o evento do motor ate la.
+console.log("\n=== (C) a cena do choque, no mapa 3D ===");
+const ponte = (html.match(/function eventosDeEstrada\(\)[\s\S]*?\n {2}\}/) || [])[0] || "";
+ok("a ponte converte o evento do motor para o mapa", /combate_estrada/.test(ponte));
+ok("e a ponte e chamada no empurrarPara3D",
+  /eventos: eventosDeEstrada\(\)/.test(html));
+const mapa3d = fs.readFileSync(
+  path.join(__dirname, "..", "sonda3d", "mapa3d.js"), "utf8");
+ok("o mapa 3D abre a cena quando chega um combate de estrada",
+  /ev\.tipo === "combate_estrada"[\s\S]{0,40}abrirBatalha\(ev\)/.test(mapa3d));
+const batalha = fs.readFileSync(
+  path.join(__dirname, "..", "sonda3d", "batalha.js"), "utf8");
+ok("o perdedor e ANIQUILADO na cena, como no motor",
+  /perdeVenc/.test(batalha) && /compPerd/.test(batalha));
 // 25/08, decisao do Lucas: "circulos piscando e numero de tropas mortas poluem
 // o momento". A cena do choque nao pode reintroduzir nenhum dos dois.
-ok("a cena NAO usa numero flutuante de baixas (decisao de 25/08)",
-  !/quedaEstandarte[\s\S]{0,400}dano:/.test(efeitos) && !/choqueEstrada[\s\S]{0,300}dano:/.test(efeitos));
+ok("a cena NAO usa anel a piscar nem numero flutuante de baixas (25/08)",
+  !/anelImpacto|numeroFlutuante|floatDano/.test(batalha));
 
 // ---------- (D) todo campo que a UI le existe MESMO no evento ----------
 // Este e o modo de falha silencioso: um nome trocado (e.atkOrigem em vez de

@@ -1,19 +1,30 @@
 // ============================================================
-//  Smoke5fog.js — A CAMARA DO REI (fog of war no canvas), P4 17/08
+//  Smoke5fog.js — A CAMARA DO REI (fog of war no mapa), P4 17/08
 // ------------------------------------------------------------
 //  Rodar:  node testes_arena/Smoke5fog.js
 //
 //  O que guarda: o seletor "olhos de" do index.html mostra o mapa como UM Rei
-//  o ve, e o que ele desenha bate com Engine.visiveisPara / game.visto — as
+//  o ve, e o que chega ao mapa bate com Engine.visiveisPara / game.visto — as
 //  MESMAS fontes que o prompt usa. Se este smoke passar e o prompt divergir,
 //  o bug esta no render; se divergirem entre si, a camara esta a mentir ao
 //  espectador, que e o pior caso (a narracao passaria a contar outra partida).
 //
-//  COMO: extrai reiObservado + desenharNevoaDoRei do index.html e roda-as
-//  contra um contexto 2d FALSO que so registra chamadas. Nao abre browser e
-//  nao depende do resto do script (o test_index_carrega ja garante que o
-//  ficheiro inteiro roda). Se a extracao falhar, o teste FALHA em vez de
-//  passar em silencio — um refactor que renomeie as funcoes tem de doer aqui.
+//  ── O QUE MUDOU EM 22/09 ───────────────────────────────────────────────
+//  Ate aqui o smoke extraia `desenharNevoaDoRei`, que pintava um veu com
+//  buracos no canvas plano. Esse canvas deixou de pintar em 11/09, quando o 3D
+//  passou a default, e foi apagado em 22/09 com as outras 1031 linhas de
+//  desenho que ninguem via.
+//
+//  A camara do Rei nao desapareceu: mudou de sitio. Hoje ela e a PONTE — o
+//  `empurrarPara3D` decide, aldeia a aldeia, se manda o estado verdadeiro, a
+//  ultima fotografia (`lembrada`) ou nada. O invariante e o mesmo e continua a
+//  valer a pena tranca-lo: o que o espectador VE tem de ser o que o Rei SABE.
+//
+//  COMO: extrai reiObservado + empurrarPara3D do index.html e roda-os contra
+//  um mapa 3D FALSO que so guarda o que recebeu. Nao abre browser e nao
+//  depende do resto do script (o test_index_carrega ja garante que o ficheiro
+//  inteiro roda). Se a extracao falhar, o teste FALHA em vez de passar em
+//  silencio — um refactor que renomeie as funcoes tem de doer aqui.
 // ============================================================
 "use strict";
 const fs = require("fs");
@@ -33,74 +44,90 @@ console.log("\n=== (A) o seletor de olhos ===");
 ok("select #gvisao existe", /id="gvisao"/.test(html));
 ok("tres opcoes: espectador, Rei A, Rei B",
   /value=""[^>]*>espectador/.test(html) && /value="A">Rei A</.test(html) && /value="B">Rei B</.test(html));
-ok("drawGame chama a nevoa no FIM (camada por cima de tudo)", /desenharNevoaDoRei\(\);\s*\n\s*\}/.test(html));
+ok("a ponte usa a MESMA funcao de olhos que o prompt",
+  /const olhos = reiObservado\(\);/.test(html));
 ok("trocar de olhos redesenha", /gvisao[\s\S]{0,200}addEventListener\("change"[\s\S]{0,40}draw\(\)/.test(html));
 
 // ---------- (B) extracao das funcoes ----------
-const src = (html.match(/function reiObservado\(\)[\s\S]*?\n  \}\n  function desenharNevoaDoRei\(\)[\s\S]*?\n  \}\n/) || [])[0];
-if (!src) {
-  console.log("  [XX ] extrair reiObservado + desenharNevoaDoRei do index.html");
+const fReiObs = (html.match(/ {2}function reiObservado\(\)[\s\S]*?\n {2}\}/) || [])[0];
+const fPonte = (html.match(/ {2}function empurrarPara3D\(\)[\s\S]*?\n {2}\}/) || [])[0];
+if (!fReiObs || !fPonte) {
+  console.log("  [XX ] extrair reiObservado + empurrarPara3D do index.html");
   console.log("\nFALHOU: as funcoes da camara do fog nao foram encontradas no index.html.");
   console.log("Se foram renomeadas ou movidas, ATUALIZE este smoke — nao o apague:");
   console.log("ele e o unico ponto que compara o que o espectador VE com o que o Rei SABE.");
   process.exit(1);
 }
-ok("extraiu reiObservado + desenharNevoaDoRei do index.html", true);
+ok("extraiu reiObservado + empurrarPara3D do index.html", true);
 
-const calls = [];
-const ctx = new Proxy({}, {
-  get: (t, k) => {
-    if (k === "measureText") return () => ({ width: 120 });
-    return (...a) => calls.push([k, ...a]);
-  },
-  set: () => true,
-});
 let olhos = "A";
+let recebido = null;
 const sandbox = {
-  ctx, Engine: E, VW: 1200, VH: 800, TILE: 16, scale: 1.4,
-  COR: { A: "#6c8cff", B: "#ff6c6c", neutra: "#bbbbbb" },
-  SX: (x) => x * 0.5, SY: (y) => y * 0.5,
+  Engine: E,
+  M3D: { atualizar: (d) => { recebido = d; } },
   game: null,
+  // a ponte tambem carrega marchas e combates; nao e disso que este smoke
+  // trata, e um progresso fixo chega para o codigo correr
+  progMarcha: () => 0.5,
+  eventosDeEstrada: () => [],
   document: { getElementById: (id) => (id === "gvisao" ? { value: olhos } : null) },
 };
 const fabricar = new Function(...Object.keys(sandbox),
-  src + "; return { reiObservado, desenharNevoaDoRei };");
-const montar = (g) => { sandbox.game = g; return fabricar(...Object.values(sandbox)); };
+  fReiObs + "\n" + fPonte + "\n; return { reiObservado, empurrarPara3D };");
+const empurrar = (g) => {
+  sandbox.game = g;
+  recebido = null;
+  fabricar(...Object.values(sandbox)).empurrarPara3D();
+  return recebido;
+};
+const porSlug = (d) => new Map(d.aldeias.map((a) => [a.slug, a]));
 
-// ---------- (C) turno 1: ve pouco, o resto e '?' ----------
+// ---------- (C) turno 1: ve pouco, o resto e desconhecido ----------
 console.log("\n=== (B) turno 1: o Rei ve a sua aldeia e as vizinhas ===");
 const g1 = E.criarEstadoInicial(Object.assign({}, E.CONFIG, { seed: 1 }));
 E.tick(g1);
-let api = montar(g1);
-ok("reiObservado le o select", api.reiObservado() === "A");
-calls.length = 0; api.desenharNevoaDoRei();
+sandbox.game = g1;
+ok("reiObservado le o select",
+  fabricar(...Object.values(sandbox)).reiObservado() === "A");
+
+const d1 = empurrar(g1);
 const vis1 = E.visiveisPara(g1, "A");
-const txt1 = calls.filter((c) => c[0] === "fillText").map((c) => c[1]);
-ok("pintou o veu com buracos (fill evenodd)", calls.some((c) => c[0] === "fill" && c[1] === "evenodd"));
-ok("um buraco por aldeia visivel", calls.filter((c) => c[0] === "arc").length >= vis1.size,
-  `${calls.filter((c) => c[0] === "arc").length} arcos p/ ${vis1.size} visiveis`);
-ok("etiqueta diz de quem sao os olhos", txt1.some((t) => /olhos do Rei A/.test(t)),
-  txt1.find((t) => /olhos/.test(t)));
-ok("a contagem da etiqueta bate com visiveisPara",
-  txt1.some((t) => t.includes(`ve ${vis1.size} `) && t.includes(`nunca viu ${g1.aldeias.length - vis1.size}`)));
-ok("'?' em TODAS as nunca exploradas",
-  txt1.filter((t) => t === "?").length === g1.aldeias.length - vis1.size,
-  `${txt1.filter((t) => t === "?").length} de ${g1.aldeias.length - vis1.size}`);
+const m1 = porSlug(d1);
+ok("o mapa recebe TODAS as aldeias (a geografia e publica)",
+  d1.aldeias.length === g1.aldeias.length,
+  `${d1.aldeias.length} de ${g1.aldeias.length}`);
+ok("marcadas como visiveis exatamente as de visiveisPara",
+  d1.aldeias.filter((a) => a.visivel).length === vis1.size,
+  `${d1.aldeias.filter((a) => a.visivel).length} p/ ${vis1.size}`);
+const naoVistas = g1.aldeias.filter((a) => !vis1.has(a.id) && !g1.visto.A[a.id]);
+ok("nunca explorada nao leva dono nem tropas",
+  naoVistas.length > 0 && naoVistas.every((a) => {
+    const r = m1.get(a.slug);
+    return r && r.dono === null && r.tropas === null && r.lembrada === null;
+  }),
+  `${naoVistas.length} nunca exploradas`);
+ok("a aldeia visivel leva a contagem VERDADEIRA do motor",
+  [...vis1].every((id) => {
+    const a = g1.aldeias.find((v) => v.id === id);
+    const r = m1.get(a.slug);
+    return r && r.tropas === E.contarTropas(a.tropas) && r.dono === a.dono;
+  }));
 
 // ---------- (D) desligado quando deve ----------
-console.log("\n=== (C) a camara desliga: espectador e fogOfWar:false ===");
-olhos = ""; calls.length = 0; montar(g1).desenharNevoaDoRei();
-ok("espectador (valor vazio): nao desenha nada", calls.length === 0, `${calls.length} chamadas`);
+console.log("\n=== (C) a camara desliga: espectador ve tudo ===");
+olhos = "";
+const dEsp = empurrar(g1);
+ok("espectador (valor vazio): todas visiveis",
+  dEsp.aldeias.every((a) => a.visivel), "omnisciente");
+ok("e nenhuma marcada como lembrada",
+  dEsp.aldeias.every((a) => a.lembrada === null));
 olhos = "A";
-g1.config.fogOfWar = false; calls.length = 0; montar(g1).desenharNevoaDoRei();
-ok("fogOfWar:false: nao desenha nada", calls.length === 0, `${calls.length} chamadas`);
-g1.config.fogOfWar = true;
 
 // ---------- (E) o caminho 'LEMBRADA' ----------
-// Este bloco testa o DESENHO da memoria. A semantica de quem entra e sai da
-// memoria e do motor e esta trancada em testes/test_prompt_p4.js (B4/B5); aqui
-// injetamos a entrada exatamente como o registrarAvistamentos a escreveria, e
-// verificamos o que o espectador VE.
+// Este bloco testa o que CHEGA AO MAPA sobre a memoria. A semantica de quem
+// entra e sai da memoria e do motor e esta trancada em testes/test_prompt_p4.js
+// (B4/B5); aqui injetamos a entrada exatamente como o registrarAvistamentos a
+// escreveria, e verificamos o que o espectador VE.
 //
 // Porque nao produzir a memoria "naturalmente": burro x burro nunca perde
 // aldeia de vista, e a tentativa obvia (mandar um exercito longe e depois
@@ -123,28 +150,49 @@ g2.visto.A[idAlvo] = {                             // a foto que o motor teria g
 };
 ok("memoria injetada como o motor a escreveria", !!g2.visto.A[idAlvo]);
 ok("continua INVISIVEL (memoria nao da visao)", !E.visiveisPara(g2, "A").has(idAlvo));
-calls.length = 0; montar(g2).desenharNevoaDoRei();
-const txt2 = calls.filter((c) => c[0] === "fillText").map((c) => c[1]);
-const lembradas = g2.aldeias.filter((a) => !E.visiveisPara(g2, "A").has(a.id) && g2.visto.A[a.id]).length;
-ok("desenha 'Tn' (turno do ultimo avistamento) em cada lembrada",
-  txt2.filter((t) => /^T\d+$/.test(t)).length === lembradas && lembradas > 0,
-  `${txt2.filter((t) => /^T\d+$/.test(t)).length} de ${lembradas}`);
-ok("a etiqueta conta a lembrada", txt2.some((t) => t.includes(`lembra ${lembradas} `)),
-  txt2.find((t) => /olhos/.test(t)));
-ok("usa pontilhado na lembrada (nao confundir com visivel)", calls.some((c) => c[0] === "setLineDash"));
+const d2 = empurrar(g2);
+const r2 = porSlug(d2).get(alvoReal.slug);
+ok("a lembrada chega ao mapa com o TURNO do ultimo avistamento",
+  !!r2 && r2.visivel === false && r2.lembrada === g2.visto.A[idAlvo].turno,
+  r2 && `lembrada: T${r2.lembrada}`);
+ok("e com a fotografia, nao com o estado de agora",
+  !!r2 && r2.tropas === E.contarTropas(g2.visto.A[idAlvo].tropas));
+const lembradas = g2.aldeias.filter(
+  (a) => !E.visiveisPara(g2, "A").has(a.id) && g2.visto.A[a.id]).length;
+ok("uma entrada por lembrada, e so essas",
+  d2.aldeias.filter((a) => a.lembrada !== null).length === lembradas && lembradas > 0,
+  `${d2.aldeias.filter((a) => a.lembrada !== null).length} de ${lembradas}`);
 
 // ---------- (F) os dois Reis veem coisas DIFERENTES ----------
 console.log("\n=== (E) a camara e subjetiva: A e B nao veem o mesmo ===");
 const g3 = E.criarEstadoInicial(Object.assign({}, E.CONFIG, { seed: 1 }));
 for (let i = 0; i < 6; i++) E.rodarTurno(g3, { A: E.jogadorBurro, B: E.jogadorBurro });
-const conta = (lado) => {
-  olhos = lado; calls.length = 0; montar(g3).desenharNevoaDoRei();
-  return calls.filter((c) => c[0] === "fillText").map((c) => c[1]).find((t) => /olhos do Rei/.test(t));
+// ⚠ COMPARAR CONJUNTOS, NAO CONTAGENS. O mapa e simetrico de proposito
+// (fairness), por isso os dois Reis costumam ver o MESMO NUMERO de aldeias —
+// uma versao anterior deste smoke comparava contagens e passava sem provar
+// nada. O que tem de diferir e QUAIS.
+const quais = (lado) => {
+  olhos = lado;
+  return empurrar(g3).aldeias.filter((a) => a.visivel).map((a) => a.slug).sort().join(",");
 };
-const eA = conta("A"), eB = conta("B");
-ok("a etiqueta de A nao e a de B", eA !== eB, `A: "${eA}" | B: "${eB}"`);
-ok("cada uma bate com o visiveisPara do seu Rei",
-  eA.includes(`ve ${E.visiveisPara(g3, "A").size} `) && eB.includes(`ve ${E.visiveisPara(g3, "B").size} `));
+const sA = quais("A"), sB = quais("B");
+ok("A e B nao veem as MESMAS aldeias", sA !== sB,
+  `${sA.split(",").length} vs ${sB.split(",").length}, conjuntos distintos`);
+const nomes = (lado) => [...E.visiveisPara(g3, lado)]
+  .map((id) => g3.aldeias.find((a) => a.id === id).slug).sort().join(",");
+ok("cada conjunto bate com o visiveisPara do seu Rei",
+  sA === nomes("A") && sB === nomes("B"));
+
+// ---------- (G) a marcha tambem obedece ao fog ----------
+console.log("\n=== (F) marcha so aparece se o Rei ve uma das pontas ===");
+olhos = "A";
+const d3 = empurrar(g3);
+const visSlugs = new Set([...E.visiveisPara(g3, "A")]
+  .map((id) => g3.aldeias.find((a) => a.id === id).slug));
+const foraDaVista = d3.marchas.filter((m) => !visSlugs.has(m.de) && !visSlugs.has(m.para));
+ok("nao chega ao mapa marcha cujas DUAS pontas o Rei nao ve",
+  foraDaVista.length === 0,
+  `${d3.marchas.length} marchas entregues, ${foraDaVista.length} as cegas`);
 
 console.log(falhas ? `\nSMOKE 5 FALHOU: ${falhas} checagem(ns)` : "\nSmoke5fog: todos ok");
 process.exit(falhas ? 1 : 0);

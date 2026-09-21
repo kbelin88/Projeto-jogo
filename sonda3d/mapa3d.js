@@ -1186,6 +1186,10 @@ transformed.y += onda * transformed.x * 0.05;`);
 
   let dtQuadro = 16;
   function porTropas(t) {
+    // ⚠ ZERA-SE NO PRINCIPIO, nao no fim. Estava depois da conta e por isso
+    // `porDesenhar` dava sempre zero -- um mostrador que existe exatamente para
+    // avisar que o poco encheu, e que nunca avisava.
+    nSemPoco = 0;
     const vivos = {};
     for (const tipo of Object.keys(animados)) vivos[tipo] = 0;
     const meter = (tipo, via, metros, rumoExtra, lat, j, dono) => {
@@ -1351,7 +1355,6 @@ transformed.y += onda * transformed.x * 0.05;`);
     for (const [tipo, carne] of Object.entries(animados))
       for (let i = vivos[tipo]; i < carne.length; i++) carne[i].raiz.visible = false;
     nAnim = Object.values(vivos).reduce((a, b) => a + b, 0);
-    nSemPoco = 0;
   }
 
   // ── O ESTANDARTE ────────────────────────────────────────────────────────
@@ -1646,6 +1649,29 @@ transformed.y += onda * transformed.x * 0.05;`);
       if (!alvo) return false;
       ctrl.target.copy(alvo);
       cam.position.copy(alvo).add(new THREE.Vector3(34, 26, 34));
+      ctrl.update();
+      return true;
+    },
+    // ── A CAMARA, A PEDIDO DE QUEM MANDA NA CENA (22/09) ─────────────────
+    // O `irVer` interno e da camara automatica das batalhas e esta trancado
+    // atras do `seguirCena`. Isto e outra coisa: e o replay a dizer "olha para
+    // aqui" -- a camara cinematografica que existia no canvas plano e que,
+    // desde 11/09, mexia um `panX` que ninguem pintava. Recebe METROS.
+    apontar(x, z, opcoes) {
+      const o = opcoes || {};
+      const alvo = new THREE.Vector3(x, o.y || 0, z);
+      const dist = o.dist || 220, alto = o.alto || dist * 0.62;
+      // salta se estiver longe, desliza se estiver perto -- a mesma regra da
+      // camara das batalhas, pela mesma razao: deslizar 2 km leva mais tempo do
+      // que dura a cena, e gravava-se paisagem em vez de partida.
+      if (cam.position.distanceTo(alvo) > 260 || o.saltar) {
+        ctrl.target.copy(alvo);
+        cam.position.set(alvo.x + dist * 0.5, alvo.y + alto, alvo.z + dist * 0.5);
+      } else {
+        ctrl.target.lerp(alvo, 0.25);
+        const q = new THREE.Vector3(alvo.x + dist * 0.5, alvo.y + alto, alvo.z + dist * 0.5);
+        cam.position.lerp(q, 0.25);
+      }
       ctrl.update();
       return true;
     },
