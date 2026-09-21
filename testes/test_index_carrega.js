@@ -53,7 +53,6 @@ t("o script roda ate o fim sem lancar (pega TDZ e nome sumido)", () => {
   const janela = dublê();
   const ctx = {
     // modulos de verdade: e o contrato que o index consome
-    World: require(path.join(RAIZ, "world.js")),
     Iberia: require(path.join(RAIZ, "world-iberia.js")),
     Engine: require(path.join(RAIZ, "engine.js")),
     document: janela,

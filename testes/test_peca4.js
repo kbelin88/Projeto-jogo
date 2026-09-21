@@ -12,8 +12,11 @@
 // ============================================================
 "use strict";
 const Engine = require("../engine.js");
+// ── O MAPA E UM SO (22/09) ─────────────────────────────────────────────────
+// Este teste fixava `layout = "v1"` (o mapa procedural antigo). Esse mapa foi
+// apagado; o que aqui se mede -- o jogador burro e o laco da partida -- nao
+// depende do mapa, so do numero de aldeias, que agora vem da Iberia.
 const CONFIG = Engine.CONFIG;
-CONFIG.layout = "v1"; // teste da GERACAO V1 (preservada): estes invariantes sao dela
 
 let falhas = 0;
 function checa(nome, cond, detalhe) {
@@ -31,7 +34,7 @@ console.log("0) Fronteira decisao/motor (montarVisao -> jogadorBurro -> ordem):"
   Engine.tick(e); // 1 turno para haver recurso
   const visao = Engine.montarVisao(e, "A");
   checa("visao tem minhas aldeias", Array.isArray(visao.minhas) && visao.minhas.length === 1);
-  checa("visao tem alvos (neutras+inimigo)", Array.isArray(visao.alvos) && visao.alvos.length === CONFIG.teatro.n_aldeias - 1);
+  checa("visao tem alvos (neutras+inimigo)", Array.isArray(visao.alvos) && visao.alvos.length === Engine.criarEstadoInicial(CONFIG).aldeias.length - 1);
   const ordem = Engine.jogadorBurro(visao);
   checa("ordem tem listas construir/envios", Array.isArray(ordem.construir) && Array.isArray(ordem.envios));
   console.log(`     ex.: ordem.construir = ${JSON.stringify(ordem.construir.map((c) => c.tipo))}`);

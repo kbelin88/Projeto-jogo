@@ -56,7 +56,6 @@ global.fetch = (url, opts) => {
     res({ ok: true, json: async () => ({ response: resposta }) }), 25));
 };
 
-global.World = require(process.cwd() + "/world.js");
 global.Engine = require(process.cwd() + "/engine.js");
 const fs = require("fs");
 const html = fs.readFileSync("index.html", "utf-8");

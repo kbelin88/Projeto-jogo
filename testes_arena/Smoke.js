@@ -52,7 +52,6 @@ global.alert = noop;
 global.fetch = () => Promise.reject(new Error("sem rede no smoke"));
 
 // carrega world/engine como no browser (UMD cai no module.exports; injeta como globals)
-global.World = require(process.cwd() + "/world.js");
 global.Engine = require(process.cwd() + "/engine.js");
 
 // executa o script inline do index.html

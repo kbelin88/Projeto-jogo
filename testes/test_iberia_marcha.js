@@ -176,16 +176,7 @@ t("a marcha mostrada no relatorio e a que o motor pratica", () => {
   assert.ok(conferidos >= 5, "poucos alvos conferidos (" + conferidos + ")");
 });
 
-console.log("NAO-REGRESSAO");
-t("mapa procedural (v2) continua medindo por pixel", () => {
-  const cfg = JSON.parse(JSON.stringify(Object.assign({}, Engine.CONFIG_V3_ARQUIVO, { layout: "v2", seed: 7 })));
-  const e = Engine.criarEstadoInicial(cfg);
-  assert.ok(!e.estradas.custo, "o mapa procedural nao deve ter custo autoral");
-  const a = e.aldeias[0], b = e.aldeias[1];
-  const cam = Engine.caminhoEntre(e, a.id, b.id) || [a.id, b.id];
-  const esperado = Math.max(1, Math.ceil(
-    Engine.distanciaRota(e, cam) / e.config.velocidade_passo.media));
-  assert.strictEqual(Engine.turnosDeCaminho(e, cam, { arqueiro: 5 }), esperado);
-});
+// (o caso "mapa procedural (v2) mede por pixel" saiu em 22/09 com o mapa
+// antigo: ha um mapa so, a Iberia autoral)
 
 console.log(`\n${ok} testes ok`);

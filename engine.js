@@ -1,7 +1,7 @@
 // ============================================================
 //  engine.js  —  MOTOR DO JOGO (V0, sem IA)
 // ------------------------------------------------------------
-//  Camada de ESTADO MUTAVEL por cima do MUNDO (world.js).
+//  Camada de ESTADO MUTAVEL por cima do MAPA (world-iberia.js).
 //  O mundo e o tabuleiro (fixo, lido); aqui moram as aldeias
 //  da partida, com dono, recursos e tropas.
 //
@@ -10,21 +10,21 @@
 //    - Movimento/combate/conquista        -> PECA 3.
 //    - Jogador burro + loop + log         -> PECA 4.
 //
-//  Roda no navegador (global `Engine`, usa global `World`) e no
+//  Roda no navegador (global `Engine`) e no
 //  Node (module.exports, require('./world')).
 // ============================================================
 (function (root, factory) {
-  let World, Iberia;
+  let Iberia;
   if (typeof module !== "undefined" && module.exports) {
-    World = require("./world.js");
+
     Iberia = require("./world-iberia.js");
-    module.exports = factory(World, Iberia);
+    module.exports = factory(Iberia);
   } else {
-    World = root.World;
+
     Iberia = root.Iberia;
-    root.Engine = factory(World, Iberia);
+    root.Engine = factory(Iberia);
   }
-})(typeof self !== "undefined" ? self : this, function (World, Iberia) {
+})(typeof self !== "undefined" ? self : this, function (Iberia) {
   "use strict";
 
   // ==========================================================
@@ -173,21 +173,7 @@
     // ZERA a comparabilidade com o historico: partidas do v2 viram historia,
     // nao baseline. O ELO comeca do zero neste mapa (decisao do Lucas).
     layout: "iberia",
-    teatro_v2: {
-      // palco proprio da v2 (calibrado 17/07 v2): 60x34 — WIDESCREEN.
-      // Gate do Lucas revelou: teatro quase quadrado estoura a tela na
-      // vertical e desperdica as laterais. O teatro agora tem o formato
-      // da tela: cabe inteiro sem scroll e os reis ficam a >=51.
-      x0: 70, y0: 83, w: 60, h: 34,
-      n_aldeias: 24,        // 2 reis + 22 neutras (11 pares espelhados)
-      min_dist: 5,          // calibrado pos-gate: 4 aglomerava
-      portas_por_rei: 2,    // neutras de expansao garantida perto do rei
-      dist_porta: [4, 7],   // faixa de distancia das portas ao rei
-      faixa_rei_y: 0.20,    // rei nasce no centro vertical +- 20% da altura
-      faixa_rei_x: 0.25,    // rei nasce no quarto oeste (B = espelho)
-      miolo: 0.40,          // calibrado pos-gate: 0.60 afunilava no centro
-      dist_rei_min: 0.85,   // reis a >= 85% da largura (48 -> minimo 40.8)
-    },
+
 
     // JOGADOR BURRO (V0, sem IA): parametros da decisao simples.
     //   composicao_alvo : proporcao desejada do exercito (puxa o mix).
@@ -356,10 +342,12 @@
   //     o resto vira neutra de UM tipo sorteado, com N unidades na faixa.
   // ==========================================================
   function gerarTeatro(config) {
-    const layout = config.layout || "v1";
-    if (layout === "iberia") return gerarTeatroIberia(config);
-    if (layout === "v2") return gerarTeatroV2(config);
-    return gerarTeatroV1(config);
+    // ── UM MAPA SO (22/09) ────────────────────────────────────────────────
+    // Havia tres: a Iberia autoral e dois teatros PROCEDURAIS (v1 e v2), que
+    // vinham do `world.js`. O jogo corre na Iberia desde 02/08 e o Lucas
+    // decidiu que o mapa antigo nao volta -- estava a pesar duas geracoes de
+    // mapa, um ficheiro de mundo e tres testes.
+    return gerarTeatroIberia(config);
   }
 
   // ===== MUNDO IBERIA (02/08) — mapa AUTORAL, nao procedural =====
@@ -452,225 +440,6 @@
   }
 
   function chaveTrecho(a, b) { return Math.min(a, b) + "|" + Math.max(a, b); }
-
-  // GUARNICAO INICIAL de uma neutra pelo GRADIENTE de distancia (v2).
-  // frac = dist(neutra, rei mais proximo) / (separacao_reis / 2): 0 no rei,
-  // ~1 no centro. Devolve as tropas da 1a faixa cujo `ate` >= frac. Gradiente
-  // inativo (ou sem reis) -> devolve `fallback` (o sorteio forca_min/max).
-  function guarnicaoNeutra(config, q, reiA, reiB, fallback) {
-    const g = config.neutra && config.neutra.guarnicao_gradiente;
-    if (!g || !g.ativo || !reiA || !reiB) return fallback;
-    const distReis = Math.hypot(reiA.x - reiB.x, reiA.y - reiB.y);
-    if (!(distReis > 0)) return fallback;
-    const d = Math.min(
-      Math.hypot(q.x - reiA.x, q.y - reiA.y),
-      Math.hypot(q.x - reiB.x, q.y - reiB.y)
-    );
-    const frac = d / (distReis / 2);
-    for (const f of g.faixas) if (frac <= f.ate) return f.tropas;
-    return g.faixas[g.faixas.length - 1].tropas;
-  }
-
-  // ===== MUNDO v2 (17/07) — layout ESPELHADO ponto-central =====
-  // Regras aprovadas pelo Lucas: reis no eixo horizontal (oeste/leste,
-  // faixa vertical central); TODAS as neutras nascem na metade oeste e sao
-  // espelhadas (posicao + tipo + forca) p/ a leste — fairness total, lado
-  // nao e desculpa; 2 "portas" por rei (expansao inicial garantida);
-  // pares comuns com vies p/ o miolo (a zona de disputa vale a guerra).
-  // Determinismo: TUDO sai do rng semeado; mesma seed -> mesmo mundo.
-  function gerarTeatroV2(config) {
-    const rng = criarRng(config.seed);
-    const v2 = config.teatro_v2;
-    // teatro proprio da v2 quando definido; senao herda o da v1
-    const t = { x0: v2.x0 != null ? v2.x0 : config.teatro.x0,
-                y0: v2.y0 != null ? v2.y0 : config.teatro.y0,
-                w: v2.w || config.teatro.w, h: v2.h || config.teatro.h };
-    const x1 = Math.min(World.WORLD, t.x0 + t.w);
-    const y1 = Math.min(World.WORLD, t.y0 + t.h);
-    // espelho AXIAL (17/07, correcao pos-gate): a linha vertical central e
-    // o espelho — B nasce na MESMA ALTURA de A, confronto horizontal puro.
-    // (o rotacional invertia Y tambem e devolvia a diagonal pela porta dos fundos)
-    const esp = (p) => ({ x: t.x0 + (x1 - 1 - p.x), y: p.y });
-    const agua = (p) => World.isWater(p.x, p.y);
-    const cyMin = Math.floor(t.y0 + t.h * (0.5 - v2.faixa_rei_y));
-    const cyMax = Math.ceil(t.y0 + t.h * (0.5 + v2.faixa_rei_y));
-
-    const pontos = [];   // {x,y} ja aceitos (inclui espelhos)
-    const minD2 = v2.min_dist * v2.min_dist;
-    const longe = (p) => pontos.every((q) => {
-      const dx = q.x - p.x, dy = q.y - p.y; return dx * dx + dy * dy >= minD2;
-    });
-    const longeDoEspelho = (p) => {
-      const m = esp(p); const dx = m.x - p.x, dy = m.y - p.y;
-      return dx * dx + dy * dy >= minD2;
-    };
-    function sortearPar(xa, xb, ya, yb, tenta) {
-      for (let i = 0; i < tenta; i++) {
-        const p = { x: Math.floor(xa + rng() * (xb - xa)), y: Math.floor(ya + rng() * (yb - ya)) };
-        const m = esp(p);
-        if (agua(p) || agua(m)) continue;
-        if (!longe(p) || !longe(m) || !longeDoEspelho(p)) continue;
-        return p;
-      }
-      return null;
-    }
-
-    // 1) REI A: quarto oeste, faixa vertical central; B = espelho exato.
-    //    Garantia: dist(A, B) >= dist_rei_min * largura — o jogo precisa correr.
-    const distMin = t.w * v2.dist_rei_min;
-    let reiA = null;
-    for (let i = 0; i < 600 && !reiA; i++) {
-      const c = sortearPar(t.x0 + 1, t.x0 + Math.floor(t.w * v2.faixa_rei_x), cyMin, cyMax, 1);
-      if (!c) continue;
-      const m = esp(c);
-      if (Math.hypot(m.x - c.x, m.y - c.y) < distMin) continue;
-      reiA = c;
-    }
-    if (!reiA) reiA = { x: t.x0 + 3, y: Math.floor(t.y0 + t.h / 2) }; // fallback deterministico
-    pontos.push(reiA, esp(reiA));
-
-    // 2) PORTAS: neutras a [dist_porta] do rei, metade oeste; espelhadas.
-    const portas = [];
-    for (let k = 0; k < v2.portas_por_rei; k++) {
-      let p = null;
-      for (let i = 0; i < 400 && !p; i++) {
-        const ang = rng() * Math.PI * 2;
-        const d = v2.dist_porta[0] + rng() * (v2.dist_porta[1] - v2.dist_porta[0]);
-        const c = { x: Math.round(reiA.x + Math.cos(ang) * d), y: Math.round(reiA.y + Math.sin(ang) * d) };
-        if (c.x <= t.x0 || c.x >= t.x0 + t.w / 2 || c.y <= t.y0 || c.y >= y1 - 1) continue;
-        const m = esp(c);
-        if (agua(c) || agua(m) || !longe(c) || !longe(m) || !longeDoEspelho(c)) continue;
-        p = c;
-      }
-      if (p) { portas.push(p); pontos.push(p, esp(p)); }
-    }
-
-    // 3) PARES COMUNS ate fechar a cota: vies p/ o miolo (fracao `miolo`
-    //    sorteia no terco central-oeste; o resto, na metade oeste toda).
-    const cotaPares = Math.floor((v2.n_aldeias - 2) / 2) - portas.length;
-    const comuns = [];
-    for (let k = 0; k < cotaPares; k++) {
-      const noMiolo = rng() < v2.miolo;
-      const xa = noMiolo ? t.x0 + Math.floor(t.w * 0.26) : t.x0 + 1;
-      const xb = Math.floor(t.x0 + t.w / 2) - 2; // folga do eixo do espelho
-      const p = sortearPar(xa, xb, t.y0 + 1, y1 - 1, 600);
-      if (p) { comuns.push(p); pontos.push(p, esp(p)); }
-    }
-
-    // 4) montar aldeias: A primeiro, B (espelho) segundo, depois pares
-    //    (oeste, leste, oeste, leste...) — ids estaveis e legiveis.
-    const aldeias = [];
-    let id = 0;
-    function porRei(p, dono) {
-      const ald = criarAldeia(id++, p.x, p.y, World.villageName(p.x, p.y), dono);
-      ald.capital = true;                        // aldeia principal do rei (castelo)
-      const ti = (config.rei && config.rei.tropas_iniciais) || {};
-      for (const tp of ["lanceiro", "arqueiro", "cavaleiro"]) ald.tropas[tp] = ti[tp] || 0;
-      aldeias.push(ald);
-    }
-    const reiB = esp(reiA); // rei espelhado (posicao) — usado pelo gradiente
-    function parNeutra(p) {
-      // tipo e forca sorteados UMA vez e aplicados aos DOIS lados (fairness)
-      const pool = config.neutra.tipos_sorteaveis;
-      const tipo = pool[Math.floor(rng() * pool.length)];
-      // rngInt e SEMPRE consumido (mantem o stream do rng estavel: tipo e
-      // posicao das neutras seguintes nao mudam). O gradiente so SOBREPOE o
-      // valor. p e esp(p) sao equidistantes dos reis -> mesma guarnicao (fair).
-      const nBase = rngInt(rng, config.neutra.forca_min, config.neutra.forca_max);
-      const n = guarnicaoNeutra(config, p, reiA, reiB, nBase);
-      for (const q of [p, esp(p)]) {
-        const ald = criarAldeia(id++, q.x, q.y, World.villageName(q.x, q.y), null);
-        ald.tipo = tipo; ald.tropas[tipo] = n;
-        aldeias.push(ald);
-      }
-    }
-    porRei(reiA, "A"); porRei(esp(reiA), "B");
-    for (const p of portas) parNeutra(p);
-    for (const p of comuns) parNeutra(p);
-
-    return montarJogo(config, aldeias);
-  }
-
-  function gerarTeatroV1(config) {
-    const rng = criarRng(config.seed);
-    const t = config.teatro;
-    const x1 = Math.min(World.WORLD, t.x0 + t.w);
-    const y1 = Math.min(World.WORLD, t.y0 + t.h);
-
-    // 1) candidatos: celulas-aldeia dentro do teatro
-    const candidatos = [];
-    for (let y = t.y0; y < y1; y++) {
-      for (let x = t.x0; x < x1; x++) {
-        const d = World.cellData(x, y);
-        if (d.village) candidatos.push({ x, y });
-      }
-    }
-
-    // embaralha (Fisher-Yates semeado) para a selecao nao ter vies espacial
-    for (let i = candidatos.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      const tmp = candidatos[i]; candidatos[i] = candidatos[j]; candidatos[j] = tmp;
-    }
-
-    // 2) seleciona com espacamento minimo
-    const escolhidas = [];
-    const minD2 = t.min_dist * t.min_dist;
-    for (const c of candidatos) {
-      if (escolhidas.length >= t.n_aldeias) break;
-      let ok = true;
-      for (const e of escolhidas) {
-        const dx = e.x - c.x, dy = e.y - c.y;
-        if (dx * dx + dy * dy < minD2) { ok = false; break; }
-      }
-      if (ok) escolhidas.push(c);
-    }
-    // se o espacamento minimo nao encheu a cota, completa sem o filtro
-    if (escolhidas.length < t.n_aldeias) {
-      for (const c of candidatos) {
-        if (escolhidas.length >= t.n_aldeias) break;
-        if (!escolhidas.includes(c)) escolhidas.push(c);
-      }
-    }
-
-    // 3) reis em lados opostos: min e max de (x+y) entre as escolhidas
-    let iMin = 0, iMax = 0;
-    for (let i = 1; i < escolhidas.length; i++) {
-      if (escolhidas[i].x + escolhidas[i].y < escolhidas[iMin].x + escolhidas[iMin].y) iMin = i;
-      if (escolhidas[i].x + escolhidas[i].y > escolhidas[iMax].x + escolhidas[iMax].y) iMax = i;
-    }
-
-    const aldeias = escolhidas.map((c, i) => {
-      const nome = World.villageName(c.x, c.y);
-      let dono = null;
-      if (i === iMin) dono = "A";
-      else if (i === iMax) dono = "B";
-      const ald = criarAldeia(i, c.x, c.y, nome, dono);
-      if (dono === null) {
-        // neutra: sorteia UM tipo (deterministico) e N unidades dele na faixa.
-        const pool = config.neutra.tipos_sorteaveis;
-        const tipo = pool[Math.floor(rng() * pool.length)];
-        const n = rngInt(rng, config.neutra.forca_min, config.neutra.forca_max);
-        ald.tipo = tipo;
-        ald.tropas[tipo] = n;
-      } else {
-        // rei: guarnicao inicial (CONFIG.rei.tropas_iniciais) p/ poder atacar cedo.
-        ald.capital = true;                     // aldeia principal do rei (castelo)
-        const ti = (config.rei && config.rei.tropas_iniciais) || {};
-        for (const t of ["lanceiro", "arqueiro", "cavaleiro"]) ald.tropas[t] = ti[t] || 0;
-      }
-      return ald;
-    });
-
-    return montarJogo(config, aldeias);
-  }
-
-  // Rede de ESTRADAS (fase motor #1, 19/07): grafo que liga as aldeias.
-  //   base : arvore geradora minima (Prim do id 0, empates por id) -> garante
-  //          conectividade (da p/ chegar a qualquer aldeia).
-  //   + k  : os k vizinhos mais proximos de cada aldeia como ATALHOS -> rotas
-  //          alternativas, sem serpentear o mapa (a MST pura fazia isso).
-  // Deterministica; so depende das posicoes (fixas na partida). Devolve
-  // adjacencia { id: [idVizinho,...] } com vizinhos ordenados por id.
   function construirEstradas(aldeias, k, travessias) {
     k = (k == null) ? 3 : k;                        // respeita k=0 (so MST)
     travessias = (travessias == null) ? 0 : travessias;

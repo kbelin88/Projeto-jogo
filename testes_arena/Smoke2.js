@@ -44,7 +44,6 @@ global.Blob = class { constructor(parts) { global.__blob = parts.join(""); } };
 global.FileReader = class {
   readAsText(f) { this.result = f.__txt; realTO(() => this.onload(), 1); }
 };
-global.World = require(process.cwd() + "/world.js");
 global.Engine = require(process.cwd() + "/engine.js");
 const html = require("fs").readFileSync("index.html", "utf-8");
 __idsHtml = new Set([...html.slice(0, html.lastIndexOf("<script>")).matchAll(/id="([^"]+)"/g)].map((m) => m[1]));

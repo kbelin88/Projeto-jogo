@@ -929,7 +929,6 @@
   <button id="gchave" title="Trocar a chave da OpenRouter guardada NESTE navegador. Mostra os ultimos 4 caracteres da atual.">&#128273; Chave</button>
 </div>
 
-<script src="world.js"></script>
 <script src="world-iberia.js"></script>
 <!-- Ajustes cosmeticos do mapa, gerados pelo editor em jogo. O arquivo pode
      nao existir: o 404 e inofensivo e o jogo cai no mapa original. -->
@@ -939,10 +938,27 @@
 (() => {
   "use strict";
 
-  // ---------- Mundo: FONTE UNICA em world.js ----------
-  // O motor (engine.js) e o render leem exatamente a mesma geracao de terreno.
-  const { hash, lerp, vnoise, lakeInfo, isWater, cellData, villageName,
-          TRIBES, WORLD, LAKE_G, T_GRASS, T_FOREST, T_MOUNT, T_WATER } = World;
+  // ── O MAPA PROCEDURAL SAIU (22/09) ────────────────────────────────────
+  // Isto era desestruturado do `world.js`: terreno gerado por ruido, lagos,
+  // tribos, tipos de celula. O jogo corre na Iberia autoral desde 02/08 e o
+  // mapa antigo nao volta -- o ficheiro foi apagado. Ficam as duas contas de
+  // sempre (ruido e interpolacao), que o desenho ainda usa para a relva e para
+  // o grao do pergaminho, e o tamanho do tabuleiro, que agora vem da ilha.
+  const WORLD = 200;                       // celulas do tabuleiro (a Iberia cabe)
+  const hash = (x, y, s) => {
+    const n = Math.sin(x * 127.1 + y * 311.7 + (s || 0) * 74.7) * 43758.5453;
+    return n - Math.floor(n);
+  };
+  const lerp = (a, b, t) => a + (b - a) * t;
+  function vnoise(x, y, semente, escala) {
+    const fx = x * (escala || 0.1), fy = y * (escala || 0.1);
+    const ix = Math.floor(fx), iy = Math.floor(fy);
+    const tx = fx - ix, ty = fy - iy;
+    const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+    const a = hash(ix, iy, semente), b = hash(ix + 1, iy, semente);
+    const c = hash(ix, iy + 1, semente), d = hash(ix + 1, iy + 1, semente);
+    return lerp(lerp(a, b, sx), lerp(c, d, sx), sy);
+  }
 
   // ---------- Configuração de render ----------
   const TILE = 32;          // pixels de mundo por coordenada
@@ -1540,7 +1556,7 @@
           const d2 = dx * dx + dy * dy;
           if (d2 > RAIO_INF * RAIO_INF) continue;
           const x = a.x + dx, y = a.y + dy;
-          if (x < 0 || y < 0 || x >= WORLD || y >= WORLD || isWater(x, y)) continue;
+          if (x < 0 || y < 0 || x >= WORLD || y >= WORLD) continue;
           const k = x + "," + y;
           const atual = m.get(k);
           if (!atual || d2 < atual.d2) m.set(k, { dono: a.dono, d2 });
@@ -1686,71 +1702,20 @@
     // lakeInfo seguem no motor (aldeias nao nascem na agua), mas nao sao mais
     // desenhados — paisagem limpa. Rios ficam para uma etapa de motor.
 
-    // 2) decoração de terreno (florestas e montanhas) — some só na visão de grade
-    if (!gridView) {
-      for (let y = cy0; y < cy1; y++) {
-        for (let x = cx0; x < cx1; x++) {
-          const d = cellData(x, y);
-          const sx = x * cs + panX, sy = y * cs + panY;
-          if (game && decoClear().has(x + "," + y)) continue; // pele v2: sem deco sob aldeias
-          if (d.type === T_FOREST && !d.village) {
-            if (SPR.bosque && SPR.bosque.pronto) {
-              // 1 bosque do kit por aglomerado (~1 a cada 10 celulas de mata),
-              // nao 1 carimbo por celula — menos arvore, mais paisagem.
-              // densidade calibravel no olho (Lucas): 0.10 = esparso, 0.18 = denso.
-              if (hash(x, y, 401) < 0.10) {
-                const wS = cs * (2.4 + hash(x, y, 402) * 1.2);
-                desenharSprite(SPR.bosque, sx + cs * 0.5, sy + cs * 0.95, wS);
-              }
-            } else if (detailed) {
-              // mata: 1-2 árvores/pinheiros com variação natural de escala e rotação
-              const n = 1 + Math.floor(hash(x, y, 31) * 2);
-              for (let i = 0; i < n; i++) {
-                const ox = 0.25 + hash(x, y, 40 + i) * 0.5;
-                const oy = 0.55 + hash(x, y, 50 + i) * 0.35;
-                const tipo = hash(x, y, 60 + i) < 0.45 ? "pinheiro" : "arvore";
-                const sc = 0.85 + hash(x, y, 70 + i) * 0.30;        // 0.85..1.15
-                const rot = tipo === "arvore" ? (hash(x, y, 80 + i) - 0.5) * 0.28 : 0; // ~ ±8°
-                drawTile(tipo, sx + ox * cs, sy + oy * cs, cs * 1.25 * sc, rot);
-              }
-            } else {
-              // zoom médio: mancha verde-escura arredondada
-              ctx.fillStyle = "#2f6b2e";
-              blobPath(sx + cs * 0.5, sy + cs * 0.5, cs * 0.5, (x & 1023) * 31 + (y & 1023));
-              ctx.fill();
-            }
-          } else if (d.type === T_MOUNT) {
-            if (SPR.serra_pequena && SPR.serra_pequena.pronto) {
-              if (hash(x, y, 411) < 0.22) {
-                const grande = SPR.serra_grande && SPR.serra_grande.pronto && hash(x, y, 412) < 0.30;
-                const img = grande ? SPR.serra_grande : SPR.serra_pequena;
-                const wS = cs * (grande ? 5.5 : 2.8) * (0.9 + hash(x, y, 413) * 0.3);
-                desenharSprite(img, sx + cs * 0.5, sy + cs * 0.9, wS);
-              }
-            } else if (detailed) {
-              const sc = 0.9 + hash(x, y, 71) * 0.3;
-              drawTile("montanha", sx + cs * 0.5, sy + cs * 0.72, cs * 1.6 * sc, 0);
-            } else {
-              // zoom médio: mancha acinzentada
-              ctx.fillStyle = "#7d7163";
-              blobPath(sx + cs * 0.5, sy + cs * 0.5, cs * 0.5, (x & 1023) * 17 + (y & 1023));
-              ctx.fill();
-            }
-          }
-        }
-      }
-    }
+    // (2) A DECORACAO DE TERRENO SAIU EM 22/09 com o mapa procedural: eram
+    // florestas e montanhas lidas do `cellData` do `world.js`. A mata da Iberia
+    // e desenhada pelo mapa 3D, que e o que o jogo usa.
 
     // 3) vilas — SOMENTE as 50 aldeias da partida (cenário procedural escondido).
     //    A cor segue o DONO (azul A / vermelho B / tom neutro).
     for (let y = cy0; y < cy1; y++) {
       for (let x = cx0; x < cx1; x++) {
-        const d = cellData(x, y);
-        if (!d.village) continue;
+        // so as aldeias da partida: o cenario procedural que punha vilas de
+        // fundo saiu com o `world.js`
         const gv = game ? game.byCell.get(x + "," + y) : null;
-        if (game && !gv) continue;            // fora da partida: não desenha
+        if (!gv) continue;
         const sx = x * cs + panX, sy = y * cs + panY;
-        const cor = gv ? (gv.dono === null ? COR.neutra : COR[gv.dono]) : TRIBES[d.tribe].c;
+        const cor = gv.dono === null ? COR.neutra : COR[gv.dono];
 
         if (gridView) {
           const r = Math.max(2, cs * 0.28);

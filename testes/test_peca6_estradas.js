@@ -10,10 +10,34 @@
 // ============================================================
 "use strict";
 const Engine = require("../engine.js");
-// layout fixado: este arquivo testa a rede DERIVADA das posicoes (procedural).
-// O default do motor virou "iberia" (rede autoral) em 02/08, entao herdar
-// o default aqui faria o teste medir outra coisa.
-const CONFIG = Object.assign({}, Engine.CONFIG, { layout: "v2" });
+// ── O MAPA PROCEDURAL SAIU DO MOTOR (22/09) ────────────────────────────────
+// Este ficheiro testava a rede DERIVADA das posicoes, e usava o teatro "v2"
+// (mapa procedural) para ter aldeias. Esse mapa foi apagado -- o jogo tem um
+// mapa so, a Iberia autoral. O que aqui se testa continua vivo e continua a
+// fazer falta: `construirEstradas` e a rede que qualquer estado SEM rede
+// autoral recebe. Por isso as aldeias passam a ser postas aqui, a mao, numa
+// grelha deterministica: o teste mede a mesma coisa e nao depende de um mapa.
+const CONFIG = Object.assign({}, Engine.CONFIG, { layout: "iberia" });
+
+// uma povoacao sintetica, sempre igual: 12 aldeias numa grelha com um desvio
+// fixo por id (nada de aleatorio -- duas chamadas tem de dar o mesmo)
+function teatroSintetico(seed) {
+  const aldeias = [];
+  for (let i = 0; i < 12; i++) {
+    // ⚠ a capital B (id 1) fica no CANTO OPOSTO, e nao ao lado da A: o bloco D
+    // mede que a marcha PARA na primeira aldeia nao-propria, e com as duas
+    // capitais vizinhas nao ha nenhuma pelo meio para ela parar
+    const ordem = i === 1 ? 11 : (i === 11 ? 1 : i);
+    const lin = Math.floor(ordem / 4), col = ordem % 4;
+    const desvio = ((ordem * 7 + seed * 13) % 5) * 0.4;
+    aldeias.push({ id: i, x: 10 + col * 9 + desvio, y: 10 + lin * 8 + (col % 2) * 2,
+                   dono: i === 0 ? "A" : (i === 1 ? "B" : null),
+                   nome: "ald" + i, tropas: { lanceiro: 0, arqueiro: 0, cavaleiro: 0 },
+                   recursos: { madeira: 0, ferro: 0 }, construindo: [] });
+  }
+  return { config: CONFIG, turno: 0, log: [], movimentos: [], aldeias,
+           estradas: Engine.construirEstradas(aldeias, 3) };
+}
 
 let falhas = 0;
 function checa(nome, cond, detalhe) {
@@ -28,7 +52,7 @@ const adjacentes = (adj, a, b) => (adj[a] || []).includes(b);
 // ---------------------------------------------------------
 console.log("A) Rede de estradas: conexa, simetrica e mais rica que arvore:");
 {
-  const g = Engine.gerarTeatro(Object.assign({}, CONFIG, { seed: 1 }));
+  const g = teatroSintetico(1);
   const adj = g.estradas.adj;
   const n = g.aldeias.length;
   let grau = 0;
@@ -47,9 +71,9 @@ console.log("A) Rede de estradas: conexa, simetrica e mais rica que arvore:");
 // ---------------------------------------------------------
 console.log("\nB) Determinismo da rede:");
 {
-  const a1 = JSON.stringify(Engine.gerarTeatro(Object.assign({}, CONFIG, { seed: 7 })).estradas.adj);
-  const a2 = JSON.stringify(Engine.gerarTeatro(Object.assign({}, CONFIG, { seed: 7 })).estradas.adj);
-  checa("seed 7 gera a MESMA rede", a1 === a2);
+  const a1 = JSON.stringify(teatroSintetico(7).estradas.adj);
+  const a2 = JSON.stringify(teatroSintetico(7).estradas.adj);
+  checa("a mesma povoacao gera a MESMA rede", a1 === a2);
 }
 
 // ---------------------------------------------------------
@@ -57,7 +81,7 @@ console.log("\nB) Determinismo da rede:");
 // ---------------------------------------------------------
 console.log("\nC) Menor caminho entre aldeias (Dijkstra):");
 {
-  const g = Engine.gerarTeatro(Object.assign({}, CONFIG, { seed: 1 }));
+  const g = teatroSintetico(1);
   const adj = g.estradas.adj;
   const cam = Engine.caminhoEntre(g, 0, 1); // capital A -> capital B
   checa("caminho comeca em 0 e termina em 1", cam[0] === 0 && cam[cam.length - 1] === 1, cam.join(">"));
@@ -79,8 +103,12 @@ console.log("\nC) Menor caminho entre aldeias (Dijkstra):");
 // ---------------------------------------------------------
 console.log("\nD) enviarExercito segue a estrada e nao pula aldeia alheia:");
 {
-  const g = Engine.criarEstadoInicial(CONFIG);          // front-end usa esta via
-  checa("criarEstadoInicial tem rede de estradas", !!(g.estradas && g.estradas.adj));
+  // a via do jogo continua conferida (a Iberia autoral tambem tem rede), e o
+  // roteamento mede-se na povoacao sintetica, onde se sabe quem e de quem
+  const real = Engine.criarEstadoInicial(CONFIG);
+  checa("criarEstadoInicial tem rede de estradas", !!(real.estradas && real.estradas.adj));
+  const g = teatroSintetico(1);
+  g.aldeias[0].tropas = { lanceiro: 5, arqueiro: 0, cavaleiro: 0 };
   const rotaCheia = Engine.caminhoEntre(g, 0, 1);       // capital A -> capital B (passa por neutras)
   const mov = Engine.enviarExercito(g, 0, 1, { lanceiro: 1 });
   checa("mov.caminho comeca em 0", mov.caminho[0] === 0);

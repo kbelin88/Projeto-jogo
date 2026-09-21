@@ -56,7 +56,6 @@ global.fetch = (url) => {
     res({ ok: true, json: async () => corpo, text: async () => "" }), ollama ? 400 : 30));
 };
 
-global.World = require(process.cwd() + "/world.js");
 global.Engine = require(process.cwd() + "/engine.js");
 const html = require("fs").readFileSync("index.html", "utf-8");
 __idsHtml = new Set([...html.slice(0, html.lastIndexOf("<script>")).matchAll(/id="([^"]+)"/g)].map((m) => m[1]));
