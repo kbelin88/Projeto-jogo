@@ -31,7 +31,50 @@ const LARG_M = 3.2;              // entre homens da mesma fileira
 // turnos abriram-se 59 combates de estrada. A 16 figuras com esqueleto cada,
 // isso sao ~950 bonecos animados -- a placa nao aguenta e nem se veem todos.
 // Fica um punhado; as mais velhas fecham para dar lugar as novas.
-const MAX_VIVAS = 4;
+const MAX_VIVAS = 6;
+// ── O RESCALDO ──────────────────────────────────────────────────────────────
+// Acabada a luta, o campo fica: corpos no chao, flechas espetadas e o marcador
+// aceso. E o que dá tempo a quem viu o sinal de longe para levar a camara la --
+// o Lucas quer mandar na camara, e sem rescaldo chegava sempre tarde (22/09).
+const RESCALDO_S = 12.0;
+
+// ── O MARCADOR ──────────────────────────────────────────────────────────────
+// Espadas cruzadas e os dois números, com tamanho FIXO no ecrã (como as placas
+// das colunas). É o que faz uma batalha existir para quem está a olhar para a
+// Ibéria inteira: as figuras têm dez píxeis a essa distância, o marcador não.
+const CORES = { A: "#5b9bf0", B: "#e2655a", null: "#b8b19c" };
+function telaMarcador(donoV, nV, donoP, nP) {
+  const c = document.createElement("canvas");
+  c.width = 340; c.height = 140;
+  const g = c.getContext("2d");
+  g.fillStyle = "rgba(12,9,5,.88)";
+  g.beginPath();
+  g.roundRect(6, 30, 328, 78, 16);
+  g.fill();
+  g.lineWidth = 5;
+  g.strokeStyle = "rgba(240,214,150,.85)";
+  g.stroke();
+  g.font = "700 54px system-ui, sans-serif";
+  g.textBaseline = "middle";
+  g.textAlign = "right";
+  g.fillStyle = CORES[donoV] || CORES.null;
+  g.fillText(String(nV), 140, 70);
+  g.textAlign = "left";
+  g.fillStyle = CORES[donoP] || CORES.null;
+  g.fillText(String(nP), 200, 70);
+  // as espadas cruzadas, desenhadas a mão (uma fonte de emoji não é igual em
+  // todos os sistemas, e este símbolo tem de sair sempre igual)
+  g.strokeStyle = "#f0d9a0";
+  g.lineWidth = 7;
+  g.lineCap = "round";
+  for (const s of [1, -1]) {
+    g.beginPath();
+    g.moveTo(170 - s * 22, 44);
+    g.lineTo(170 + s * 22, 96);
+    g.stroke();
+  }
+  return c;
+}
 
 export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
   const vivas = [];
@@ -202,7 +245,23 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
       chaves.push(chaveLuta(dono, b.de, b.para), chaveLuta(dono, b.para, b.de));
     }
     for (const c of chaves) emLuta.add(c);
-    const ba = { chaves, pos: b.pos.clone(), dir, lado, hostes, t: 0,
+    const somaT = (o) => ["lanceiro", "arqueiro", "cavaleiro"]
+      .reduce((s, k) => s + ((o && o[k]) || 0), 0);
+    const tex = new THREE.CanvasTexture(telaMarcador(
+      b.vencedor, somaT(b.compVenc) || b.totalVenc || 0,
+      b.perdedor, somaT(b.compPerd) || 0));
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const marca = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: tex, sizeAttenuation: false, depthTest: false, transparent: true,
+      toneMapped: false }));
+    marca.center.set(0.5, 0);
+    // medido no ecra: com 0,075 de largura o numero lia-se mal na vista de ilha
+    // inteira, que e justamente de onde se procura uma batalha
+    marca.scale.set(0.105, 0.043, 1);
+    marca.position.copy(b.pos).add(new THREE.Vector3(0, 6, 0));
+    marca.renderOrder = 960;
+    cena.add(marca);
+    const ba = { chaves, pos: b.pos.clone(), dir, lado, hostes, t: 0, marca,
                  dur: b.segundos || 7.0, perdeVenc, proxTiro: 0.4, proxGolpe: 1.0,
                  nasceu: (typeof performance !== "undefined" ? performance.now() : Date.now()),
                  tombados: { venc: 0, perd: 0 } };
@@ -213,6 +272,11 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
 
   function fechar(ba) {
     for (const c of (ba.chaves || [])) emLuta.delete(c);
+    if (ba.marca) {
+      cena.remove(ba.marca);
+      if (ba.marca.material.map) ba.marca.material.map.dispose();
+      ba.marca.material.dispose();
+    }
     for (const quem of ["venc", "perd"]) {
       for (const f of ba.hostes[quem].homens) {
         cena.remove(f.raiz);
@@ -298,11 +362,24 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
         }
       }
 
+      // ── O RESCALDO ────────────────────────────────────────────────────────
+      // Passada a luta, o campo fica mais um bocado: corpos, flechas e o
+      // marcador a apagar-se devagar. As marchas destes dois já podem seguir --
+      // por isso as chaves saem de `emLuta` aqui, e não no fim.
+      if (u >= 1 && !ba.rescaldo) {
+        ba.rescaldo = true;
+        for (const c of (ba.chaves || [])) emLuta.delete(c);
+      }
+      if (ba.marca) {
+        const sobra = ba.rescaldo ? Math.max(0, 1 - (ba.t - ba.dur) / RESCALDO_S) : 1;
+        ba.marca.material.opacity = 0.25 + 0.75 * sobra;
+      }
       // ⚠ E PELO RELOGIO TAMBEM: com a pagina escondida o navegador estrangula
       // o rAF e o `dt` deixa de correr -- as cenas ficavam abertas para sempre,
       // e foi assim que se acumularam 59 (21/09).
       const agora = (typeof performance !== "undefined" ? performance.now() : Date.now());
-      if (u >= 1 || agora - ba.nasceu > ba.dur * 1000 + 12000) {
+      if (ba.t >= ba.dur + RESCALDO_S
+          || agora - ba.nasceu > (ba.dur + RESCALDO_S) * 1000 + 15000) {
         fechar(ba);
         vivas.splice(i, 1);
       }
@@ -318,9 +395,18 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
     aLutar(dono, de, para) { return emLuta.has(chaveLuta(dono, de, para)); },
     // onde esta a batalha mais nova a decorrer -- e para la que a camara vai
     ondeEsta() {
-      if (!vivas.length) return null;
-      const b = vivas[vivas.length - 1];
-      return { pos: b.pos.clone(), falta: Math.max(0, b.dur - b.t) };
+      // a mais nova que ainda esta a LUTAR (o rescaldo nao vale a pena seguir)
+      for (let i = vivas.length - 1; i >= 0; i--) {
+        if (vivas[i].t < vivas[i].dur) {
+          return { pos: vivas[i].pos.clone(), falta: vivas[i].dur - vivas[i].t };
+        }
+      }
+      return null;
+    },
+    // onde estao TODAS, para quem quiser levar a camara a mao
+    lista() {
+      return vivas.map((b) => ({ pos: b.pos.clone(), t: Math.round(b.t * 10) / 10,
+                                 dur: b.dur, rescaldo: !!b.rescaldo }));
     },
     // para conferir de fora sem partida nenhuma
     get diagnostico() {

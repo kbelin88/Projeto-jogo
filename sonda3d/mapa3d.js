@@ -1112,7 +1112,12 @@ transformed.y += onda * transformed.x * 0.05;`);
   let toqueCam = 0;
   ctrl.addEventListener("start", () => { toqueCam = performance.now(); });
   let camCena = null;                 // { alvo, ate }
-  let seguirCena = true;
+  // ⚠ DESLIGADA POR OMISSAO (22/09). O Lucas quer mandar na camara e ir ele ver
+  // a batalha; uma camara que salta sozinha tira-lhe isso das maos. Quem quiser
+  // o modo automatico (gravar video, por exemplo) liga com `seguirBatalhas(true)`
+  // ou com a tecla B no jogo. O que garante que a batalha se ENCONTRA e o
+  // marcador de espadas cruzadas, que se ve de qualquer distancia.
+  let seguirCena = false;
   function irVer(p, segundos) {
     if (!seguirCena || performance.now() - toqueCam < 5000) return;
     if (camCena && performance.now() < camCena.ate) return;   // ja esta a ver uma
@@ -1162,7 +1167,8 @@ transformed.y += onda * transformed.x * 0.05;`);
     const rumo = noCaminho(via, via.inv ? (1 - t) * via.comp : t * via.comp, _pb);
     // com a camara a ir ver, o corte por distancia deixa de fazer sentido: ela
     // vai la ter. So se corta se o jogador tiver tomado a camara e estiver longe.
-    if (!seguirCena && cam.position.distanceTo(_pb) > 1400) return null;
+    // (nao se corta por distancia: o marcador e para ser visto de longe, e e
+    // dali que o Lucas decide ir la)
     const feita = asBatalhas().abrir({
       id: ev.id || (ev.turno + "|" + ev.de + ">" + ev.para + "|" + ev.vencedor),
       de: ev.de, para: ev.para,
@@ -1656,8 +1662,23 @@ transformed.y += onda * transformed.x * 0.05;`);
     parar(v) { parado = !!v; },
     // uma batalha a pedido, para conferir sem partida nenhuma
     batalhaDeTeste(ev) { return abrirBatalha(ev); },
-    // a camara automatica das batalhas; desliga-se para gravar a mao
-    seguirBatalhas(v) { seguirCena = !!v; if (!v) camCena = null; return seguirCena; },
+    // a camara automatica das batalhas; ligada a mao ou pela tecla B
+    seguirBatalhas(v) {
+      seguirCena = v === undefined ? !seguirCena : !!v;
+      if (!seguirCena) camCena = null;
+      return seguirCena;
+    },
+    get batalhas() { return batalhas ? batalhas.lista() : []; },
+    // leva a camara a uma batalha a decorrer (a mais nova), sem ligar o modo automatico
+    verBatalha() {
+      const onde = batalhas && batalhas.ondeEsta();
+      const alvo = onde ? onde.pos : (batalhas && batalhas.lista()[0] || {}).pos;
+      if (!alvo) return false;
+      ctrl.target.copy(alvo);
+      cam.position.copy(alvo).add(new THREE.Vector3(34, 26, 34));
+      ctrl.update();
+      return true;
+    },
     get batalhasAtivas() { return batalhas ? batalhas.diagnostico : []; },
     redimensionar: tamanho,
     destruir() { vivo = false; rend.dispose(); hospedeiro.removeChild(tela); },

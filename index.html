@@ -2029,9 +2029,22 @@
                : "");
         }, 500);
         addEventListener("keydown", (ev) => {
-          if ((ev.key === "f" || ev.key === "F") &&
-              !(document.activeElement && document.activeElement.tagName === "INPUT"))
+          if (document.activeElement && document.activeElement.tagName === "INPUT") return;
+          if (ev.key === "f" || ev.key === "F")
             cx.style.display = cx.style.display === "none" ? "" : "none";
+          // ── AS BATALHAS: A CAMARA E DE QUEM A MEXE (22/09) ───────────────
+          // B liga/desliga a camara automatica (util para gravar); V leva a
+          // camara a batalha que esta a decorrer, uma vez, sem tomar conta dela.
+          // O que faz a batalha ser ENCONTRADA e o marcador de espadas cruzadas,
+          // que tem tamanho fixo no ecra e ve-se de qualquer distancia.
+          if (ev.key === "b" || ev.key === "B") {
+            const on = M3D.seguirBatalhas();
+            setStatus(on ? "camara segue as batalhas (B para largar)"
+                         : "camara e sua (B para ela seguir as batalhas)");
+          }
+          if (ev.key === "v" || ev.key === "V") {
+            if (!M3D.verBatalha()) setStatus("nao ha batalha a decorrer agora");
+          }
         });
         // ── O MAPA 3D TEM RITMO PROPRIO ──────────────────────────────────
         // O `draw` do 2D e chamado quando o 2D precisa: numa mudanca de
