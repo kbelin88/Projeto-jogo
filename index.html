@@ -1899,39 +1899,59 @@
   };
   const donoLbl = (d) => (d === "A" ? "Rei A" : d === "B" ? "Rei B" : "neutra");
   const corDono = (d) => (typeof COR !== "undefined" && COR[d]) || "#d8c9a3";
+  // ── O HOVER LE O MAPA QUE ESTA NO ECRA (22/09) ─────────────────────────
+  // Media a posicao das aldeias com `SX`/`SY` -- a camara do canvas plano, que
+  // desde 11/09 ninguem mexe nem pinta. Resultado medido: com a camara 3D
+  // sobre Barcelona, o balao no centro do ecra dizia "Lisboa". Nao era um
+  // desalinhamento de uns pixeis; eram duas camaras diferentes, e uma delas
+  // estava parada desde que o jogo abriu.
+  //
+  // Agora projeta-se cada aldeia e cada marcha com a camara VERDADEIRA
+  // (`M3D.ecraDoMundo`) e escolhe-se a mais proxima do rato. A aldeia vive em
+  // `p: [x, y]` mais `z` (altura); a estrada em pontos `[x, y, z]`. O raio de
+  // apanha e em PIXEIS, porque e em pixeis que o rato se move: o mesmo mapa
+  // visto de 2 km nao pode exigir a mesma pontaria que visto de 50 m.
+  const RAIO_HOVER = 42;          // px
+  function pontoDaMarcha(m) {
+    // a MESMA conta da ponte: quem decide onde esta um exercito e o motor
+    const pos = Engine.posicaoRota(game, m.turnosTotal
+      ? Object.assign({}, m, { turnosRestantes: m.turnosTotal * (1 - progMarcha(m)) })
+      : m);
+    if (!pos) return null;
+    const a = Engine.aldeiaPorId(game, pos.aId), b = Engine.aldeiaPorId(game, pos.bId);
+    if (!a || !b || !M3D) return null;
+    const via = M3D.MAPA.estradas.find((v) =>
+      (v.de === a.slug && v.para === b.slug) || (v.de === b.slug && v.para === a.slug));
+    if (!via || !via.pts || !via.pts.length) return null;
+    const t = via.de === a.slug ? pos.t : 1 - pos.t;
+    const q = via.pts[Math.max(0, Math.min(via.pts.length - 1,
+      Math.round(t * (via.pts.length - 1))))];
+    return new M3D.THREE.Vector3(q[0], q[2], -q[1]);
+  }
   function atualizarHover(e) {
     if (!hoverTip) return;
-    if (!game || dragging || (typeof ED !== "undefined" && ED && ED.pegou)) { hoverTip.style.display = "none"; return; }
-    const mx = e.clientX, my = e.clientY, cs = TILE * scale;
-    let alvo = null, melhor = Infinity;
+    if (!game || !M3D) { hoverTip.style.display = "none"; return; }
+    const mx = e.clientX, my = e.clientY;
+    let alvo = null, melhor = RAIO_HOVER * RAIO_HOVER;
     for (const a of game.aldeias) {
-      // a aldeia e desenhada LEVANTADA: base em baseVisualIB(a) e o sprite (largo)
-      // sobe dali. Hit-test = caixa que cobre o sprite, nao a ancora crua SY(a.y).
-      const cap = !!a.capital;
-      const larg = cs * (cap ? 3.2 : 2.4);
-      const spr = cap ? (typeof SPR !== "undefined" && SPR.castelo && SPR.castelo.pronto ? SPR.castelo : null)
-                      : (typeof SPR !== "undefined" && SPR.aldeia_neutra && SPR.aldeia_neutra.pronto ? SPR.aldeia_neutra : null);
-      const alt = alturaSprite(spr, larg, Math.max(20, cs * 0.59));
-      const cx = SX(a.x);
-      const baseY = (typeof baseVisualIB === "function" && IB) ? baseVisualIB(a) : SY(a.y);
-      const meia = larg * 0.46, topo = baseY - alt * 0.92, fundo = baseY + alt * 0.22;
-      if (mx >= cx - meia && mx <= cx + meia && my >= topo && my <= fundo) {
-        const cyc = (topo + fundo) / 2, dd = (cx - mx) * (cx - mx) + (cyc - my) * (cyc - my);
-        if (dd < melhor) { melhor = dd; alvo = { tipo: "aldeia", a }; }
-      }
+      const m3 = M3D.MAPA.aldeias[a.slug];
+      if (!m3) continue;
+      const v = new M3D.THREE.Vector3(m3.p[0], m3.z || 0, -m3.p[1]);
+      const q = M3D.ecraDoMundo(v);
+      if (!q || q.atras) continue;
+      // a aldeia desenha-se PARA CIMA do assento: aponta-se ao corpo dela, um
+      // pouco acima do chao, e nao ao ponto onde ela assenta
+      const dy = q.y - 26 - my, dx = q.x - mx, d2 = dx * dx + dy * dy;
+      if (d2 < melhor) { melhor = d2; alvo = { tipo: "aldeia", a }; }
     }
     for (const m of game.movimentos) {
-      const o = game.aldeias.find((a) => a.id === m.origemId), d = game.aldeias.find((a) => a.id === m.destinoId);
-      if (!o || !d) continue;
-      // repFrac (23/08): 0 no jogo ao vivo (comportamento identico a antes) —
-      // so o replay avanca repFrac de 0 a 1 entre um quadro e o proximo, pra
-      // a tropa ANDAR pela estrada em vez de saltar de turno em turno no
-      // video. Ver animarEntreQuadros().
-      const prog = progMarcha(m);
-      const pts = pontosCaminho(m);
-      const p = pts ? pontoNaRota(pts, prog) : { x: o.x + (d.x - o.x) * prog, y: o.y + (d.y - o.y) * prog };
-      const dx = SX(p.x) - mx, dy = SY(p.y) - my, d2 = dx * dx + dy * dy, raio = Math.max(13, cs * 0.38);
-      if (d2 < raio * raio && d2 < melhor) { melhor = d2; alvo = { tipo: "mov", m, d }; }
+      const d = game.aldeias.find((v) => v.id === m.destinoId);
+      const v = pontoDaMarcha(m);
+      if (!v || !d) continue;
+      const q = M3D.ecraDoMundo(v);
+      if (!q || q.atras) continue;
+      const dx = q.x - mx, dy = q.y - my, d2 = dx * dx + dy * dy;
+      if (d2 < melhor) { melhor = d2; alvo = { tipo: "mov", m, d }; }
     }
     if (!alvo) { hoverTip.style.display = "none"; return; }
     let html;

@@ -1476,8 +1476,15 @@ transformed.y += onda * transformed.x * 0.05;`);
   let relogio = 0, parado = false, ultimo = performance.now();
   let quadros = 0, fps = 0, vivo = true;
   function tamanho() {
+    // ⚠ UM ECRA DE ZERO POR ZERO ENVENENA A CAMARA. `aspect = 0/0` e NaN, a
+    // matriz de projecao fica NaN, e a partir dai TUDO o que se projeta sai
+    // NaN -- inclusive depois de o ecra voltar a ter tamanho, porque nada
+    // recalcula a matriz sozinho. Acontece a serio: um separador escondido, um
+    // painel encolhido, a janela minimizada. Apanhado em 22/09 com o hover a
+    // devolver NaN num painel de largura zero.
     const w = hospedeiro.clientWidth || innerWidth;
     const h = hospedeiro.clientHeight || innerHeight;
+    if (!(w > 0 && h > 0)) return;
     rend.setSize(w, h, false);
     cam.aspect = w / h;
     cam.updateProjectionMatrix();
