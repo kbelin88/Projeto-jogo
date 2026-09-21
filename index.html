@@ -939,7 +939,6 @@
     canvas.height = Math.floor(VH * DPR);
     canvas.style.width = VW + "px";
     canvas.style.height = VH + "px";
-    ajustarZoomMinimoIB();     // a viewport mudou -> o piso do zoom mudou
     draw();
   }
   window.addEventListener("resize", resize);
@@ -958,11 +957,6 @@
   let scale = 1.6;
   let panX = 0, panY = 0;
 
-  // Começa centralizado em uma região movimentada do mundo
-  function centerOn(cx, cy) {
-    panX = VW / 2 - cx * TILE * scale;
-    panY = VH / 2 - cy * TILE * scale;
-  }
 
   // ---------- MAPA DA IBERIA (mapa autoral) ----------
   // As cidades vem em px do viewBox do world-iberia ('130 144 1429 886'), nao
@@ -991,7 +985,6 @@
     IB.div = IB.larg / IB.largCels;
     IB.cels = { w: IB.largCels, h: IB.alt / IB.div };   // retangulo do VIEWBOX
     // Ate a imagem carregar, assume o retangulo do viewBox.
-    IB.imgCels = { w: IB.cels.w, h: IB.cels.h };
     // MAR INFINITO (03/08): fora da imagem o canvas pinta o MESMO mar, num
     // gradiente amostrado da propria arte (5 paradas na faixa limpa a oeste).
     // Com isso a peninsula pode flutuar num oceano sem fim e o zoom deixa de
@@ -1009,15 +1002,6 @@
     // escura nas bordas (papel envelhecido) e era ELA que denunciava o
     // retangulo, mesmo com a agua casando. 16px cabe com folga: a terra mais
     // proxima de uma borda esta a 24px (norte); nos outros lados, 35px+.
-    IB.esfumar = 16;
-    // Gradiente so como PLANO B, se o padrao nao puder ser criado. 9 paradas
-    // medianas das colunas de borda da arte.
-    IB.mar = [[0.000,"rgb(35,49,46)"],  [0.125,"rgb(56,77,75)"], [0.250,"rgb(63,84,81)"],
-              [0.375,"rgb(63,85,83)"],  [0.500,"rgb(64,89,87)"], [0.625,"rgb(59,84,83)"],
-              [0.750,"rgb(57,78,76)"],  [0.875,"rgb(51,67,64)"], [1.000,"rgb(45,46,40)"]];
-    // quanto da imagem ainda precisa caber na tela no zoom mais afastado
-    IB.afastamento = 0.5;
-    IB.levanta = 0.30;
     // foco da camera: centro do retangulo das CIDADES (o miolo jogavel), que
     // nao e o centro da imagem — sobra muito mar no sul e a leste.
     const xs = Iberia.CIDADES.map((c) => c.x), ys = Iberia.CIDADES.map((c) => c.y);
@@ -1058,58 +1042,18 @@
     Object.assign(IB.vias, IB.ajustes.vias);
     Object.assign(IB.desloc, IB.ajustes.desloc || {});
 
-    IB.img = new Image();
-    IB.img.onload = () => {
-      IB.pronto = true;
-      // COVER ancorado no topo (xMidYMin slice): escala UNIFORME, a largura
-      // casa com o viewBox e a altura sobra por baixo (so mar). Esticar a
-      // imagem para dentro do retangulo do viewBox achata 13% na vertical e
-      // joga as cidades da costa para dentro da agua — foi o bug de 02/08.
-      IB.imgCels = {
-        w: IB.largCels,
-        h: IB.largCels * IB.img.naturalHeight / IB.img.naturalWidth,
-      };
-      montarArteEsfumadaIB();
-      ajustarZoomMinimoIB();
-      enquadrarTeatro();
-      draw();
-    };
-    // Recorte (23/08): a arte original tem agua opaca ate a costa, e so a
-    // borda externa (16px) virava transparente — por isso a agua nova so
-    // aparecia LONGE da ilha, com uma emenda de tom visivel bem perto da
-    // costa (feedback do Lucas). assets/ilha-recortada.png e a MESMA arte,
-    // mesmas dimensoes, so com toda a agua (nao so a borda) marcada
-    // transparente por cor (classificador R/G/B + so mantem agua CONECTADA
-    // a borda da imagem, pra sombra de montanha isolada nao virar buraco).
-    // Ver assets/ilha-recortada.png e o script que gerou (historico do chat).
-    // A ILHA v4 e a MESMA proporcao (2430x1728 contra 1215x864), portanto o
-    // encaixe — escala 1.17613 ancorada no topo — nao muda em nada: o `imgCels`
-    // acima e calculado por PROPORCAO, nao por pixeis. O dobro da resolucao so
-    // serve para nao virar papa quando se aproxima.
-    // CHAO LISO (07/09, decisao do Lucas): o terreno renderizado competia com
-    // as pecas e nao havia como saber se um bosque estava mal ou se era o chao.
-    // Despido a uma cor so, cada peca passa a ser julgavel sozinha. A SILHUETA e
-    // a mesma — a costa vem do alfa da arte original — portanto o encaixe e as
-    // 24 ancoras nao se mexem.
-    //   ?aldeia=v4          -> chao liso
-    //   ?aldeia=v4&terreno  -> a ilha renderizada, para comparar
-    const _terrenoRico = /(\?|&)terreno(&|=|$)/.test(location.search || "");
-    IB.img.src = !ALDEIA_V4 ? "assets/ilha-recortada.png"
-               : (_terrenoRico ? "assets/ilha-v4.png" : "assets/ilha-chao.png");
-
-    // Textura de agua (23/08): ver nota acima. Carrega em paralelo com a arte
-    // da ilha — o padrao so fica pronto quando ELA carregar, independente da
-    // ilha (por isso o proprio draw() de novo aqui, e nao so no IB.img.onload).
-    IB.marTilePx = 900;   // quantos px de tela (no zoom de referencia 1x) um
-                          // ladrilho de 1024px da textura ocupa — ajustavel;
-                          // a escala da onda da textura nao e a mesma da arte.
-    IB.marTex = new Image();
-    IB.marTex.onload = () => {
-      try { IB.padraoMar = ctx.createPattern(IB.marTex, "repeat"); } catch (e) { IB.padraoMar = null; }
-      draw();
-    };
-    IB.marTex.src = "assets/agua-textura.png";
   }
+  // ── A ARTE DA ILHA E O MAR SAIRAM (22/09) ──────────────────────────────
+  // `assets/ilha-recortada.png` (4 MB) e `assets/agua-textura.png` eram o fundo
+  // do canvas plano: a peninsula desenhada e um oceano ladrilhado a toda a
+  // volta. Media: 13 pedidos e 4,4 MB descarregados a cada abertura, para um
+  // desenho que nao acontece desde 11/09.
+  //
+  // O que sobra do `IB` e GEOMETRIA, nao arte: a origem e a escala do viewBox
+  // (`ox`, `oy`, `div`), que e como o caderno de marcas guarda um risco. Uma
+  // marca continua a valer seja qual for o zoom porque e gravada ali, e nao em
+  // pixeis de ecra.
+
   // tela -> px do viewBox (inverso de SX/SY). So faz sentido no mapa autoral.
   const vbX = (sx) => (sx - panX) / (TILE * scale) * IB.div + IB.ox;
   const vbY = (sy) => (sy - panY) / (TILE * scale) * IB.div + IB.oy;
@@ -1122,11 +1066,6 @@
   // script inteiro morre no carregamento — foi a tela marrom de 03/08.
   function chaveVia(a, b) { return [a, b].sort().join("|"); }
 
-  // Zoom em que a imagem cobre exatamente a viewport (piso do afastamento).
-  function escalaCoverIB() {
-    if (!IB) return MIN_SCALE;
-    return Math.max(VW / (IB.imgCels.w * TILE), VH / (IB.imgCels.h * TILE));
-  }
   // Fundo de mar que continua para fora da imagem. O gradiente e ancorado na
   // POSICAO DA IMAGEM na tela, entao a agua pintada encosta na agua desenhada
   // com a mesma cor — a emenda some. Alem das pontas o canvas repete a cor da
@@ -1134,39 +1073,7 @@
   // O padrao de mar (IB.padraoMar) e montado direto no onload de IB.marTex —
   // a textura ja e seamless/tileable por construcao, sem precisar espelhar.
 
-  // Copia da arte com as 4 beiradas desvanecidas (alpha -> 0). Feita UMA vez,
-  // no load. destination-out apaga o que o gradiente pinta, entao a borda vira
-  // transparente e deixa passar o oceano ladrilhado de tras.
-  function montarArteEsfumadaIB() {
-    const w = IB.img.naturalWidth, h = IB.img.naturalHeight;
-    // a faixa esfumada e proporcional a imagem, nao um numero de pixeis: com a
-    // ilha ao dobro, 16 px viravam metade da borda de antes
-    const n = IB.esfumar * (w / 1215);
-    const lona = document.createElement("canvas");
-    lona.width = w; lona.height = h;
-    const c = lona.getContext("2d");
-    c.drawImage(IB.img, 0, 0);
-    c.globalCompositeOperation = "destination-out";
-    const som = "rgba(0,0,0,1)", nada = "rgba(0,0,0,0)";
-    const faixa = (x0, y0, x1, y1, x, y, lw, lh) => {
-      const g = c.createLinearGradient(x0, y0, x1, y1);
-      g.addColorStop(0, som); g.addColorStop(1, nada);
-      c.fillStyle = g; c.fillRect(x, y, lw, lh);
-    };
-    faixa(0, 0, n, 0, 0, 0, n, h);                 // oeste
-    faixa(w, 0, w - n, 0, w - n, 0, n, h);         // leste
-    faixa(0, 0, 0, n, 0, 0, w, n);                 // norte
-    faixa(0, h, 0, h - n, 0, h - n, w, n);         // sul
-    IB.arte = lona;
-  }
 
-  function ajustarZoomMinimoIB() {
-    if (!IB) return;
-    // o piso e uma FRACAO do cover: com mar infinito, afastar alem do cover
-    // nao mostra fundo — mostra oceano, que e o que o mapa deveria ter.
-    MIN_SCALE = escalaCoverIB() * IB.afastamento;
-    if (scale < MIN_SCALE) scale = MIN_SCALE;
-  }
 
   // px do viewBox -> celula de mundo. Sem Iberia: identidade.
   const celX = (v) => (IB ? (v - IB.ox) / IB.div : v);
@@ -1240,40 +1147,14 @@
   };
 
   // Desenha um tile com âncora de chão em (gx,gy), tamanho 'size' (px), rotação em rad
-  // ===== PELE v2 / PECA A — sprites do kit (assets/sprites) =====
-  // Carregamento assincrono com FALLBACK: enquanto (ou se) um sprite nao
-  // carrega, o desenho procedural antigo segue valendo. O mock dos smokes
-  // nao tem Image: o guarda typeof mantem os testes no fallback p/ sempre.
-  const SPR = {};
-  (function () {
-    if (typeof Image === "undefined") return;
-    for (const nome of ["bosque", "serra_grande", "serra_pequena", "castelo", "aldeia_neutra",
-                        "estrada_reta", "estrada_reta2",
-                        "torre_base", "torre_chamas", "torre_queimada",
-                        "leito"]) {
-      const img = new Image();
-      img.onload = function () { img.pronto = true; if (typeof draw === "function") draw(); };
-      img.src = "assets/sprites/" + nome + ".png";
-      SPR[nome] = img;
-    }
-    // ESTANDARTE (23/08): o marcador de tropa em marcha usa o MESMO brasao do
-    // placar do topo (pedido do Lucas) — mesmo arquivo, so carregado aqui como
-    // <img> de canvas em vez de <image> de SVG no HTML.
-    for (const [nome, arq] of [["brasao_a", "rei_a_azul"], ["brasao_b", "rei_b_vermelho"]]) {
-      const img = new Image();
-      img.onload = function () { img.pronto = true; if (typeof draw === "function") draw(); };
-      img.src = "assets/brasoes/" + arq + ".png";
-      SPR[nome] = img;
-    }
-  })();
-
-  // PECA B (pele v2): sprite tingido na cor do dono, cacheado uma vez por cor.
-  // A tinta e aplicada num buffer proprio com "source-atop" — pinta SO onde ha
-  // pixel do sprite, sem vazar no terreno (um multiply direto no mapa vazaria).
-  const _tintCache = {};
-
-
-
+  // ── O KIT DE SPRITES SAIU (22/09) ──────────────────────────────────────
+  // Onze imagens de assets/sprites (bosque, serra, castelo, torre, leito...)
+  // mais os dois brasoes, carregadas a cada abertura da pagina para um
+  // desenhador que foi apagado. O que as usava — `spriteAldeia`,
+  // `drawVillage`, `desenharEstradasV4` — ja nao existe.
+  //
+  // As pecas do mapa de hoje sao 3D e vem do forno (`pecas.glb`); os brasoes
+  // que aparecem no placar sao <image> no SVG do HTML, nao estes <img>.
 
   // ---------- Render principal ----------
   // ===== PINTURA DE TERRITORIO: area de influencia de cada rei =====
@@ -1295,7 +1176,6 @@
   // de estado, um turno, um passo de replay -- porque e o unico ponto que
   // garante que o mapa ve o estado NOVO sem esperar pelos 250 ms do laco.
   function draw() {
-    updateHUD();
     if (!M3D) return;
     try { empurrarPara3D(); }
     catch (e) { if (!erro3D) { erro3D = e; console.error("ponte 3D:", e); } }
@@ -1542,9 +1422,6 @@
 
   // ---------- HUD ----------
   let mouseSX = VW / 2, mouseSY = VH / 2;
-  function updateHUD() {
-    // caixas de coordenada/ajuda removidas: o mapa fala por si (espectador).
-  }
 
   // ---------- Interação ----------
   let dragging = false, lastX = 0, lastY = 0, moved = 0;
@@ -1705,20 +1582,7 @@
   // Guarda so id -> {de, para, t0}; nada disto toca o estado do jogo.
   const TROCA_MS = 420, TROCA_ATRASO = 400;
   let trocasDono = new Map();
-  function misturarCor(c1, c2, k) {
-    const h = (c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
-    const [r1, g1, b1] = h(c1), [r2, g2, b2] = h(c2);
-    const m = (x, y) => Math.round(x + (y - x) * k);
-    return "rgb(" + m(r1, r2) + "," + m(g1, g2) + "," + m(b1, b2) + ")";
-  }
   const corBase = (dono) => (dono === null ? COR.neutra : COR[dono]);
-  function corDaAldeia(a) {
-    const t = trocasDono.get(a.id);
-    if (!t) return corBase(a.dono);
-    const k = (performance.now() - t.t0) / TROCA_MS;
-    if (k >= 1) { trocasDono.delete(a.id); return corBase(a.dono); }
-    return misturarCor(corBase(t.de), corBase(a.dono), Math.max(0, k));
-  }
 
   let game = null;        // estado da partida (engine)
   // PELE v2: ids das CAPITAIS (as unicas aldeias que ja comecam com dono).
@@ -2383,22 +2247,6 @@
   }
 
 
-  // enquadra a camera no teatro da partida
-  function enquadrarTeatro() {
-    if (IB) {
-      // COVER: a imagem preenche a tela inteira, sem faixas vazias nas
-      // laterais (era o "sobrou espaco nos lados"). O que passa da borda e
-      // mar do rodape. Enquadra pelo centro das CIDADES, nao da imagem.
-      const cover = Math.max(VW / (IB.imgCels.w * TILE), VH / (IB.imgCels.h * TILE));
-      scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, cover));
-      centerOn(IB.foco.x, IB.foco.y);
-      return;
-    }
-    const t = Engine.CONFIG.teatro;
-    const fit = Math.min(VW / (t.w * TILE), VH / (t.h * TILE));
-    scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, fit * 0.96));
-    centerOn(t.x0 + t.w / 2, t.y0 + t.h / 2);
-  }
 
   function novaPartida() {
     pause();
@@ -2429,7 +2277,6 @@
     // posicao de partida. O estado inicial depende da seed e o replay nao a
     // guarda, entao reconstruir depois era impossivel: tem de ser gravado aqui.
     gravarFrame();
-    enquadrarTeatro();
     updateGameHUD();
     draw();
   }
@@ -3331,28 +3178,14 @@
 
 
 
-  // ===== MATA v4 ==========================================================
-  // Bosques espalhados por `ferramentas/cena/espalhar_mata.py`, a partir do
-  // MESMO campo de densidade que decidiu onde o render da ilha pos floresta.
-  // As posicoes sao decididas UMA VEZ, fora do jogo: sortear por rejeicao e
-  // barato uma vez e caro sessenta vezes por segundo, e sorteado a cada
-  // carregamento a mata mudava de sitio entre partidas e entre o jogo e o video.
-  let MATA = null;
-  const MATA_SPR = {};
-  if (ALDEIA_V4 && typeof fetch === "function") {
-    fetch("assets/sprites/mata.json").then((r) => r.json())
-      .then((m) => { MATA = m; if (typeof draw === "function") draw(); })
-      .catch(() => { MATA = []; });
-    if (typeof Image !== "undefined") {
-      for (let i = 1; i <= 6; i++) {
-        const img = new Image();
-        img.onload = function () { img.pronto = true; if (typeof draw === "function") draw(); };
-        img.src = "assets/sprites/mata_" + i + ".png";
-        MATA_SPR[i - 1] = img;
-      }
-    }
-  }
-
+  // ── A MATA DO MAPA PLANO SAIU (22/09) ──────────────────────────────────
+  // `assets/sprites/mata.json` e seis PNG de bosque, carregados a cada abertura
+  // para o desenhador apagado. A mata que se ve hoje sao 22 mil copias no mapa
+  // 3D, espalhadas pelo forno -- outro ficheiro, outra fonte.
+  //
+  // Com ela sai tambem a parte "moitas" do `oQueEstaAqui`, que nomeava a linha
+  // do `mata.json` a corrigir. O `oQueEstaAqui3D` ja nomeia as manchas do mapa
+  // que existe, que e onde a correcao tem de ser feita.
 
   // ===== CADERNO DE MARCAS =================================================
   // Ligado por ?marcar no endereco, ou pela tecla M.
@@ -3731,16 +3564,11 @@
       const d = Math.hypot(c[0] - (a.x + t * vx), c[1] - (a.y + t * vy));
       if (dentro(d, 8)) estradas.push({ id: e.de + "-" + e.para, dist: Math.round(d) });
     }
-    // as MOITAS sao o que faltava: "arvore em cima da estrada" era um defeito
-    // que eu tinha de ir procurar a olho no mapa. Agora vem com o indice da
-    // moita, que e a linha exata do `assets/sprites/mata.json` a corrigir.
-    for (let i = 0; i < (MATA || []).length; i++) {
-      const m = MATA[i];
-      const d = Math.hypot(c[0] - m.x, c[1] - m.y);
-      if (dentro(d, 16)) moitas.push({ i: i, dist: Math.round(d), sprite: m.s });
-    }
+    // A As MOITAS saiam daqui com o indice do `assets/sprites/mata.json`, que
+    // era a mata do mapa plano. Quem nomeia as manchas do mapa que existe e o
+    // `oQueEstaAqui3D`, logo abaixo -- e e la que a correcao tem de ser feita.
     const ord = (L) => L.sort((x, y) => x.dist - y.dist).slice(0, 6);
-    return { aldeias: ord(aldeias), estradas: ord(estradas), moitas: ord(moitas) };
+    return { aldeias: ord(aldeias), estradas: ord(estradas), moitas: [] };
   }
 
   // O RECADO NAO E UM `alert`. Um alert bloqueia a pagina inteira ate alguem
@@ -3924,9 +3752,6 @@
 
   function IB2div() { return IB ? IB.div : 1; }
 
-  function alturaSprite(spr, larg, r) {
-    return spr ? larg * spr.height / spr.width : r * 2;
-  }
 
   // ===== ESTADOS DA TORRE (25/08) =====
   // A aldeia nao-capital passa a ser a torre de madeira, em tres estados:
@@ -3940,15 +3765,6 @@
   // agora fecha: base -> chamas -> queimada -> base, e a aldeia volta ao normal.
   const CHAMAS_MS = 1800, QUEIMADA_MS = 1000;
   let aldeiasEmChamas = new Map();   // id -> t0 do incendio
-  function estadoTorre(a) {
-    const t = aldeiasEmChamas.get(a.id);
-    if (t == null) return "torre_base";
-    const dt = performance.now() - t;
-    if (dt < CHAMAS_MS) return "torre_chamas";
-    if (dt < CHAMAS_MS + QUEIMADA_MS) return "torre_queimada";
-    aldeiasEmChamas.delete(a.id);
-    return "torre_base";
-  }
   // Sprite e largura da aldeia, num lugar so: baseVisualIB e o desenho TEM de
   // concordar, senao a ancora sai do lugar (o erro que ja mordeu 3x).
   // ===== POVOACOES v4 (cozidas no Blender, ferramentas/cena/cozer.py) =====
@@ -3983,63 +3799,8 @@
   const V4_COR = { A: "azul", B: "vermelha" };
 
 
-  function spriteV4(a) {
-    if (typeof Image === "undefined") return null;
-    // o sprite e NEUTRO: a cor vem da flamula que o jogo desenha por cima
-    const nome = "aldeia_" + a.slug;
-    let img = V4[nome];
-    if (img === undefined) {
-      img = new Image();
-      img.onload = function () { img.pronto = true; if (typeof draw === "function") draw(); };
-      img.onerror = function () { img.falhou = true; };
-      img.src = "assets/sprites/" + nome + ".png";
-      V4[nome] = img;
-    }
-    return img.pronto ? img : null;
-  }
 
-  // Sprite e largura da aldeia, num lugar so: baseVisualIB e o desenho TEM de
-  // concordar, senao a ancora sai do lugar (o erro que ja mordeu 3x).
-  function spriteAldeia(a) {
-    if (ALDEIA_V4) {
-      const v = spriteV4(a);
-      const man = V4_MAN && V4_MAN[a.slug];
-      if (v && man) {
-        // as capitais sao maiores no mapa porque sao maiores na peca
-        const k = capitalIds.has(a.id) ? 4.6 : 3.8;
-        // `assento`: quanto da ALTURA do sprite fica ABAIXO do ponto que assenta
-        // na cidade. O desenho soma-o ao y; as estradas ignoram-no e miram no
-        // chao, que e onde elas de facto chegam.
-        return { spr: v, larg: (TILE * scale) * k, torre: false,
-                 assento: man.ancora_y };
-      }
-      // se a imagem ainda nao chegou, cai no desenho antigo: o mapa nunca fica
-      // sem peca enquanto o PNG viaja
-    }
-    if (capitalIds.has(a.id)) {
-      const c = SPR.castelo && SPR.castelo.pronto ? SPR.castelo : null;
-      return { spr: c, larg: (TILE * scale) * 3.2, torre: false };
-    }
-    const nome = estadoTorre(a);
-    let spr = SPR[nome] && SPR[nome].pronto ? SPR[nome] : null;
-    if (!spr && SPR.torre_base && SPR.torre_base.pronto) spr = SPR.torre_base;
-    if (!spr) { // torre ainda nao carregou: cai na aldeia antiga
-      const v = SPR.aldeia_neutra && SPR.aldeia_neutra.pronto ? SPR.aldeia_neutra : null;
-      return { spr: v, larg: (TILE * scale) * 2.4, torre: false };
-    }
-    return { spr, larg: (TILE * scale) * 2.15, torre: true };
-  }
 
-  function baseVisualIB(a) {
-    const cs = TILE * scale;
-    const e = spriteAldeia(a);
-    // Nas pecas v4 o ponto que assenta na cidade E a posicao da cidade: nao ha
-    // levante nenhum a aplicar, porque a peca ja traz a sua ancora. As estradas
-    // passam a terminar no CHAO da povoacao em vez do fundo da imagem — que e
-    // onde elas de facto chegam.
-    if (e.assento != null) return SY(a.y);
-    return SY(a.y) - alturaSprite(e.spr, e.larg, Math.max(20, cs * 0.59)) * IB.levanta;
-  }
 
 
   // ===== FOG OF WAR: A CAMARA DO REI (P4, 17/08) =========================
@@ -4100,91 +3861,6 @@
       espBase = cur;
     }
     // mesmo turno: mantem espDelta/espNova cacheados
-  }
-  function espVar(n) {
-    if (n > 0) return '<span class="esp-d esp-up">+' + n + "</span>";
-    if (n < 0) return '<span class="esp-d esp-down">−' + Math.abs(n) + "</span>";
-    return '<span class="esp-d esp-flat">0</span>';
-  }
-  function espTropasCel(a) {
-    let h = "";
-    for (const tp of ["lanceiro", "arqueiro", "cavaleiro"]) {
-      const n = a.tropas[tp];
-      h += '<u' + (n === 0 ? ' class="esp-zero"' : "") + '><i style="background:' + ESP_COR[tp] + '"></i><b>' + n + "</b></u>";
-    }
-    return h;
-  }
-  function renderPainelEspectador(lado) {
-    const el = document.getElementById(lado === "A" ? "espA" : "espB");
-    if (!el) return;
-    const lista = Engine.aldeiasDe(game, lado);
-    // composicao do exercito = guarnicoes + tropas em marcha (o exercito todo
-    // do rei; senao, com tudo marchando, o painel mostrava 0 a partida inteira)
-    let L = 0, Aq = 0, C = 0;
-    for (const a of lista) { L += a.tropas.lanceiro; Aq += a.tropas.arqueiro; C += a.tropas.cavaleiro; }
-    for (const m of game.movimentos) if (m.dono === lado) { L += m.tropas.lanceiro; Aq += m.tropas.arqueiro; C += m.tropas.cavaleiro; }
-    const tot = L + Aq + C;
-    const pct = (n) => tot > 0 ? (100 * n / tot) : 0;
-    // em marcha (exercitos deste rei em transito)
-    const marcha = game.movimentos.filter((m) => m.dono === lado).length;
-    // recursos (soma dos estoques das aldeias do rei)
-    let mad = 0, fer = 0;
-    for (const a of lista) { mad += a.recursos.madeira; fer += a.recursos.ferro; }
-    // sob ataque: aldeia deste rei que e destino de exercito inimigo
-    const sob = new Set();
-    for (const m of game.movimentos) {
-      if (m.dono === lado) continue;
-      const alvo = lista.find((a) => a.id === m.destinoId);
-      if (alvo) sob.add(alvo.id);
-    }
-    const nova = espNova[lado] || new Set();
-    // ordenacao: sob ataque > capital > nova > resto (por id). Mostra TODAS as
-    // aldeias — o total da partida e 24 (teto absoluto do rei) e cabe de sobra.
-    const rank = (a) => sob.has(a.id) ? 0 : (a.capital ? 1 : (nova.has(a.id) ? 2 : 3));
-    const ord = lista.slice().sort((x, y) => { const r = rank(x) - rank(y); return r !== 0 ? r : x.id - y.id; });
-    // ---- monta HTML ----
-    const dl = espDelta[lado];
-    let linhas = "";
-    for (const a of ord) {
-      const cls = sob.has(a.id) ? " combate" : (nova.has(a.id) ? " nova" : "");
-      const tag = sob.has(a.id)
-        ? '<span class="esp-ald-tag esp-tag-combate">sob ataque</span>'
-        : (nova.has(a.id) ? '<span class="esp-ald-tag esp-tag-nova">nova</span>' : "");
-      const cap = a.capital ? '<span class="esp-ald-cap">CAPITAL</span>' : "";
-      const nid = String(a.id).padStart(2, "0");
-      linhas +=
-        '<div class="esp-ald' + cls + '">' +
-          '<span class="esp-ald-n">' + nid + "</span>" +
-          '<span class="esp-ald-nome">' + esc(a.nome) + cap + "</span>" +
-          '<span class="esp-ald-tropas">' + espTropasCel(a) + tag + "</span>" +
-        "</div>";
-    }
-
-    el.innerHTML =
-      '<div class="esp-topo">' + ESP_BRASAO[lado] +
-        '<div class="esp-id"><div class="esp-nome">' + ESP_NOME[lado] + "</div>" +
-        '<div class="esp-modelo">' + esc(lado === "A" ? etiquetaA : etiquetaB) + "</div></div></div>" +
-      '<div class="esp-barra">' +
-        '<div class="esp-m"><span class="esp-v">' + lista.length + espVar(dl.ald) + '</span><span class="esp-r">aldeias</span></div>' +
-        '<div class="esp-m"><span class="esp-v">' + marcha + '</span><span class="esp-r">em marcha</span></div>' +
-        '<div class="esp-m"><span class="esp-v">' + tot + espVar(dl.tropas) + '</span><span class="esp-r">tropas</span></div>' +
-      "</div>" +
-      '<div class="esp-exercito"><div class="esp-rot">Exercito</div>' +
-        '<div class="esp-exe-barra">' +
-          '<i style="background:' + ESP_COR.lanceiro + ';width:' + pct(L) + '%"></i>' +
-          '<i style="background:' + ESP_COR.arqueiro + ';width:' + pct(Aq) + '%"></i>' +
-          '<i style="background:' + ESP_COR.cavaleiro + ';width:' + pct(C) + '%"></i>' +
-        "</div>" +
-        '<div class="esp-exe-leg">' +
-          '<span><em style="background:' + ESP_COR.lanceiro + '"></em>lanceiro <b>' + L + "</b></span>" +
-          '<span><em style="background:' + ESP_COR.arqueiro + '"></em>arqueiro <b>' + Aq + "</b></span>" +
-          '<span><em style="background:' + ESP_COR.cavaleiro + '"></em>cavaleiro <b>' + C + "</b></span>" +
-        "</div></div>" +
-      '<div class="esp-lista"><div class="esp-lista-cab"><span class="esp-rot">Aldeias</span>' +
-        '<span class="esp-lista-cnt">' + ord.length + "</span></div>" +
-        linhas +
-      "</div>" +
-      '<div class="esp-rec"><span>madeira <b>' + mad + "</b></span><span>ferro <b>" + fer + "</b></span></div>";
   }
   // ===== TRANSMISSAO v5: BARRA DE TOPO + RODAPE DOS REIS ================
   //  Mesma fonte de dados dos paineis laterais (espTotais/espDelta) — muda a
