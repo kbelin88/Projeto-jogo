@@ -32,6 +32,12 @@ const LARG_M = 3.2;              // entre homens da mesma fileira
 // isso sao ~950 bonecos animados -- a placa nao aguenta e nem se veem todos.
 // Fica um punhado; as mais velhas fecham para dar lugar as novas.
 const MAX_VIVAS = 6;
+// ⚠ E QUANTOS MARCADORES. Com o rescaldo de 12 s e uma partida movimentada
+// chegaram a estar 37 ao mesmo tempo no mapa (medido, 22/09) -- deixa de ser um
+// sinal e passa a ser ruido. Os mais velhos apagam-se.
+const MAX_MARCAS = 12;
+// o marcador sozinho (combate sem cena) vive menos: ninguem tem de ir la ver
+const RESCALDO_MARCA_S = 5.0;
 // ── O RESCALDO ──────────────────────────────────────────────────────────────
 // Acabada a luta, o campo fica: corpos no chao, flechas espetadas e o marcador
 // aceso. E o que dá tempo a quem viu o sinal de longe para levar a camara la --
@@ -78,7 +84,10 @@ function telaMarcador(donoV, nV, donoP, nP) {
 
 export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
   const vivas = [];
-  const feitas = new Set();
+  // ⚠ era um Set que nunca esquecia: numa sessao longa fica lixo por cada
+  // combate ja fechado. Guarda a HORA e esquece o que ja passou.
+  const feitas = new Map();
+  const MEMORIA_MS = 10 * 60 * 1000;
   // ── QUEM ESTA A LUTAR NAO ESTA A MARCHAR ──────────────────────────────────
   // O mapa desenhava as duas colunas do motor POR CIMA da cena de batalha: via-se
   // os dois exercitos a atravessarem-se um pelo outro enquanto, ao lado, dezasseis
@@ -204,7 +213,14 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
   // concorda com a marcha que continua depois.
   function abrir(b) {
     if (feitas.has(b.id)) return null;
-    feitas.add(b.id);
+    feitas.set(b.id, Date.now());
+    // ── O MARCADOR E DE TODOS; A CENA E DE ALGUNS (22/09) ───────────────────
+    // Num turno cheio ha dez combates de estrada e so cabem seis cenas -- os
+    // outros quatro nao tinham NADA, e o Lucas leu isso como "nesta estrada nao
+    // houve batalha". Agora o marcador nasce sempre: onde nao ha figuras, ha
+    // pelo menos as espadas cruzadas e os dois numeros, que e o que diz que ali
+    // se lutou.
+    const comCena = vivas.filter((x) => !x.soMarca).length < MAX_VIVAS;
     const dir = new THREE.Vector3(Math.cos(b.rumo), 0, Math.sin(b.rumo)).normalize();
     const lado = new THREE.Vector3(-dir.z, 0, dir.x);
     const hostes = {};
@@ -214,7 +230,7 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
       const dono = quem === "venc" ? b.vencedor : b.perdedor;
       const homens = [];
       let fundo = 0;
-      for (const bl of reparte(comp || {})) {
+      for (const bl of (comCena ? reparte(comp || {}) : [])) {
         for (let k = 0; k < bl.n; k++) {
           const f = figura(bl.tipo, dono);
           if (!f) continue;
@@ -262,11 +278,24 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
     marca.renderOrder = 960;
     cena.add(marca);
     const ba = { chaves, pos: b.pos.clone(), dir, lado, hostes, t: 0, marca,
+                 soMarca: !comCena,
                  dur: b.segundos || 7.0, perdeVenc, proxTiro: 0.4, proxGolpe: 1.0,
                  nasceu: (typeof performance !== "undefined" ? performance.now() : Date.now()),
                  tombados: { venc: 0, perd: 0 } };
     vivas.push(ba);
-    while (vivas.length > MAX_VIVAS) fechar(vivas.shift());
+    // dois tetos: as CENAS (caras) e os MARCADORES (baratos, mas a mais viram
+    // ruido no mapa). Em ambos, o mais velho sai primeiro.
+    while (vivas.filter((x) => !x.soMarca).length > MAX_VIVAS) {
+      const i = vivas.findIndex((x) => !x.soMarca);
+      fechar(vivas[i]);
+      vivas.splice(i, 1);
+    }
+    while (vivas.length > MAX_MARCAS) {
+      const i = vivas.findIndex((x) => x.soMarca);
+      const k = i >= 0 ? i : 0;
+      fechar(vivas[k]);
+      vivas.splice(k, 1);
+    }
     return ba;
   }
 
@@ -296,6 +325,10 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
 
   function passo(dt) {
     moverFlechas(dt);
+    if (feitas.size > 200) {
+      const agora = Date.now();
+      for (const [id, quando] of feitas) if (agora - quando > MEMORIA_MS) feitas.delete(id);
+    }
     for (let i = vivas.length - 1; i >= 0; i--) {
       const ba = vivas[i];
       ba.t += dt;
@@ -369,17 +402,36 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
       if (u >= 1 && !ba.rescaldo) {
         ba.rescaldo = true;
         for (const c of (ba.chaves || [])) emLuta.delete(c);
+        // ── QUEM FICOU DE PE, SEGUE CAMINHO ─────────────────────────────────
+        // O rescaldo deixava os sobreviventes parados em formacao durante doze
+        // segundos -- "a tropa fica parada depois", disse o Lucas. No campo
+        // ficam os MORTOS; o vencedor volta a marchar (a coluna dele reaparece
+        // assim que as chaves saem de `emLuta`, na linha acima).
+        for (const quem of ["venc", "perd"]) {
+          const h = ba.hostes[quem];
+          h.homens = h.homens.filter((f) => {
+            if (f.caido) return true;
+            cena.remove(f.raiz);
+            f.mix.stopAllAction();
+            f.raiz.traverse((o) => {
+              if (o.isMesh && o.material && o.material.dispose) o.material.dispose();
+            });
+            return false;
+          });
+        }
       }
       if (ba.marca) {
-        const sobra = ba.rescaldo ? Math.max(0, 1 - (ba.t - ba.dur) / RESCALDO_S) : 1;
+        const resto = ba.soMarca ? RESCALDO_MARCA_S : RESCALDO_S;
+      const sobra = ba.rescaldo ? Math.max(0, 1 - (ba.t - ba.dur) / resto) : 1;
         ba.marca.material.opacity = 0.25 + 0.75 * sobra;
       }
       // ⚠ E PELO RELOGIO TAMBEM: com a pagina escondida o navegador estrangula
       // o rAF e o `dt` deixa de correr -- as cenas ficavam abertas para sempre,
       // e foi assim que se acumularam 59 (21/09).
       const agora = (typeof performance !== "undefined" ? performance.now() : Date.now());
-      if (ba.t >= ba.dur + RESCALDO_S
-          || agora - ba.nasceu > (ba.dur + RESCALDO_S) * 1000 + 15000) {
+      const restoFim = ba.soMarca ? RESCALDO_MARCA_S : RESCALDO_S;
+      if (ba.t >= ba.dur + restoFim
+          || agora - ba.nasceu > (ba.dur + restoFim) * 1000 + 15000) {
         fechar(ba);
         vivas.splice(i, 1);
       }
@@ -397,7 +449,7 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
     ondeEsta() {
       // a mais nova que ainda esta a LUTAR (o rescaldo nao vale a pena seguir)
       for (let i = vivas.length - 1; i >= 0; i--) {
-        if (vivas[i].t < vivas[i].dur) {
+        if (!vivas[i].soMarca && vivas[i].t < vivas[i].dur) {
           return { pos: vivas[i].pos.clone(), falta: vivas[i].dur - vivas[i].t };
         }
       }
@@ -406,12 +458,18 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
     // onde estao TODAS, para quem quiser levar a camara a mao
     lista() {
       return vivas.map((b) => ({ pos: b.pos.clone(), t: Math.round(b.t * 10) / 10,
-                                 dur: b.dur, rescaldo: !!b.rescaldo }));
+                                 dur: b.dur, rescaldo: !!b.rescaldo,
+                                 soMarca: !!b.soMarca,
+                                 figuras: b.hostes.venc.homens.length
+                                        + b.hostes.perd.homens.length,
+                                 // de pe = ainda a lutar; no rescaldo tem de ser 0
+                                 dePe: b.hostes.venc.homens.filter((f) => !f.caido).length
+                                     + b.hostes.perd.homens.filter((f) => !f.caido).length }));
     },
     // para conferir de fora sem partida nenhuma
     get diagnostico() {
       return vivas.map((b) => ({ t: Math.round(b.t * 10) / 10, dur: b.dur,
-        caidos: b.tombados.perd + b.tombados.venc,
+        caidos: b.tombados.perd + b.tombados.venc, soMarca: !!b.soMarca,
         figuras: b.hostes.venc.homens.length + b.hostes.perd.homens.length }));
     },
   };
