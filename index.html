@@ -4889,47 +4889,73 @@
 
   document.getElementById("gcinema").addEventListener("click", alternarCinema);
   document.getElementById("grepCinema").addEventListener("click", alternarCinema);
-  // ---------- ENQUADRAMENTO DE GRAVACAO (31/08/2026) ----------
-  // A camera do modo cinema e FIXA. Sem isto cada gravacao saia com um
-  // enquadramento diferente, e a posicao de cada aldeia na tela tinha de ser
-  // medida de novo video a video — foram TRES medicoes diferentes em tres
-  // gravacoes, duas delas da MESMA partida.
+  // ── O ENQUADRAMENTO DA GRAVACAO ────────────────────────────────────────
+  // Enquadrava o canvas plano com `scale` e `panX`: dois numeros que, desde
+  // 11/09, nenhum pixel obedece. Um video gravado com isto enquadrava um mapa
+  // invisivel enquanto a camara 3D ficava onde estava.
   //
-  // A escala e presa a LARGURA (nao ao max(largura,altura) do cover): assim a
-  // posicao de cada aldeia e uma fracao fixa de VW, e a tabela de coordenadas
-  // vale em qualquer resolucao.
+  // Agora poe a CAMARA a olhar o mapa inteiro, de cima e de frente, e devolve
+  // sempre o mesmo enquadramento para a mesma resolucao -- que e o unico
+  // requisito real: dois videos da mesma partida tem de ter a mesma moldura.
   //
-  //   telaX = VW * ( ZOOM_GRAVACAO/imgW * ((mundoX-ox)/div - focoX) + 0.5 )
-  //   telaY = VH/2 + VW * ZOOM_GRAVACAO/imgW * ((mundoY-oy)/div - focoY)
-  //
-  // ⚠ Desliga a camera automatica: se ela seguisse os combates o enquadramento
+  // ⚠ Desliga a camara automatica: se ela seguisse os combates o enquadramento
   // deixaria de ser fixo, que e todo o ponto.
-  // Os dois numeros que enquadram a gravacao. Mexer neles muda a moldura de
-  // TODOS os videos daqui para a frente — e obriga a refazer a tabela de
-  // posicoes (videos/aldeias_tela.txt), que e lida do proprio SX/SY.
-  const ZOOM_GRAVACAO = 0.75;    // maior = mapa maior na tela
-  const DESCE_GRAVACAO = 0.09;   // fracao da ALTURA: empurra o mapa para baixo
+  // A moldura sai da CAIXA das aldeias e do campo de visao da camara, nao de
+  // dois numeros a jeito: se o mapa mudar de forma, ou o ecra de proporcao, o
+  // enquadramento acompanha. `MARGEM` e o unico gosto que aqui ha.
+  const MARGEM_GRAVACAO = 1.18;
+  const INCLINACAO_GRAVACAO = 26 * Math.PI / 180;   // do zenite
   function enquadrarGravacao() {
-    if (!IB) return;
+    if (!M3D) return;
     camAuto = false;
     const g = document.getElementById("grepCam");
     if (g) g.classList.remove("ativo");
-    scale = (VW / (IB.imgCels.w * TILE)) * ZOOM_GRAVACAO;
-    centerOn(IB.foco.x, IB.foco.y);
-    panY += VH * DESCE_GRAVACAO;   // o foco fica alto de mais sem isto
-    draw();
-    console.log("[gravacao] VW=" + VW + " VH=" + VH + " escala=" + scale.toFixed(6) +
-                " panX=" + panX.toFixed(2) + " panY=" + panY.toFixed(2));
+    M3D.seguirBatalhas(false);
+    const ps = Object.values(M3D.MAPA.aldeias).map((a) => a.p);
+    const xs = ps.map((q) => q[0]), ys = ps.map((q) => q[1]);
+    const cx = (Math.min.apply(null, xs) + Math.max.apply(null, xs)) / 2;
+    const cy = (Math.min.apply(null, ys) + Math.max.apply(null, ys)) / 2;
+    const lx = (Math.max.apply(null, xs) - Math.min.apply(null, xs)) * MARGEM_GRAVACAO;
+    const ly = (Math.max.apply(null, ys) - Math.min.apply(null, ys)) * MARGEM_GRAVACAO;
+    const meiaFov = M3D.cam.fov * Math.PI / 360;
+    // a inclinacao estica o que se ve na vertical: divide-se pelo cosseno
+    const dist = Math.max(ly / 2 / Math.tan(meiaFov) / Math.cos(INCLINACAO_GRAVACAO),
+                          lx / 2 / (Math.tan(meiaFov) * (M3D.cam.aspect || 1.6)));
+    M3D.cam.position.set(cx, dist * Math.cos(INCLINACAO_GRAVACAO),
+                         -cy + dist * Math.sin(INCLINACAO_GRAVACAO));
+    M3D.ctrl.target.set(cx, 0, -cy);
+    // ⚠ A CAMARA TEM AMORTECIMENTO, E A MOLDURA TEM DE VALER JA. Com
+    // `enableDamping` a camara leva ~2 s a assentar, e quem chamar o
+    // `posAldeiasTela` logo a seguir le posicoes a MEIO do movimento -- foi o
+    // que aconteceu ao medir: o centro do mapa caia em y=897 num ecra de 800.
+    // Uma tabela de posicoes tirada assim poe as flechas do video ao lado das
+    // aldeias. Desliga-se por um passo, assenta, e volta a ligar.
+    const tinha = M3D.ctrl.enableDamping;
+    M3D.ctrl.enableDamping = false;
+    M3D.ctrl.update();
+    M3D.ctrl.enableDamping = tinha;
+    console.log("[gravacao] centro=" + Math.round(cx) + "," + Math.round(cy)
+                + " dist=" + Math.round(dist) + " caixa=" + Math.round(lx) + "x" + Math.round(ly));
   }
   // deixa a conta acessivel de fora (ferramentas de video leem daqui)
   window.enquadrarGravacao = enquadrarGravacao;
+  // ── ONDE CADA ALDEIA APARECE NO ECRA ───────────────────────────────────
+  // E daqui que sai a `videos/aldeias_tela.txt`, que manda nas flechas e nos
+  // recortes dos Shorts. Lia `SX`/`SY` -- a camara plana -- e por isso dava as
+  // posicoes de um mapa que ninguem ve. Mesma causa do balao do rato a dizer
+  // "Lisboa" com a camara sobre Barcelona.
   window.posAldeiasTela = function () {
-    if (!game) return null;
-    return game.aldeias.map((a) => ({
-      id: a.id, nome: a.nome,
-      x: SX(a.x), y: SY(a.y),
-      fx: SX(a.x) / VW, fy: SY(a.y) / VH,
-    }));
+    if (!game || !M3D) return null;
+    const r = M3D.rend.domElement.getBoundingClientRect();
+    return game.aldeias.map((a) => {
+      const m3 = M3D.MAPA.aldeias[a.slug];
+      if (!m3) return { id: a.id, nome: a.nome, x: null, y: null, fx: null, fy: null };
+      const q = M3D.ecraDoMundo(
+        new M3D.THREE.Vector3(m3.p[0], m3.z || 0, -m3.p[1]));
+      return { id: a.id, nome: a.nome, x: q.x, y: q.y,
+               fx: q.x / (r.width || 1), fy: q.y / (r.height || 1),
+               atras: !!q.atras };
+    });
   };
 
   function alternarCinema() {

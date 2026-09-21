@@ -49,5 +49,20 @@ conferir(/Engine\.posicaoRota/.test(ponto) && /progMarcha\(m\)/.test(ponto),
 conferir(/if \(!\(w > 0 && h > 0\)\) return;/.test(mapa),
   "um ecra 0x0 nao envenena a matriz de projecao com NaN");
 
+// ── A MESMA CAMARA MANDA NO VIDEO ──────────────────────────────────────────
+// A `videos/aldeias_tela.txt` sai do `posAldeiasTela` e manda nas flechas e
+// nos recortes dos Shorts. Lia SX/SY tambem, e por isso dava as posicoes de um
+// mapa que ninguem ve -- as flechas ficariam ao lado das aldeias.
+const pos = (jogo.match(/window\.posAldeiasTela = function \(\)[\s\S]*?\n {2}\};/) || [])[0] || "";
+conferir(/M3D\.ecraDoMundo\(/.test(pos) && !/\bSX\(|\bSY\(/.test(pos),
+  "a tabela de posicoes do video le a camara do mapa 3D");
+const enq = (jogo.match(/ {2}function enquadrarGravacao\(\)[\s\S]*?\n {2}\}/) || [])[0] || "";
+conferir(/M3D\.cam\.fov/.test(enq) && /MARGEM_GRAVACAO/.test(enq),
+  "a moldura sai da caixa das aldeias e do campo de visao, nao de constantes");
+conferir(/enableDamping = false/.test(enq),
+  "a camara assenta JA (senao le-se a moldura a meio do movimento)");
+conferir(/cam\.matrixWorldInverse\.copy\(cam\.matrixWorld\)\.invert\(\)/.test(mapa),
+  "projetar antes de renderizar da a posicao certa, nao a do quadro anterior");
+
 if (falhas) { console.error("\n" + falhas + " falha(s)"); process.exit(1); }
 console.log("\nSmoke11hover: o balao le o mapa que esta no ecra");

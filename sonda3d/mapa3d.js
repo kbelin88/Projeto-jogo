@@ -1635,6 +1635,15 @@ transformed.y += onda * transformed.x * 0.05;`);
     },
     ecraDoMundo(v) {
       const r = rend.domElement.getBoundingClientRect();
+      // ⚠ PROJETAR ANTES DE RENDERIZAR DA A POSICAO DO QUADRO ANTERIOR. O
+      // `project` usa a `matrixWorldInverse`, que so e recalculada dentro do
+      // `render`. Quem mexe a camara e pergunta logo a seguir -- e e
+      // exatamente isso que o enquadramento de gravacao faz -- recebia a
+      // moldura antiga: medido, o centro do mapa a cair em y=897 num ecra de
+      // 800 px. Um quadro de atraso nao se ve no rato; ve-se numa tabela de
+      // posicoes que manda nas flechas de um video.
+      cam.updateMatrixWorld();
+      cam.matrixWorldInverse.copy(cam.matrixWorld).invert();
       const q = v.clone().project(cam);
       return { x: (q.x * 0.5 + 0.5) * r.width, y: (-q.y * 0.5 + 0.5) * r.height,
                atras: q.z > 1 };
