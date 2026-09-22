@@ -16,7 +16,7 @@ jobs:
         with:
           node-version: 20
 
-      # Passo 3: os 10 testes do motor, um a um.
+      # Passo 3: todos os testes do motor, um a um (32 em 22/09).
       # O shell do Actions roda com "fail fast": o primeiro
       # exit code != 0 derruba o passo inteiro.
       - name: Testes do motor
@@ -26,11 +26,15 @@ jobs:
             node "$t"
           done
 
-      # Passo 4: os 5 smokes da arena (stubs em modo estrito,
-      # sem Ollama — por isso rodam numa VM sem GPU)
+      # Passo 4: TODOS os smokes da arena (stubs em modo estrito, sem
+      # rede nem GPU). Ate 22/09 esta lista tinha 5 nomes escritos a mao e o
+      # CI nunca correu os outros 8 -- o fog, a rede, a estrada, os modulos,
+      # o hover, a batalha. Conferido num clone limpo: os 13 passam sem nada
+      # que esteja fora do git. Por padrao, e nao por lista, para um smoke
+      # novo entrar sozinho.
       - name: Smokes da arena
         run: |
-          for t in testes_arena/Race.js testes_arena/Smoke.js testes_arena/Smoke2.js testes_arena/Smoke3duelo.js testes_arena/Smoke4pausa.js; do
+          for t in testes_arena/*.js; do
             echo "== $t"
             node "$t"
           done
