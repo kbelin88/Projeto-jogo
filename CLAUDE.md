@@ -60,6 +60,7 @@ gabarito escrito antes do experimento, artefato publicado antes da próxima fase
 | `ferramentas/dump-modelos-free.js` | o catálogo `:free` ao vivo. Conferir o catálogo é o passo 1 de toda bateria |
 | `ferramentas/medir-assento.js` | a mesa é neutra? (jogador-base contra ele próprio, dos dois lados) |
 | `ferramentas/medir-tropa-inicial.js` | que parte da força fica parada nas aldeias de partida |
+| `ferramentas/acompanhar-partida.js` | partida a correr: os Reis estão a AGIR? (turno a turno, alarme de turnos sem envio) |
 | `ferramentas/medir-cruzamentos.js` | colunas que se atravessam no desenho sem lutar (jogador-base, ou `--replay`) |
 
 ### Os testes

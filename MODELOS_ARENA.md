@@ -1,6 +1,6 @@
 # Tabela da Arena — modelos free da OpenRouter
 
-Gerada por `ferramentas/tabela-modelos.js` a partir de `modelos_free_openrouter.txt` (dump de **2026-09-21T18:08:17.939Z**)
+Gerada por `ferramentas/tabela-modelos.js` a partir de `modelos_free_openrouter.txt` (dump de **2026-09-22T23:31:35.815Z**)
 e de `resultados_arena.json` (o que foi medido em partida). **Não edite à mão** — edite o JSON e regenere.
 
 Catálogo: **24 modelos free**, dos quais **20 são aptos** a jogar a Arena.
@@ -49,13 +49,13 @@ não mede latência de partida nem estabilidade ao longo de 30 turnos (ver a leg
 
 | modelo | por quê |
 |---|---|
-| `deepseek/deepseek-v4-flash:free` | fora do catalogo free em 2026-09-21 |
-| `minimax/minimax-m2.7:free` | fora do catalogo free em 2026-09-21 |
-| `minimax/minimax-m3:free` | fora do catalogo free em 2026-09-21 |
-| `nvidia/nemotron-3-nano-30b-a3b:free` | fora do catalogo free em 2026-09-21 |
-| `nvidia/nemotron-nano-12b-v2-vl:free` | fora do catalogo free em 2026-09-21 |
-| `nvidia/nemotron-nano-9b-v2:free` | fora do catalogo free em 2026-09-21 |
-| `openai/gpt-oss-20b:free` | fora do catalogo free em 2026-09-21 |
+| `deepseek/deepseek-v4-flash:free` | fora do catalogo free em 2026-09-22 |
+| `minimax/minimax-m2.7:free` | fora do catalogo free em 2026-09-22 |
+| `minimax/minimax-m3:free` | fora do catalogo free em 2026-09-22 |
+| `nvidia/nemotron-3-nano-30b-a3b:free` | fora do catalogo free em 2026-09-22 |
+| `nvidia/nemotron-nano-12b-v2-vl:free` | fora do catalogo free em 2026-09-22 |
+| `nvidia/nemotron-nano-9b-v2:free` | fora do catalogo free em 2026-09-22 |
+| `openai/gpt-oss-20b:free` | fora do catalogo free em 2026-09-22 |
 | `google/lyria-3-clip-preview` | saida de audio |
 | `google/lyria-3-pro-preview` | saida de audio |
 | `openrouter/free` | router: escolhe outro modelo por baixo, nao e sujeito de benchmark |
