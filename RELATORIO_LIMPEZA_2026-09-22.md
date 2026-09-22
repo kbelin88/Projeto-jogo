@@ -200,6 +200,26 @@ Ficam de cada lado, porque mudá-los mexeria no que já foi medido: o **ritmo**
 > **Provado com chamada real** pelo runner (`lfm-2.5-2.6b:free`): resposta
 > "pronto", 72 tokens, `finish stop`, 0 throttles, 4,9 s.
 
+### O bug que eu proprio meti, e a cegueira que o escondeu
+
+Vale contar porque e a licao mais util do dia. O `const _or = ClienteOR.criar({...})`
+ficou **acima** das declaracoes de `TETO_ALTO_LLM` e `tetoPorModelo`, que o
+literal de opcoes le. Avaliar aquilo ali e um `ReferenceError` na **zona morta
+temporal**: o script morria a meio, `game` ficava `null`, e o jogo abria **sem
+partida nenhuma**.
+
+O que o tornou invisivel: no Node dos testes o `ClienteOR` **nao existia** — os
+smokes ainda nao o carregavam —, o adaptador caia no ramo de reserva, e o literal
+nunca chegava a ser avaliado. **Trinta testes e treze smokes verdes, jogo morto
+no navegador.** Foi exatamente o modo de falha que o `Smoke12modulos` nasceu para
+apanhar, e eu tinha deixado o terceiro modulo de fora dele.
+
+Duas correcoes, nao uma: o cliente passa a nascer **a pedido** (quando a pagina ja
+carregou inteira), e os cinco smokes passaram a carregar tambem o `clienteor.js`.
+
+E a regra que fica: **conferir que o global existe nao e conferir que o jogo
+corre.** Depois de extrair um modulo, abrir e jogar.
+
 ### E um teste que mentia
 
 A extração do `Smoke8estrada` tinha um `[\s\S]*?` ganancioso. Quando o
@@ -258,6 +278,74 @@ já não existia. Nenhum deles dava erro. Foi por isso que sobreviveram onze dia
 
 ---
 
-## 8. A partida de prova
+## 8. As partidas de prova
 
-*(preenchido quando a partida terminar)*
+O pedido era correr **a mesma partida dos modelos de hoje de manhã, até ao turno
+100**, para haver tempo de acontecerem batalhas nas estradas. Correram três
+coisas, e a segunda é a que responde à pergunta.
+
+### 8.1 A tentativa com os dois modelos de manhã — parou sozinha no T19
+
+`liquid/lfm-2.5-2.6b:free` × `inclusionai/ling-3.0-flash-fin:free`, seed 7.
+
+A partida **congelou no turno 19**: A com 5 aldeias e 7 tropas, B com 7 aldeias e
+75 tropas, e **zero exércitos em trânsito dos dois lados**. Ficou assim, turno
+após turno. Não houve uma única batalha de estrada, e não ia haver: sem ninguém
+a marchar, não há onde os exércitos se cruzarem.
+
+A causa está medida:
+
+- do turno 5 em diante, **34 respostas vazias em 23 turnos**, todas com
+  `finish = length`;
+- o `lfm` gasta os **8192 tokens inteiros a pensar** e devolve string vazia;
+- **não é o nosso teto**: ele aprendeu 61579 pelo HTTP 400 do próprio modelo. É o
+  **provedor** que corta em 8192;
+- **o orçamento de raciocínio não salva**: com `REASONING_MAX_TOKENS=1500` o
+  primeiro turno ainda deu 8192 de raciocínio e `finish length`. Este provedor
+  ignora o pedido — não é um botão nosso.
+
+A sonda de 3 turnos da manhã não previa nada disto: ali ele respondeu **6 de 6
+com envios**. É a lição de 19/08 outra vez, com outra cara — **sonda curta não
+prevê partida longa**, porque o prompt cresce e o raciocínio cresce com ele.
+
+A partida parada ficou guardada como prova
+(`resultados/p4-partida-0922/PARADA_sem_orcamento_lfm_x_ling_seed7.txt`) e a
+`MODELOS_ARENA.md` foi atualizada: o `lfm` não volta a partida longa.
+
+### 8.2 O controlo burro × burro, 100 turnos — **55 batalhas de estrada**
+
+Mesma seed, mesmo mapa, sem API. Serve para responder a outra pergunta, que é a
+que interessa ao sistema: **as batalhas de estrada funcionam de ponta a ponta?**
+
+| | |
+|---|---|
+| turnos | acabou no **17** — por eliminação, não por limite |
+| placar final | A **22** aldeias, B **0** |
+| **combates de estrada** | **55** |
+| no replay `.json` | os mesmos 55, com os 27 campos |
+
+E todos com a semântica certa do motor — **o perdedor sai inteiro**:
+
+```
+COMBATE-ESTRADA no trecho [2] Evora-[5] Faro: A (ia [2] Evora->[4] Badajoz)
+  vs B (ia [4] Badajoz->[5] Faro) Fatk=2 (ef 2) Fdef=7 (ef 7) vant=0
+  -> vence B | exercito de A ANIQUILADO (2S) | vencedor perdeu 0
+```
+
+### 8.3 E um evento real abre mesmo uma cena no mapa
+
+Peguei no **primeiro combate de estrada dessa partida de 100 turnos** e meti-o no
+jogo pela porta de sempre — o log do motor. A ponte converteu-o e o mapa abriu a
+cena:
+
+| | |
+|---|---|
+| convertido para | `evora → faro` |
+| vencedor / perdedor | B / A |
+| composição aniquilada | 2 lanceiros — **a mesma do evento do motor** |
+| cenas no mapa | 0 → **1** |
+| figuras na cena | **16** |
+
+É o caminho inteiro provado com dados reais: motor → `ponte3d.js` →
+`mapa3d.js` → `batalha.js`.
+
