@@ -454,4 +454,44 @@ t("E3 extrai rota em turnos e id inexistente", () => {
   assert.ok(a.some((x) => x.tipo === "id_citado" && x.a === 99));
 });
 
+// ============================================================
+//  (F) O COMBATE DE ESTRADA NO RELATORIO (23/09)
+// ============================================================
+console.log("\n=== (F) o Rei sabe onde, com que exercito e a que custo lutou na estrada ===");
+// o primeiro turno de seed 7 com combates de estrada
+const comEstrada = (extra) => {
+  const e = E.criarEstadoInicial(Object.assign({}, E.CONFIG, { seed: 7 }, extra || {}));
+  for (let i = 0; i < 40; i++) {
+    E.rodarTurno(e, { A: E.jogadorBurro, B: E.jogadorBurro });
+    if (e.log.some((x) => x.tipo === "combate_estrada" && x.turno === e.turno)) return e;
+  }
+  throw new Error("nenhum combate de estrada em 40 turnos");
+};
+t("F1 cada combate de estrada do turno vira UMA linha com o troco e as forcas do motor", () => {
+  const e = comEstrada();
+  const evs = e.log.filter((x) => x.tipo === "combate_estrada" && x.turno === e.turno);
+  const linhas = promptDe(e, "A").split("\n").filter((l) => /ON THE ROAD/.test(l));
+  assert.strictEqual(linhas.length, evs.length);
+  const nomeDe = (id) => e.aldeias.find((a) => a.id === id).nome;
+  for (const ev of evs) {
+    const onde = `between [${ev.trechoDeId}] ${nomeDe(ev.trechoDeId)} and [${ev.trechoParaId}] ${nomeDe(ev.trechoParaId)}`;
+    const minha = ev.atacante === "A" ? ev.FatkEf : ev.FdefEf;
+    const dele = ev.atacante === "A" ? ev.FdefEf : ev.FatkEf;
+    assert.ok(linhas.some((l) => l.includes(onde) && l.includes(`effective force ${minha} vs ${dele}`)),
+      "falta a linha de " + onde);
+  }
+});
+t("F2 plurais ingleses: spearmen, nunca 'spearmans' -- e o parser aceita", () => {
+  const e = aposTurnos(20);
+  const p = promptDe(e, "A") + promptDe(e, "B");
+  assert.ok(!/spearmans/.test(p), "o prompt ainda diz 'spearmans'");
+  assert.strictEqual(E.normalizarTipo("spearmen"), "lanceiro");
+});
+t("F3 com relatoEstrada:false volta a frase curta de antes", () => {
+  const e = comEstrada({ relatoEstrada: false });
+  const linhas = promptDe(e, "A").split("\n").filter((l) => /ON THE ROAD/.test(l));
+  assert.ok(linhas.length > 0);
+  for (const l of linhas) assert.ok(/^- Armies met ON THE ROAD: your army (won|was beaten in) the field/.test(l), l);
+});
+
 console.log("\ntest_prompt_p4: " + ok + " testes OK");

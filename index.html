@@ -1126,7 +1126,7 @@
     ? Ponte3D.criar({ Engine })
     : { sincronizar() {}, empurrarPara3D() {}, eventosDeEstrada() { return []; } };
   function sincronizarPonte() {
-    if (_ponte) _ponte.sincronizar({ M3D, game, reiObservado, progMarcha });
+    if (_ponte) _ponte.sincronizar({ M3D, game, reiObservado, progMarcha, eventosPorVir });
   }
   function empurrarPara3D() { sincronizarPonte(); _ponte.empurrarPara3D(); }
   function eventosDeEstrada() { sincronizarPonte(); return _ponte.eventosDeEstrada(); }
@@ -1623,6 +1623,13 @@
     // guarda quem estava chegando ANTES de o quadro trocar: o exercito que
     // conquista some do estado, mas e ele que tem de aparecer plantando.
     chegandoAntes = (game && game.movimentos) ? game.movimentos.filter((m) => m.turnosRestantes <= 1) : [];
+    // ⚠ O QUADRO NOVO COMECA NO INICIO DO TURNO DELE. O `repFrac` chegava aqui
+    // ainda a 1 (o fim da animacao anterior), e o `draw()` no fim desta funcao
+    // pintava as colunas do quadro novo um turno A FRENTE, para logo a seguir
+    // voltarem atras -- um solavanco a cada troca de quadro. E, desde que a
+    // cena abre no instante do encontro (23/09), abria TODAS as batalhas do
+    // turno seguinte logo no primeiro desenho.
+    repFrac = 0;
     game.turno = fr.turno;
     game.aldeias = fr.aldeias;
     game.movimentos = fr.movimentos;
@@ -1743,9 +1750,54 @@
   //
   // Uma conta, um sitio. Quem quiser saber onde esta um exercito pergunta aqui.
   function progMarcha(m) {
+    // quem vai lutar na estrada neste turno para no instante do encontro
+    const enc = encontrosPorVir();
+    const s = enc && enc.para.get(chaveMarchaRep(m.dono, m.origemId, m.destinoId));
+    const f = s !== undefined && s !== null ? Math.min(repFrac, s) : repFrac;
     return m.turnosTotal
-      ? Math.min(progTeto(m), (m.turnosTotal - m.turnosRestantes + repFrac) / m.turnosTotal)
+      ? Math.min(progTeto(m), (m.turnosTotal - m.turnosRestantes + f) / m.turnosTotal)
       : 1;
+  }
+
+  // ── PARAR ONDE SE ENCONTRAM (23/09) ──────────────────────────────────────
+  // O motor decide o turno inteiro de uma vez, e o combate de estrada so
+  // aparecia quando o quadro SEGUINTE era aplicado -- ate la, a animacao
+  // deixava as duas colunas andar o turno todo, e elas atravessavam-se no ecra
+  // antes de a cena abrir. Era a maior queixa do Lucas antes de gravar.
+  //
+  // O motor passou a gravar `sEncontro`: a fracao do turno em que os dois
+  // estiveram no mesmo ponto. A animacao entre este quadro e o seguinte le os
+  // combates do SEGUINTE, para cada coluna nesse instante, e a cena abre nele.
+  // Medido com `ferramentas/medir-cruzamentos.js`: 0 colunas inimigas que se
+  // atravessam no desenho, em 60 partidas e 4014 combates.
+  // `var`, como o `_ponte`: o draw() pode correr antes destas linhas
+  var chaveMarchaRep = function (dono, de, para) { return dono + ":" + de + ">" + para; };
+  var _encRep = { dados: null, idx: -1, v: null };
+  function encontrosPorVir() {
+    if (!emReplay || !rep || !rep.dados) return null;
+    if (_encRep.dados === rep.dados && _encRep.idx === rep.idx) return _encRep.v;
+    const fr = rep.dados.frames[rep.idx];
+    let v = null;
+    if (fr && fr.eventos) {
+      const lista = fr.eventos.filter((e) => e.tipo === "combate_estrada" && e.sEncontro != null);
+      const para = new Map();
+      for (const e of lista) {
+        // um vencedor pode lutar duas vezes no mesmo turno: para na primeira
+        for (const k of [chaveMarchaRep(e.atacante, e.atkOrigemId, e.atkDestinoId),
+                         chaveMarchaRep(e.defensor, e.defOrigemId, e.defDestinoId)]) {
+          const ja = para.get(k);
+          para.set(k, ja === undefined ? e.sEncontro : Math.min(ja, e.sEncontro));
+        }
+      }
+      if (lista.length) v = { lista, para };
+    }
+    _encRep = { dados: rep.dados, idx: rep.idx, v };
+    return v;
+  }
+  // os combates do quadro seguinte cujo instante a animacao ja passou
+  function eventosPorVir() {
+    const enc = encontrosPorVir();
+    return enc ? enc.lista.filter((e) => e.sEncontro <= repFrac) : [];
   }
   // Quem estava a 1 turno de chegar no quadro ANTERIOR: e desta lista que sai a
   // composicao do estandarte que planta na aldeia conquistada (o exercito ja

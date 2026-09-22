@@ -1230,8 +1230,84 @@
     return saida;
   }
 
+  // ── ONDE E QUANDO SE ENCONTRARAM (23/09) ───────────────────────────────
+  // A varredura acima diz SE os trocos percorridos se sobrepoem no ESPACO.
+  // Isso nao diz quando, nem onde -- e o replay precisa das duas coisas: sem
+  // elas, a cena abria no fim do passo, no sitio onde o atacante ACABOU, e ate
+  // la as duas colunas ja se tinham atravessado no ecra (91% dos combates
+  // gravados a menos de 10% da ponta do troco, em 3800 medidos).
+  //
+  // Dentro do passo a marcha anda a velocidade constante (o progresso e
+  // linear no turno), portanto em cada troco a posicao e uma reta no tempo, e
+  // o encontro e a raiz de uma diferenca de retas: exato, sem amostragem.
+  //
+  // E com isto a regra fica mais estreita, e mais certa: 3,3% dos combates que
+  // a sobreposicao de espaco marcava eram de exercitos que NUNCA estiveram no
+  // mesmo sitio ao mesmo tempo (um passava por onde o outro ja tinha saido).
+  // Esses deixam de lutar. Todo cruzamento verdadeiro continua a ser apanhado:
+  // quem se atravessa esteve, num instante, no mesmo ponto.
+  function trocosNoTempo(estado, mov) {
+    const cam = mov.caminho;
+    if (!cam || cam.length < 2) return [];
+    const total = pesoRota(estado, cam);
+    const fr = (r) => Math.max(0, Math.min(1,
+      mov.turnosTotal ? (mov.turnosTotal - r) / mov.turnosTotal : 1));
+    const d0 = fr(mov.turnosRestantes + 1) * total;
+    const d1 = fr(mov.turnosRestantes) * total;
+    const vel = d1 - d0;
+    const saida = [];
+    let acc = 0;
+    for (let i = 0; i + 1 < cam.length; i++) {
+      const seg = pesoTrecho(estado, cam[i], cam[i + 1]);
+      const ini = Math.max(d0, acc), fim = Math.min(d1, acc + seg);
+      if (fim >= ini) {
+        const a = cam[i], b = cam[i + 1];
+        // posicao medida a partir da ponta de id MENOR, para os dois caberem
+        // no mesmo eixo
+        const u = (d) => { const t = seg > 0 ? (d - acc) / seg : 0; return a < b ? t : 1 - t; };
+        saida.push({ lo: Math.min(a, b), hi: Math.max(a, b), sentido: a < b ? 1 : -1,
+                     s0: vel > 0 ? (ini - d0) / vel : 0, s1: vel > 0 ? (fim - d0) / vel : 1,
+                     u0: u(ini), u1: u(fim) });
+      }
+      acc += seg;
+    }
+    return saida;
+  }
+
+  // O primeiro instante do passo (s, de 0 a 1) em que os dois estao no MESMO
+  // ponto do mesmo troco, e esse ponto (u, a partir de `lo`). null = nao se
+  // encontraram. Em sentidos opostos e o cruzamento; no mesmo sentido, e quem
+  // vem atras a alcancar quem vai a frente.
+  function encontroNoPasso(estado, m1, m2) {
+    let melhor = null;
+    for (const p of trocosNoTempo(estado, m1)) {
+      for (const q of trocosNoTempo(estado, m2)) {
+        if (p.lo !== q.lo || p.hi !== q.hi) continue;
+        const S0 = Math.max(p.s0, q.s0), S1 = Math.min(p.s1, q.s1);
+        if (S0 > S1 + 1e-12) continue;
+        const up = (x) => (p.s1 > p.s0 ? p.u0 + (x - p.s0) / (p.s1 - p.s0) * (p.u1 - p.u0) : p.u0);
+        const uq = (x) => (q.s1 > q.s0 ? q.u0 + (x - q.s0) / (q.s1 - q.s0) * (q.u1 - q.u0) : q.u0);
+        const f0 = up(S0) - uq(S0), f1 = up(S1) - uq(S1);
+        let sE = null;
+        // tolerancia nas duas pontas: tocar-se exatamente no fim do passo da
+        // -1e-16 ou +1e-16 conforme o arredondamento, e isso nao pode decidir
+        if (Math.abs(f0) < 1e-9) sE = S0;
+        else if (Math.abs(f1) < 1e-9) sE = S1;
+        else if (f0 * f1 < 0) sE = S0 + (S1 - S0) * (f0 / (f0 - f1));
+        if (sE === null || (melhor && sE >= melhor.s)) continue;
+        melhor = { s: sE, lo: p.lo, hi: p.hi, u: up(sE), sentido1: p.sentido, sentido2: q.sentido };
+      }
+    }
+    return melhor;
+  }
+
   function cruzaramNaEstrada(estado, m1, m2) {
     if (m1.dono === m2.dono) return false;
+    if (estado.config.encontroNoTempo !== false) {
+      const e = encontroNoPasso(estado, m1, m2);
+      if (!e) return false;
+      return e.sentido1 !== e.sentido2 || estado.config.cruzamentoMesmoSentido !== false;
+    }
     // ── A VARREDURA, QUE E EXATA ────────────────────────────────────────────
     // Dois inimigos encontram-se se os trocos que percorreram no passo se
     // sobrepuserem. Em sentidos opostos, sobrepor-se E cruzar-se; no mesmo
@@ -1279,7 +1355,7 @@
   // Combate CAMPO ABERTO entre dois exercitos (sem bonus de terreno). Vencedor
   // segue com baixas; perdedor eliminado. Determinismo do empate: dono "A" e o
   // "atacante" (a conta em si nao depende da ordem dos argumentos).
-  function resolverCombateEstrada(estado, m1, m2) {
+  function resolverCombateEstrada(estado, m1, m2, enc) {
     const cfg = estado.config;
     let atk = m1.dono < m2.dono ? m1 : m2;
     let def = atk === m1 ? m2 : m1;
@@ -1315,7 +1391,15 @@
     const antesVenc = Object.assign({}, vencedor.tropas);
     const perdidas = Object.assign({}, perdedor.tropas); // o perdedor sai INTEIRO do transito
     aplicarBaixas(estado, vencedor.tropas, fracao);
-    const pa = posicaoRota(estado, atk) || { x: 0, y: 0 };
+    let pa = posicaoRota(estado, atk) || { x: 0, y: 0 };
+    // com o encontro medido, o sitio e o do ENCONTRO, e o troco vai no sentido
+    // da marcha do atacante (como ia antes)
+    if (enc) {
+      const lo = aldeiaPorId(estado, enc.lo), hi = aldeiaPorId(estado, enc.hi);
+      const sAtk = atk === m1 ? enc.sentido1 : enc.sentido2;
+      pa = { x: lo.x + (hi.x - lo.x) * enc.u, y: lo.y + (hi.y - lo.y) * enc.u,
+             aId: sAtk === 1 ? enc.lo : enc.hi, bId: sAtk === 1 ? enc.hi : enc.lo };
+    }
     // O TRECHO em que se encontraram, que nao e a rota de nenhum dos dois: uma
     // rota de 5 aldeias atravessa varios trechos, e o encontro pode ser longe
     // das pontas. Dizer "ia de [4] para [23]" como se fosse o lugar do combate
@@ -1335,6 +1419,9 @@
       aniquilados: somaT(perdidas),
       baixasVencedor: somaT(antesVenc) - somaT(vencedor.tropas),
       baixasForca: Math.round(baixasEf) };
+    // em que ponto do turno se encontraram (0 = no inicio, 1 = no fim): e a
+    // hora a que o replay para as duas colunas e abre a cena
+    if (enc) ev.sEncontro = Math.round(enc.s * 10000) / 10000;
     estado.log.push(ev);
     return { vencedor, perdedor, ev };
   }
@@ -1343,6 +1430,29 @@
   // os sobreviventes (perdedores saem do transito). O(m^2), m pequeno.
   function detectarCombatesEstrada(estado, movs) {
     const mortos = new Set();
+    // ── PRIMEIRO O QUE ACONTECEU PRIMEIRO (23/09) ──────────────────────────
+    // A varredura por pares ia pela ordem da LISTA: um exercito podia morrer
+    // num encontro do fim do turno e, por isso, nao lutar noutro que tinha
+    // acontecido antes -- no ecra, atravessava o primeiro inimigo sem luta.
+    // Com o instante de cada encontro, resolvem-se por ordem de tempo; no
+    // empate de instante, pela ordem da lista, como antes. O caminho do
+    // vencedor nao muda com a luta, portanto os encontros dele ficam validos.
+    if (estado.config.encontroNoTempo !== false) {
+      const fila = [];
+      for (let i = 0; i < movs.length; i++) {
+        for (let j = i + 1; j < movs.length; j++) {
+          if (!cruzaramNaEstrada(estado, movs[i], movs[j])) continue;
+          fila.push({ i, j, enc: encontroNoPasso(estado, movs[i], movs[j]) });
+        }
+      }
+      fila.sort((a, b) => (a.enc.s - b.enc.s) || (a.i - b.i) || (a.j - b.j));
+      for (const f of fila) {
+        if (mortos.has(movs[f.i]) || mortos.has(movs[f.j])) continue;
+        const { perdedor } = resolverCombateEstrada(estado, movs[f.i], movs[f.j], f.enc);
+        mortos.add(perdedor);
+      }
+      return movs.filter((m) => !mortos.has(m));
+    }
     for (let i = 0; i < movs.length; i++) {
       if (mortos.has(movs[i])) continue;
       for (let j = i + 1; j < movs.length; j++) {
@@ -2072,12 +2182,17 @@
   // ==========================================================
   // Composicao em texto para o renderizador P4 (tokens do protocolo + caso vazio
   // em ingles). Fora do relatorioTextoP4 porque o eventoTextoEN tambem precisa.
+  // PLURAL INGLES (23/09): era `en(k) + "s"`, e o prompt dizia "2 spearmans".
+  // O parser ja aceitava "spearmen" (TIPO_EN), portanto o modelo pode usar a
+  // forma certa na resposta sem risco.
+  const PLURAL_EN = { spearman: "spearmen", archer: "archers", knight: "knights" };
+  const enPlural = (k, n) => (n === 1 ? en(k) : (PLURAL_EN[en(k)] || en(k) + "s"));
   function compTextoEN(t) {
     const p = [];
-    for (const k of TIPOS) if (t[k]) p.push(`${t[k]} ${en(k)}${t[k] > 1 ? "s" : ""}`);
+    for (const k of TIPOS) if (t[k]) p.push(`${t[k]} ${enPlural(k, t[k])}`);
     return p.length ? p.join(", ") : "empty (no troops)";
   }
-  function eventoTextoEN(ev, me) {
+  function eventoTextoEN(ev, me, nomeDe) {
     if (ev.tipo === "combate") {
       const euAtaquei = ev.atacante === me;
       const quem = euAtaquei ? "You" : "King " + ev.atacante;
@@ -2094,9 +2209,31 @@
     }
     if (ev.tipo === "cancelado") return `Order ignored: ${ev.motivo || "invalid send"}`;
     if (ev.tipo === "combate_estrada") {
-      const euAtaquei = ev.atacante === me;
       const venciMeu = ev.vencedorDono === me;
-      return `Armies met ON THE ROAD${euAtaquei || ev.defensor === me ? "" : ""}: ${venciMeu ? "your army won the field" : "your army was beaten in the field"} (no location bonus in the open)`;
+      // ── O QUE O REI VIVEU NA ESTRADA (23/09) ─────────────────────────────
+      // Dizia so "your army won the field", oito vezes seguidas num turno
+      // cheio: nem onde, nem que coluna, nem a que custo. O motor sabe tudo
+      // isso (o Smoke8 tranca os campos) e um Rei que aprende com o turno
+      // anterior precisa de o saber tambem. Nada daqui fura o fog: e a coluna
+      // DELE que lutou, no sitio onde lutou, contra o exercito que viu.
+      // Sem os campos novos (eventos antigos), cai na frase curta de sempre.
+      if (ev.trechoDeId == null || (ev.atkOrigemId == null && ev.defOrigemId == null)) {
+        return `Armies met ON THE ROAD: ${venciMeu ? "your army won the field" : "your army was beaten in the field"} (no location bonus in the open)`;
+      }
+      const nm = (id) => `[${id}]` + (nomeDe ? nomeDe(id) : "");
+      const souAtk = ev.atacante === me;
+      const deMim = souAtk ? ev.atkOrigemId : ev.defOrigemId;
+      const paraMim = souAtk ? ev.atkDestinoId : ev.defDestinoId;
+      const forcaMinha = souAtk ? ev.FatkEf : ev.FdefEf;
+      const forcaDele = souAtk ? ev.FdefEf : ev.FatkEf;
+      const onde = `ON THE ROAD between ${nm(ev.trechoDeId)} and ${nm(ev.trechoParaId)}`;
+      const coluna = `your army marching ${nm(deMim)} -> ${nm(paraMim)}`;
+      const forcas = `effective force ${forcaMinha} vs ${forcaDele}, no location bonus in the open`;
+      const perdida = compTextoEN(ev.perdedorTropas || {});
+      if (venciMeu) {
+        return `${onde}: ${coluna} WON. The enemy army (${perdida}) was destroyed; your losses: ${ev.baixasVencedor || 0} troop${ev.baixasVencedor === 1 ? "" : "s"} (${forcas}).`;
+      }
+      return `${onde}: ${coluna} was DESTROYED (${perdida}); the enemy army lost ${ev.baixasVencedor || 0} troop${ev.baixasVencedor === 1 ? "" : "s"} (${forcas}).`;
     }
     return JSON.stringify(ev);
   }
@@ -2364,7 +2501,14 @@
       evs = evs.filter((ev) => ev.atacante === me || ev.dono === me || ev.defensor === me || visIds.has(ev.alvoId));
     }
     if (!evs.length) L.push("- nothing you could see");
-    for (const ev of evs) L.push("- " + eventoTextoEN(ev, me));
+    // os nomes vem da visao (a geografia e publica); com a flag desligada o
+    // combate de estrada volta a frase curta de antes de 23/09
+    const nomeEv = cfg.relatoEstrada !== false ? ((id) => nomePorIdSeguro(visao, id)) : null;
+    for (const ev of evs) {
+      const evTxt = (ev.tipo === "combate_estrada" && cfg.relatoEstrada === false)
+        ? Object.assign({}, ev, { trechoDeId: null }) : ev;
+      L.push("- " + eventoTextoEN(evTxt, me, nomeEv));
+    }
 
     return L.join("\n");
   }
@@ -3391,6 +3535,7 @@
     turnosDeCaminho,
     estradasIberia,
     posicaoRota,
+    encontroNoPasso,
     cruzaramNaEstrada,
     resolverCombateEstrada,
     enviarExercito,

@@ -17,7 +17,8 @@ const cfgIberia = () => { const c = JSON.parse(JSON.stringify(E.CONFIG_V3_ARQUIV
   // 22/09: as duas correcoes do assento mudam o JOGO do burro (a ordem em que
   // percorre as aldeias e quem resolve primeiro nas chegadas), e portanto o
   // estado que alimenta esta baseline. Desligadas pela mesma regra 2.
-  c.visaoEspelhada = false; c.chegadaSorteada = false; return c; };
+  c.visaoEspelhada = false; c.chegadaSorteada = false;
+  c.encontroNoTempo = false; c.relatoEstrada = false; return c; };
 function estadoNoTurno(n) {
   const e = E.criarEstadoInicial(cfgIberia());
   const d = { A: (v) => E.jogadorBurro(v), B: (v) => E.jogadorBurro(v) };

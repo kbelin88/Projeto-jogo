@@ -35,12 +35,16 @@
     let M3D = null, game = null;
     let reiObservado = function () { return null; };
     let progMarcha = function () { return 1; };
+    // os combates de estrada do quadro SEGUINTE cujo instante ja passou na
+    // animacao (so no replay; ao vivo nao ha quadro seguinte)
+    let eventosPorVir = function () { return []; };
     function sincronizar(d) {
       if (!d) return;
       if ("M3D" in d) M3D = d.M3D;
       if ("game" in d) game = d.game;
       if (typeof d.reiObservado === "function") reiObservado = d.reiObservado;
       if (typeof d.progMarcha === "function") progMarcha = d.progMarcha;
+      if (typeof d.eventosPorVir === "function") eventosPorVir = d.eventosPorVir;
     }
 
     function empurrarPara3D() {
@@ -106,8 +110,15 @@
     function eventosDeEstrada() {
       if (!game || !game.log) return [];
       const saida = [];
-      for (const e of game.log) {
-        if (e.tipo !== "combate_estrada" || e.turno !== game.turno) continue;
+      // ── A CENA ABRE NO INSTANTE DO ENCONTRO (23/09) ─────────────────────────
+      // Os do turno que o quadro mostra, e os do turno SEGUINTE que a animacao
+      // ja alcancou. Um combate antecipado tem o mesmo `id` quando o quadro
+      // dele chegar, e a cena nao abre duas vezes.
+      const lista = [];
+      for (const e of game.log)
+        if (e.tipo === "combate_estrada" && e.turno === game.turno) lista.push([e, false]);
+      for (const e of (eventosPorVir() || [])) lista.push([e, true]);
+      for (const [e, antecipado] of lista) {
         const a = Engine.aldeiaPorId(game, e.trechoDeId);
         const b = Engine.aldeiaPorId(game, e.trechoParaId);
         if (!a || !b) continue;
@@ -121,6 +132,9 @@
         const dele = (game.movimentos || []).find((m) => m.dono === e.vencedorDono
           && m.origemId === e.vencedorOrigemId && m.destinoId === e.vencedorDestinoId);
         const compVenc = dele ? Object.assign({}, dele.tropas) : { lanceiro: 1 };
+        // antecipado, a marcha do vencedor ainda e a de ANTES da luta: as
+        // baixas ja estao la dentro e nao se somam outra vez
+        const totalVenc = somaT(compVenc) + (antecipado ? 0 : (e.baixasVencedor || 0));
         saida.push({
           tipo: "combate_estrada",
           id: e.turno + "|" + e.trechoDeId + ">" + e.trechoParaId + "|"
@@ -128,7 +142,7 @@
           turno: e.turno, de: a.slug, para: b.slug, t,
           vencedor: e.vencedorDono, perdedor: e.perdedorDono,
           compVenc, compPerd: Object.assign({}, e.perdedorTropas || {}),
-          totalVenc: somaT(compVenc) + (e.baixasVencedor || 0),
+          totalVenc,
           baixasVenc: e.baixasVencedor || 0,
         });
       }

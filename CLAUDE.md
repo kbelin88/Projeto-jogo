@@ -60,16 +60,18 @@ gabarito escrito antes do experimento, artefato publicado antes da próxima fase
 | `ferramentas/dump-modelos-free.js` | o catálogo `:free` ao vivo. Conferir o catálogo é o passo 1 de toda bateria |
 | `ferramentas/medir-assento.js` | a mesa é neutra? (jogador-base contra ele próprio, dos dois lados) |
 | `ferramentas/medir-tropa-inicial.js` | que parte da força fica parada nas aldeias de partida |
+| `ferramentas/medir-cruzamentos.js` | colunas que se atravessam no desenho sem lutar (jogador-base, ou `--replay`) |
 
 ### Os testes
 
-**32 ficheiros de teste** em `testes/` e **13 smokes** em `testes_arena/`. Os que
+**33 ficheiros de teste** em `testes/` e **13 smokes** em `testes_arena/`. Os que
 guardam mais:
 
 - `test_prompt_p4.js` — o P4, o fog e o parser tolerante;
 - `test_lote_c.js` / `test_lote_e.js` — regressão **byte a byte** contra baselines
   congeladas, com as flags novas desligadas (ver §5.4);
 - `test_simetria_assento.js` — a mesa é neutra (ver §4);
+- `test_sem_atravessar.js` — no replay, nenhuma coluna atravessa outra sem lutar;
 - `test_ruleset_vivo.js` — há um ruleset só, e é o que pensamos;
 - `test_guia_verdadeiro.js` — este ficheiro diz a verdade;
 - `test_index_carrega.js` — o `index.html` corre inteiro (`node --check` NÃO basta);
@@ -128,8 +130,11 @@ julga — a análise é do Lucas.
   Exército misto anda à velocidade da tropa mais lenta. Uma marcha **pára na 1ª
   aldeia não-sua** do caminho. Envios de aldeias diferentes **não somam** — lutam
   um de cada vez.
-- **Estrada:** dois exércitos inimigos que se cruzam no mesmo troço lutam ali, e o
-  **perdedor é aniquilado**. A deteção é por varredura dos troços percorridos.
+- **Estrada:** dois exércitos inimigos que estão no **mesmo ponto do mesmo troço
+  no mesmo instante** lutam ali (de frente ou um a alcançar o outro), e o
+  **perdedor é aniquilado**. Os encontros resolvem-se por ordem de tempo dentro do
+  turno (`encontroNoTempo`, 23/09; antes bastava os troços percorridos se
+  sobreporem no espaço, e 3,3% das "lutas" eram de quem nunca se tinha visto).
 - **Neutras endurecem**: +1 tropa do seu tipo a cada 5 turnos.
 - **Ordens simultâneas:** os dois Reis decidem sobre a mesma fotografia.
 
@@ -169,6 +174,10 @@ continuarem a render o texto antigo.
 - `plan` volta no turno seguinte (a única memória deliberada do Rei);
   `statement` vai só para a tela e o `.txt`.
 - `construir` aceita `quantity`; o parser expande em N ordens de 1.
+- **Combate de estrada** (`relatoEstrada`, 23/09): cada um vira uma linha com o
+  troço, a coluna do Rei (origem → destino), o resultado, o exército destruído,
+  as baixas e as forças efetivas. Antes dizia só "your army won the field".
+  Plurais ingleses certos (`spearmen`), que o parser já aceitava.
 
 ### 5.1 Fog of war
 
@@ -298,8 +307,13 @@ estão em `ferramentas/cena/` e `assets/texturas/`.
 
 - **A rede V2**: 24 cidades, 37 estradas, Lisboa→Barcelona custa 17,
   `verificarEquilibrio()` = 0 por construção.
-- **Ninguém se atravessa na estrada** no motor: varredura de troços percorridos
-  (`test_varredura_estrada.js`).
+- **Ninguém se atravessa na estrada**, nem no motor nem no ecrã. O motor luta
+  quando dois inimigos estão no MESMO ponto no MESMO instante (`encontroNoPasso`,
+  exato: a marcha anda a velocidade constante dentro do passo), resolve os
+  encontros por ordem de tempo e grava no evento o instante (`sEncontro`) e o
+  ponto. O replay para as duas colunas nesse instante e abre a cena ali
+  (`progMarcha` + `eventosPorVir` no `index.html`). Trancado por
+  `test_varredura_estrada.js` e `test_sem_atravessar.js`.
 - **O progresso de uma marcha tem uma implementação só** (`progMarcha` no
   `index.html`), injetada na `ponte3d.js`.
 - **Estradas e aldeias são zona protegida** no relevo (90 m à volta de cada
@@ -326,13 +340,10 @@ Este guia não guarda estado. Para saber onde o projeto está:
 - **`resultados/p4-*/`** — as partidas, com `DIARIO.md` nas baterias.
 - **`docs/HISTORIA.md`** — como se chegou aqui.
 
-**Em aberto** (22/09):
+**Em aberto** (23/09):
 
 - **batalhas de estrada entre LLMs são raras**: precisam de dois Reis ativos, e o
   que perde costuma não sair de casa (exércitos-turno na estrada 13 contra 85);
-- **no replay 3D, os exércitos atravessam-se em vez de pararem e lutarem** — a
-  maior dificuldade do Lucas antes de gravar;
-- o prompt diz "a tua coluna ganhou na estrada" sem dizer **onde** nem **qual**;
 - a **cena de conquista de aldeia** ainda não existe no 3D;
 - **composição/monocultura** ("quem constrói menos lanceiro ganha"): medida três
   vezes, sem veredito.

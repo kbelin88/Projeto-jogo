@@ -470,7 +470,9 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
     get diagnostico() {
       return vivas.map((b) => ({ t: Math.round(b.t * 10) / 10, dur: b.dur,
         caidos: b.tombados.perd + b.tombados.venc, soMarca: !!b.soMarca,
-        figuras: b.hostes.venc.homens.length + b.hostes.perd.homens.length }));
+        figuras: b.hostes.venc.homens.length + b.hostes.perd.homens.length,
+        // as colunas que esta cena esconde (dono|de>para); no rescaldo, nenhuma
+        chaves: b.rescaldo ? [] : (b.chaves || []).slice() }));
     },
   };
 }

@@ -18,7 +18,7 @@ const REF = path.join(__dirname, "ref-lote-e");
 // `visaoEspelhada` e `chegadaSorteada` (22/09) pela mesma razao: sao correcoes de
 // assento que o motor da baseline nao tinha.
 const FLAGS_OFF = { ordensSimultaneas: false, interceptaChegada: false, desempateEstradaRng: false, cruzamentoMesmoSentido: false, varreduraEstrada: false,
-  visaoEspelhada: false, chegadaSorteada: false };
+  visaoEspelhada: false, chegadaSorteada: false, encontroNoTempo: false, relatoEstrada: false };
 let ok = 0;
 const t = (nome, fn) => { fn(); console.log("  ok  " + nome); ok++; };
 
