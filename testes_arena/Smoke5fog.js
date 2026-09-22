@@ -44,40 +44,45 @@ console.log("\n=== (A) o seletor de olhos ===");
 ok("select #gvisao existe", /id="gvisao"/.test(html));
 ok("tres opcoes: espectador, Rei A, Rei B",
   /value=""[^>]*>espectador/.test(html) && /value="A">Rei A</.test(html) && /value="B">Rei B</.test(html));
-ok("a ponte usa a MESMA funcao de olhos que o prompt",
-  /const olhos = reiObservado\(\);/.test(html));
+ok("o index.html entrega os olhos a ponte",
+  /reiObservado,/.test(html) && /_ponte\.sincronizar\(/.test(html));
 ok("trocar de olhos redesenha", /gvisao[\s\S]{0,200}addEventListener\("change"[\s\S]{0,40}draw\(\)/.test(html));
 
-// ---------- (B) extracao das funcoes ----------
+// ---------- (B) a ponte, do modulo ----------
+// ⚠ ATE 22/09 ESTE BLOCO EXTRAIA O `empurrarPara3D` DO index.html COM UMA
+// EXPRESSAO REGULAR. A ponte mudou-se para `ponte3d.js` e passa a ser usada
+// como o jogo a usa -- o que e melhor: deixa de haver uma copia do codigo a ser
+// testada e passa a ser O codigo.
 const fReiObs = (html.match(/ {2}function reiObservado\(\)[\s\S]*?\n {2}\}/) || [])[0];
-const fPonte = (html.match(/ {2}function empurrarPara3D\(\)[\s\S]*?\n {2}\}/) || [])[0];
-if (!fReiObs || !fPonte) {
-  console.log("  [XX ] extrair reiObservado + empurrarPara3D do index.html");
-  console.log("\nFALHOU: as funcoes da camara do fog nao foram encontradas no index.html.");
-  console.log("Se foram renomeadas ou movidas, ATUALIZE este smoke — nao o apague:");
+if (!fReiObs) {
+  console.log("  [XX ] extrair reiObservado do index.html");
+  console.log("\nFALHOU: a funcao dos olhos nao foi encontrada no index.html.");
+  console.log("Se foi renomeada ou movida, ATUALIZE este smoke — nao o apague:");
   console.log("ele e o unico ponto que compara o que o espectador VE com o que o Rei SABE.");
   process.exit(1);
 }
-ok("extraiu reiObservado + empurrarPara3D do index.html", true);
+ok("extraiu reiObservado do index.html", true);
+const Ponte3D = require(path.join(__dirname, "..", "ponte3d.js"));
+ok("ponte3d.js exporta criar()", typeof Ponte3D.criar === "function");
 
 let olhos = "A";
 let recebido = null;
-const sandbox = {
-  Engine: E,
-  M3D: { atualizar: (d) => { recebido = d; } },
-  game: null,
-  // a ponte tambem carrega marchas e combates; nao e disso que este smoke
-  // trata, e um progresso fixo chega para o codigo correr
-  progMarcha: () => 0.5,
-  eventosDeEstrada: () => [],
-  document: { getElementById: (id) => (id === "gvisao" ? { value: olhos } : null) },
-};
-const fabricar = new Function(...Object.keys(sandbox),
-  fReiObs + "\n" + fPonte + "\n; return { reiObservado, empurrarPara3D };");
+const reiObservado = new Function("document",
+  fReiObs + "; return reiObservado;")(
+  { getElementById: (id) => (id === "gvisao" ? { value: olhos } : null) });
+
+const ponte = Ponte3D.criar({ Engine: E });
 const empurrar = (g) => {
-  sandbox.game = g;
   recebido = null;
-  fabricar(...Object.values(sandbox)).empurrarPara3D();
+  ponte.sincronizar({
+    M3D: { atualizar: (d) => { recebido = d; } },
+    game: g,
+    reiObservado,
+    // a ponte tambem carrega marchas e combates; nao e disso que este smoke
+    // trata, e um progresso fixo chega para o codigo correr
+    progMarcha: () => 0.5,
+  });
+  ponte.empurrarPara3D();
   return recebido;
 };
 const porSlug = (d) => new Map(d.aldeias.map((a) => [a.slug, a]));
@@ -86,9 +91,7 @@ const porSlug = (d) => new Map(d.aldeias.map((a) => [a.slug, a]));
 console.log("\n=== (B) turno 1: o Rei ve a sua aldeia e as vizinhas ===");
 const g1 = E.criarEstadoInicial(Object.assign({}, E.CONFIG, { seed: 1 }));
 E.tick(g1);
-sandbox.game = g1;
-ok("reiObservado le o select",
-  fabricar(...Object.values(sandbox)).reiObservado() === "A");
+ok("reiObservado le o select", reiObservado() === "A");
 
 const d1 = empurrar(g1);
 const vis1 = E.visiveisPara(g1, "A");

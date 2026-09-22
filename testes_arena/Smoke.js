@@ -56,6 +56,7 @@ global.Engine = require(process.cwd() + "/engine.js");
 // o caderno de marcas saiu do index.html em 22/09; sem isto o smoke corria
 // com o esboco de reserva e deixava de cobrir uma linha dele.
 global.Marcas = require(process.cwd() + "/marcas.js");
+global.Ponte3D = require(process.cwd() + "/ponte3d.js");
 
 // executa o script inline do index.html
 const fs = require("fs");

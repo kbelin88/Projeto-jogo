@@ -59,5 +59,25 @@ for (const t of ["Race.js", "Smoke.js", "Smoke2.js", "Smoke3duelo.js", "Smoke4pa
   conferir(/global\.Marcas = require/.test(src), t + " carrega o marcas.js");
 }
 
+// ── ponte3d.js — a unica porta entre a partida e o desenho ────────────────
+conferir(fs.existsSync(path.join(RAIZ, "ponte3d.js")), "ponte3d.js esta no sitio");
+const Ponte3D = require(path.join(RAIZ, "ponte3d.js"));
+conferir(typeof Ponte3D.criar === "function", "ponte3d.js exporta criar()");
+const ponte = Ponte3D.criar({ Engine: require(path.join(RAIZ, "engine.js")) });
+for (const nome of ["sincronizar", "empurrarPara3D", "eventosDeEstrada"])
+  conferir(typeof ponte[nome] === "function", "a ponte devolve `" + nome + "`");
+// sem mapa e sem estado ela cala-se, em vez de estourar a meio de uma partida
+ponte.empurrarPara3D();
+conferir(Array.isArray(ponte.eventosDeEstrada()) && ponte.eventosDeEstrada().length === 0,
+  "sem partida nao ha eventos (e nao ha excecao)");
+conferir(/<script src="ponte3d\.js"><\/script>/.test(jogo),
+  "o index.html carrega o ponte3d.js");
+conferir(/Ponte3D\.criar\(\{ Engine \}\)/.test(jogo), "e cria a ponte com o motor");
+conferir(/var _ponte =/.test(jogo), "a ponte esta em `var`, pela mesma razao do caderno");
+for (const t of ["Race.js", "Smoke.js", "Smoke2.js", "Smoke3duelo.js", "Smoke4pausa.js"]) {
+  const src = fs.readFileSync(path.join(__dirname, t), "utf8");
+  conferir(/global\.Ponte3D = require/.test(src), t + " carrega o ponte3d.js");
+}
+
 if (falhas) { console.error("\n" + falhas + " falha(s)"); process.exit(1); }
-console.log("\nSmoke12modulos: o que saiu do index.html continua ligado");
+console.log("\nSmoke12modulos: os dois modulos continuam ligados ao jogo");

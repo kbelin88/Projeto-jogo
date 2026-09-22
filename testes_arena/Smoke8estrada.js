@@ -62,10 +62,6 @@ const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
 const canais = [
   ["log .txt do browser (registrarEventosTurno)", /function registrarEventosTurno\(\)[\s\S]*?\n  \}/],
   ["cronica de jogo (cronicaEventos)", /function cronicaEventos\(tn\)[\s\S]*?\n  \}/],
-  // ⚠ ERA "efeitos de mapa (registrarEfeitosTurno)". Esse canal pintava o
-  // choque no canvas plano e foi apagado em 22/09 com o resto do desenho 2D;
-  // a cena a serio esta no mapa 3D e e conferida na seccao (C).
-  ["ponte para o mapa 3D (eventosDeEstrada)", / {2}function eventosDeEstrada\(\)[\s\S]*?\n {2}\}/],
 ];
 for (const [nome, re] of canais) {
   const bloco = (html.match(re) || [])[0];
@@ -92,10 +88,16 @@ ok("camera aponta ao PONTO da estrada, nao a uma aldeia inexistente",
 // a cena a serio, com soldados, no `sonda3d/batalha.js` — e o caminho que
 // interessa trancar e o que LEVA o evento do motor ate la.
 console.log("\n=== (C) a cena do choque, no mapa 3D ===");
-const ponte = (html.match(/function eventosDeEstrada\(\)[\s\S]*?\n {2}\}/) || [])[0] || "";
-ok("a ponte converte o evento do motor para o mapa", /combate_estrada/.test(ponte));
-ok("e a ponte e chamada no empurrarPara3D",
-  /eventos: eventosDeEstrada\(\)/.test(html));
+// ⚠ A PONTE MUDOU-SE PARA `ponte3d.js` EM 22/09. E la que o evento do motor
+// vira o que o mapa entende -- slug do trecho, fracao ao longo dele, e a
+// composicao dos dois exercitos.
+const ponte = fs.readFileSync(path.join(__dirname, "..", "ponte3d.js"), "utf8");
+ok("a ponte converte o evento do motor para o mapa",
+  /function eventosDeEstrada\(\)/.test(ponte) && /combate_estrada/.test(ponte));
+ok("e o que ela devolve entra no `atualizar` do mapa",
+  /eventos: eventosDeEstrada\(\)/.test(ponte));
+ok("e o index.html liga-a ao jogo",
+  /Ponte3D\.criar\(/.test(html) && /_ponte\.empurrarPara3D\(\)/.test(html));
 const mapa3d = fs.readFileSync(
   path.join(__dirname, "..", "sonda3d", "mapa3d.js"), "utf8");
 ok("o mapa 3D abre a cena quando chega um combate de estrada",
