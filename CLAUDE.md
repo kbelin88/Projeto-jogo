@@ -1,643 +1,338 @@
 # CLAUDE.md — Arena dos Reis (Projeto Jogo)
 
 Guia de contexto para qualquer modelo/agente que for trabalhar neste repositório.
-Atualizado: 09/09/2026. Repo público: https://github.com/kbelin88/Projeto-jogo
+Repo público: https://github.com/kbelin88/Projeto-jogo
+
+> **Este guia diz só o que é verdade hoje.** Reescrito em 22/09/2026, quando tinha
+> 643 linhas, três camadas de "estado atual" e dez afirmações falsas (counter,
+> regra de vitória, cliente de API, língua do protocolo…). O histórico saiu,
+> tal e qual, para **`docs/HISTORIA.md`**. O `testes/test_guia_verdadeiro.js`
+> confere os números deste ficheiro contra o jogo: **se mudar uma regra, mude
+> aqui também, ou a suíte fica vermelha.**
 
 ---
 
 ## 1. O que é
 
 Um **jogo de estratégia por turnos** onde **LLMs jogam como Reis** (Rei A vs Rei B)
-disputando a conquista de aldeias no mapa da **Ibéria**. Não é só um jogo: é um
-**benchmark** para medir *quão bem um modelo joga estratégia*, e está evoluindo para
-um produto ("Arena dos Reis").
+disputando as aldeias do mapa da **Ibéria**. Não é só um jogo: é um **benchmark**
+que mede *quão bem um modelo joga estratégia*, e é a matéria-prima de um canal de
+YouTube em inglês (**The Kings Arena**: Vídeo 1 a 01/09, Vídeo 2 a 07/09).
 
-**Escada de degraus** (como se mede um modelo): `0 formato (JSON válido) → 1 grounding
-(usa ids reais, não pede tropa que não tem) → 2 economia (rastreia o caixa) → 3
-estratégia (concentração de força, tempo)`. O **DeepSeek R1** é o mais forte que passou
-(candidato a degrau 3); modelos fracos travam no 1 ou 2.
+**Escada de degraus** (como se mede um modelo): `0 formato (JSON válido) → 1
+grounding (usa ids reais, não pede tropa que não tem) → 2 economia (rastreia o
+caixa) → 3 estratégia (concentração de força, tempo)`. O achado mais forte até
+hoje: **o que separa modelos é AGÊNCIA** (quantos envios faz, quanto tempo tem
+exércitos fora de casa), **não validade** — ver `MODELOS_ARENA.md`.
 
 O dono do projeto (Lucas) usa isto como espinha de um **estudo autodirigido de
 Engenharia de Agentes de IA**. Método: conceito antes de código, uma peça por vez,
-gabarito escrito antes de experimento, artefato publicado antes da próxima fase.
+gabarito escrito antes do experimento, artefato publicado antes da próxima fase,
+**nada se corrige antes de virar um número**.
 
 ---
 
-## 2. Arquitetura (arquivos que importam)
+## 2. Arquitetura
 
-- **`engine.js`** — o MOTOR, puro e determinístico, roda em Node sem browser. Contém:
-  - `criarEstadoInicial(config)`, `tick(estado)` (produção → construção → movimento+
-    combate → endurecimento), `rodarTurno(estado, decisores)`, `checarVitoria` (só por
-    ELIMINAÇÃO total: `jogadorVivo` = tem ≥1 aldeia).
-  - `montarVisao(estado, dono, opcoes)` → a "visão" (relatório que o Rei recebe).
-  - `montarPrompt(visao, opcoes)` / `relatorioTexto(visao, opcoes)` → o PROMPT em texto.
-  - `jogadorBurro(visao)` → jogador-baseline burro (determinístico, sem LLM).
-  - `resolverCombate` (COMBATE v3: ataque e defesa SEPARADOS — `atq`/`def` por tipo;
-    triângulo counter ×1.25; bônus de terreno: aldeia ×1.25, castelo/capital ×1.5),
-    `minimoParaTomar` (quantas tropas p/ conquistar; usa `preverCombateTipos`, a MESMA
-    conta do combate), `turnosDeCaminho` (marcha = custo de rota × passoRef/velTropa).
-- **`index.html`** — o JOGO NO BROWSER (é onde as partidas rodam de facto). Contém: o
-  loop `runDuelo`/`passoTurnoDuelo`, os clientes de API próprios (`gerarOpenRouter`,
-  `gerarGemini`, `gerarGrok`, `gerarOllama`), o log `.txt`/RESUMO
-  (`registrarTurnoLado`/`baixarLogGemini`), o replay `.json`, o cartão do espectador, o
-  hover, a transmissão v5 e o auto-save por turno. **~3570 linhas** (eram 6386 até
-  22/09), num único `<script>` inline mais dois módulos ao lado.
-- **`ponte3d.js`** — a ÚNICA porta entre a partida e o desenho. Tudo o que se vê no
-  mapa passa por aqui: o fog (o mesmo `visiveisPara`/`game.visto` do prompt), a marcha
-  (posição do MOTOR, por peso de rota), a composição inteira do exército e a conversão
-  dos combates de estrada. Guardada por `testes_arena/Smoke5fog.js` e `Smoke8estrada.js`,
-  que a CORREM em vez de a extrair do HTML.
-- **`marcas.js`** — o caderno de marcas (tecla M): a ferramenta com que o Lucas aponta
-  um defeito no mapa e o Claude o corrige na fonte. Fora do jogo de propósito — um
-  defeito aqui não pode derrubar uma partida.
-- **`rei.js`** — cliente e decisor para o RUNNER headless (`clienteOllama/Gemini/
-  OpenRouter`, `criarCliente`, `decidirRei`, `rodarPartidaRei`). ⚠️ É um cliente
-  OpenRouter DUPLICADO do que está no `index.html` (dívida técnica conhecida — não
-  unificar sem lote próprio).
-- **`runners/rei_vs_rei.js`** — duelo LLM×LLM headless (linha de comando), grava `.txt`.
-- **`world-iberia.js`** — o mapa autoral da Ibéria (cidades, estradas, custos de rota).
-  `verificarEquilibrio()` TEM de devolver 0 falhas.
-- **`servir.py`** — servidor HTTP local (`localhost:8000`). Necessário porque `file://`
-  bloqueia fetch/localStorage/downloads. Rotas: `/salvar-mapa` (hoje só o
-  `ferramentas/tracar-rede.html`), `/marcas` (o caderno) e `/checkpoint`
-  (auto-save do `.txt` por turno, sobrevive a crash).
-- **`ferramentas/reconstruir-prompts.js`** — recupera o PROMPT EXATO de qualquer partida
-  reexecutando o motor com as ordens gravadas no `.txt` e **verificando** o estado contra o
-  replay `.json`. Detecta pelo cabeçalho se a partida foi P4 ou legado.
-- **`ferramentas/alucinacao-espacial.js`** — E9: mede alucinação espacial nos raciocínios já
-  gravados (adjacência, rota em turnos, ids inexistentes), sem gastar API. Deduz a
-  `escalaMarcha` do **replay**, não do cabeçalho (que já mentiu).
-- **`ferramentas/analisar-log.js`** — analisador pós-jogo (métricas do `.txt` + replay
-  `.json`). Métricas: reforço-vs-ataque (pelo replay = estado do motor), distribuição de
-  counter, taxa de ataque viável (conquistas/COMBATES, nunca /envios), cobertura de
-  raciocínio, etc.
-- **`ferramentas/tabela-modelos.js`** — gera **`MODELOS_ARENA.md`** (a tabela viva de quais
-  modelos free servem para jogar) a partir de `modelos_free_openrouter.txt` (dump do catálogo)
-  + **`resultados_arena.json`** (o que já foi medido, escrito à mão a cada bateria).
-  ⚠️ **Não edite `MODELOS_ARENA.md` à mão** — edite o JSON e rode `node ferramentas/tabela-modelos.js`.
-  A coluna "apto" é regra explícita (texto→texto, ctx ≥ 32k, saída ≥ 4k, não é router nem
-  classificador), não gosto.
-- **`testes/`** — 30 ficheiros de teste do motor (`test_*.js`). **`testes/test_prompt_p4.js`**
-  (39 casos) cobre o P4, o fog e o parser tolerante. **`testes_arena/`** — 13 smokes; o
-  **`Smoke5fog.js`** guarda a câmara do Rei e o **`Smoke6rede.js`** a resiliência a throttle
-  de free-tier (com `fetch` falso: não toca a rede, não gasta cota). **`testes/test_lote_c.js`** cobre
-  LOTE C/D (regressão byte-idêntica + features). **`testes/ref-lote-c/`** = os 3 outputs
-  de referência da regressão. Cinco dos smokes fazem `eval` do bloco inline do
-  `index.html` num stub Node — e por isso **carregam também o `marcas.js` e o
-  `ponte3d.js`**, senão correriam com os esboços de reserva do adaptador (verdes,
-  a cobrir zero linhas). O **`Smoke12modulos.js`** tranca exatamente isso.
+### O jogo
+
+| ficheiro | o que é |
+|---|---|
+| **`engine.js`** | o MOTOR, puro e determinístico, corre em Node sem browser. `criarEstadoInicial`, `tick` (produção → construção → movimento+combate → endurecimento), `rodarTurno`, `checarVitoria`, `montarVisao` (o que o Rei sabe), `relatorioTexto`/`montarPrompt` (o prompt), `jogadorBurro` (o jogador-base, sem LLM), `resolverCombate`, `turnosDeCaminho` |
+| **`world-iberia.js`** | o mapa autoral: 24 cidades, 37 estradas, custos de rota, e o PAR de cada cidade (a gémea do outro lado). `verificarEquilibrio()` TEM de devolver 0 falhas |
+| **`index.html`** | o jogo no browser, onde as partidas do vídeo correm: o loop do duelo, o log `.txt`/RESUMO, o replay `.json`, o hover, a transmissão v5, o auto-save por turno. ~3 550 linhas num `<script>` inline |
+| **`ponte3d.js`** | a ÚNICA porta entre a partida e o desenho: fog, posição das marchas (do motor), composição dos exércitos, conversão dos combates de estrada |
+| **`marcas.js`** | o caderno de marcas (tecla M): o Lucas aponta um defeito no mapa e o Claude corrige na fonte. Fora do jogo de propósito |
+| **`clienteor.js`** | o ÚNICO cliente de OpenRouter, partilhado pelo browser e pelo runner: honra o `Retry-After`, aprende o teto de resposta pelo HTTP 400 do modelo, conta throttles |
+| **`rei.js`** | o decisor do runner headless (`criarCliente`, `decidirRei`, `rodarPartidaRei`); o OpenRouter vem do `clienteor.js` |
+| **`runners/rei_vs_rei.js`** | duelo headless; grava o `.txt` e o `.replay.json` ao lado |
+| **`servir.py`** | servidor local (`localhost:8000`). Rotas: `/checkpoint` (auto-save do `.txt` por turno), `/marcas` (o caderno), `/salvar-mapa` (só o `ferramentas/tracar-rede.html`) |
+| **`sonda3d/`** | o mapa 3D (`mapa3d.js`, `batalha.js`) e as bancadas. Ficheiro a ficheiro no `sonda3d/LEIA-ME.md` |
+
+### As ferramentas que importam
+
+| ferramenta | para quê |
+|---|---|
+| `ferramentas/analisar-log.js` | métricas pós-jogo, do `.txt` **e do replay** (sem o replay, metade fica "indisponível") |
+| `ferramentas/reconstruir-prompts.js` | recupera o prompt EXATO de qualquer turno, reexecutando o motor e conferindo contra o replay |
+| `ferramentas/alucinacao-espacial.js` | mede alucinação espacial nos raciocínios gravados, sem gastar API |
+| `ferramentas/tabela-modelos.js` | gera o `MODELOS_ARENA.md` a partir de `resultados_arena.json` + `modelos_free_openrouter.txt`. ⚠️ **Nunca editar o `.md` à mão** |
+| `ferramentas/dump-modelos-free.js` | o catálogo `:free` ao vivo. Conferir o catálogo é o passo 1 de toda bateria |
+| `ferramentas/medir-assento.js` | a mesa é neutra? (jogador-base contra ele próprio, dos dois lados) |
+| `ferramentas/medir-tropa-inicial.js` | que parte da força fica parada nas aldeias de partida |
+
+### Os testes
+
+**32 ficheiros de teste** em `testes/` e **13 smokes** em `testes_arena/`. Os que
+guardam mais:
+
+- `test_prompt_p4.js` — o P4, o fog e o parser tolerante;
+- `test_lote_c.js` / `test_lote_e.js` — regressão **byte a byte** contra baselines
+  congeladas, com as flags novas desligadas (ver §5.4);
+- `test_simetria_assento.js` — a mesa é neutra (ver §4);
+- `test_ruleset_vivo.js` — há um ruleset só, e é o que pensamos;
+- `test_guia_verdadeiro.js` — este ficheiro diz a verdade;
+- `test_index_carrega.js` — o `index.html` corre inteiro (`node --check` NÃO basta);
+- `Smoke5fog` / `Smoke8estrada` — correm a `ponte3d.js` a sério;
+- `Smoke6rede` — resiliência a throttle, com `fetch` falso (não gasta cota);
+- `Smoke12modulos` — os três módulos continuam ligados ao jogo.
+
+⚠️ Cinco smokes fazem `eval` do `<script>` do `index.html` num DOM de mentira, e
+por isso **carregam o `marcas.js`, o `ponte3d.js` e o `clienteor.js`**. Sem isso
+correriam com os esboços de reserva do adaptador — verdes, a cobrir zero linhas.
+Foi exatamente assim que um erro de zona morta temporal passou verde pela suíte
+em 22/09 e matou o jogo no navegador.
 
 ---
 
-## 3. Como rodar
+## 3. Como correr
 
-**Jogar/assistir (browser):** `python servir.py` → abre `http://localhost:8000/
-index.html`. **NÃO abrir com duplo clique** (`file://` quebra chave/downloads/canvas).
-A chave da API fica no `localStorage` do navegador (o jogo pede uma vez).
+**Jogar/assistir:** `python servir.py` → `http://localhost:8000/index.html`.
+**Nunca com duplo clique**: `file://` bloqueia fetch, `localStorage` e downloads.
+A chave da API fica no `localStorage` do navegador. O mapa 3D precisa dos
+ficheiros do forno (§7), que não estão no git.
 
-**Duelo headless:** `node runners/rei_vs_rei.js <backend:modelo> <backend:modelo> <seed>
-<maxTurnos> <out.txt>` (ex.: `openrouter:deepseek/deepseek-r1 burro 1 40 out.txt`). Lê a
-chave do `.env` (`OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `GROK_API_KEY`).
+**Duelo headless:** `node runners/rei_vs_rei.js <backend:modelo> <backend:modelo>
+<seed> <maxTurnos> <saida.txt>` (ex.: `openrouter:dots-studio/dots-3-note-preview:free
+burro 1 40 out.txt`). Chaves no `.env` (`OPENROUTER_API_KEY`, `GEMINI_API_KEY`,
+`GROK_API_KEY`). `REASONING_MAX_TOKENS=N` dá orçamento de raciocínio — ⚠️ muda o
+que se mede, e alguns provedores ignoram-no.
 
-**Bateria (headless, uma sessão inteira de partidas):** cada bateria tem uma spec própria
-(`SPEC_TESTES_HEADLESS_<data>.md`), é conduzida por um agente e deixa tudo em
-`resultados/p4-bateria-<data>/` — sondas, `.txt`, `.replay.json` e o `DIARIO.md`. Regra da
-spec: **o condutor aponta o dedo, não julga** — a análise é do Lucas, depois.
+**Testes:**
+```bash
+for f in testes/*.js testes_arena/*.js; do node "$f" || echo "FALHOU $f"; done
+```
+e `verificarEquilibrio()` tem de dar 0.
 
-**Testes:** `for f in testes/*.js; do node "$f"; done` + `node testes_arena/{Race,Smoke,
-Smoke2,Smoke3duelo,Smoke4pausa}.js`. Invariante: `node --check` NÃO basta — usar
-`testes/test_index_carrega.js` (roda o script inteiro).
-
----
-
-## 4. Mecânica essencial (o que o modelo precisa saber pra jogar)
-
-- **Vitória:** conquistar TODAS as aldeias do inimigo (eliminação). Partidas costumam
-  terminar no limite de turnos (empate) se ninguém elimina o outro.
-- **Combate:** número decide o vencedor; triângulo (lanceiro/arqueiro/cavaleiro, RPS)
-  modula via counter ×1.25; o TIPO MAIS NUMEROSO define o matchup (desempate L>A>C). O
-  vencedor SEMPRE sofre baixas (atrito 50% da força efetiva do perdedor). Defesa: aldeia
-  ×1.25, capital ×1.5.
-- **Recurso é POR ALDEIA** (não há caixa global): cada aldeia acumula madeira/ferro e
-  gasta do estoque local pra construir. **Madeira é o gargalo** (ferro sobra).
-- **Marcha pela REDE DE ESTRADAS** (não em linha reta), custo por trecho. Exército misto
-  anda na velocidade da tropa MAIS LENTA (lanceiro lenta / arqueiro média / cavaleiro
-  rápida). Marcha para na 1ª aldeia não-sua do caminho.
-- **Envios de aldeias DIFERENTES não somam** no mesmo ataque (lutam um de cada vez) —
-  para concentrar, reúna numa aldeia e ataque num envio só. Aldeias endurecem +1/5 turnos.
-- **Neutras endurecem** (+1 do seu tipo a cada 5 turnos) → pegar cedo é melhor (tempo).
+**Bateria:** uma spec por bateria (`SPEC_TESTES_HEADLESS_<data>.md`), tudo em
+`resultados/p4-bateria-<data>/` com um `DIARIO.md`. O condutor aponta o dedo, não
+julga — a análise é do Lucas.
 
 ---
 
-## 5. O PROMPT (P4, atual) e o sistema de flags
+## 4. A mecânica (o que o Rei precisa de saber)
 
-O relatório que o Rei vê é montado em `relatorioTexto`. Evoluiu por LOTES, cada
-alteração de texto ATRÁS DE UMA FLAG (default ligada), e com **todas as flags a `false`
-o output é BYTE-IDÊNTICO** ao P2 original (o lote de logs de controlo continua válido).
+- **Vitória:** ter **≥ 75% das aldeias (18 de 24) durante 2 turnos seguidos**, ou
+  eliminar o inimigo. As partidas acabam cedo: mediana de **18 turnos** com o
+  jogador-base, 18–19 nas LLM de 22/09.
+- **Combate:** ataque e defesa separados por tipo (lanceiro 1/2, arqueiro 2/2,
+  cavaleiro 4/2). Triângulo: lanceiro > cavaleiro > arqueiro > lanceiro, e ter o
+  counter multiplica a força por **1.5**. O tipo MAIS NUMEROSO define o matchup
+  (desempate L>A>C). Defesa: aldeia **×1.25**, capital **×1.5**, estrada sem
+  bónus. Empate favorece o defensor. O vencedor perde sempre (atrito 50% da força
+  efetiva do perdedor).
+- **Economia POR ALDEIA** (não há caixa global): cada aldeia produz **30 madeira e
+  20 ferro** por turno e paga as suas construções. Tudo fica pronto em 1 turno.
+  Teto de 300 tropas em casa. Madeira é o gargalo.
+- **Marcha pela REDE DE ESTRADAS**, nunca em linha reta, com `escalaMarcha` 0.2.
+  Exército misto anda à velocidade da tropa mais lenta. Uma marcha **pára na 1ª
+  aldeia não-sua** do caminho. Envios de aldeias diferentes **não somam** — lutam
+  um de cada vez.
+- **Estrada:** dois exércitos inimigos que se cruzam no mesmo troço lutam ali, e o
+  **perdedor é aniquilado**. A deteção é por varredura dos troços percorridos.
+- **Neutras endurecem**: +1 tropa do seu tipo a cada 5 turnos.
+- **Ordens simultâneas:** os dois Reis decidem sobre a mesma fotografia.
 
-Flags (em `cfg`, lidas como `cfg.X !== false`, override por `opcoes.X`):
-`promptP3` (LOTE B), `marchaComOrigem`, `redeComDono`, `marcarFronteira`,
-`contagemAgregada`, `rotulosExpectativa` (LOTE C), `deltaDefesa`, `memoriaAlvo` (LOTE D).
+### A mesa é neutra (22/09)
 
-O que o P3 mostrava que o P2 não mostrava: `defesa efetiva (inclui bonus do
-local)`, `tropas em casa: N/300`, `marcha desde [id]: L lenta / M media / R rapida`,
-tags FRONTEIRA/INTERIOR, donos na rede de estradas, `TOTAL:` de tropas, `para tomar
-AGORA`, `(era X ha N turnos)` de defesa, `voce atacou aqui Nx nos ultimos 8 turnos`.
+Com dois jogadores idênticos, o Rei A ganhava **64%**. Duas causas, corrigidas:
 
-### 5.1 P4 — o prompt VIVO (17/08/2026)
+- **`visaoEspelhada`** — os ids não são espelho (oeste numerado capital→fronteira,
+  leste ao contrário). A visão, o prompt e o jogador-base passaram a percorrer as
+  aldeias por **distância à própria capital inicial**, depois à do inimigo, com o
+  **par de gémeas** a desempatar. Cada Rei lê a sua capital em primeiro lugar.
+- **`chegadaSorteada`** — quando os dois chegam à mesma aldeia no mesmo turno,
+  uma moeda com semente decide quem resolve primeiro (antes era sempre A).
 
-**O jogo usa o P4.** É em **inglês**, tem **fog of war**, e **não tem exemplo**. Flags no
-`CONFIG`: `promptP4: true` e `fogOfWar: true`, lidas como **`=== true`** (e não `!== false`
-como as flags de lote) para que os estados congelados do `test_lote_c`, gerados com
-`CONFIG_V3_ARQUIVO`, continuem a render o texto legado byte a byte.
+Medido: **assento A 50,1%, lado de Lisboa 51,5%** em 2 400 jogos. **Método:** um
+resultado de par de modelos são DOIS jogos, com os lados trocados.
 
-- `montarPrompt` / `relatorioTexto` fazem **dispatch**: com `config.promptP4 === true` vão
-  para `montarPromptP4` / `relatorioTextoP4`; `opcoes.promptP4 === false` força o legado.
-- O renderizador legado (`montarPromptLegado`, `relatorioTextoLegado`) está **intocado** e
-  continua a ser o que reproduz os logs antigos.
-- Tokens do protocolo continuam PT (`construir`/`envios`, `lanceiro`/`arqueiro`/`cavaleiro`).
-  Só a **prosa** é inglesa. `normalizarTipo` aceita os nomes ingleses como sinónimos,
-  **com registro** em `normalizacoes`.
-- O que o P4 diz e o P2/P3 não diziam: a **condição de vitória real** (75%/2 turnos, com o
-  progresso ao vivo), a **simultaneidade** das ordens, o **reforço a aldeia própria** como
-  mecânica, o **endurecimento das neutras**, e o **corte de 600 chars** do plano.
-- O que **saiu**: o exemplo JSON com valores (virou **esquema declarado**, com os três tipos
-  sempre enumerados juntos), o `para tomar AGORA` (o mínimo pré-calculado saiu do jogo por
-  decisão do Lucas: *o prompt informa, não recomenda*), e a frase que **proibia reforçar**.
-- `construir` aceita **`quantidade`** (ou `count`): `parsearOrdem` expande em N ordens de 1,
-  então motor, diagnóstico e log continuam a ver ordens unitárias.
+---
 
-### 5.2 Fog of war
+## 5. O prompt (P4)
 
-`estado.visto[dono][id]` guarda a última fotografia que cada Rei teve de cada aldeia
-(turno, dono, tropas). Escrito por `registrarAvistamentos`, chamado no fim do `tick` —
-a memória é **do motor**, porque o modelo é stateless.
+O jogo usa o **P4**: **em inglês**, com **fog of war**, **sem exemplo** (esquema
+declarado). `config.promptP4 === true` e `config.fogOfWar === true` — lidas como
+`=== true`, e não `!== false`, para os estados congelados do `test_lote_c`
+continuarem a render o texto antigo.
 
-Visibilidade (`visiveisPara`): aldeias próprias + **vizinhas diretas na rede** + o destino
-efetivo de cada exército próprio em marcha. A **topologia é sempre pública** — o fog esconde
-estado (dono, guarnição, defesa), nunca geografia; a localização da capital inimiga também
-é pública.
+- **O protocolo JSON é em inglês desde 01/09** (`build`, `movements`, `villageId`,
+  `fromId`, `toId`, `troops`, `plan`, `statement`) — acabou com a troca de língua a
+  meio da partida. O parser aceita também as chaves PT antigas e converte tudo
+  para o formato interno (`construir`/`envios`). Nomes de tropa em inglês entram
+  com registo em `normalizacoes`.
+- O P4 diz a **condição de vitória real** com o progresso ao vivo, a
+  **simultaneidade**, o **reforço** a aldeia própria, o **endurecimento** das
+  neutras e o **corte de 600 caracteres** do plano.
+- **"O prompt informa, não recomenda"** (decisão do Lucas): não há mínimo
+  pré-calculado nem exemplo com valores.
+- `plan` volta no turno seguinte (a única memória deliberada do Rei);
+  `statement` vai só para a tela e o `.txt`.
+- `construir` aceita `quantity`; o parser expande em N ordens de 1.
 
-**Explorar é conquistar.** Não há unidade de reconhecimento, e uma marcha para na 1ª aldeia
-não-sua do caminho — então o destino iluminado é quase sempre um vizinho já visível. Quem
-quer ver o mapa tem de tomar aldeias; o cavaleiro pesa nisto por ser rápido, não por ver
-longe. (O `testes_arena/Smoke5fog.js` apanhou esta afirmação exagerada num handoff.)
+### 5.1 Fog of war
 
-O fog é **do relatório**: `montarVisao` continua a carregar todos os alvos (com `visivel` e
-`visto` anotados), então motor, `jogadorBurro` e espectador seguem omniscientes.
+`estado.visto[dono][id]` guarda a última fotografia que cada Rei teve de cada
+aldeia, escrita no fim do `tick` — a memória é **do motor**, porque o modelo é
+stateless. Visível: as aldeias próprias, as **vizinhas diretas na rede**, e o
+destino de cada exército próprio em marcha. **A topologia é pública** (o fog
+esconde estado, nunca geografia).
 
-### 5.3 Free-tier: o throttle é a maior causa de morte de partida
+**Explorar é conquistar**: não há reconhecimento, e a marcha pára na 1ª aldeia
+não-sua. O fog é **do relatório**: `montarVisao` carrega todos os alvos anotados
+(`visivel`, `visto`), e motor, jogador-base e espectador continuam omniscientes.
 
-Medido em 17/08: as duas primeiras partidas em P4 morreram com **HTTP 429 do
-`glm-5.2:free`** — provedor único (Decart), `limit_source: upstream_provider_shared_pool`,
-`retry_after_seconds: 5`. O Nemotron 3 Ultra fez 5 chamadas sem um erro.
+### 5.2 Free-tier
 
-O cliente (`gerarOpenRouter`) **honra o `Retry-After`** (header ou `retry_after_seconds` do
-corpo), com teto de 45s por espera e `MAX_TENT_OR = 9` tentativas. Acima dele,
-`deliberarComRetentativa` repete a **deliberação** até 2 vezes em erro de rede — seguro
-porque no caminho de ordens simultâneas nada foi aplicado ainda, e repete a **chamada**,
-nunca o **parse** (JSON quebrado continua sem segunda chance: é o degrau 0 do benchmark).
+- O custo agora é **relógio**, não dólar: partidas de 30 turnos levam 2–4 h.
+  Teto de **20 req/min e 1000/dia**.
+- O cliente (`clienteor.js`) honra o `Retry-After` (o maior entre o pedido do
+  provedor e o backoff, teto de 45 s por espera). Acima dele,
+  `deliberarComRetentativa` repete a **chamada** até 2 vezes em erro de rede,
+  nunca o **parse** (JSON quebrado é o degrau 0 do benchmark).
+- O log regista o throttle **sobrevivido** (`THROTTLE: N x 429/503 recuperado(s)`).
+- **Falhas sem erro existem**: string vazia com `finish: length` — o modelo gastou
+  o orçamento a pensar. **Sonda curta não prevê partida**: o raciocínio cresce com
+  o prompt até bater no teto do provedor (três casos: laguna, nano-omni, lfm).
+- **O catálogo `:free` roda depressa** — modelos somem em 24 h.
 
-O log passou a registar o throttle que a partida **sobreviveu** (`THROTTLE: N x 429/503
-recuperado(s)`, `RETENTATIVA DE TURNO: N`, e um campo no RESUMO) — sem isso um modelo que
-precisa de 5 tentativas por turno parecia igual a um que responde de primeira.
+### 5.3 A câmara do Rei
 
-**Latência importa mais que custo em free-tier:** Nemotron 3 Ultra 550B tem mediana de
-**167 s/turno** (máx. 264 s) contra 5.9 s do GLM 5.2. Quatro turnos = 11 min; 20 turnos ≈ 1h45.
+O seletor `olhos de` (`#gvisao`) mostra o mapa como UM Rei o vê: esconde o que ele
+não vê e mostra o que ele se lembra. Lê as mesmas fontes do prompt (a `ponte3d.js`
+passa-lhe `visivel`/`lembrada`). Trancado por `Smoke5fog`.
 
-**Atualização 18/08 (60 turnos medidos por partida, mediana por lado tirada do campo `| ms N`
-do próprio log):** a dispersão é de duas ordens de grandeza — `nemotron-nano-12b-v2-vl` **7 s**,
-Lightning **128–196 s**, Ultra 550B **324 s**, `laguna-xs-2.1` **1200 s** num turno só. Fora
-isso, o throttle deixou de ser a maior causa de morte: das 4 partidas de 18/08, **1** caiu por
-erro de rede (e o mesmo modelo correu 30/30 limpos horas depois, no mesmo dia — se fosse teto
-diário não teria voltado). As outras falhas foram **do modelo**, não da rede: resposta cortada
-no teto (`finish length`), degeneração por repetição, e `construir: []` sem erro nenhum.
+### 5.4 As flags de lote
 
-**A câmara do Rei (UI):** o seletor `olhos de` (`#gvisao`) no painel escurece o que o Rei
-escolhido não vê, marca as lembradas com `T<turno do último avistamento>` em pontilhado, põe
-`?` nas nunca exploradas, e mostra uma etiqueta `ve N · lembra N · nunca viu N`. É só câmara
-— lê `Engine.visiveisPara` e `game.visto`, as mesmas fontes do prompt, e não toca no estado.
-Funciona com a partida pausada, a correr e dentro de um replay. Trancado por
-`testes_arena/Smoke5fog.js`.
+Cada mudança de texto ou de comportamento entrou **atrás de uma flag**, lida como
+`cfg.X !== false` (ligada por omissão). Com as flags desligadas, o motor e o texto
+são **byte a byte** os das baselines — é assim que `test_lote_c` e `test_lote_e`
+continuam válidos. Ao acrescentar uma flag de comportamento, **acrescentá-la às
+listas "desligadas" desses dois testes**. A história de cada lote está em
+`docs/HISTORIA.md`.
 
 ---
 
 ## 6. Convenções e INVARIANTES (não quebrar)
 
-- **Commits: SEM rodapé de sessão.** Nada de `Co-Authored-By: Claude` nem link de
-  conversa — o repo é PÚBLICO e o link expõe a conversa. Travado no settings.
-- **Uma flag por vez / um commit por etapa** ao seguir uma spec de lote.
-- **UM RULESET SÓ, sem opt-in (17/08).** O `CONFIG` **é** o jogo e pode ser mexido — ainda
-  estamos a afinar, e comparabilidade com o histórico não é prioridade até haver YouTube e
-  ranking. O `CONFIG_V3_ARQUIVO` é o ruleset antigo, congelado e **não jogável**: existe só
-  porque `testes/test_lote_c.js` congela o texto do relatório contra estados gerados com ele.
-  **Nunca crie um segundo ruleset selecionável em tempo de execução** — houve um, ligado por
-  checkbox, e três partidas pagas (~$2.25) correram com as regras erradas enquanto o log dizia
-  o contrário.
-
-  > **O caso, por extenso** (era o §2 do handoff de 17/08, trazido para cá em 28/08 porque os
-  > handoffs saíram do repo): o ruleset era escolhido por um checkbox (`gv4`). O estado da
-  > partida nasce quando a página carrega — **antes** de a caixa ser marcada — mas o cabeçalho
-  > do log lia a caixa **ao vivo**. Marcar e dar Play deixava o jogo em v3 com o log a dizer v4;
-  > só `Reiniciar` depois de marcar é que aplicava, e ninguém sabia. Provado por dois números:
-  > produção observada de **+10 madeira / +6 ferro** (o v4 dá 30/20) e **7 de 7 marchas** a bater
-  > com `escalaMarcha` 1.0 em vez de 0.2.
-  > **A lição não foi "faltou um listener"** — foi que uma regra que *pode* não estar ligada,
-  > mais cedo ou mais tarde, não está.
-- **Não tocar** em: topologia/custos do `world-iberia.js`; encaixe da imagem (escala 1.17613,
-  xMidYMin slice).
-- **Marcha nunca por pixel** — sempre custo de rota (`turnosDeCaminho`). Regressão dessa
-  regra já mordeu 3x (L3/L4/B3): "o número que o DECISOR LÊ tem de ser o que o MOTOR
-  EXECUTA" — uma regra, uma implementação.
-- **Métricas vêm do estado do motor** (replay `.json`), não de reparsear o `.txt`. "O
-  `.txt` narra, o JSON mede."
-- **O log tem de descrever a partida que CORREU**, não a intenção do painel. O cabeçalho de
-  condições lê de `game.config`. Já mentiu uma vez (texto fixo "dist x2/3" depois da escala
-  mudar) e escondeu o bug do ruleset por um dia inteiro.
-- **Suíte tem de ficar verde** (30 testes + 13 smokes + `verificarEquilibrio()=0`)
-  antes de commitar.
-- Sprite de aldeia é desenhado LEVANTADO (base em `baseVisualIB`, não na âncora crua) —
-  já mordeu no hit-test do hover e nas estradas.
+- **Commits SEM rodapé de sessão.** Nada de `Co-Authored-By: Claude` nem link de
+  conversa — o repo é público e o link expõe a conversa.
+- **UM RULESET SÓ, sem opt-in em tempo de execução.** O `CONFIG` **é** o jogo. O
+  `CONFIG_V3_ARQUIVO` existe só para o `test_lote_c`, congelado e não jogável.
+  > Houve um segundo ruleset ligado por checkbox: o estado nascia antes de a
+  > caixa ser marcada, o log lia a caixa ao vivo, e três partidas pagas (~$2,25)
+  > correram em v3 com o log a dizer v4. **A lição: uma regra que *pode* não
+  > estar ligada, mais cedo ou mais tarde, não está.**
+- **Marcha nunca por pixel** — sempre custo de rota (`turnosDeCaminho`). Mordeu 3
+  vezes: *o número que o decisor lê tem de ser o que o motor executa*.
+- **Métricas vêm do estado do motor** (o replay), não de reparsear o `.txt`. *"O
+  `.txt` narra, o JSON mede."* **Nunca apagar um `.replay.json`.**
+- **O log descreve a partida que CORREU**: o cabeçalho lê de `game.config` (regras,
+  e desde 22/09 a mesa). Já mentiu uma vez, e escondeu o bug do ruleset um dia.
+- **Números da Arena contam-se dos ficheiros** (`=== PARTIDA` / `=== FIM`), nunca
+  da nota anterior. Ao atualizar `resultados_arena.json`, **acrescentar**, não
+  substituir, e registar o assento.
+- **Não mexer** na topologia nem nos custos do `world-iberia.js` sem um lote
+  próprio — `verificarEquilibrio()` = 0 **por construção**.
+- **Suíte verde** antes de cada commit.
+- **Ao apagar um símbolo, procurar quem depende dele FORA do código também**:
+  `.claude/skills/`, a memória, os `.md`, `testes_arena/fixtures/`. Em 22/09 a
+  skill de vídeo e o gerador da fixture ficaram a apontar para coisas apagadas.
+- **Um `<script src>` que dá 404 falha em silêncio.** Qualquer módulo novo ao lado
+  do `index.html` entra também no `Smoke12modulos` e nos cinco smokes que fazem
+  `eval`.
 
 ---
 
-## 7. Estado atual (28/08/2026, fim do dia)
+## 7. O mapa 3D
 
-### A pasta foi reorganizada (28/08)
+**Desde 22/09 é o único mapa.** Não há `?mapa=2d` nem canvas plano: se os
+ficheiros do forno faltarem, o jogo **diz e pára**. O canvas 2D foi apagado com
+1 031 linhas de desenho que nenhum caminho atingia desde 11/09; o que ainda lia a
+câmara plana (o balão do rato, o enquadramento de gravação, a tabela de posições
+do vídeo) passou a ler a câmara 3D — e estava errado (o balão dizia "Lisboa" com a
+câmara sobre Barcelona). No Node dos testes não há ecrã (`HA_ECRA`): corre o motor,
+o HUD e o log, sem mapa.
 
-A raiz tinha 31 ficheiros `.md` e 45+ entradas; ficou com **27 entradas** e o que está
-**vivo**. Tudo o resto foi para **`arquivo/`** — nada apagado. Ver `arquivo/LEIA-ME.md`.
-
-⚠️ **Três coisas NÃO saíram da raiz, e mover qualquer uma parte algo:**
-- **`mapa-ajustes.js`** — o `index.html` carrega-o por `<script src>`. ⚠️ O editor de mapa
-  que o gravava **saiu em 22/09** (arrastava cidades no canvas plano, que já não existe);
-  quem escreve neste ficheiro agora é o `ferramentas/tracar-rede.html`. A lição continua a
-  valer, e agora para o `marcas.js` e o `ponte3d.js`: um `<script>` que dá 404 **falha em
-  silêncio** — foi por isso que nasceu o `testes_arena/Smoke12modulos.js`.
-- **`checkpoints/`** — caminho de escrita cravado no `servir.py:87`.
-- **`docs/`** — dois comentários de código apontam para `docs/ACHADO_..._truncamento_ollama.txt`.
-
-Ficheiros vivos na raiz: `CLAUDE.md`, `README.md`, `MODELOS_ARENA.md`, `ANTES_DO_MES_PAGO.md`,
-`PLANO_DIA_*`, `HANDOFF_*`.
-
-### Ferramentas novas (28/08)
-
-- **`ferramentas/dump-modelos-free.js`** — gera `modelos_free_openrouter.txt` do catálogo AO
-  VIVO. Existe porque o dump era manual e por isso ficou 10 dias parado enquanto o catálogo
-  rodava por baixo. Conferir o catálogo é o passo 1 de toda bateria.
-- **`ferramentas/medir-tropa-inicial.js`** — a métrica das aldeias de partida (ver §7 item 1).
-  Validada contra a linha de base antes de ser usada.
-- **`testes_arena/Smoke8estrada.js`** — tranca os quatro canais do combate de estrada e
-  confronta os 19 campos que a UI lê contra um evento real do motor.
-
-### Combate de estrada: o jogo passou a mostrá-lo (28/08)
-
-Acontecia e não aparecia — 16 combates nas duas partidas do vídeo, nenhum visto. Quatro canais
-do `index.html` excluíam o evento pela mesma condição `e.tipo !== "combate"`. Agora todos o
-tratam; o evento do motor ganhou campos aditivos (origem/destino dos dois exércitos, forças
-efetivas, composição aniquilada, baixas do vencedor); a câmera tem prioridade
-**conquista > combate de estrada > assalto repelido** e aponta ao ponto da estrada.
-
-**A cena** são duas batidas: choque em raios de DUAS cores (0 ms) e o estandarte do perdedor a
-tombar (350 ms). **Não usa anel nem número flutuante** — em 25/08 o Lucas tirou os dois da
-conquista ("círculos piscando e número de tropas mortas poluem o momento").
-⚠️ **O aspeto nunca foi visto por ninguém** — é o item 1 do `ANTES_DO_MES_PAGO.md`.
-
----
-
-## 7.0 Estado anterior (28/08/2026, manhã)
-
-✅ **`main` está em dia e sincronizada com `origin/main`.** A `spec-lote-e-fairness` já foi
-mesclada. As 4 branches não mescladas (`exp-cautela-2x2`, `exp-duas-fases`, `exp-exemplo-ancora`,
-`sonda-admissao-8b`) são experimentos antigos e **não devem ser promovidas** — o `exp-duas-fases`
-teve resultado negativo (decompor a saída piora).
-
-### O que o GitHub guarda, a partir de 28/08
-
-**Decisão do Lucas: o repo público é BACKUP DE CÓDIGO E MOTOR, e mais nada.** Ficam de fora, no
-`.gitignore` (continuam no disco, só não são versionados):
-
-| fora do git | porquê |
-|---|---|
-| `resultados/`, `traces/` | 78 MB de partidas; o `.txt` é raciocínio cru de modelo |
-| material de vídeo (`PLANO_VINHETA_*`, `NARRACAO.md`, `FOLHA_DE_TEMPOS.md`, `ferramentas/vinheta/`, `ROTEIRO_VIDEO_01.md`, `PLANO_VIDEO_*`) | plano de canal, não é código |
-| imagens de plano (`IMAGEM-JOGO.png`, `MAPASITE.png`, `mapa.png`, `assets/banner_arena.png`, `assets/Generated Image*`) | mockup, não é asset do jogo |
-| `HANDOFF_*`, `SESSAO_*`, `.claude/` | registro de sessão |
-
-⚠️ **Os assets que o JOGO carrega continuam versionados** — `ilha-recortada.png`,
-`agua-textura.png`, `brasoes/`, `sprites/`. Conferido: o `index.html` só referencia esses quatro
-grupos, e todos estão rastreados. Não mexer nisso sem reconferir.
-
-⚠️ Untrackear não apaga o histórico: o que já foi pushado antes de 28/08 continua nos commits
-antigos do GitHub.
-
-### Correções de 28/08 (motor + interface)
-
-Saíram de uma pesquisa de 4 itens (`pesquisa/2026-08-28/`, com `REVISAO-OPUS.md` corrigindo
-duas conclusões erradas do relatório original). Três implementadas; a quarta ficou para depois.
-
-1. **Prompt: distância da retaguarda à frente** (`engine.js`, secção YOUR VILLAGES). Cada aldeia
-   INTERIOR passa a mostrar `from here to your nearest border village [id]: N slow / N medium /
-   N fast turns`. Medido em 53 replays: **um terço da força de um rei fica parada nas aldeias de
-   partida a partida inteira**, e o relatório nunca dava o custo de mover entre aldeias próprias.
-   ⚠️ **Há DUAS métricas parecidas e elas não são a mesma** — a troca já enganou uma vez:
-   **INICIAIS** (capital + anel 1) = 34.1%, e é esta a afirmação acima, medida por
-   `ferramentas/medir-tropa-inicial.js`; **INTERIOR** (aldeia sem vizinho inimigo) = 53.8%,
-   medida por `pesquisa/2026-08-28/experimentos/medir-retaguarda.js`. Uma aldeia conquistada no
-   meio do mapa é INTERIOR mas não é inicial.
-   **Medida em 28/08** (repetição exata das duas partidas do vídeo, único delta = esta linha):
-   30.3% → **25.2%**, e o ganho está quase todo na ABERTURA (38.6% → 23.5%); o fim de partida
-   praticamente não mexeu. Direção consistente em 2 de 2 seeds, mas **n=2 e as duas referências
-   diferem entre si em 20 pontos** — sugestivo, não estabelecido. Ver
-   `resultados/p4-bateria-0828/DIARIO.md`.
-   ⚠️ **Uma primeira versão pôs o peso em cada ARESTA da rede e foi revertida**: com
-   `escalaMarcha 0.2` quase toda aresta arredonda para "1t", e três "1t" fariam o modelo esperar
-   3 turnos onde a rota leva 2 (o motor soma os custos e arredonda **uma vez só**). Era um número
-   que o decisor lê e o motor não executa — a regressão da secção 6. **Não repor peso por aresta.**
-2. **Layout que se adapta à tela** (`index.html`). `--bt-h/--dp-h/--rr-h` eram px cravados
-   (94+252+286 = 632px de UI fixa em qualquer tela); viraram `clamp(piso, vh, teto)`, com os
-   **tetos iguais aos valores antigos** — em 1920x1080 o layout fica idêntico, e a transmissão do
-   vídeo não muda. Ponto de corte em 900px para tela estreita.
-3. **A barra de controlo desceu** (`index.html`). Tinha 1627px de largura FIXA (estourava
-   qualquer tela abaixo disso, 433% num telemóvel) e era empurrada para o meio do mapa. Agora
-   quebra linha, tem teto de largura que respeita as colunas do rodapé, e fica em `bottom: 14px`
-   — o centro de baixo já estava livre desde 24/08, quando a `#replaybar` desceu.
-4. **Bug pré-existente corrigido:** `#zoombar` não tinha `position: fixed` (dependia da classe
-   `.hud`, que o elemento nunca teve) — os botões de zoom caíam no fluxo normal, **abaixo da
-   dobra e sem clique possível**.
-
-Verificado com `getBoundingClientRect()` em 5 resoluções (375x812, 1280x720, 1366x768,
-1920x1080, 3840x2160): **0 sobreposições, 0 elementos fora da tela**. Suíte verde.
-
-- **LOTES A→D** — instrumentação, prompt P3, visão de mapa, diagnóstico+memória.
-- **LOTE E** — fairness do turno: ordens simultâneas (A1), interceptação na chegada (A3),
-  desempate de estrada sem viés (A4), `| ms N` no log (A2), teto configurável (A6), 4 métricas
-  no analisador (E7). Ver `RELATORIO_LOTE_E.md`.
-- **RULESET (17/08)** — o que era o "reboot v4" **é agora o jogo**, sem toggle:
-  produção madeira 30 / ferro 20, counter 1.5, cavaleiro def 2 em 1 turno, `escalaMarcha` 0.2
-  (Lisboa→Barcelona 6 turnos, era 27), `dicaNeutras` false, vitória por ≥75% das aldeias por 2
-  turnos. O `CONFIG_V3_ARQUIVO` guarda o antigo, não jogável.
-- **TRANSMISSÃO v5** — barra longa no topo (modelo, aldeias, tropas, composição L/A/C
-  empilhada, madeira, ferro, deltas, turno ao centro) e dois quadros no rodapé (depoimento do
-  turno + benchmark ao vivo com custo em US$). Painéis laterais fora por CSS.
-- **RESUMOS DO REI** (flag `resumosDoRei`) — `plano` volta no prompt do turno seguinte;
-  `depoimento` não volta nunca, vai só para a tela e o `.txt`.
-- **RUNNER GRAVA REPLAY (18/08)** — `runners/rei_vs_rei.js` escreve `<saida>.replay.json` ao
-  lado do `.txt`. Era o maior buraco de ferramenta: sem ele, métricas A3 e reconstrução de
-  prompt ficavam cegas em toda partida headless. **Nunca apagar os `.replay.json`.**
-
-**Testes:** 30 ficheiros no motor + 13 smokes + `verificarEquilibrio()` = 0. Destaque para
-**`testes/test_ruleset_vivo.js`** (há um ruleset só e é o que pensamos) e
-**`testes_arena/Smoke6rede.js`** (resiliência a throttle, com `fetch` falso — não gasta cota).
-
-### 7.1 A Arena medida — três baterias (17, 18 e 19/08)
-
-O P4 + fog deixaram de ser teóricos: **9 partidas de LLM contra LLM** já correram sob eles.
-
-| bateria | o que correu | registro |
-|---|---|---|
-| 17→18/08 | 5 partidas completas, 222 req, zero interrompidas | `RELATORIO_BATERIA_P4_2026-08-18.md` |
-| 18→19/08 | 10 sondas + 4 partidas (3 completas, 1 interrompida no t7), ~207 req, 11h40 | `resultados/p4-bateria-0818/DIARIO.md` |
-| 19/08 | **planeada, ainda não corrida** | `SPEC_TESTES_HEADLESS_0819.md` |
-
-**Estado do catálogo:** 18 modelos free, **14 aptos**, todos já sondados; **6 já jogaram**
-partida. Quem está onde, e por quê, está em `MODELOS_ARENA.md` — leia-a antes de gastar cota.
-Régua da tabela: `nvidia/nemotron-3.5-lightning:free` (9 lados). Mais forte medido:
-`nemotron-3-ultra-550b-a55b` e `nemotron-3-super-120b-a12b`.
-
-**O que as baterias ensinaram (e que muda como se testa):**
-
-1. **A primeira vitória por dominância do projeto** aconteceu no T24 de 17/08 (Super 120B).
-   A regra dos 75%/2 turnos está no ponto de tensão: 3 partidas tocaram o limiar, 1 converteu.
-   `maxTurnos` subiu de 25 para **30** por causa disto.
-2. **"Quem constrói menos lanceiro ganha" está EM ABERTO.** Valeu 5 de 5 em 17/08
-   (correlação +0.80 entre ataque médio por unidade e aldeias finais) e **falhou 2 de 3 em
-   18/08**: no espelho venceu o lado com 94% de lanceiro, e o `nano-12b-v2-vl` perdeu com o
-   maior atq/unid já medido (3.29). Não trate como facto.
-3. **Sonda de 1 turno não prevê latência nem estabilidade.** `laguna-s-2.1` deu 5 s na sonda e
-   181 s de mediana em jogo, degenerando (repetia a mesma frase até estourar o teto);
-   `nano-12b-v2-vl` deu 5.6 s e entregou 19 de 30 turnos. Por isso a spec de 19/08 usa
-   **sonda de 3 turnos** e teto de latência de 180 s.
-4. **Dá para falhar sem erro nenhum.** `laguna-xs-2.1` passou 20 minutos "a pensar", gastou os
-   12401 tokens de resposta no raciocínio e devolveu `construir: []` com `finish: error` — sem
-   uma linha de erro de rede. Modo de falha novo, e caro se apanhar uma partida.
-5. **O catálogo `:free` roda rápido:** 3 dos 8 modelos de 17/08 morreram (404) em menos de 24 h.
-   Conferir o catálogo é a primeira coisa de qualquer bateria.
-6. **O custo agora é relógio, não dólar.** Partidas de 30 turnos levaram de **2h09 a 4h14**; a
-   bateria de 18/08 levou 11h40 para 4 partidas. A spec de 19/08 tem regra de aborto por
-   projeção de tempo (acima de 5 h, corta).
-
-**Próximo passo:** correr a bateria de 19/08 (`SPEC_TESTES_HEADLESS_0819.md`) — sondas de 3
-turnos dos 5 aptos que nunca jogaram, repetição do `nano-12b-v2-vl` (os 11 turnos perdidos
-repetem?), espelho com seed 3 (fecha o trio 18×4 / 16×8 / ?) e dois modelos novos contra a régua.
-
-**Abertos:**
-(a) **monocultura/composição** — medida três vezes, ainda sem veredito (ver 7.1 §2);
-(b) cavaleiro **resolvido** (95 construídos em 17/08, 62 e 110 em 18/08);
-(c) **entesouramento** — envios de 1 tropa caíram de 62 em 90 (69%) para **6–35%** dos envios
-em 18/08; o P4 parece ter resolvido, falta confirmar num relatório;
-(d) **respostas vazias voltaram com outra cara**: não são erro de rede, são `construir: []` com
-`finish error`/`length` (laguna-xs-2.1, nano-12b-v2-vl, e o próprio Lightning em 18 dos 30
-turnos de um lado do espelho);
-(e) cliente OpenRouter **duplicado** (`rei.js` × `index.html`) — a dívida continua;
-(f) ~~2 chaves expostas em 03/08 por revogar~~ — **feito**: revogadas pelo Lucas em agosto
-(confirmado por ele em 11/09). Não voltar a listar como pendente;
-(g) ~~`main` por consolidar~~ — **feito**: `main` limpa e sincronizada (28/08);
-(h) ~~counter por tipo de alvo no `analisar-log.js`~~ — **estava feito desde 20/08** e a nota é
-que ficou para trás. É `counterPorAlvoDe` (`analisar-log.js:383`); exige o `.replay.json` como
-2º argumento, senão o relatório diz "indisponível: sem replay". Confirmado a correr em 28/08.
-
-**Orçamento OpenRouter pago: ESGOTADO** (HTTP 403 no turno 25 de 17/08; recarrega ~fim de
-agosto). Desde então tudo corre em modelos **`:free`**, com teto de **20 req/min e 1000/dia** —
-e é esse teto, mais o relógio, que dimensiona uma bateria. Custo observado quando havia crédito:
-~$0.041/turno com dois raciocinadores.
-
----
-
-## 8. O MAPA EM 3D (a linha viva desde 07/09)
-
-O jogo continua a ser o `index.html`. O que mudou é a **pele**: existe agora um
-mapa a três dimensões, com aldeias, estradas, mata, relevo, costa — e **tropas
-animadas a marchar por ela**. Foi o default desde 11/09; **desde 22/09 é o único
-mapa que existe**. Não há `?mapa=2d`, não há canvas plano, não há desenhador de
-reserva: se os ficheiros do forno faltarem o jogo **diz e para**, porque fingir
-que há um mapa alternativo era pior do que a falha.
-
-O canvas 2D foi apagado em 22/09 com **1031 linhas de desenho que nenhum caminho
-do jogo atingia desde 11/09**, mais o sistema de efeitos (que continuava a encher
-listas para ninguém), o editor de mapa, 4,4 MB de arte descarregada a cada
-abertura e a câmara plana inteira. O que lia essa câmara e continuava vivo — o
-balão do rato, o enquadramento de gravação, a tabela `aldeias_tela.txt` — passou
-a ler a câmara 3D, e os três estavam **errados** (o balão dizia "Lisboa" com a
-câmara sobre Barcelona). O stub de Node dos testes não tem `location.search`:
-ali corre o motor, o HUD e o log, sem mapa nenhum (`HA_ECRA`).
-
-### 8.1 O que corre no navegador
+### 7.1 O que corre no navegador
 
 | ficheiro | o que é |
 |---|---|
-| `sonda3d/mapa3d.js` | o mapa 3D: carrega, povoa, anima, e é a ponte com o motor |
-| `sonda3d/mapa.html` | o mapa sozinho, sem jogo — é onde se confere qualquer alteração |
-| `sonda3d/marcha.html` | bancada: duas aldeias e uma tropa a ir e vir |
-| `sonda3d/encontro.html` | bancada: a batalha encenada (flechas, choque, carga, debandada) |
+| `sonda3d/mapa3d.js` | o mapa: carrega, povoa, anima as marchas, abre as cenas |
+| `sonda3d/batalha.js` | a cena da batalha de estrada — a MESMA no jogo e nas bancadas |
+| `sonda3d/mapa.html` | o mapa sozinho, sem jogo |
+| `sonda3d/encontro.html` | bancada: duas colunas encontram-se e o evento é o do motor |
+| `sonda3d/marcha.html` | bancada: uma tropa a ir e vir |
 
-Consomem quatro ficheiros **que não estão no git** (`.gitignore`), porque são
-saída de forno e pesam dezenas de MB: `sonda3d/pecas.glb` (a biblioteca: cada
-protótipo UMA vez, na origem), `sonda3d/mapa3d.json` (onde fica cada cópia) e
-`sonda3d/{lanceiro,arqueiro,cavaleiro}.glb`. **Quem clonar o repo tem de os
-cozer** — ver 8.2. Idem `assets/texturas/`.
+Para vídeo, o jogo expõe `enquadrarGravacao()` (moldura fixa, da caixa das 24
+aldeias) e `posAldeiasTela()` (onde cada aldeia aparece no ecrã). A receita está
+na skill `video-arena`.
 
-### 8.2 O forno
-
-```bash
-"/c/Program Files/Blender Foundation/Blender 5.2/blender.exe" -b --factory-startup   -noaudio -P ferramentas/cena/exportar_mapa.py      # ~105 s -> pecas.glb + mapa3d.json
-```
+### 7.2 O forno
 
 ```bash
-python ferramentas/cena/tex_estrada.py                # trata as fotografias (ver 8.3)
+"/c/Program Files/Blender Foundation/Blender 5.2/blender.exe" -b --factory-startup -noaudio -P ferramentas/cena/exportar_mapa.py
 ```
+~105 s → `sonda3d/pecas.glb` + `sonda3d/mapa3d.json`. Os soldados são
+`sonda3d/{lanceiro,arqueiro,cavaleiro}_novo.glb`. **Nada disto está no git**
+(dezenas de MB): quem clona tem de cozer. As ferramentas do forno e as texturas
+estão em `ferramentas/cena/` e `assets/texturas/`.
 
-| ferramenta | o que faz |
-|---|---|
-| `ferramentas/cena/exportar_mapa.py` | o mapa inteiro: chão, relevo, costa, estradas, mata, aldeias |
-| `ferramentas/cena/pecas.py` | a biblioteca de peças e **as tabelas `FICHEIRO` / `COR`** (que textura, que ladrilho, que tom) |
-| `ferramentas/cena/exportar_tropa.py` | os três soldados, do mesmo corpo, com esqueleto e animações |
-| `ferramentas/cena/tex_estrada.py` | trata as fotografias **fora** do Blender |
-| `ferramentas/cena/tex_prado.py` | trata a fotografia da relva (a que temos é palha seca) |
-| `ferramentas/cena/mar_costa.py` | a distância à costa, para o mar saber onde é raso |
-| `ferramentas/cena/cor_prado.py` | a humidade por região, que pinta o campo e a mata |
-| `ferramentas/tracar-rede.html` | a página onde a rede de estradas se desenha à mão |
-| `ferramentas/gerar-rede.py` | lê `rede-nova.json` e escreve o `world-iberia.js` |
+### 7.3 As armadilhas do glTF (todas custaram horas)
 
-### 8.3 As armadilhas do glTF (todas custaram horas)
+- **O glTF NÃO leva grafos de nós.** Do material só sobrevivem uma imagem e o
+  `baseColorFactor`. **O que tem de mudar, muda na IMAGEM** (`tex_estrada.py`,
+  `tex_prado.py`). O único padrão que passa: imagem → `ShaderNodeMix` MULTIPLY com
+  uma constante → Base Color.
+- **Material sem `metallicFactor` assume metal = 1.0**, e metal branco sem
+  ambiente renderiza preto (o cavalo preto).
+- O exportador segue só o **Material Output ativo**.
+- O `GLTFLoader` **corta os pontos dos nomes** (`mao.L` → `maoL`).
+- **`InstancedMesh` não aceita esqueleto**; o que torna a animação pagável é o
+  corte por **tamanho aparente em píxeis**, não por metros.
+- A cor de vértice só é exportada se o material a usar.
+- **Toda a instância da mata tem de levar `instanceColor`** — o vetor nasce a
+  zeros e uma instância sem cor sai preta.
 
-- **O glTF NÃO leva grafos de nós.** Do material só sobrevivem *uma imagem* e o
-  `baseColorFactor`. Tingir, clarear ou misturar no Blender é deitado fora na
-  porta. **O que tem de mudar, muda na IMAGEM** — é para isso que o
-  `tex_estrada.py` existe. Confirmado duas vezes a abrir o GLB.
-  O único padrão que sobrevive: imagem → `ShaderNodeMix` MULTIPLY com uma
-  constante → Base Color, que sai como textura × `baseColorFactor`.
-- **Material sem `metallicFactor` declarado assume metal = 1.0**, e metal branco
-  sem ambiente renderiza **preto**. Foi o cavalo preto.
-- O exportador segue só o **Material Output ativo** com `target="ALL"`. Um
-  segundo output esquecido faz a peça sair sem textura, sem um aviso.
-- O `GLTFLoader` do three **corta os pontos dos nomes**: `mao.L` chega `maoL`.
-- **`InstancedMesh` não aceita malhas com esqueleto.** O que torna a animação
-  pagável é o corte por **tamanho aparente em píxeis**
-  (`px = altura × (h / (2·tan(fov/2))) / dist`), não por metros.
-- A cor de vértice (COLOR_0) é a única forma de passar um **gradiente** pela
-  cadeia — e só é exportada se o **material** a usar (`cor_vertice=True`).
+### 7.4 O que está trancado
 
-### 8.4 O que já está trancado, e não se mexe
+- **A rede V2**: 24 cidades, 37 estradas, Lisboa→Barcelona custa 17,
+  `verificarEquilibrio()` = 0 por construção.
+- **Ninguém se atravessa na estrada** no motor: varredura de troços percorridos
+  (`test_varredura_estrada.js`).
+- **O progresso de uma marcha tem uma implementação só** (`progMarcha` no
+  `index.html`), injetada na `ponte3d.js`.
+- **Estradas e aldeias são zona protegida** no relevo (90 m à volta de cada
+  estrada). Conferir depois de cada forno.
+- **O mar está a 0 m**; praias só em costa baixa; areia e rocha são fitas
+  recortadas por curva, não faces da grelha.
 
-- **A rede de estradas foi refeita do zero (V2)**: 24 cidades, **37 estradas**,
-  `verificarEquilibrio()` = 0 **por construção** (custos = comprimento/velocidade
-  do terreno, mediados entre gémeas). Lisboa→Barcelona custa 17.
-- **Ninguém se atravessa na estrada.** A deteção é por **varredura de troços
-  percorridos** no passo, não por amostragem de posições num instante — travada
-  por `testes/test_varredura_estrada.js`.
-- **Marcha é sempre custo de rota**, nunca píxeis, e o progresso do replay tem
-  **uma implementação só** (`progMarcha` no `index.html`), injetada na ponte
-  (`ponte3d.js`). Ter duas foi o bug das marchas que saltavam para o meio da
-  estrada e desapareciam.
-- **O caderno de marcas funciona por cima do mapa 3D** (`ferramentas/cena/COMO_MARCAR.md`).
-  A calibração sai de Lisboa e Barcelona **medidas**, não de constantes copiadas.
+### 7.5 Como se corrige um asset 3D
 
-### 8.5 A paisagem: mar, praia, falésia, campo e mata (11-12/09)
+**Cada defeito que o Lucas consegue VER tem de virar um número ou uma imagem que o
+Claude consegue ver, antes de tentar corrigir.** As provas automáticas (pesos por
+cor, lança × bota, pé × anca, ilhas por cor) e as armadilhas medidas estão na
+skill **`asset-3d`**; a versão longa do método está em `docs/HISTORIA.md`.
 
-- **O mar está a 0 m**, que é onde o forno sempre o esperou (esteve a −11 m desde
-  08/09, de antes de haver praias, e por isso toda a costa acabava num degrau de
-  12 a 14 m). Cor por profundidade, transparência no raso e espuma na linha de
-  água saem do `mar_costa.png`; sem ele o mar volta a cor chapada e nada parte.
-- **As praias são esculpidas no relevo**: areal quase plano de 30 m que entra na
-  água, e atrás uma encosta de 22° — e **só em costa baixa** (acima de ~75 m de
-  altura de região, a costa é falésia, como numa costa real).
-- **ESTRADAS E ALDEIAS SÃO ZONA PROTEGIDA** (90 m à volta de cada estrada, a
-  rampa inteira de cada aldeia): ali o relevo é o antigo, byte a byte. Sem isso,
-  1047 dos 2583 pontos de estrada desciam (mediana 37 m) e 16 estradas passavam
-  de 15° de inclinação. **Conferir sempre depois de um forno**: as alturas das
-  estradas e os patamares das aldeias têm de bater com os de antes.
-- **A areia e o lábio de rocha são FITAS recortadas por uma curva** (`_fita` no
-  `exportar_mapa.py`), 10 a 20 cm acima do chão, e não faces da grelha: escolher
-  faces inteiras de 5 m dá os dentes de serra que já se viram na costa.
-- **O campo tem fotografia e cor de região.** Era uma chapa verde porque o
-  material do chão estava na paleta que o exportador achata. E ligar a fotografia
-  crua deixou o mapa **castanho** — a nossa tinta é um nó do Blender, e o glTF
-  deita-a fora (ver 8.3). Por isso existe o `tex_prado.py`: **o que tem de mudar,
-  muda na imagem**. O `claro` também não passa: o factor do glTF não vai acima de 1.
-- **A cor da mata entra por `instanceColor`**, no navegador: 22 mil cópias da
-  mesma malha não podem ter cor na geometria. ⚠️ **Toda a instância tem de levar
-  cor** — o vetor nasce a zeros e uma instância sem cor sai PRETA.
-- Falta: textura de areia (`assets/texturas/areia/` está vazia; sem ela fica cor
-  chapada), e árvores soltas fora das manchas.
+---
 
-### 8.6 Como se corrige um soldado (o metodo, 13/09)
+## 8. Onde está o estado atual
 
-Durante dois dias o ciclo foi: eu exportava, o Lucas via o video, descrevia o
-defeito por palavras ("uma imagem borrada da cor da bota"), e eu adivinhava a
-causa. Lento e pouco fiavel — cada volta custava um forno inteiro e acertava
-por sorte. **A regra que substitui isso: cada defeito que ele consegue VER tem
-de virar um numero ou uma imagem que EU consigo ver, antes de tentar corrigir.**
+Este guia não guarda estado. Para saber onde o projeto está:
 
-Tres provas, todas escritas pelo `armar_lanceiro.py`, todas automaticas:
+- **`MODELOS_ARENA.md`** — que modelos jogam, o registo de cada um (por assento),
+  e porquê. Ler antes de gastar cota.
+- **o `RELATORIO_*` mais recente na raiz** — o que a última sessão fez.
+- **`resultados/p4-*/`** — as partidas, com `DIARIO.md` nas baterias.
+- **`docs/HISTORIA.md`** — como se chegou aqui.
 
-| prova | o que responde | onde sai |
-|---|---|---|
-| **pesos por cor** | de que OSSO e cada vertice | `_saida/pesos_{frente,lado}.png` |
-| **lanca x bota** | a haste separa-se do pe no ciclo? | `varia N cm` (avisa abaixo de 4 cm) |
-| **pe x anca** | o pe passa a frente da anca? | oito numeros, um por quadro |
-| **ilhas por cor** | de que pedacos a malha e feita | `ilhas_cor.py` -> `_saida/ilhas_*.png` |
+**Em aberto** (22/09):
 
-A primeira apanhou, em UM render, o que sete tentativas de adivinhar nao
-apanharam: a metade de baixo da haste estava pintada da cor da BOTA. Nao havia
-mais nada para discutir.
-
-| **marca da lanca** | que madeira vai com a mao | `_saida/marca_lanca_{todo,pes}.png` |
-
-**E a causa, que vale para qualquer asset que venha de fora. Sao DUAS hastes.**
-O ComfyUI gerou a lanca duas vezes: uma vara SOLTA por dentro do modelo (ilha
-propria, 2529 vertices, raio 0,008 da altura) e a que se VE, soldada a ilha
-grande. Marcar a ilha — que parecia obviamente "a lanca", por ser comprida e
-fina (vao/largura 6,1, contra 2,7 das pernas e 2,1 do corpo) — deixou a de fora
-presa a perna: na bancada apareceram **duas madeiras no chao**, uma certa e uma
-a seguir o pe. Um render das ilhas por cor (`ilhas_cor.py`) fechou a questao num
-olhar: toda a superficie visivel era da MESMA ilha.
-
-A ilha serve na mesma, mas para outra coisa: da o **eixo exato** da lanca. Com
-esse eixo medido, a separacao e limpa em toda a altura — madeira a 0,010-0,014
-do eixo, corpo e bota a 0,04-0,11 — e um corte em **0,020** apanha as duas
-hastes e nenhuma bota.
-
-⚠ **Sem corte em altura.** Uma versao so apanhava acima do fundo da vara
-interna, a supor que mais abaixo so havia bota; a PONTEIRA ficou de fora e era
-exatamente ela que andava agarrada ao pe. O raio sozinho chega.
-
-⚠ **O cilindro tambem apanha a BIQUEIRA DA BOTA**, que o eixo atravessa rente
-ao chao — e ai o erro e ao contrario: em vez de madeira presa ao pe, fica um
-pedaco de PE preso a mao, e a bota estica e borra a cada passo (foi o mesmo
-"borrao" de antes, com outra causa). A madeira distingue-se por ser CONTINUA:
-parte-se a marca em pedacos ligados e ficam so os que atravessam o modelo de
-alto a baixo. Foram 757 vertices de bota fora.
-
-⚠ **A MALHA NAO VEM CENTRADA EM X**, e o esqueleto e simetrico a volta de x=0.
-As pernas estavam em -0,121 e +0,005 (meio em -0,058); separa-las por "x < 0"
-punha uma perna inteira e metade da outra do mesmo lado, e dai saia um
-afastamento de 0,110 num lado e 0,193 no outro. Nenhuma afinacao do numero
-arranjava isso, porque o errado era o EIXO. Acha-se sem supor nada: numa fatia
-a altura do joelho os x fazem dois montes com um vazio no meio — corta-se no
-maior vazio e cada monte da uma perna.
-
-⚠ **Apertar as pernas mexe na GEOMETRIA, nao nos ossos.** Estreitar so o
-esqueleto deixa o osso a correr fora do tubo da perna e a deformacao parte. O
-modelo vinha com 29 cm entre eixos num homem de 2 m (uma pessoa anda com 22);
-`APERTO_PERNAS` encolhe o x por rampa, nada na anca e tudo da coxa para baixo,
-e os ossos sao medidos DEPOIS, por cima do resultado.
-
-⚠ A marca tem de ser posta ANTES de reduzir, e a lanca sai para um objeto seu,
-reduz-se a parte e junta-se outra vez. Um grupo de vertices sozinho nao chega:
-o `Decimate` faz a MEDIA dos pesos e dos 7883 marcados sobravam 25 acima de 0,5.
-
-⚠ Saber onde esta a lanca tambem conserta a ALTURA: o alto da cabeca era um
-palpite (contagem de vertices por fatia) e mentiu assim que a haste mudou de
-densidade — o soldado saiu 15% mais pequeno sem um aviso. Agora e o vertice
-mais alto que **nao** e da lanca.
+- **batalhas de estrada entre LLMs são raras**: precisam de dois Reis ativos, e o
+  que perde costuma não sair de casa (exércitos-turno na estrada 13 contra 85);
+- **no replay 3D, os exércitos atravessam-se em vez de pararem e lutarem** — a
+  maior dificuldade do Lucas antes de gravar;
+- o prompt diz "a tua coluna ganhou na estrada" sem dizer **onde** nem **qual**;
+- a **cena de conquista de aldeia** ainda não existe no 3D;
+- **composição/monocultura** ("quem constrói menos lanceiro ganha"): medida três
+  vezes, sem veredito.
