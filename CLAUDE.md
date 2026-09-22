@@ -37,10 +37,19 @@ gabarito escrito antes de experimento, artefato publicado antes da próxima fase
     `minimoParaTomar` (quantas tropas p/ conquistar; usa `preverCombateTipos`, a MESMA
     conta do combate), `turnosDeCaminho` (marcha = custo de rota × passoRef/velTropa).
 - **`index.html`** — o JOGO NO BROWSER (é onde as partidas rodam de facto). Contém: o
-  render em canvas, o loop `runDuelo`/`passoTurnoDuelo`, os clientes de API próprios
-  (`gerarOpenRouter`, `gerarGemini`, `gerarGrok`, `gerarOllama`), o log `.txt`/RESUMO
+  loop `runDuelo`/`passoTurnoDuelo`, os clientes de API próprios (`gerarOpenRouter`,
+  `gerarGemini`, `gerarGrok`, `gerarOllama`), o log `.txt`/RESUMO
   (`registrarTurnoLado`/`baixarLogGemini`), o replay `.json`, o cartão do espectador, o
-  hover, o auto-save por turno. **~2900 linhas de JS inline num único `<script>`.**
+  hover, a transmissão v5 e o auto-save por turno. **~3570 linhas** (eram 6386 até
+  22/09), num único `<script>` inline mais dois módulos ao lado.
+- **`ponte3d.js`** — a ÚNICA porta entre a partida e o desenho. Tudo o que se vê no
+  mapa passa por aqui: o fog (o mesmo `visiveisPara`/`game.visto` do prompt), a marcha
+  (posição do MOTOR, por peso de rota), a composição inteira do exército e a conversão
+  dos combates de estrada. Guardada por `testes_arena/Smoke5fog.js` e `Smoke8estrada.js`,
+  que a CORREM em vez de a extrair do HTML.
+- **`marcas.js`** — o caderno de marcas (tecla M): a ferramenta com que o Lucas aponta
+  um defeito no mapa e o Claude o corrige na fonte. Fora do jogo de propósito — um
+  defeito aqui não pode derrubar uma partida.
 - **`rei.js`** — cliente e decisor para o RUNNER headless (`clienteOllama/Gemini/
   OpenRouter`, `criarCliente`, `decidirRei`, `rodarPartidaRei`). ⚠️ É um cliente
   OpenRouter DUPLICADO do que está no `index.html` (dívida técnica conhecida — não
@@ -48,9 +57,9 @@ gabarito escrito antes de experimento, artefato publicado antes da próxima fase
 - **`runners/rei_vs_rei.js`** — duelo LLM×LLM headless (linha de comando), grava `.txt`.
 - **`world-iberia.js`** — o mapa autoral da Ibéria (cidades, estradas, custos de rota).
   `verificarEquilibrio()` TEM de devolver 0 falhas.
-- **`world.js`** — mapa procedural antigo (fallback).
 - **`servir.py`** — servidor HTTP local (`localhost:8000`). Necessário porque `file://`
-  bloqueia fetch/localStorage/downloads. Rotas: `/salvar-mapa` (editor) e `/checkpoint`
+  bloqueia fetch/localStorage/downloads. Rotas: `/salvar-mapa` (hoje só o
+  `ferramentas/tracar-rede.html`), `/marcas` (o caderno) e `/checkpoint`
   (auto-save do `.txt` por turno, sobrevive a crash).
 - **`ferramentas/reconstruir-prompts.js`** — recupera o PROMPT EXATO de qualquer partida
   reexecutando o motor com as ordens gravadas no `.txt` e **verificando** o estado contra o
@@ -68,13 +77,15 @@ gabarito escrito antes de experimento, artefato publicado antes da próxima fase
   ⚠️ **Não edite `MODELOS_ARENA.md` à mão** — edite o JSON e rode `node ferramentas/tabela-modelos.js`.
   A coluna "apto" é regra explícita (texto→texto, ctx ≥ 32k, saída ≥ 4k, não é router nem
   classificador), não gosto.
-- **`testes/`** — 29 ficheiros de teste do motor (`test_*.js`). **`testes/test_prompt_p4.js`**
-  (39 casos) cobre o P4, o fog e o parser tolerante. **`testes_arena/`** — 7 smokes; o
+- **`testes/`** — 30 ficheiros de teste do motor (`test_*.js`). **`testes/test_prompt_p4.js`**
+  (39 casos) cobre o P4, o fog e o parser tolerante. **`testes_arena/`** — 13 smokes; o
   **`Smoke5fog.js`** guarda a câmara do Rei e o **`Smoke6rede.js`** a resiliência a throttle
   de free-tier (com `fetch` falso: não toca a rede, não gasta cota). **`testes/test_lote_c.js`** cobre
   LOTE C/D (regressão byte-idêntica + features). **`testes/ref-lote-c/`** = os 3 outputs
-  de referência da regressão. **`testes_arena/`** — 5 smokes que fazem `eval` do
-  `index.html` num stub Node.
+  de referência da regressão. Cinco dos smokes fazem `eval` do bloco inline do
+  `index.html` num stub Node — e por isso **carregam também o `marcas.js` e o
+  `ponte3d.js`**, senão correriam com os esboços de reserva do adaptador (verdes,
+  a cobrir zero linhas). O **`Smoke12modulos.js`** tranca exatamente isso.
 
 ---
 
@@ -243,8 +254,8 @@ Funciona com a partida pausada, a correr e dentro de um replay. Trancado por
 - **O log tem de descrever a partida que CORREU**, não a intenção do painel. O cabeçalho de
   condições lê de `game.config`. Já mentiu uma vez (texto fixo "dist x2/3" depois da escala
   mudar) e escondeu o bug do ruleset por um dia inteiro.
-- **Suíte tem de ficar verde** (23 testes + 5 smokes + `verificarEquilibrio()=0`) antes
-  de commitar.
+- **Suíte tem de ficar verde** (30 testes + 13 smokes + `verificarEquilibrio()=0`)
+  antes de commitar.
 - Sprite de aldeia é desenhado LEVANTADO (base em `baseVisualIB`, não na âncora crua) —
   já mordeu no hit-test do hover e nas estradas.
 
@@ -258,9 +269,11 @@ A raiz tinha 31 ficheiros `.md` e 45+ entradas; ficou com **27 entradas** e o qu
 **vivo**. Tudo o resto foi para **`arquivo/`** — nada apagado. Ver `arquivo/LEIA-ME.md`.
 
 ⚠️ **Três coisas NÃO saíram da raiz, e mover qualquer uma parte algo:**
-- **`mapa-ajustes.js`** — o `index.html:861` carrega-o por `<script src>` e o editor grava-o de
-  volta na raiz. Chegou a ser movido nesta limpeza. Um `<script>` que dá 404 **falha em
-  silêncio**: o jogo abre na mesma e os ajustes do mapa desaparecem sem uma linha de erro.
+- **`mapa-ajustes.js`** — o `index.html` carrega-o por `<script src>`. ⚠️ O editor de mapa
+  que o gravava **saiu em 22/09** (arrastava cidades no canvas plano, que já não existe);
+  quem escreve neste ficheiro agora é o `ferramentas/tracar-rede.html`. A lição continua a
+  valer, e agora para o `marcas.js` e o `ponte3d.js`: um `<script>` que dá 404 **falha em
+  silêncio** — foi por isso que nasceu o `testes_arena/Smoke12modulos.js`.
 - **`checkpoints/`** — caminho de escrita cravado no `servir.py:87`.
 - **`docs/`** — dois comentários de código apontam para `docs/ACHADO_..._truncamento_ollama.txt`.
 
@@ -373,7 +386,7 @@ Verificado com `getBoundingClientRect()` em 5 resoluções (375x812, 1280x720, 1
   lado do `.txt`. Era o maior buraco de ferramenta: sem ele, métricas A3 e reconstrução de
   prompt ficavam cegas em toda partida headless. **Nunca apagar os `.replay.json`.**
 
-**Testes:** 29 ficheiros no motor + 7 smokes + `verificarEquilibrio()` = 0. Destaque para
+**Testes:** 30 ficheiros no motor + 13 smokes + `verificarEquilibrio()` = 0. Destaque para
 **`testes/test_ruleset_vivo.js`** (há um ruleset só e é o que pensamos) e
 **`testes_arena/Smoke6rede.js`** (resiliência a throttle, com `fetch` falso — não gasta cota).
 
@@ -445,10 +458,19 @@ e é esse teto, mais o relógio, que dimensiona uma bateria. Custo observado qua
 
 O jogo continua a ser o `index.html`. O que mudou é a **pele**: existe agora um
 mapa a três dimensões, com aldeias, estradas, mata, relevo, costa — e **tropas
-animadas a marchar por ela**. **Desde 11/09 o 3D é o default** do `index.html`
-(é o que abre pelo `python servir.py`); o canvas 2D sozinho fica em
-`index.html?mapa=2d`. Se os ficheiros do forno faltarem, o jogo avisa e volta ao
-2D. O stub de Node dos testes não tem `location.search`, por isso corre no 2D.
+animadas a marchar por ela**. Foi o default desde 11/09; **desde 22/09 é o único
+mapa que existe**. Não há `?mapa=2d`, não há canvas plano, não há desenhador de
+reserva: se os ficheiros do forno faltarem o jogo **diz e para**, porque fingir
+que há um mapa alternativo era pior do que a falha.
+
+O canvas 2D foi apagado em 22/09 com **1031 linhas de desenho que nenhum caminho
+do jogo atingia desde 11/09**, mais o sistema de efeitos (que continuava a encher
+listas para ninguém), o editor de mapa, 4,4 MB de arte descarregada a cada
+abertura e a câmara plana inteira. O que lia essa câmara e continuava vivo — o
+balão do rato, o enquadramento de gravação, a tabela `aldeias_tela.txt` — passou
+a ler a câmara 3D, e os três estavam **errados** (o balão dizia "Lisboa" com a
+câmara sobre Barcelona). O stub de Node dos testes não tem `location.search`:
+ali corre o motor, o HUD e o log, sem mapa nenhum (`HA_ECRA`).
 
 ### 8.1 O que corre no navegador
 
@@ -515,9 +537,9 @@ python ferramentas/cena/tex_estrada.py                # trata as fotografias (ve
   percorridos** no passo, não por amostragem de posições num instante — travada
   por `testes/test_varredura_estrada.js`.
 - **Marcha é sempre custo de rota**, nunca píxeis, e o progresso do replay tem
-  **uma implementação só** (`progMarcha` no `index.html`), partilhada pelos dois
-  sítios 2D e pela ponte 3D. Ter duas foi o bug das marchas que saltavam para o
-  meio da estrada e desapareciam.
+  **uma implementação só** (`progMarcha` no `index.html`), injetada na ponte
+  (`ponte3d.js`). Ter duas foi o bug das marchas que saltavam para o meio da
+  estrada e desapareciam.
 - **O caderno de marcas funciona por cima do mapa 3D** (`ferramentas/cena/COMO_MARCAR.md`).
   A calibração sai de Lisboa e Barcelona **medidas**, não de constantes copiadas.
 
