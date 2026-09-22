@@ -6,85 +6,75 @@
 // Numa arena que mede modelos, o assento tem de ser neutro: se o Rei A ganha
 // mais por ser A, cada vitória de um modelo que jogou como A está contaminada.
 // Medido em 22/09/2026 com o jogador-base contra ele próprio — dois jogadores
-// IDÊNTICOS — em 300 seeds: **o Rei A ganhou 64%** (z≈5). Não é acaso.
+// IDÊNTICOS — em 300 seeds: **o Rei A ganhava 64%** (z≈5). Não era acaso, e
+// tinha duas causas, as duas corrigidas no mesmo dia:
 //
-// Isto separa as duas causas que se misturam nesse número:
+//   1. OS IDS NÃO SÃO ESPELHO (`visaoEspelhada`). O mapa é um espelho perfeito,
+//      mas o oeste está numerado capital→fronteira e o leste ao contrário. O
+//      relatório e o jogador-base percorriam as aldeias por id: o Rei A lia a
+//      capital em primeiro lugar, o Rei B em penúltimo, e o lado de Lisboa
+//      ganhava ~9 pontos. A visão passou a vir por distância à própria casa.
 //
-//   1. O LADO DO MAPA. O mapa é um espelho perfeito (37 estradas, 37 espelhos,
-//      custos iguais), mas os ids não: o oeste está numerado capital→fronteira
-//      (0 Lisboa, 1 Santarém…) e o leste fronteira→capital (…22 Barcelona). O
-//      jogador-base percorre as suas aldeias por id, e isso bastava para dar
-//      ~9 pontos ao lado de Lisboa. A mesma ordem por id chega ao PROMPT: o
-//      Rei A lê a capital em primeiro lugar, o Rei B em penúltimo.
+//   2. A ORDEM DAS CHEGADAS (`chegadaSorteada`). Quando os dois Reis chegavam
+//      à mesma aldeia no mesmo turno, A resolvia sempre primeiro — valia 5
+//      pontos. Passou a ser uma moeda com semente por turno, como o desempate
+//      de estrada (A4).
 //
-//   2. A ORDEM DAS CHEGADAS. As ordens são decididas em simultâneo mas
-//      executadas A→B, e no `tick` as chegadas resolvem-se pela ordem da lista.
-//      Quando os dois Reis chegam à mesma aldeia no mesmo turno, A resolve
-//      primeiro. É a alavanca maior: "sempre A primeiro" dá 73,5% a A, "sempre
-//      B primeiro" dá 27,8%.
+// Cada seed joga-se duas vezes, com Lisboa de um lado e depois do outro, e a
+// ferramenta mede o jogo tal como está e com cada correção desligada.
 //
-// Para isolar (2), o jogador-base corre aqui com a ordem ESPELHADA (por custo
-// até à própria capital) e cada seed joga-se duas vezes, com os lados trocados.
-//
-// ⚠ Esta ferramenta MEDE; não muda o motor. Corrigir é uma decisão de regra.
+// ⚠ Esta ferramenta MEDE; não muda o motor. O teste que TRANCA o resultado é o
+// `testes/test_simetria_assento.js`.
 "use strict";
 const path = require("path");
 const RAIZ = path.join(__dirname, "..");
 const E = require(path.join(RAIZ, "engine.js"));
-const I = require(path.join(RAIZ, "world-iberia.js"));
 
 const N = parseInt(process.argv[2], 10) || 300;
 
-// custo de cada cidade às duas capitais, pelo nome (a visão não traz o slug)
-const porNome = {};
-for (const c of I.CIDADES) porNome[c.nome] = { A: c.custoLisboa, B: c.custoBarcelona };
-
-// o MESMO jogador-base, a ver as suas aldeias numa ordem igual dos dois lados
-function burroEspelhado(visao) {
-  const v = Object.assign({}, visao), eu = visao.dono, outro = eu === "A" ? "B" : "A";
-  v.minhas = [...visao.minhas].sort((p, q) =>
-    (porNome[p.nome][eu] - porNome[q.nome][eu]) || (porNome[p.nome][outro] - porNome[q.nome][outro]));
-  return E.jogadorBurro(v);
-}
-
-// `trocar`: Lisboa passa a ser do Rei B e Barcelona do Rei A
-function corre(decisor, trocar) {
-  const r = { A: 0, B: 0, empate: 0 };
-  for (let seed = 1; seed <= N; seed++) {
-    const st = E.criarEstadoInicial(Object.assign({}, E.CONFIG, { seed }));
-    if (trocar) for (const a of st.aldeias) {
+// uma partida do jogador-base contra ele proprio; `trocar` poe Lisboa do lado
+// do Rei B (e a capital inicial acompanha a troca, senao a ordem espelhada
+// continuava a medir "casa" a partir de Lisboa)
+function partida(seed, flags, trocar) {
+  const st = E.criarEstadoInicial(Object.assign({}, E.CONFIG, { seed }, flags));
+  if (trocar) {
+    for (const a of st.aldeias) {
       if (a.dono === "A") a.dono = "B"; else if (a.dono === "B") a.dono = "A";
     }
-    let v = null;
-    for (let t = 0; t < 100 && !v; t++) {
-      E.rodarTurno(st, { A: decisor, B: decisor });
-      v = E.checarVitoria(st);
-    }
-    r[v || "empate"]++;
+    if (st.capitalInicial) st.capitalInicial = { A: st.capitalInicial.B, B: st.capitalInicial.A };
   }
-  return r;
+  let v = null;
+  for (let t = 0; t < 100 && !v; t++) {
+    E.rodarTurno(st, { A: E.jogadorBurro, B: E.jogadorBurro });
+    v = E.checarVitoria(st);
+  }
+  return v || "empate";
+}
+
+function medir(flags) {
+  let vA = 0, lisboa = 0, n = 0;
+  for (let seed = 1; seed <= N; seed++) {
+    for (const trocar of [false, true]) {
+      const v = partida(seed, flags, trocar);
+      if (v === "empate") continue;
+      n++;
+      if (v === "A") vA++;
+      if ((v === "A") !== trocar) lisboa++;   // Lisboa e A sem troca, B com troca
+    }
+  }
+  return { vA, lisboa, n };
 }
 
 const pct = (x, n) => (100 * x / n).toFixed(1) + "%";
 const z = (x, n) => ((x / n - 0.5) / Math.sqrt(0.25 / n)).toFixed(2);
+const linha = (nome, r) => console.log(
+  nome.padEnd(34) + `assento A ${pct(r.vA, r.n)} (z=${z(r.vA, r.n)})`.padEnd(28)
+  + `lado de Lisboa ${pct(r.lisboa, r.n)} (z=${z(r.lisboa, r.n)})`);
 
-console.log(`\nMEDIR ASSENTO — ${N} seeds por configuracao, jogador-base contra ele proprio\n`);
-
-const idNormal = corre(E.jogadorBurro, false);
-const idTrocado = corre(E.jogadorBurro, true);
-console.log("1) jogador-base TAL COMO E (percorre as aldeias por id)");
-console.log(`   Lisboa=A: A vence ${pct(idNormal.A, N)} | Lisboa=B: A vence ${pct(idTrocado.A, N)}`);
-const lisboa = idNormal.A + idTrocado.B;
-console.log(`   -> o lado de LISBOA vence ${pct(lisboa, 2 * N)} (z=${z(lisboa, 2 * N)})`);
-
-const esNormal = corre(burroEspelhado, false);
-const esTrocado = corre(burroEspelhado, true);
-const soA = esNormal.A + esTrocado.A;
-console.log("\n2) ordem ESPELHADA (tira o efeito dos ids; sobra so o motor)");
-console.log(`   Lisboa=A: A vence ${pct(esNormal.A, N)} | Lisboa=B: A vence ${pct(esTrocado.A, N)}`);
-console.log(`   -> o ASSENTO A vence ${pct(soA, 2 * N)} (z=${z(soA, 2 * N)})`);
-
-console.log("\nLeitura: |z| < 2 e o que se espera de um assento neutro.");
-console.log("Se (1) der longe de 50%, o jogador-base depende dos ids; se (2) der");
-console.log("longe de 50%, e o MOTOR que favorece um dos Reis.\n");
+console.log(`\nMEDIR ASSENTO — ${N} seeds x 2 lados, jogador-base contra ele proprio\n`);
+linha("o jogo como esta", medir({}));
+linha("sem a ordem espelhada", medir({ visaoEspelhada: false }));
+linha("sem a moeda nas chegadas", medir({ chegadaSorteada: false }));
+linha("sem as duas (o motor de 21/09)", medir({ visaoEspelhada: false, chegadaSorteada: false }));
+console.log("\nLeitura: |z| < 2 e o que se espera de uma mesa neutra.\n");
 process.exit(0);

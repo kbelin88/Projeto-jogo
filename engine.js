@@ -511,9 +511,16 @@
   // `estradas` pre-montadas (mapa autoral) tem precedencia; sem elas, a rede
   // e derivada das posicoes como sempre (v1/v2 procedurais).
   function montarJogo(config, aldeias, estradas) {
+    // ── ONDE CADA REI COMECOU (22/09) ─────────────────────────────────────
+    // E a ancora da ordem espelhada (ver `ordemEspelhada`): "perto de casa"
+    // tem de querer dizer a mesma coisa para os dois Reis, e a casa e a
+    // capital INICIAL -- a de agora pode ter caido.
+    const capitalInicial = {};
+    for (const a of aldeias) if (a.capital && (a.dono === "A" || a.dono === "B")) capitalInicial[a.dono] = a.id;
     return {
       config,
       turno: 0,
+      capitalInicial,
       aldeias,
       estradas: estradas || construirEstradas(aldeias,
         (config.estradas && config.estradas.vizinhos) != null ? config.estradas.vizinhos : 3,
@@ -609,6 +616,71 @@
   // ==========================================================
   function aldeiasDe(estado, dono) {
     return estado.aldeias.filter((a) => a.dono === dono);
+  }
+
+  // ── A ORDEM ESPELHADA (22/09) ─────────────────────────────────────────────
+  // O mapa e um espelho perfeito -- 37 estradas, 37 espelhos, custos iguais --
+  // mas os IDS nao: o oeste esta numerado capital->fronteira (0 Lisboa, 1
+  // Santarem...) e o leste fronteira->capital (...22 Barcelona, 23 Girona).
+  // Tudo o que percorria as aldeias por id dava um mundo diferente a cada Rei:
+  //   * o Rei A lia a sua capital em PRIMEIRO lugar no relatorio, o Rei B em
+  //     penultimo;
+  //   * o jogador-base percorria as suas aldeias pela mesma ordem, e isso
+  //     bastava para dar ~9 pontos ao lado de Lisboa (medido: 61,2% em 600
+  //     jogos do jogador-base contra ele proprio; `ferramentas/medir-assento.js`).
+  // A ordem que e igual dos dois lados e a DISTANCIA: primeiro o custo de
+  // marcha ate a minha capital inicial, depois ate a do inimigo. Dois lugares
+  // espelhados tem os dois numeros trocados, e por isso a mesma posicao na
+  // lista de cada Rei.
+  //
+  // O custo vem da rede (Dijkstra sobre o custo de cada trecho) e guarda-se
+  // fora do estado, porque o estado e serializado e isto e so uma conta.
+  const _distEspelho = new WeakMap();
+  function distanciasDe(estado, origemId) {
+    let porOrigem = _distEspelho.get(estado);
+    if (!porOrigem) { porOrigem = {}; _distEspelho.set(estado, porOrigem); }
+    if (porOrigem[origemId]) return porOrigem[origemId];
+    const adj = (estado.estradas && estado.estradas.adj) || {};
+    const custo = (estado.estradas && estado.estradas.custo) || null;
+    const d = {};
+    for (const a of estado.aldeias) d[a.id] = Infinity;
+    d[origemId] = 0;
+    const aberto = new Set(estado.aldeias.map((a) => a.id));
+    while (aberto.size) {
+      let u = null;
+      for (const x of aberto) if (u === null || d[x] < d[u]) u = x;
+      if (d[u] === Infinity) break;
+      aberto.delete(u);
+      for (const v of (adj[u] || [])) {
+        const w = custo ? (custo[chaveTrecho(u, v)] != null ? custo[chaveTrecho(u, v)] : 1) : 1;
+        if (d[u] + w < d[v]) d[v] = d[u] + w;
+      }
+    }
+    porOrigem[origemId] = d;
+    return d;
+  }
+  // comparador de aldeias na ordem espelhada para `dono`; null se o estado nao
+  // souber onde cada Rei comecou (estados antigos congelados nos testes), e
+  // entao quem chama fica com a ordem por id -- a de sempre.
+  function ordemEspelhada(estado, dono) {
+    const cap = estado.capitalInicial;
+    if (!cap || cap.A == null || cap.B == null) return null;
+    const minha = distanciasDe(estado, dono === "B" ? cap.B : cap.A);
+    const dele = distanciasDe(estado, dono === "B" ? cap.A : cap.B);
+    // ⚠ O DESEMPATE FINAL E PELO PAR, NAO PELO ID. Ha cidades empatadas nas
+    // DUAS distancias (Salamanca e Toledo estao a 7 de Lisboa e a mesma
+    // distancia de Barcelona), e com o id a desempatar o espelho partia outra
+    // vez: A lia Salamanca antes de Toledo e B lia Madrid antes de Teruel --
+    // que sao as gemeas trocadas. Apanhado pelo test_simetria_assento no
+    // primeiro teste que correu. Cada par de gemeas partilha um numero (o menor
+    // id dos dois), e esse numero e o mesmo dos dois lados da mesa.
+    const idPorSlug = {};
+    for (const a of estado.aldeias) if (a.slug) idPorSlug[a.slug] = a.id;
+    const doPar = (a) => (a.par && idPorSlug[a.par] != null) ? Math.min(a.id, idPorSlug[a.par]) : a.id;
+    const porId = {};
+    for (const a of estado.aldeias) porId[a.id] = a;
+    const par = (x) => doPar(porId[x.id] || x);
+    return (p, q) => (minha[p.id] - minha[q.id]) || (dele[p.id] - dele[q.id]) || (par(p) - par(q)) || (p.id - q.id);
   }
 
   function resumoEstado(estado) {
@@ -1310,7 +1382,24 @@
     const chegaram = [], viajando = [];
     for (const m of sobreviventes) (m.turnosRestantes <= 0 ? chegaram : viajando).push(m);
     estado.movimentos = viajando;
-    for (const m of chegaram) resolverChegada(estado, m);
+    // ── QUEM CHEGA PRIMEIRO, QUANDO CHEGAM OS DOIS (22/09) ──────────────
+    // As ordens sao decididas em simultaneo mas executadas A->B, e a lista de
+    // movimentos herda essa ordem: quando os dois Reis chegavam a mesma
+    // aldeia no mesmo turno, A resolvia SEMPRE primeiro. Medido com o
+    // jogador-base contra ele proprio, em ordem espelhada, 600 jogos:
+    //     sempre A primeiro  -> A vence 73,5%
+    //     sempre B primeiro  -> A vence 27,8%
+    //     como estava        -> A vence 55,0%   (z = 2,45)
+    //     moeda por turno    -> A vence 50,2%
+    // A moeda e a mesma do desempate de estrada (A4): hash puro da seed e do
+    // turno, determinista, sem lado. Dentro de cada Rei a ordem nao muda.
+    let ordemChegada = chegaram;
+    if (estado.config.chegadaSorteada !== false) {
+      const deA = chegaram.filter((m) => m.dono === "A"), deB = chegaram.filter((m) => m.dono !== "A");
+      ordemChegada = chaveRngAlvo(estado.config.seed, estado.turno, 0x5eed, 0xc4e9) < 0.5
+        ? deB.concat(deA) : deA.concat(deB);
+    }
+    for (const m of ordemChegada) resolverChegada(estado, m);
   }
 
   // TICK: avanca um turno seguindo a ORDEM da spec.
@@ -1382,17 +1471,23 @@
     const fog = estado.config.fogOfWar === true;
     const visSet = fog ? visiveisPara(estado, dono) : null;
     const memVisto = fog ? ((estado.visto && estado.visto[dono]) || {}) : null;
+    // A ORDEM ESPELHADA (22/09): as listas saem da visao ja ordenadas por
+    // distancia a casa, e quem as le -- o relatorio P4, o jogador-base -- ve o
+    // mesmo mundo dos dois lados da mesa. Com a flag desligada, ou num estado
+    // sem `capitalInicial`, a ordem e por id, como sempre foi.
+    const cmpEsp = estado.config.visaoEspelhada !== false ? ordemEspelhada(estado, dono) : null;
+    const ordenar = (lista) => (cmpEsp ? lista.slice().sort(cmpEsp) : lista);
     return {
       dono,
       turno: estado.turno,
       config: estado.config,
-      minhas: aldeiasDe(estado, dono).map((a) => ({
+      minhas: ordenar(aldeiasDe(estado, dono)).map((a) => ({
         id: a.id, x: a.x, y: a.y, nome: a.nome, capital: !!a.capital,
         recursos: { madeira: a.recursos.madeira, ferro: a.recursos.ferro },
         tropas: copiaTropas(a.tropas),
         construindo: a.construindo.map((c) => ({ tipo: c.tipo, turnosRestantes: c.turnosRestantes })),
       })),
-      alvos: estado.aldeias.filter((a) => a.dono !== dono).map((a) => {
+      alvos: ordenar(estado.aldeias.filter((a) => a.dono !== dono)).map((a) => {
         const alvo = {
           id: a.id, x: a.x, y: a.y, dono: a.dono, tipo: a.tipo, capital: !!a.capital,
           tropas: copiaTropas(a.tropas),
@@ -2089,7 +2184,9 @@
     }
 
     // ---- suas aldeias ----
-    const minhasOrd = visao.minhas.slice().sort((p, q) => p.id - q.id);
+    // a ordem e a da VISAO (espelhada desde 22/09; por id se a flag estiver
+    // desligada). Havia aqui um `sort` por id que a desfazia.
+    const minhasOrd = visao.minhas.slice();
     L.push(`=== YOUR VILLAGES (${visao.minhas.length}) ===`);
     const casa = { lanceiro: 0, arqueiro: 0, cavaleiro: 0 };
     let marchando = 0;
@@ -2166,7 +2263,11 @@
     L.push("");
 
     // ---- alvos ----
-    const ordenar = (lista) => lista.map((a) => ({ a, t: marchaMedia(a) })).sort((p, q) => p.t - q.t || p.a.id - q.a.id);
+    // desempate pela posicao na VISAO, e nao pelo id: dois alvos a mesma
+    // distancia saiam sempre pela ordem de id, e isso e outra vez o oeste
+    // primeiro para os dois Reis
+    const posVisao = new Map(visao.alvos.map((a, i) => [a.id, i]));
+    const ordenar = (lista) => lista.map((a) => ({ a, t: marchaMedia(a) })).sort((p, q) => p.t - q.t || posVisao.get(p.a.id) - posVisao.get(q.a.id));
     const linhaAlvo = (a) => {
       const donoTag = a.dono === null ? "NEUTRAL" : (a.capital ? `ENEMY CAPITAL (King ${a.dono})` : `ENEMY (King ${a.dono})`);
       return `[${a.id}]${nomeDe(a)} | ${donoTag} | garrison: ${compEN(a.tropas)} | effective defense (location bonus included): ${defefetiva(a)}${deltaTexto(a)} | ${marchaTexto(a)}${memoriaTexto(a)}`;
@@ -2198,7 +2299,7 @@
         }
         L.push("");
       }
-      const nunca = visao.alvos.filter((a) => !a.visivel && !a.visto).sort((p, q) => p.id - q.id);
+      const nunca = visao.alvos.filter((a) => !a.visivel && !a.visto);   // na ordem da visao
       if (nunca.length) {
         L.push(`=== UNEXPLORED (${nunca.length}) - never seen; find them on the ROAD NETWORK below ===`);
         L.push(nunca.map((a) => `[${a.id}]${nomeDe(a)}${a.capital ? " (THE ENEMY CAPITAL - its garrison is unknown to you)" : ""}`).join(", "));

@@ -2842,7 +2842,13 @@
           ", vitoria " + Math.round((_c.vitoriaFracao || 0) * 100) + "%/" + _c.vitoriaTurnos + "t)"
         : "regras=congeladas v3";
       const resumosTxt = (_c.resumosDoRei !== false) ? " | resumos do Rei: plano+depoimento" : "";
-      geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=" + (_c.promptP4 === true ? "P4 EN (esquema declarado, sem exemplo, sem minimos, vitoria real, reforco, quantidade)" : "P2 (minimo por alvo)") + (_c.fogOfWar === true ? " + FOG OF WAR" : "") + " + combate v3 | " + regrasTxt + resumosTxt + " | normalizacao H3 ativa | thinking=" + (function(){const o=parseInt((document.getElementById("gorc")||{}).value,10);if(o>0) return "orcamento "+o+" tokens";const e=(document.getElementById("gesf")||{}).value;return e ? "esforco "+e : "on (sem limite)";})() + " | max_tokens_resposta=" + maxTokensLLM + " | " + (semLimite ? "SEM LIMITE de turnos (empate por estagnacao em 30t)" : "maxTurnos " + maxT) + " | teto=" + (TETO_CUSTO > 0 ? "$" + TETO_CUSTO.toFixed(2) : "desligado") + "\n"); // LOTE E, E6
+      // A MESA (22/09): desde as correcoes do assento, uma partida pode ter
+      // corrido com a mesa neutra ou com o motor antigo, e so o log o diz. Lido
+      // do `game.config`, pela regra de sempre: o cabecalho descreve a partida
+      // que CORREU, nao a intencao.
+      const mesaTxt = " | mesa: " + (_c.visaoEspelhada !== false ? "ordem espelhada" : "ordem por id")
+        + " + " + (_c.chegadaSorteada !== false ? "chegada sorteada" : "chegada A-primeiro");
+      geminiLog.push("condicoes: ambiente=" + (Engine.CONFIG.layout || "v1") + " | temp=" + tempLLM + " | prompt=" + (_c.promptP4 === true ? "P4 EN (esquema declarado, sem exemplo, sem minimos, vitoria real, reforco, quantidade)" : "P2 (minimo por alvo)") + (_c.fogOfWar === true ? " + FOG OF WAR" : "") + " + combate v3 | " + regrasTxt + mesaTxt + resumosTxt + " | normalizacao H3 ativa | thinking=" + (function(){const o=parseInt((document.getElementById("gorc")||{}).value,10);if(o>0) return "orcamento "+o+" tokens";const e=(document.getElementById("gesf")||{}).value;return e ? "esforco "+e : "on (sem limite)";})() + " | max_tokens_resposta=" + maxTokensLLM + " | " + (semLimite ? "SEM LIMITE de turnos (empate por estagnacao em 30t)" : "maxTurnos " + maxT) + " | teto=" + (TETO_CUSTO > 0 ? "$" + TETO_CUSTO.toFixed(2) : "desligado") + "\n"); // LOTE E, E6
       // AUTO-SAVE: cria o checkpoint .txt no disco com o cabecalho (via servir.py).
       const tsCp = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 16);
       checkpointArquivo = ("partida_" + vA + "_vs_" + vB + "_" + tsCp).replace(/[^a-z0-9._-]/gi, "-") + ".txt";

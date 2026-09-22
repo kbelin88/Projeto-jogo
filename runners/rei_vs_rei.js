@@ -142,10 +142,13 @@ const regrasTxt = cfg.vitoriaPorDominancia
     ", dist x" + (cfg.escalaMarcha != null ? cfg.escalaMarcha : 1) +
     ", vitoria " + Math.round((cfg.vitoriaFracao || 0) * 100) + "%/" + cfg.vitoriaTurnos + "t)"
   : "regras=congeladas v3";
+// a mesa (22/09): ordem espelhada e chegada sorteada, ou o motor antigo
+const mesaTxt = " | mesa: " + (cfg.visaoEspelhada !== false ? "ordem espelhada" : "ordem por id")
+  + " + " + (cfg.chegadaSorteada !== false ? "chegada sorteada" : "chegada A-primeiro");
 out("condicoes: ambiente=" + (cfg.layout || "v1") + " | temp=0 | prompt=" +
   (cfg.promptP4 === true ? "P4 EN (esquema declarado, sem exemplo, sem minimos, vitoria real, reforco, quantidade)" : "P2 (minimo por alvo)") +
   (cfg.fogOfWar === true ? " + FOG OF WAR" : "") +
-  " + combate v3 (atq/def, counter " + cfg.bonus_forca_triangulo + ") + clamp | " + regrasTxt +
+  " + combate v3 (atq/def, counter " + cfg.bonus_forca_triangulo + ") + clamp | " + regrasTxt + mesaTxt +
   // O cabecalho tem de descrever a partida que CORREU, nao a intencao.
   // Estava cravado "thinking=on" e mentiu na P1 de 31/08: a partida corria
   // em esforco medium e o log dizia que nao havia limite nenhum.

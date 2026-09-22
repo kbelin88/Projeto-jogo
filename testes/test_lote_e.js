@@ -15,7 +15,10 @@ const REF = path.join(__dirname, "ref-lote-e");
 // `varreduraEstrada` entra aqui pela mesma razao que as outras: a baseline
 // congelada nasceu com a deteccao por INSTANTE, e o que ela guarda e esse
 // motor. A varredura exata corre no jogo vivo e tem teste proprio.
-const FLAGS_OFF = { ordensSimultaneas: false, interceptaChegada: false, desempateEstradaRng: false, cruzamentoMesmoSentido: false, varreduraEstrada: false };
+// `visaoEspelhada` e `chegadaSorteada` (22/09) pela mesma razao: sao correcoes de
+// assento que o motor da baseline nao tinha.
+const FLAGS_OFF = { ordensSimultaneas: false, interceptaChegada: false, desempateEstradaRng: false, cruzamentoMesmoSentido: false, varreduraEstrada: false,
+  visaoEspelhada: false, chegadaSorteada: false };
 let ok = 0;
 const t = (nome, fn) => { fn(); console.log("  ok  " + nome); ok++; };
 

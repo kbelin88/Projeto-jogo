@@ -13,7 +13,11 @@ const E = require("../engine.js");
 // A regressao mede o TEXTO do relatorio, nao o balanceamento — entao continua
 // a correr contra o arquivo, que e imutavel por definicao.
 const cfgIberia = () => { const c = JSON.parse(JSON.stringify(E.CONFIG_V3_ARQUIVO)); c.layout = "iberia"; c.seed = 1;
-  c.ordensSimultaneas = false; c.interceptaChegada = false; c.desempateEstradaRng = false; return c; };
+  c.ordensSimultaneas = false; c.interceptaChegada = false; c.desempateEstradaRng = false;
+  // 22/09: as duas correcoes do assento mudam o JOGO do burro (a ordem em que
+  // percorre as aldeias e quem resolve primeiro nas chegadas), e portanto o
+  // estado que alimenta esta baseline. Desligadas pela mesma regra 2.
+  c.visaoEspelhada = false; c.chegadaSorteada = false; return c; };
 function estadoNoTurno(n) {
   const e = E.criarEstadoInicial(cfgIberia());
   const d = { A: (v) => E.jogadorBurro(v), B: (v) => E.jogadorBurro(v) };
