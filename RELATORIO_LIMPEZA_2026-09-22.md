@@ -312,7 +312,48 @@ A partida parada ficou guardada como prova
 (`resultados/p4-partida-0922/PARADA_sem_orcamento_lfm_x_ling_seed7.txt`) e a
 `MODELOS_ARENA.md` foi atualizada: o `lfm` não volta a partida longa.
 
-### 8.2 O controlo burro × burro, 100 turnos — **55 batalhas de estrada**
+### 8.2 Duas partidas que correram até ao fim — e **nenhuma chegou ao turno 100**
+
+Trocado o `lfm` pelo `dots-studio/dots-3-note-preview:free` (o outro modelo
+sondado hoje que respondeu 4 de 4 com envios), contra o mesmo
+`inclusionai/ling-3.0-flash-fin:free`. Teto de 100 turnos nas duas.
+
+| | seed 7 | seed 3 |
+|---|---|---|
+| acabou no turno | **18** | **19** |
+| como | vitória de A por **domínio** (75%, 2 turnos) | idem |
+| placar | A 19 × B 2 | A 19 × B 5 |
+| envios de A | 52 (198 tropas) | 72 (342 tropas) |
+| envios de B | **12** (52 tropas) | **15** (74 tropas) |
+| latência mediana | 89 s/turno | 91 s/turno |
+| respostas vazias | 17 em 36 | 14 em 38 |
+| **combates de estrada** | **0** | **0** |
+
+**O teto de 100 turnos nunca foi usado**: as duas acabaram antes do turno 20,
+pela regra de domínio. Subir o teto não dá mais tempo a uma partida que termina
+por vitória.
+
+### Porque não houve batalhas de estrada — a causa, medida
+
+Um combate de estrada precisa de **dois exércitos no mesmo troço**. Contei quantos
+exércitos cada Rei teve na estrada, turno a turno:
+
+| | exércitos-turno na estrada | turnos com ALGUM exército fora |
+|---|---|---|
+| A (dots) | 59 / 85 | 18 de 18 / 19 de 19 |
+| B (ling) | **13 / 15** | **7 de 18 / 6 de 19** |
+
+**O Rei B passa dois terços da partida sem um único exército fora de casa.** Não é
+que os dois se desencontrem: é que um deles quase nunca sai. Com um lado parado,
+a probabilidade de cruzamento vai a quase zero — e o que se vê no log confirma-o:
+27 combates de estrada... **de assalto a aldeia** (`COMBATE [id]`), nenhum
+`COMBATE-ESTRADA`.
+
+É o velho **entesouramento** com outra cara. A diferença agora é que está medido
+num número que se pode seguir de partida para partida: *exércitos-turno na
+estrada, por Rei*.
+
+### 8.3 O controlo burro × burro, 100 turnos — **55 batalhas de estrada**
 
 Mesma seed, mesmo mapa, sem API. Serve para responder a outra pergunta, que é a
 que interessa ao sistema: **as batalhas de estrada funcionam de ponta a ponta?**
@@ -332,7 +373,7 @@ COMBATE-ESTRADA no trecho [2] Evora-[5] Faro: A (ia [2] Evora->[4] Badajoz)
   -> vence B | exercito de A ANIQUILADO (2S) | vencedor perdeu 0
 ```
 
-### 8.3 E um evento real abre mesmo uma cena no mapa
+### 8.4 E um evento real abre mesmo uma cena no mapa
 
 Peguei no **primeiro combate de estrada dessa partida de 100 turnos** e meti-o no
 jogo pela porta de sempre — o log do motor. A ponte converteu-o e o mapa abriu a
@@ -349,3 +390,40 @@ cena:
 É o caminho inteiro provado com dados reais: motor → `ponte3d.js` →
 `mapa3d.js` → `batalha.js`.
 
+
+---
+
+## 9. O que fica para amanhã
+
+Três coisas saíram desta noite e nenhuma é código:
+
+1. **O teto de turnos não é o botão certo para ver batalhas de estrada.** As duas
+   partidas acabaram por domínio antes do turno 20. Se o objetivo é filmar
+   choques na estrada, o que falta não é tempo — é os **dois** lados marcharem.
+2. **`exércitos-turno na estrada, por Rei`** é a métrica que faltava. Separa
+   "não se encontraram" de "um deles nunca saiu de casa", e o segundo é o que
+   está a acontecer (B: 13 e 15, contra 59 e 85 de A).
+3. **A sonda de 3 turnos não prevê partida.** O `lfm` respondeu 6 de 6 na sonda e
+   congelou a partida no T19. Já tinha sido dito em 19/08; agora tem um segundo
+   caso e uma causa nomeada (o raciocínio cresce com o prompt até bater no teto
+   do provedor).
+
+E uma quarta, sobre o jogo: a **cena de conquista de aldeia** continua por fazer
+no mapa 3D — o combate de estrada tem cena, o assalto a aldeia ainda não. Está no
+`PLANO_BATALHAS_E_ALDEIAS.md`, e os 27 assaltos por partida que estas duas
+produziram mostram que é o evento mais frequente do jogo.
+
+---
+
+## 10. Os ficheiros desta noite
+
+```
+resultados/p4-partida-0922/
+  dots_x_ling_seed7_t100.txt          + .replay.json   (18 turnos, A vence 19x2)
+  dots_x_ling_seed3_t100.txt          + .replay.json   (19 turnos, A vence 19x5)
+  burro_x_burro_seed7_t100.txt        + .replay.json   (17 turnos, 55 combates de estrada)
+  PARADA_sem_orcamento_lfm_x_ling_seed7.txt            (a que congelou no T19)
+```
+
+O replay do burro é o que vale a pena abrir: **55 batalhas de estrada** para ver
+a cena nova a funcionar.
