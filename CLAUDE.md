@@ -64,7 +64,7 @@ gabarito escrito antes do experimento, artefato publicado antes da próxima fase
 
 ### Os testes
 
-**33 ficheiros de teste** em `testes/` e **13 smokes** em `testes_arena/`. Os que
+**34 ficheiros de teste** em `testes/` e **13 smokes** em `testes_arena/`. Os que
 guardam mais:
 
 - `test_prompt_p4.js` — o P4, o fog e o parser tolerante;
@@ -72,6 +72,7 @@ guardam mais:
   congeladas, com as flags novas desligadas (ver §5.4);
 - `test_simetria_assento.js` — a mesa é neutra (ver §4);
 - `test_sem_atravessar.js` — no replay, nenhuma coluna atravessa outra sem lutar;
+- `test_runner_simultaneo.js` — o runner headless joga o mesmo jogo que o motor;
 - `test_ruleset_vivo.js` — há um ruleset só, e é o que pensamos;
 - `test_guia_verdadeiro.js` — este ficheiro diz a verdade;
 - `test_index_carrega.js` — o `index.html` corre inteiro (`node --check` NÃO basta);
@@ -136,7 +137,10 @@ julga — a análise é do Lucas.
   turno (`encontroNoTempo`, 23/09; antes bastava os troços percorridos se
   sobreporem no espaço, e 3,3% das "lutas" eram de quem nunca se tinha visto).
 - **Neutras endurecem**: +1 tropa do seu tipo a cada 5 turnos.
-- **Ordens simultâneas:** os dois Reis decidem sobre a mesma fotografia.
+- **Ordens simultâneas:** os dois Reis decidem sobre a mesma fotografia — no motor,
+  no browser e, desde 23/09, no runner headless (que executava A antes de B
+  decidir; todas as baterias anteriores correram assim). O runner faz as duas
+  chamadas em paralelo.
 
 ### A mesa é neutra (22/09)
 

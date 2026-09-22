@@ -356,9 +356,24 @@ async function main() {
   while (estado.turno < maxTurnos) {
     Engine.tick(estado);
     const turno = estado.turno;
-    for (const dono of ["A", "B"]) {
-      if (!Engine.aldeiasDe(estado, dono).length) continue;
-      const registro = await decidirLado(estado, dono);
+    // ── ORDENS SIMULTANEAS, TAMBEM AQUI (23/09) ─────────────────────────────
+    // O motor (rodarTurno) e o browser decidem os dois Reis sobre a MESMA
+    // fotografia desde o LOTE E, e o prompt P4 di-lo com todas as letras
+    // ("Nothing you order this turn is visible to them"). O runner ficou para
+    // tras: executava a ordem de A ANTES de montar o prompt de B, e B via as
+    // marchas que A acabara de ordenar. Todas as partidas headless correram
+    // assim. Agora decide os dois primeiro -- em paralelo, porque nada muda
+    // entre as duas chamadas, e isso corta o relogio do turno quase a metade
+    // -- e so depois executa, A e depois B, como o motor.
+    const vivosT = ["A", "B"].filter((d) => Engine.aldeiasDe(estado, d).length);
+    const simultaneo = estado.config.ordensSimultaneas !== false;
+    const decididos = {};
+    if (simultaneo) {
+      const rs = await Promise.all(vivosT.map((d) => decidirLado(estado, d)));
+      vivosT.forEach((d, i) => { decididos[d] = rs[i]; });
+    }
+    for (const dono of vivosT) {
+      const registro = simultaneo ? decididos[dono] : await decidirLado(estado, dono);
       Engine.executarOrdem(estado, dono, registro.ordemParseada); // motor clampa (Fase 3)
 
       out(`########## TURNO ${turno} — Rei ${dono} (${etiquetaDe[dono]}) ##########`);
