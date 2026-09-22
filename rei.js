@@ -182,140 +182,87 @@ function clienteGemini(opcoes) {
 // runners de linha de comando (antes so existia no index.html/browser).
 // Teto de resposta pedido por default (29/08). Alto de proposito: ver o bloco de
 // comentario em `tetoAjustado`, abaixo. Modelos que nao o suportam ensinam-nos o
-// deles no proprio erro, e o cliente ajusta-se sozinho.
-const TETO_ALTO = 128000;
+// deles no proprio erro, e o cliente ajusta-se sozinho. A conta vive agora no
+// `clienteor.js`, partilhada com o browser (ClienteOR.TETO_ALTO).
+
+// ── O CLIENTE E UM SO, E ESTA NO clienteor.js (22/09) ──────────────────────
+// Este ficheiro tinha uma copia do cliente do browser -- a divida que o
+// CLAUDE.md listava desde agosto. E as duas copias nao eram iguais: a correcao
+// de 17/08 (honrar o `Retry-After` do provedor em vez de adivinhar por backoff)
+// entrou so no browser, depois de tres partidas morrerem por causa disso. Este
+// lado ficou um mes com a regra velha, e o que falhasse aqui falhava calado.
+//
+// ⚠ ISTO MUDA O COMPORTAMENTO DO RUNNER, de proposito: agora espera o MAIOR
+// entre o que o provedor pede e o backoff, com teto de 45 s por espera, e
+// reconhece `retry_after_seconds` alem do `retryDelay`. E a regra que ja estava
+// medida e documentada; o que estava errado era este lado nao a ter.
+//
+// O que continua a ser DESTE lado: o ritmo (3 s entre chamadas, porque o free
+// tier do OpenRouter tem janela propria) e a insistencia (6). Mudar qualquer um
+// mudaria o que ja foi medido em bancada.
+const ClienteOR = require("./clienteor.js");
 
 function clienteOpenRouter(opcoes) {
   opcoes = opcoes || {};
   const silencioso = !!opcoes.silencioso;
   const modelo = opcoes.modelo || "nvidia/nemotron-3-super-120b-a12b:free";
-  const temperatura = opcoes.temperatura != null ? opcoes.temperatura : 0;
   carregarEnv();
   const apiKey = opcoes.apiKey || process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("OPENROUTER_API_KEY ausente (defina no .env desta pasta)");
-  const url = opcoes.url || "https://openrouter.ai/api/v1/chat/completions";
-  // Backoff SO p/ throttle de transporte (429/503) — mesma regra do Gemini:
-  // o modelo nunca respondeu, entao repetir nao "esconde" decisao ruim. NUNCA
-  // retry em resposta invalida (essa o Rei "passa" o turno).
-  const maxTentativas = opcoes.maxTentativas != null ? opcoes.maxTentativas : 6;
-  const espera = (ms) => new Promise((r) => setTimeout(r, ms));
-  // OpenRouter sinaliza throttle via header Retry-After (segundos); as vezes um
-  // retryDelay/retry_after no corpo do erro. Respeitamos o que vier (como o Gemini).
-  function delayServidor(resp, corpo) {
-    const h = resp && resp.headers && resp.headers.get && resp.headers.get("retry-after");
-    if (h) { const s = parseFloat(h); if (isFinite(s)) return Math.ceil(s * 1000); }
-    const m = /"retry(?:_after|Delay)"\s*:\s*"?(\d+(?:\.\d+)?)s?"?/.exec(corpo || "");
-    return m ? Math.ceil(parseFloat(m[1]) * 1000) : null;
-  }
-  // PACING: piso entre chamadas. O free tier do OpenRouter tem janela PROPRIA
-  // (cota diaria por conta + rate por minuto), diferente dos 5 req/min do Gemini
-  // — por isso NAO herda o 13s do Gemini. Default folgado; suba via
-  // opcoes.minIntervaloMs se tomar 429. 0 desliga.
-  const minIntervaloMs = opcoes.minIntervaloMs != null ? opcoes.minIntervaloMs : 3000;
-  let ultimoEnvio = 0;
-  async function respeitarPiso() {
-    const faltam = minIntervaloMs - (Date.now() - ultimoEnvio);
-    if (faltam > 0) await espera(faltam);
-    ultimoEnvio = Date.now();
-  }
+
+  // ── O ESFORCO DE RACIOCINIO (31/08) ─────────────────────────────────────
+  // Por omissao continua sempre-ligado sem nivel -- o historico todo foi medido
+  // assim. Com REASONING_EFFORT=low|medium|high pede-se um nivel ao fornecedor;
+  // com REASONING_MAX_TOKENS da-se um ORCAMENTO, que e o que tem controlo fino.
+  //
+  // Existe porque o glm-5.3-flash gastou os 128 mil tokens INTEIROS a pensar no
+  // turno 5 e devolveu string vazia: o problema nao era o teto ser apertado, era
+  // ele nao saber parar. Medido: para esse modelo o `effort` nao tem meio termo
+  // -- low e medium dao ambos ~150 tokens.
+  //
+  // ⚠ Baixar o esforco muda O QUE SE MEDE. Uma partida assim nao e "o modelo X",
+  // e "o modelo X em esforco baixo" -- tem de ir dito na tabela e no video, ou a
+  // medida e desonesta.
+  const raciocinio = process.env.REASONING_MAX_TOKENS
+    ? { max_tokens: parseInt(process.env.REASONING_MAX_TOKENS, 10) }
+    : (process.env.REASONING_EFFORT
+        ? { effort: process.env.REASONING_EFFORT }
+        : { enabled: true });
+
+  const or = ClienteOR.criar({
+    url: opcoes.url,
+    chave: apiKey,
+    temperatura: opcoes.temperatura != null ? opcoes.temperatura : 0,
+    maxTentativas: opcoes.maxTentativas != null ? opcoes.maxTentativas : 6,
+    // PACING: o free tier do OpenRouter tem janela PROPRIA (cota diaria por
+    // conta + rate por minuto), diferente dos 5 req/min do Gemini -- por isso
+    // NAO herda o piso de 13 s de la. Suba via opcoes.minIntervaloMs se tomar
+    // 429; 0 desliga.
+    minIntervaloMs: opcoes.minIntervaloMs != null ? opcoes.minIntervaloMs : 3000,
+    maxTokens: opcoes.maxTokens != null ? opcoes.maxTokens : ClienteOR.TETO_ALTO,
+    raciocinio,
+    aviso: (m) => { if (!silencioso) console.error("  " + m); },
+  });
+
   return {
     nome: `openrouter:${modelo}`,
     ultimosTokens: null, // E3/1b — mesmo canal lateral dos outros clientes
     ultimoFinish: null,  // A1: finish_reason ("length" = truncou no teto de tokens)
-    // TETO DE RESPOSTA (29/08). Era 32000 fixo. Medido na P5 vs P6 de 28/08: o
-    // mesmo modelo, o mesmo adversario e a mesma seed, mudando SO o teto —
-    // 32000 perdeu 6x18 no T23; 64000 segurou os 40 turnos em 10x14 e com mais
-    // tropas. Um modelo estava a ser descartado por uma configuracao NOSSA.
-    //
-    // Decisao do Lucas (29/08): nao perder jogos por causa do teto. Pede-se ALTO.
-    //
-    // Mas alto e FIXO nao serve: 128000 rebenta em modelos de contexto pequeno
-    // (o liquid/lfm-2.5-2.6b tem 65536 de contexto TOTAL e devolve HTTP 400). E
-    // os fornecedores nao sao consistentes — o ling, com teto de saida 32768,
-    // aceita 128000 em silencio.
-    //
-    // A saida e que o proprio erro diz o limite: "This endpoint's maximum
-    // context length is 65536 tokens. However, you requested about 128002".
-    // Pede-se alto e, se recusarem, recalcula-se a partir do que ELES disseram e
-    // repete-se. Auto-corrige, sem depender de catalogo nem de tabela nossa.
-    tetoAjustado: null,  // lembrado por cliente: so se aprende o limite UMA vez
+    ultimosThrottles: 0, // 22/09: o runner passou a saber isto, como o browser
     async gerar(prompt) {
-      for (let tentativa = 1; ; tentativa++) {
-        await respeitarPiso();
-        const t0 = Date.now(); // LOTE E, E5
-        const resp = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + apiKey },
-          body: JSON.stringify({
-            model: modelo,
-            messages: [{ role: "user", content: prompt }],
-            temperature: temperatura,
-            stream: false,
-            // ESFORCO DE RACIOCINIO (31/08/2026). Por omissao continua
-            // sempre-ligado sem nivel — o historico todo foi medido assim.
-            // Com REASONING_EFFORT=low|medium|high pede-se um nivel ao
-            // fornecedor. Existe porque o glm-5.3-flash gastou os 128 mil
-            // tokens INTEIROS a pensar no turno 5 e devolveu string vazia:
-            // o problema nao era o teto ser apertado, era ele nao saber parar.
-            //
-            // ⚠ Baixar o esforco muda O QUE SE MEDE. Uma partida assim nao e
-            // "o modelo X", e "o modelo X em esforco baixo" — tem de ir dito
-            // na tabela e no video, ou a medida e desonesta.
-            // Medido em 31/08: para o glm-5.3-flash o `effort` nao tem meio
-            // termo — low e medium dao ambos ~150 tokens de raciocinio, e sem
-            // nivel nenhum ele vai aos 128 mil e devolve vazio. O que da
-            // controlo fino e o ORCAMENTO: pensa ate N tokens e depois
-            // responde, em vez de pensar ate rebentar.
-            reasoning: process.env.REASONING_MAX_TOKENS
-              ? { max_tokens: parseInt(process.env.REASONING_MAX_TOKENS, 10) }
-              : (process.env.REASONING_EFFORT
-                  ? { effort: process.env.REASONING_EFFORT }
-                  : { enabled: true }),
-            // LOTE C, E1: teto explicito e IGUAL p/ os dois lados, p/ o corte ser
-            // visivel. 29/08: o valor subiu de 32000 para TETO_ALTO (ver acima).
-            max_tokens: this.tetoAjustado || (opcoes.maxTokens != null ? opcoes.maxTokens : TETO_ALTO),
-          }),
-        });
-        if (resp.ok) {
-          const data = await resp.json();
-          const u = data.usage;
-          const det = (u && u.completion_tokens_details) || {}; // LOTE C, E2
-          this.ultimosTokens = u ? { prompt: u.prompt_tokens || 0, resposta: u.completion_tokens || 0, raciocinio: det.reasoning_tokens || 0, ms: Date.now() - t0 } : null; // LOTE E, E5
-          const ch = (data.choices && data.choices[0]) || {};
-          this.ultimoFinish = ch.finish_reason || null; // A1
-          const msg = ch.message || {};
-          // raciocinio em message.reasoning (texto) e/ou reasoning_details
-          // (estruturado); content = resposta final (SO o JSON de ordens).
-          let raciocinio = msg.reasoning || null;
-          if (!raciocinio && Array.isArray(msg.reasoning_details))
-            raciocinio = msg.reasoning_details.map((d) => (d && (d.text || d.summary)) || "").join("\n").trim() || null;
-          return { texto: msg.content || "", raciocinio };
-        }
-        const corpo = await resp.text().catch(() => "");
-        // O fornecedor recusou o teto e DISSE qual e o dele: aprende e repete.
-        // Nao conta como tentativa de rede — nao houve falha de rede, houve um
-        // pedido mal dimensionado nosso. Aprende-se uma vez por cliente.
-        const lim = /maximum context length is (\d+)/.exec(corpo);
-        if (resp.status === 400 && lim && !this.tetoAjustado) {
-          const ctx = parseInt(lim[1], 10);
-          const pedido = /you requested about (\d+)/.exec(corpo);
-          // o input ja gasto = o que pedimos menos o teto de saida que pedimos
-          const entrada = pedido ? Math.max(0, parseInt(pedido[1], 10) - (opcoes.maxTokens != null ? opcoes.maxTokens : TETO_ALTO)) : 0;
-          this.tetoAjustado = Math.max(4096, ctx - entrada - 2048); // 2048 de folga
-          if (!silencioso) console.error(`  [teto] ${modelo}: contexto ${ctx}; teto de resposta ajustado para ${this.tetoAjustado}`);
-          tentativa--; // este ciclo nao gastou tentativa de rede
-          continue;
-        }
-        const recuperavel = resp.status === 429 || resp.status === 503;
-        if (!recuperavel || tentativa >= maxTentativas) {
-          throw new Error(`OpenRouter HTTP ${resp.status}: ${corpo}`);
-        }
-        const ms = delayServidor(resp, corpo) || Math.min(1000 * 2 ** tentativa, 40000);
-        await espera(ms + 500); // folga p/ a janela de quota virar
-      }
+      const r = await or.gerar(prompt, modelo);
+      const t = r.tele;
+      this.ultimosTokens = t.tokens
+        ? { prompt: t.tokens.prompt, resposta: t.tokens.resposta,
+            raciocinio: t.tokens.raciocinio, ms: t.ms }   // LOTE E, E5
+        : null;
+      this.ultimoFinish = t.finish;
+      this.ultimosThrottles = t.throttles;
+      return { texto: r.texto, raciocinio: r.raciocinio };
     },
   };
 }
+
 
 // criarCliente(id) — ponto unico p/ trocar qual modelo roda.
 // id = "backend:modelo" (ex.: "ollama:qwen2.5:3b", "ollama:llama3.2:3b",
@@ -630,4 +577,4 @@ async function rodarPartidaRei(opcoes) {
   };
 }
 
-module.exports = { TETO_ALTO, clienteOllama, clienteGemini, clienteOpenRouter, criarCliente, carregarEnv, criarReiIA, decidirRei, decidirReiComposto, montarPromptValidador, avaliarCounter, rodarPartidaRei };
+module.exports = { TETO_ALTO: ClienteOR.TETO_ALTO, clienteOllama, clienteGemini, clienteOpenRouter, criarCliente, carregarEnv, criarReiIA, decidirRei, decidirReiComposto, montarPromptValidador, avaliarCounter, rodarPartidaRei };

@@ -125,7 +125,12 @@ if (!evs.length) {
   const trechos = [
     (html.match(/else if \(e\.tipo === "combate_estrada"\)\s*\n\s*L\.push\([\s\S]*?\);/) || [])[0],
     (html.match(/\} else if \(e\.tipo === "combate_estrada"\) \{[\s\S]*?\n      \}/) || [])[0],
-    (html.match(/if \(e\.tipo === "combate_estrada"\) \{[\s\S]*?continue;\n      \}/g) || []).join("\n"),
+    // ⚠ O LIMITE NO `[\s\S]` NAO E DECORACAO. Era ganancioso, e quando a
+    // ancora `continue;` mais proxima desapareceu -- em 22/09 o cliente de
+    // OpenRouter mudou de ficheiro e levou um `continue;` com ele -- o trecho
+    // passou de 21 mil para 75 mil caracteres, apanhou `e.` de meio ficheiro
+    // e inventou catorze campos em falta que nao existiam.
+    (html.match(/if \(e\.tipo === "combate_estrada"\) \{[\s\S]{0,1600}?continue;\n      \}/g) || []).join("\n"),
   ].filter(Boolean).join("\n");
   ok("localizou os trechos que leem o evento", trechos.length > 200, `${trechos.length} chars`);
   const campos = [...new Set([...trechos.matchAll(/\be\.([A-Za-z_][A-Za-z0-9_]*)/g)].map((m) => m[1]))]

@@ -29,32 +29,47 @@ const path=require("path");
 const html=fs.readFileSync(path.join(__dirname, "..", "index.html"),"utf8");
 let falhas=0; const ok=(n,c,d)=>{ if(!c) falhas++; console.log(`  [${c?"OK ":"XX "}] ${n}${d?" -> "+d:""}`); };
 
-const src=html.match(/const MAX_TENT_OR = \d+;[\s\S]*?\n  \}\n/)[0];
-ok("extraiu gerarOpenRouter (com MAX_TENT_OR)", !!src);
+// ── 22/09: O CLIENTE E UM SO ───────────────────────────────────────────────
+// Ate aqui este smoke extraia o `gerarOpenRouter` do index.html com uma
+// expressao regular e corria-o num sandbox. Corria a COPIA do browser -- e o
+// `rei.js` tinha outra, que nunca recebeu a correcao do Retry-After e por isso
+// nunca foi testada por ninguem. Agora ha um ficheiro, e o smoke corre ESSE.
+const ClienteOR = require(path.join(__dirname, "..", "clienteor.js"));
+const rei = fs.readFileSync(path.join(__dirname, "..", "rei.js"), "utf8");
 
-let esperas=[], chamadas=0, plano=[];
-const sandbox={
-  espera:(ms)=>{ esperas.push(ms); return Promise.resolve(); },
-  ultimoEnvioOR:0, throttlesUltimaChamada:0, tempLLM:0, maxTokensLLM:128000,
-  // 29/08: o teto de resposta passou a ser alto e AUTO-AJUSTAVEL — o cliente
-  // aprende o limite do modelo com o HTTP 400 dele. As duas vivem fora da
-  // funcao extraida, entao o sandbox tem de as fornecer.
-  TETO_ALTO_LLM:128000, tetoPorModelo:{},
-  openrouterKey:"k", OPENROUTER_URL:"http://x",
-  msUltimaChamada:null, tokensUltimaChamada:null, finishUltimaChamada:null,
-  finishNativoUltimaChamada:null, erroUltimaChamada:null, modoRacUltimaChamada:null,
-  Date, JSON, Number, Math, isFinite,
-  fetch: async ()=>{ const p=plano[chamadas++] || {ok:true};
-    if(p.ok) return { ok:true, json: async()=>({choices:[{message:{content:'{"construir":[],"envios":[]}'},finish_reason:"stop"}],usage:{prompt_tokens:10,completion_tokens:5}}) };
-    return { ok:false, status:p.status, headers:{get:(h)=>h==="retry-after"?p.retryAfter:null}, text: async()=>p.corpo||"" };
-  },
+let esperas = [], chamadas = 0, plano = [], tetos = {};
+const fetchFalso = async () => {
+  const p = plano[chamadas++] || { ok: true };
+  if (p.ok) return { ok: true, json: async () => ({
+    choices: [{ message: { content: '{"construir":[],"envios":[]}' }, finish_reason: "stop" }],
+    usage: { prompt_tokens: 10, completion_tokens: 5 } }) };
+  return { ok: false, status: p.status,
+           headers: { get: (h) => (h === "retry-after" ? p.retryAfter : null) },
+           text: async () => p.corpo || "" };
 };
-const fab=new Function(...Object.keys(sandbox), src+"; return gerarOpenRouter;");
-const run=async(pl)=>{ chamadas=0; esperas=[]; plano=pl; sandbox.throttlesUltimaChamada=0; sandbox.tetoPorModelo={};
-  const g=fab(...Object.values(sandbox));
-  try { const r=await g("prompt","m"); return {ok:true, r}; } catch(e){ return {ok:false, erro:e.message}; } };
+// O CLIENTE DO BROWSER, com os numeros do browser: 9 tentativas, 300 ms.
+const run = async (pl) => {
+  chamadas = 0; esperas = []; plano = pl; tetos = {};
+  const c = ClienteOR.criar({
+    chave: "k", url: "http://x", maxTentativas: 9, minIntervaloMs: 0,
+    maxTokens: 128000, tetoPorModelo: tetos,
+    fetch: fetchFalso, espera: (ms) => { esperas.push(ms); return Promise.resolve(); },
+  });
+  try { const r = await c.gerar("prompt", "m"); return { ok: true, r }; }
+  catch (e) { return { ok: false, erro: e.message }; }
+};
 
 (async()=>{
+  // 0. os dois lados usam o MESMO ficheiro -- e a razao de este smoke valer
+  //    para os dois. Se um deles voltar a ter cliente proprio, isto tem de doer.
+  ok("o clienteor.js exporta criar()", typeof ClienteOR.criar === "function");
+  ok("o index.html usa o clienteor.js",
+     /<script src="clienteor\.js"><\/script>/.test(html) && /ClienteOR\.criar\(/.test(html));
+  ok("o rei.js usa o clienteor.js",
+     /require\("\.\/clienteor\.js"\)/.test(rei) && /ClienteOR\.criar\(/.test(rei));
+  ok("nenhum dos dois volta a chamar o endpoint por sua conta",
+     !/fetch\(OPENROUTER_URL/.test(html) && !/openrouter\.ai\/api/.test(rei));
+
   // 1. dois 429 com Retry-After 5 no HEADER, depois sucesso
   let r=await run([{ok:false,status:429,retryAfter:"5"},{ok:false,status:429,retryAfter:"5"},{ok:true}]);
   ok("recupera de 2x 429 e devolve resposta", r.ok);
@@ -67,7 +82,8 @@ const run=async(pl)=>{ chamadas=0; esperas=[]; plano=pl; sandbox.throttlesUltima
 
   // 3. teto de 45s por espera
   r=await run([{ok:false,status:429,corpo:'{"retry_after_seconds":600}'},{ok:true}]);
-  ok("respeita o teto de 45s por espera", esperas[0]===45000, String(esperas[0]));
+  ok("respeita o teto por espera (ClienteOR.TETO_ESPERA_MS)",
+     esperas[0] === ClienteOR.TETO_ESPERA_MS, String(esperas[0]));
 
   // 4. insiste 9 vezes e so entao desiste
   r=await run(Array.from({length:20},()=>({ok:false,status:429,retryAfter:"1"})));
@@ -88,8 +104,8 @@ const run=async(pl)=>{ chamadas=0; esperas=[]; plano=pl; sandbox.throttlesUltima
   r = await run([{ok:false,status:400,corpo:corpo400},{ok:true}]);
   ok("HTTP 400 de contexto: aprende o teto e REPETE (nao mata a partida)", r.ok, `chamadas=${chamadas}`);
   ok("o teto aprendido cabe no contexto do modelo e nao e ridiculo",
-    sandbox.tetoPorModelo.m > 4096 && sandbox.tetoPorModelo.m < 65536,
-    "teto=" + sandbox.tetoPorModelo.m);
+    tetos.m > 4096 && tetos.m < 65536,
+    "teto=" + tetos.m);
 
   ok("existe deliberarComRetentativa", /async function deliberarComRetentativa/.test(html));
   ok("o passoTurnoDuelo usa a versao com retentativa",

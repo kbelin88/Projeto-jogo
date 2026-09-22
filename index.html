@@ -903,6 +903,8 @@
 <script src="marcas.js"></script>
 <!-- a unica porta entre a partida e o desenho -->
 <script src="ponte3d.js"></script>
+<!-- um so cliente de OpenRouter, partilhado com o runner (22/09) -->
+<script src="clienteor.js"></script>
 <script>
 (() => {
   "use strict";
@@ -2216,92 +2218,65 @@
     }
     return openrouterKey;
   }
-  // MAX_TENT_OR: quantas vezes insistir num 429/503 antes de desistir. Subiu de 6
-  // para 9 em 17/08 depois de tres partidas em free-tier morrerem no mesmo ponto:
-  // o endpoint :free do glm-5.2 e servido por UM provedor com pool compartilhado,
-  // e o proprio erro pede "retry shortly" com Retry-After 5s. Insistir e correto —
-  // um 429 nao e resposta do modelo, e infra: nao contamina metrica nenhuma.
+  // ── O CLIENTE E UM SO, E ESTA NO clienteor.js (22/09) ──────────────────
+  // Havia dois, iguais em intencao e diferentes em regra: este e o do `rei.js`.
+  // O do runner nunca recebeu a correcao de 17/08 (honrar o `Retry-After` em
+  // vez de adivinhar por backoff) que aqui salvou as partidas, insistia 6 vezes
+  // em vez de 9, e lia metade dos campos de espera. Um mes assim.
+  //
+  // O QUE FICA AQUI e o que e DESTE lado: o ritmo (300 ms entre chamadas), a
+  // insistencia (9), a chave do localStorage, o pedido de raciocinio vindo do
+  // painel, e a copia da telemetria para as variaveis que o log ja lia.
+  //
+  // MAX_TENT_OR subiu de 6 para 9 em 17/08 depois de tres partidas em free-tier
+  // morrerem no mesmo ponto: o endpoint :free do glm-5.2 e servido por UM
+  // provedor com pool partilhado, e o proprio erro pede "retry shortly" com
+  // Retry-After 5s. Insistir e correto -- um 429 nao e resposta do modelo, e
+  // infra: nao contamina metrica nenhuma.
   const MAX_TENT_OR = 9;
-  async function gerarOpenRouter(prompt, modelo) {
-    const faltam = 300 - (Date.now() - ultimoEnvioOR); // pacing leve p/ rate limit
-    if (faltam > 0) await espera(faltam);
-    ultimoEnvioOR = Date.now();
-    throttlesUltimaChamada = 0;
-    for (let tentativa = 1; ; tentativa++) {
-      const t0 = Date.now(); // LOTE E, E5
-      const resp = await fetch(OPENROUTER_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + openrouterKey },
-        body: JSON.stringify({ model: modelo, messages: [{ role: "user", content: prompt }], temperature: tempLLM, stream: false, reasoning: (function () {
-              // MEDIDO 31/08: o `effort` nao tem meio termo no glm-5.3-flash —
-              // low e medium dao ~140 tokens; sem nivel vai aos 128 mil e
-              // devolve string vazia. O ORCAMENTO da controlo fino: pensa ate
-              // N e depois responde.
-              // ⚠ effort e max_tokens sao EXCLUSIVOS no OpenRouter; o orcamento
-              // ganha quando os dois estao postos.
-              // o Smoke6rede extrai esta funcao e corre-a SEM DOM: sem esta
-              // guarda, o teste de rede morre com "document is not defined".
-              if (typeof document === "undefined") return { enabled: true };
-              const orc = parseInt((document.getElementById("gorc") || {}).value, 10);
-              if (orc > 0) return { max_tokens: orc };
-              const esf = (document.getElementById("gesf") || {}).value;
-              return esf ? { effort: esf } : { enabled: true };
-            })(), max_tokens: (tetoPorModelo[modelo] || (typeof maxTokensLLM === "number" ? maxTokensLLM : TETO_ALTO_LLM)) }), // LOTE D, D2; teto auto-ajustavel 29/08
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        msUltimaChamada = Date.now() - t0; // LOTE E, E5: duracao da chamada que resolveu
-        const u = data.usage;
-        // LOTE D, D1: o booleano `truncado` escondia a causa real. Guardar o cru.
-        const det = (u && u.completion_tokens_details) || {};
-        tokensUltimaChamada = u ? { prompt: u.prompt_tokens || 0, resposta: u.completion_tokens || 0, raciocinio: det.reasoning_tokens || 0 } : null;
-        const ch = (data.choices && data.choices[0]) || {};
-        finishUltimaChamada = ch.finish_reason || null; // A1: "length" = truncou no teto
-        finishNativoUltimaChamada = ch.native_finish_reason || null; // D1: finish do provedor
-        erroUltimaChamada = (data.error && (data.error.message || JSON.stringify(data.error))) || null; // D1
-        const msg = ch.message || {};
-        // OpenRouter devolve o raciocinio em message.reasoning (texto) e/ou
-        // reasoning_details (estruturado); message.content e a resposta final.
-        let raciocinio = msg.reasoning || null;
-        if (!raciocinio && Array.isArray(msg.reasoning_details))
-          raciocinio = msg.reasoning_details.map((d) => (d && (d.text || d.summary)) || "").join("\n").trim() || null;
-        // A2: resumo (OpenAI: reasoning_details type *.summary) vs completo (cadeia crua) vs ausente
-        modoRacUltimaChamada = !raciocinio ? "ausente"
-          : (Array.isArray(msg.reasoning_details) && msg.reasoning_details.some((d) => d && /summary/.test(d.type || ""))) ? "resumo"
-          : "completo";
-        return { texto: msg.content || "", raciocinio };
-      }
-      const corpo = await resp.text().catch(() => "");
-      // TETO RECUSADO (29/08): pedimos alto de proposito (ver maxTokensLLM) e um
-      // modelo de contexto pequeno responde HTTP 400 dizendo qual e o limite dele
-      // — "This endpoint's maximum context length is 65536 tokens. However, you
-      // requested about 128002". Aprende-se com o erro e repete-se; nao gasta
-      // tentativa de rede, porque nao houve falha de rede: o pedido e que estava
-      // mal dimensionado. Aprende-se UMA vez por modelo, na tabela tetoPorModelo.
-      const lim = /maximum context length is (\d+)/.exec(corpo);
-      if (resp.status === 400 && lim && tetoPorModelo[modelo] == null) {
-        const ctx = parseInt(lim[1], 10);
-        const ped = /you requested about (\d+)/.exec(corpo);
-        const entrada = ped ? Math.max(0, parseInt(ped[1], 10) - maxTokensLLM) : 0;
-        tetoPorModelo[modelo] = Math.max(4096, ctx - entrada - 2048); // 2048 de folga
-        tentativa--;
-        continue;
-      }
-      if ((resp.status !== 429 && resp.status !== 503) || tentativa >= MAX_TENT_OR) throw new Error("OpenRouter HTTP " + resp.status + ": " + corpo);
-      throttlesUltimaChamada++;
-      // HONRAR O Retry-After (17/08): o provedor DIZ quanto esperar, no header e no
-      // corpo (retry_after_seconds). Adivinhar por backoff exponencial gastava as
-      // tentativas mais rapido do que o pool levava a liberar. Usa-se o MAIOR entre
-      // o pedido do provedor e o backoff, com teto de 45s por espera.
-      let pedido = Number(resp.headers.get("retry-after")) * 1000;
-      if (!isFinite(pedido) || pedido <= 0) {
-        const m = /"retry_after_seconds"\s*:\s*(\d+)/.exec(corpo);
-        pedido = m ? Number(m[1]) * 1000 : 0;
-      }
-      const backoff = Math.min(1000 * 2 ** tentativa, 40000) + 500;
-      await espera(Math.min(Math.max(pedido, backoff), 45000)); // backoff p/ throttle (429 = cota free)
-    }
+  const _or = (typeof ClienteOR !== "undefined" && ClienteOR) ? ClienteOR.criar({
+    url: OPENROUTER_URL,
+    get chave() { return openrouterKey; },
+    temperatura: 0,                      // reposto a cada chamada (ver abaixo)
+    maxTentativas: MAX_TENT_OR,
+    minIntervaloMs: 300,                 // pacing leve p/ rate limit
+    maxTokens: TETO_ALTO_LLM,
+    tetoPorModelo: tetoPorModelo,        // a MESMA tabela que o painel mostra
+    espera: (ms) => espera(ms),
+    aviso: (m) => console.log(m),
+  }) : null;
+  // ⚠ a chave e a temperatura mudam DEPOIS de o cliente nascer (o utilizador
+  // cola a chave, o painel mexe na temperatura), por isso o objeto de opcoes
+  // le-as por getter e o `gerar` recebe o resto na hora.
+  function raciocinioPedido() {
+    // MEDIDO 31/08: o `effort` nao tem meio termo no glm-5.3-flash -- low e
+    // medium dao ~140 tokens; sem nivel vai aos 128 mil e devolve string vazia.
+    // O ORCAMENTO da controlo fino: pensa ate N e depois responde.
+    // ⚠ effort e max_tokens sao EXCLUSIVOS no OpenRouter; o orcamento ganha
+    // quando os dois estao postos.
+    if (typeof document === "undefined") return { enabled: true };
+    const orc = parseInt((document.getElementById("gorc") || {}).value, 10);
+    if (orc > 0) return { max_tokens: orc };
+    const esf = (document.getElementById("gesf") || {}).value;
+    return esf ? { effort: esf } : { enabled: true };
   }
+  async function gerarOpenRouter(prompt, modelo) {
+    throttlesUltimaChamada = 0;
+    if (!_or) throw new Error("clienteor.js nao carregou");
+    const r = await _or.gerar(prompt, modelo,
+      { raciocinio: raciocinioPedido(), temperatura: tempLLM });
+    const t = r.tele;
+    // a telemetria vai para onde o log e o benchmark ao vivo sempre a leram
+    msUltimaChamada = t.ms;
+    tokensUltimaChamada = t.tokens;
+    finishUltimaChamada = t.finish;
+    finishNativoUltimaChamada = t.finishNativo;
+    erroUltimaChamada = t.erro;
+    modoRacUltimaChamada = t.modoRac;
+    throttlesUltimaChamada = t.throttles;
+    return { texto: r.texto, raciocinio: r.raciocinio };
+  }
+
 
   // "[7] Toledo" a partir do id. O combate de ESTRADA nao tem alvoNome (nao
   // acontece numa aldeia), entao a cronica e o .txt nomeiam os dois exercitos
