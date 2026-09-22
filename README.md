@@ -32,18 +32,32 @@ Detalhes e logs: `docs/PROTOCOLO_EXPERIMENTOS_H1_H2.txt`, `docs/BENCHMARK_modelo
 ## Como rodar
 
 **Arena (navegador):**
-1. Ollama local com CORS liberado: `setx OLLAMA_ORIGINS "*"` e `ollama serve`, com um modelo 3B baixado (`ollama pull qwen2.5:3b`).
-2. Abrir `index.html`. Knob de temperatura via URL: `index.html?temp=0.7`.
-3. Cada duelo gera log com cabeçalho de proveniência (condições do experimento registradas no próprio arquivo).
-
-**Runner de experimentos (linha de comando):**
+```bash
+python servir.py
 ```
-node runners/exp_perseveracao.js ollama:qwen2.5:3b --temp 0
-node runners/exp_perseveracao.js ollama:qwen2.5:3b --temp 0 --rejfim
-```
-Cada rodada: log completo em `logs/exp/` + linha agregada em `logs/exp/resumo.txt`.
+Depois abrir `http://localhost:8000/index.html`. **Não abrir o ficheiro com duplo
+clique:** em `file://` o navegador bloqueia `fetch`, `localStorage` e downloads, e
+o jogo abre sem chave de API, sem mapa e sem log.
 
-**Testes:** 10 testes do motor (`testes/`) + 5 smokes da arena (`testes_arena/`), stubs em modo estrito. Rodar da raiz com `node <arquivo>`.
+O mapa é 3D e vem de ficheiros cozidos no Blender que **não estão no git** (dezenas
+de MB). Quem clona o repositório tem de os cozer — ver `CLAUDE.md`, secção 8.2. Sem
+eles o jogo diz o que falta e pára; não há mapa de reserva.
+
+A chave da API é pedida uma vez e fica só no `localStorage` do navegador.
+
+**Duelo headless (linha de comando):**
+```bash
+node runners/rei_vs_rei.js openrouter:deepseek/deepseek-r1 burro 1 40 saida.txt
+```
+Lê a chave do `.env` da pasta (`OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `GROK_API_KEY`).
+Escreve o `.txt` narrado e, ao lado, o `.replay.json` — que é de onde saem as
+métricas. O `.txt` narra, o JSON mede.
+
+**Testes:** 30 testes do motor (`testes/`) + 13 smokes da arena (`testes_arena/`),
+com stubs de DOM em modo estrito. Rodar da raiz:
+```bash
+for f in testes/*.js testes_arena/*.js; do node "$f" || echo "FALHOU $f"; done
+```
 
 ## O que tem dentro
 
