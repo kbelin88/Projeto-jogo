@@ -124,12 +124,12 @@
       "motivosInapto": [],
       "apto": true,
       "arena": {
-        "estado": "TESTADO — ganhou as duas",
-        "partidas": 2,
-        "vitorias": 2,
-        "latenciaMediana": "89-91 s em partida",
-        "formato": "18 e 19 turnos validos; ~45% das respostas vazias, sem matar a partida",
-        "nota": "22/09, seeds 7 e 3 contra o ling-3.0-flash-fin: venceu as DUAS por dominio (75%/2t), 19x2 no T18 e 19x5 no T19. Joga a serio: 52 e 72 envios, 198 e 342 tropas, e esteve com exercito na estrada em 18 de 18 e 19 de 19 turnos. E o primeiro modelo :free a converter dominio duas vezes. Tem quase metade das respostas vazias e ganha na mesma -- o que diz que a metrica que separa modelos aqui nao e validade, e AGENCIA. Candidato a regua nova."
+        "estado": "TESTADO",
+        "partidas": 12,
+        "vitorias": "4 confirmadas por dominancia (R1 e R2 de 28/08 como Rei A; seeds 7 e 3 de 22/09 como Rei A)",
+        "latenciaMediana": "95-204 s em partida em 28/08; 89-91 s em 22/09 (a sonda de 1 turno dava 35 s)",
+        "formato": "ok em 28/08 (1 resposta cortada em 52); em 22/09 ~45% das respostas vazias, sem matar a partida",
+        "nota": "Aparece em 10 ficheiros de partida entre 19/08 e 28/08 e em mais 2 em 22/09. E o 2o modelo mais rodado da Arena, atras da regua (lightning). Em 28/08 correu 29 e 23 turnos com ZERO erros de rede. Fornecedor diferente dos Nemotron, o que o torna util quando o pool da Nvidia esta degradado. ⚠️ A sonda de 1 turno subestimou a latencia em 3-6x. 22/09, seeds 7 e 3 contra o ling-3.0-flash-fin: venceu as duas por dominio (19x2 no T18, 19x5 no T19), com 52 e 72 envios e exercito na estrada em todos os turnos. Em 22/09 teve quase metade das respostas vazias e ganhou na mesma -- o que separa modelos aqui e AGENCIA, nao validade. ⚠️ As 4 vitorias foram todas como Rei A: o assento nunca foi trocado com ele."
       }
     },
     {
@@ -199,12 +199,12 @@
       "motivosInapto": [],
       "apto": true,
       "arena": {
-        "estado": "TESTADO — responde, mas nao sai de casa",
-        "partidas": 2,
+        "estado": "TESTADO — joga, mas nao sai de casa",
+        "partidas": 3,
         "vitorias": 0,
-        "latenciaMediana": "23-78 s na sonda; em partida acompanha o adversario",
-        "formato": "18 e 19 turnos validos, com ordens",
-        "nota": "22/09, seeds 7 e 3: perdeu as duas por dominio. O formato nao e o problema -- responde e as ordens sao validas. O problema e AGENCIA: 12 e 15 envios (contra 52 e 72 do adversario), e passou DOIS TERCOS da partida sem um unico exercito na estrada (exercitos-turno: 13 e 15, contra 59 e 85). E por causa disto que as duas partidas deram ZERO combates de estrada: nao e desencontro, e um lado que nao sai. Entesouramento classico, agora com numero que se segue."
+        "latenciaMediana": "193 s em partida em 28/08 (86-234 s); 23-78 s na sonda de 21/09",
+        "formato": "28/08: 6 de 15 turnos com ordem, 47% cortadas por `length`; 22/09: 18 e 19 turnos validos",
+        "nota": "28/08: perdeu 4x19 para o 120b em 15 turnos. A resposta crescia turno a turno (11k, 16k, 30k) e a partir do T5 batia no teto de 32000 quase sempre, devolvendo finish length e ZERO ordens -- o teto proprio dele e 32768. 22/09 (com o teto novo auto-ajustavel): perdeu as duas contra o dots por dominio. O formato ja nao e o problema; o problema e AGENCIA -- 12 e 15 envios contra 52 e 72, e dois tercos da partida sem um unico exercito na estrada (exercitos-turno 13 e 15, contra 59 e 85). E a causa medida de as duas partidas darem ZERO combates de estrada. ⚠️ Sempre como Rei B."
       }
     },
     {

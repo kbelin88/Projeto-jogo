@@ -71,8 +71,14 @@ function jogadaFake(prompt) {
     return prompt.slice(i, j < 0 ? undefined : j);
   };
   const ids = (txt) => [...txt.matchAll(/\[(\d+)\]/g)].map((m) => Number(m[1]));
-  const minhas = ids(sec("SUAS ALDEIAS"));
-  const alvos = ids(sec("ALDEIAS NEUTRAS")).concat(ids(sec("INIMIGO")));
+  // o prompt vivo e o P4, em INGLES, desde 17/08; o legado continua em portugues.
+  // Le os dois -- com so o portugues este jogador deixou de atacar e o gerador
+  // passou a sair com uma fixture sem um unico combate.
+  // ⚠ So a PRIMEIRA linha de cada aldeia conta: dentro do bloco aparecem ids de
+  // vizinhos ("BORDER with [4]") que nao sao aldeias minhas.
+  const cabecas = (txt) => txt.split("\n").filter((l) => /^\[\d+\]/.test(l.trim())).join("\n");
+  const minhas = ids(cabecas(sec("SUAS ALDEIAS") || sec("YOUR VILLAGES")));
+  const alvos = ids(cabecas(sec("ALDEIAS NEUTRAS") + sec("INIMIGO") + sec("VILLAGES YOU CAN SEE")));
   if (!minhas.length) return '{"construir":[],"envios":[]}';
   const ordem = { construir: [{ aldeiaId: minhas[0], tipo: "lanceiro" }], envios: [] };
   if (alvos.length) ordem.envios.push({ origemId: minhas[0], destinoId: alvos[0],
@@ -85,7 +91,11 @@ global.fetch = (url, opts) => {
     res({ ok: true, json: async () => ({ response: jogadaFake(corpo.prompt) }) }), 5));
 };
 
-global.World = require(process.cwd() + "/world.js");
+// o `world.js` (mapa procedural) saiu em 22/09; o jogo carrega agora tres
+// modulos ao lado do index.html, e sem eles o adaptador cai no esboco de reserva
+global.Marcas = require(process.cwd() + "/marcas.js");
+global.Ponte3D = require(process.cwd() + "/ponte3d.js");
+global.ClienteOR = require(process.cwd() + "/clienteor.js");
 global.Engine = require(process.cwd() + "/engine.js");
 const fs = require("fs"), os = require("path");
 const html = fs.readFileSync("index.html", "utf-8");
@@ -97,7 +107,10 @@ eval(html.slice(html.lastIndexOf("<script>") + 8, html.lastIndexOf("</script>"))
   for (let t = 0; t < N; t++) await listeners["gstep"].click();
   listeners["greplaysave"].click();
   const dados = JSON.parse(global.__blob);
-  if (!dados.frames || dados.frames.length !== N) throw new Error(`esperava ${N} frames, veio ${dados.frames && dados.frames.length}`);
+  // N turnos jogados + o TURNO 0: desde 25/08 o replay grava o tabuleiro antes de
+  // qualquer ordem. Esta conta dizia `N` e o gerador falhou em silencio desde
+  // entao -- ninguem o corria, porque o Smoke2 le a fixture ja feita.
+  if (!dados.frames || dados.frames.length !== N + 1) throw new Error(`esperava ${N + 1} frames (turno 0 + ${N}), veio ${dados.frames && dados.frames.length}`);
   const comEventos = dados.frames.filter((f) => f.eventos && f.eventos.length).length;
   if (!comEventos) throw new Error("nenhum frame com eventos — fixture inutil p/ testar banner/cronica");
   const alvo = os.join(process.cwd(), "testes_arena", "fixtures", "replay_duelo.json");
