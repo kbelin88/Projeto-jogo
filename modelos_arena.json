@@ -1,35 +1,10 @@
 {
-  "geradoEm": "2026-08-28T13:49:47.613Z",
+  "geradoEm": "2026-09-21T18:08:17.939Z",
   "criterio": {
     "MIN_CTX": 32000,
     "MIN_OUT": 4096
   },
   "modelos": [
-    {
-      "id": "minimax/minimax-m3:free",
-      "nome": "MiniMax: MiniMax M3 (free)",
-      "provider": "minimax",
-      "criado": "2026-05-31",
-      "ctx": 1048576,
-      "maxOut": 943718,
-      "modalidade": "text+image+video->text",
-      "tokenizer": "Other",
-      "racMandatorio": false,
-      "racPadrao": false,
-      "racSuportado": true,
-      "esforcos": "?",
-      "descricao": "MiniMax-M3 is a multimodal foundation model from MiniMax. It supports text, image, and video inputs with text output, a 1M-token context window, and is suited f",
-      "motivosInapto": [],
-      "apto": true,
-      "arena": {
-        "estado": "TESTADO — salvavel levantando o teto",
-        "partidas": 2,
-        "vitorias": 0,
-        "latenciaMediana": "260 s a 32k / 287 s a 64k (pico 565 s)",
-        "formato": "a 32000: 15 de 22 turnos com ordem, 36% cortados. A 64000: 34 de 39 com ordem, 11% cortados",
-        "nota": "O CASO QUE PROVOU que um modelo pode ser descartado por configuracao NOSSA. P5 (teto 32000): perdeu 6x18 no T23 por dominancia. P6 (mesmo confronto, mesma seed, so o teto muda para 64000): chegou ao limite dos 40 turnos em 10x14 e com MAIS TROPAS que o adversario (107 vs 94). O teto proprio dele e 943718 — 29x o nosso default; quem o cortava a meio do raciocinio eramos nos. CONTRAPARTIDA: 4h54 contra 2h12 pela mesma partida. Salvavel, mas caro em relogio. Todo modelo rejeitado por finish length no historico tem de ser re-julgado antes de ser descartado."
-      }
-    },
     {
       "id": "thinkingmachines/inkling-small:free",
       "nome": "Thinking Machines: Inkling Small (free)",
@@ -209,7 +184,7 @@
     },
     {
       "id": "inclusionai/ling-3.0-flash-fin:free",
-      "nome": "Ling 3.0 Flash Fin (free)",
+      "nome": "inclusionAI: Ling 3.0 Flash Fin (free)",
       "provider": "inclusionai",
       "criado": "2026-08-27",
       "ctx": 262144,
@@ -362,12 +337,37 @@
       }
     },
     {
+      "id": "liquid/lfm-2.5-2.6b:free",
+      "nome": "LiquidAI: LFM2.5-2.6B (free)",
+      "provider": "liquid",
+      "criado": "2026-08-11",
+      "ctx": 65536,
+      "maxOut": 8192,
+      "modalidade": "text->text",
+      "tokenizer": "Other",
+      "racMandatorio": false,
+      "racPadrao": false,
+      "racSuportado": true,
+      "esforcos": "?",
+      "descricao": "LFM2.5-2.6B is a compact reasoning model from Liquid AI. It is suited for agent workflows, data extraction, RAG, and long-context processing. Liquid advises aga",
+      "motivosInapto": [],
+      "apto": true,
+      "arena": {
+        "estado": "TESTADO — nao aguenta partida longa",
+        "partidas": 1,
+        "vitorias": 0,
+        "latenciaMediana": "55 s em partida (43-116 s); 11-13 s na sonda de 3 turnos",
+        "formato": "13 turnos com ordem em 23; a partir do T5, 34 respostas VAZIAS por `finish length`",
+        "nota": "22/09, seed 7, teto 100 turnos: a partida CONGELOU no T19 com 0 exercitos em transito dos dois lados, e ficou assim. A causa nao e o teto que pedimos (aprendeu 61579 pelo HTTP 400 dele) -- e o PROVEDOR, que corta a resposta em 8192 tokens. O modelo gasta os 8192 INTEIROS a pensar e devolve string vazia com finish=length. O sinal e a TENDENCIA: na sonda de 3 turnos responde limpo (6 de 6 com envio); em partida o prompt cresce, o raciocinio cresce com ele, e a partir do T5 nunca mais responde. Sonda de 3 turnos NAO preve isto. ⚠ REASONING_MAX_TOKENS NAO SALVA: com orcamento de 1500 o primeiro turno ainda deu 8192 de raciocinio e finish length -- este provedor ignora o pedido de orcamento. Nao e um knob nosso, e um limite deles. Nao voltar a por em partida longa. Como baseline de RELOGIO numa sonda curta continua a valer."
+      }
+    },
+    {
       "id": "z-ai/glm-5.2:free",
       "nome": "Z.ai: GLM 5.2 (free)",
       "provider": "z-ai",
       "criado": "2026-06-16",
-      "ctx": 256000,
-      "maxOut": 230400,
+      "ctx": 32768,
+      "maxOut": 29491,
       "modalidade": "text->text",
       "tokenizer": "Other",
       "racMandatorio": false,
@@ -389,21 +389,32 @@
       }
     },
     {
+      "id": "deepseek/deepseek-v4-flash:free",
+      "nome": "deepseek/deepseek-v4-flash:free",
+      "provider": "deepseek",
+      "foraDoCatalogo": true,
+      "apto": false,
+      "motivosInapto": [
+        "fora do catalogo free em 2026-09-21"
+      ],
+      "modalidade": "?",
+      "tokenizer": "?",
+      "arena": {
+        "estado": "MORTO",
+        "nota": "404 'unavailable for free' em 18/08, <24 h depois de verificado"
+      }
+    },
+    {
       "id": "minimax/minimax-m2.7:free",
-      "nome": "MiniMax: MiniMax M2.7 (free)",
+      "nome": "minimax/minimax-m2.7:free",
       "provider": "minimax",
-      "criado": "2026-03-18",
-      "ctx": 196608,
-      "maxOut": 176947,
-      "modalidade": "text->text",
-      "tokenizer": "Other",
-      "racMandatorio": false,
-      "racPadrao": false,
-      "racSuportado": true,
-      "esforcos": "?",
-      "descricao": "MiniMax-M2.7 is a next-generation large language model designed for autonomous, real-world productivity and continuous improvement. Built to actively participat",
-      "motivosInapto": [],
-      "apto": true,
+      "foraDoCatalogo": true,
+      "apto": false,
+      "motivosInapto": [
+        "fora do catalogo free em 2026-09-21"
+      ],
+      "modalidade": "?",
+      "tokenizer": "?",
       "arena": {
         "estado": "SONDADO — INSTAVEL",
         "partidas": 0,
@@ -414,44 +425,23 @@
       }
     },
     {
-      "id": "liquid/lfm-2.5-2.6b:free",
-      "nome": "LiquidAI: LFM2.5-2.6B (free)",
-      "provider": "liquid",
-      "criado": "2026-08-11",
-      "ctx": 65536,
-      "maxOut": 8192,
-      "modalidade": "text->text",
-      "tokenizer": "Other",
-      "racMandatorio": false,
-      "racPadrao": false,
-      "racSuportado": true,
-      "esforcos": "?",
-      "descricao": "LFM2.5-2.6B is a compact reasoning model from Liquid AI. It is suited for agent workflows, data extraction, RAG, and long-context processing. Liquid advises aga",
-      "motivosInapto": [],
-      "apto": true,
-      "arena": {
-        "estado": "SONDADO — OK, mas throttled",
-        "partidas": 0,
-        "vitorias": 0,
-        "latenciaMediana": "11-13 s (sonda de 3 turnos)",
-        "formato": "ok — 2 de 2 turnos validos, com ordens nos dois",
-        "nota": "RESSUSCITOU: constava MORTO (404 em 18/08). O MAIS RAPIDO ja medido na Arena (11-13 s/turno) — candidato a baseline fraco barato em relogio. Cai em 429 do pool partilhado da Liquid (retry_after 60 s). 2.6B: esperar degrau baixo."
-      }
-    },
-    {
-      "id": "deepseek/deepseek-v4-flash:free",
-      "nome": "deepseek/deepseek-v4-flash:free",
-      "provider": "deepseek",
+      "id": "minimax/minimax-m3:free",
+      "nome": "minimax/minimax-m3:free",
+      "provider": "minimax",
       "foraDoCatalogo": true,
       "apto": false,
       "motivosInapto": [
-        "fora do catalogo free em 2026-08-28"
+        "fora do catalogo free em 2026-09-21"
       ],
       "modalidade": "?",
       "tokenizer": "?",
       "arena": {
-        "estado": "MORTO",
-        "nota": "404 'unavailable for free' em 18/08, <24 h depois de verificado"
+        "estado": "TESTADO — salvavel levantando o teto",
+        "partidas": 2,
+        "vitorias": 0,
+        "latenciaMediana": "260 s a 32k / 287 s a 64k (pico 565 s)",
+        "formato": "a 32000: 15 de 22 turnos com ordem, 36% cortados. A 64000: 34 de 39 com ordem, 11% cortados",
+        "nota": "O CASO QUE PROVOU que um modelo pode ser descartado por configuracao NOSSA. P5 (teto 32000): perdeu 6x18 no T23 por dominancia. P6 (mesmo confronto, mesma seed, so o teto muda para 64000): chegou ao limite dos 40 turnos em 10x14 e com MAIS TROPAS que o adversario (107 vs 94). O teto proprio dele e 943718 — 29x o nosso default; quem o cortava a meio do raciocinio eramos nos. CONTRAPARTIDA: 4h54 contra 2h12 pela mesma partida. Salvavel, mas caro em relogio. Todo modelo rejeitado por finish length no historico tem de ser re-julgado antes de ser descartado."
       }
     },
     {
@@ -461,7 +451,7 @@
       "foraDoCatalogo": true,
       "apto": false,
       "motivosInapto": [
-        "fora do catalogo free em 2026-08-28"
+        "fora do catalogo free em 2026-09-21"
       ],
       "modalidade": "?",
       "tokenizer": "?",
@@ -481,7 +471,7 @@
       "foraDoCatalogo": true,
       "apto": false,
       "motivosInapto": [
-        "fora do catalogo free em 2026-08-28"
+        "fora do catalogo free em 2026-09-21"
       ],
       "modalidade": "?",
       "tokenizer": "?",
@@ -503,7 +493,7 @@
       "foraDoCatalogo": true,
       "apto": false,
       "motivosInapto": [
-        "fora do catalogo free em 2026-08-28"
+        "fora do catalogo free em 2026-09-21"
       ],
       "modalidade": "?",
       "tokenizer": "?",
@@ -523,7 +513,7 @@
       "foraDoCatalogo": true,
       "apto": false,
       "motivosInapto": [
-        "fora do catalogo free em 2026-08-28"
+        "fora do catalogo free em 2026-09-21"
       ],
       "modalidade": "?",
       "tokenizer": "?",
@@ -537,6 +527,96 @@
         "formato": "ok, mas clamp 0.27 e 8 rejeições",
         "nota": "falha o degrau 2/3: razão atq/def mediana **0.64** — ataca com menos força que a defesa"
       }
+    },
+    {
+      "id": "inclusionai/ling-3.0-flash-sante:free",
+      "nome": "inclusionAI: Ling 3.0 Flash Sante (free)",
+      "provider": "inclusionai",
+      "criado": "2026-09-04",
+      "ctx": 262144,
+      "maxOut": 32768,
+      "modalidade": "text->text",
+      "tokenizer": "Other",
+      "racMandatorio": false,
+      "racPadrao": false,
+      "racSuportado": true,
+      "esforcos": "?",
+      "descricao": "Ling 3.0 Flash Sante is a health and medicine-focused mixture-of-experts model from InclusionAI, built on Ling 3.0 Flash with 5.1B active parameters out of 124B",
+      "motivosInapto": [],
+      "apto": true,
+      "arena": null
+    },
+    {
+      "id": "inclusionai/ling-3.0-flash-vl:free",
+      "nome": "inclusionAI: Ling 3.0 Flash VL (free)",
+      "provider": "inclusionai",
+      "criado": "2026-09-10",
+      "ctx": 262144,
+      "maxOut": 32768,
+      "modalidade": "text+image+video->text",
+      "tokenizer": "Other",
+      "racMandatorio": false,
+      "racPadrao": false,
+      "racSuportado": true,
+      "esforcos": "?",
+      "descricao": "Ling 3.0 Flash VL builds on Ling 3.0 Flash (124B total / 5.5B active MoE from InclusionAI), further strengthening its language capabilities while adding native ",
+      "motivosInapto": [],
+      "apto": true,
+      "arena": null
+    },
+    {
+      "id": "nex-agi/nex-n2.5-mini:free",
+      "nome": "Nex AGI: Nex-N2.5-Mini (free)",
+      "provider": "nex-agi",
+      "criado": "2026-09-08",
+      "ctx": 262144,
+      "maxOut": 235929,
+      "modalidade": "text+image->text",
+      "tokenizer": "Qwen3",
+      "racMandatorio": false,
+      "racPadrao": false,
+      "racSuportado": true,
+      "esforcos": "?",
+      "descricao": "Nex-N2.5 is an agentic model built to turn goals into working, verified outcomes. Its core strength is agentic coding within a visual feedback loop: it can expl",
+      "motivosInapto": [],
+      "apto": true,
+      "arena": null
+    },
+    {
+      "id": "nex-agi/nex-n2.5-pro:free",
+      "nome": "Nex AGI: Nex-N2.5-Pro (free)",
+      "provider": "nex-agi",
+      "criado": "2026-09-08",
+      "ctx": 262144,
+      "maxOut": 235929,
+      "modalidade": "text+image->text",
+      "tokenizer": "Qwen3",
+      "racMandatorio": false,
+      "racPadrao": false,
+      "racSuportado": true,
+      "esforcos": "?",
+      "descricao": "Nex-N2.5 is an agentic model built to turn goals into working, verified outcomes. Its core strength is agentic coding within a visual feedback loop: it can expl",
+      "motivosInapto": [],
+      "apto": true,
+      "arena": null
+    },
+    {
+      "id": "qwen/qwen3.8-27b:free",
+      "nome": "Qwen: Qwen3.8 27B (free)",
+      "provider": "qwen",
+      "criado": "2026-08-14",
+      "ctx": 262144,
+      "maxOut": 235929,
+      "modalidade": "text+image+video->text",
+      "tokenizer": "Qwen",
+      "racMandatorio": false,
+      "racPadrao": false,
+      "racSuportado": true,
+      "esforcos": "?",
+      "descricao": "Qwen3.8 27B is an open-weight dense vision-language model from Qwen. It is suited for coding, professional workflows, research, multimodal interaction, and long",
+      "motivosInapto": [],
+      "apto": true,
+      "arena": null
     },
     {
       "id": "google/lyria-3-clip-preview",

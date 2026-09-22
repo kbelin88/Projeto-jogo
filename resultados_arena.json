@@ -149,12 +149,12 @@
   "nota": "O CASO QUE PROVOU que um modelo pode ser descartado por configuracao NOSSA. P5 (teto 32000): perdeu 6x18 no T23 por dominancia. P6 (mesmo confronto, mesma seed, so o teto muda para 64000): chegou ao limite dos 40 turnos em 10x14 e com MAIS TROPAS que o adversario (107 vs 94). O teto proprio dele e 943718 — 29x o nosso default; quem o cortava a meio do raciocinio eramos nos. CONTRAPARTIDA: 4h54 contra 2h12 pela mesma partida. Salvavel, mas caro em relogio. Todo modelo rejeitado por finish length no historico tem de ser re-julgado antes de ser descartado."
  },
  "liquid/lfm-2.5-2.6b:free": {
-  "estado": "SONDADO — OK, mas throttled",
-  "partidas": 0,
+  "estado": "TESTADO — nao aguenta partida longa",
+  "partidas": 1,
   "vitorias": 0,
-  "latenciaMediana": "11-13 s (sonda de 3 turnos)",
-  "formato": "ok — 2 de 2 turnos validos, com ordens nos dois",
-  "nota": "RESSUSCITOU: constava MORTO (404 em 18/08). O MAIS RAPIDO ja medido na Arena (11-13 s/turno) — candidato a baseline fraco barato em relogio. Cai em 429 do pool partilhado da Liquid (retry_after 60 s). 2.6B: esperar degrau baixo."
+  "latenciaMediana": "55 s em partida (43-116 s); 11-13 s na sonda de 3 turnos",
+  "formato": "13 turnos com ordem em 23; a partir do T5, 34 respostas VAZIAS por `finish length`",
+  "nota": "22/09, seed 7, teto 100 turnos: a partida CONGELOU no T19 com 0 exercitos em transito dos dois lados, e ficou assim. A causa nao e o teto que pedimos (aprendeu 61579 pelo HTTP 400 dele) -- e o PROVEDOR, que corta a resposta em 8192 tokens. O modelo gasta os 8192 INTEIROS a pensar e devolve string vazia com finish=length. O sinal e a TENDENCIA: na sonda de 3 turnos responde limpo (6 de 6 com envio); em partida o prompt cresce, o raciocinio cresce com ele, e a partir do T5 nunca mais responde. Sonda de 3 turnos NAO preve isto. ⚠ REASONING_MAX_TOKENS NAO SALVA: com orcamento de 1500 o primeiro turno ainda deu 8192 de raciocinio e finish length -- este provedor ignora o pedido de orcamento. Nao e um knob nosso, e um limite deles. Nao voltar a por em partida longa. Como baseline de RELOGIO numa sonda curta continua a valer."
  },
  "thinkingmachines/inkling:free": {
   "estado": "NAO JOGA — 403 restrito",
