@@ -69,6 +69,11 @@ global.Engine = require(process.cwd() + "/engine.js");
 // com o esboco de reserva e deixava de cobrir uma linha dele.
 global.Marcas = require(process.cwd() + "/marcas.js");
 global.Ponte3D = require(process.cwd() + "/ponte3d.js");
+// ⚠ SEM ESTA LINHA O SMOKE NAO CORRE O CAMINHO DO NAVEGADOR. Em 22/09 o
+// `ClienteOR` faltava aqui, o adaptador caia no ramo de reserva, e um
+// ReferenceError na zona morta temporal -- que matava o jogo inteiro --
+// passou verde pela suite toda.
+global.ClienteOR = require(process.cwd() + "/clienteor.js");
 const fs = require("fs");
 const html = fs.readFileSync("index.html", "utf-8");
 __idsHtml = new Set([...html.slice(0, html.lastIndexOf("<script>")).matchAll(/id=\"([^\"]+)\"/g)].map((m) => m[1]));

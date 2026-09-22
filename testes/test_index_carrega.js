@@ -57,6 +57,7 @@ t("o script roda ate o fim sem lancar (pega TDZ e nome sumido)", () => {
     Engine: require(path.join(RAIZ, "engine.js")),
     Marcas: require(path.join(RAIZ, "marcas.js")),
     Ponte3D: require(path.join(RAIZ, "ponte3d.js")),
+    ClienteOR: require(path.join(RAIZ, "clienteor.js")),
     document: janela,
     navigator: dublê(),
     location: { protocol: "http:", href: "http://localhost/index.html" },

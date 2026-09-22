@@ -2234,20 +2234,38 @@
   // Retry-After 5s. Insistir e correto -- um 429 nao e resposta do modelo, e
   // infra: nao contamina metrica nenhuma.
   const MAX_TENT_OR = 9;
-  const _or = (typeof ClienteOR !== "undefined" && ClienteOR) ? ClienteOR.criar({
-    url: OPENROUTER_URL,
-    get chave() { return openrouterKey; },
-    temperatura: 0,                      // reposto a cada chamada (ver abaixo)
-    maxTentativas: MAX_TENT_OR,
-    minIntervaloMs: 300,                 // pacing leve p/ rate limit
-    maxTokens: TETO_ALTO_LLM,
-    tetoPorModelo: tetoPorModelo,        // a MESMA tabela que o painel mostra
-    espera: (ms) => espera(ms),
-    aviso: (m) => console.log(m),
-  }) : null;
-  // ⚠ a chave e a temperatura mudam DEPOIS de o cliente nascer (o utilizador
-  // cola a chave, o painel mexe na temperatura), por isso o objeto de opcoes
-  // le-as por getter e o `gerar` recebe o resto na hora.
+  // ── O CLIENTE NASCE A PEDIDO, NAO NA CARGA ────────────────────────────
+  // ⚠ ISTO JA FOI UM `const _or = ClienteOR.criar({...})` AQUI, E MATOU O JOGO.
+  // O objeto de opcoes le `TETO_ALTO_LLM` e `tetoPorModelo`, que sao `const`
+  // declarados MAIS ABAIXO no ficheiro: avaliar o literal aqui e um
+  // ReferenceError na zona morta temporal, e o script morre a meio -- `game`
+  // fica `null` e o jogo abre sem partida.
+  //
+  // O QUE O TORNOU INVISIVEL, e a licao: no Node dos testes o `ClienteOR` nao
+  // existia (os smokes nao o carregavam), o ramo `: null` ganhava, e o literal
+  // nunca chegava a ser avaliado. Suite verde, jogo morto. Os smokes passaram a
+  // carregar o `clienteor.js` por causa deste bug -- um caminho que so corre
+  // no navegador e um caminho que ninguem testa.
+  //
+  // Nascer a pedido resolve as duas pontas: quando a primeira chamada acontece,
+  // a pagina ja carregou inteira e nao ha zona morta nenhuma.
+  let _or = null;
+  function clienteOR() {
+    if (_or) return _or;
+    if (typeof ClienteOR === "undefined" || !ClienteOR) return null;
+    _or = ClienteOR.criar({
+      url: OPENROUTER_URL,
+      // a chave muda DEPOIS (o utilizador cola-a), por isso vai por getter
+      get chave() { return openrouterKey; },
+      maxTentativas: MAX_TENT_OR,
+      minIntervaloMs: 300,               // pacing leve p/ rate limit
+      maxTokens: TETO_ALTO_LLM,
+      tetoPorModelo: tetoPorModelo,      // a MESMA tabela que o painel mostra
+      espera: (ms) => espera(ms),
+      aviso: (m) => console.log(m),
+    });
+    return _or;
+  }
   function raciocinioPedido() {
     // MEDIDO 31/08: o `effort` nao tem meio termo no glm-5.3-flash -- low e
     // medium dao ~140 tokens; sem nivel vai aos 128 mil e devolve string vazia.
@@ -2262,8 +2280,9 @@
   }
   async function gerarOpenRouter(prompt, modelo) {
     throttlesUltimaChamada = 0;
-    if (!_or) throw new Error("clienteor.js nao carregou");
-    const r = await _or.gerar(prompt, modelo,
+    const or = clienteOR();
+    if (!or) throw new Error("clienteor.js nao carregou");
+    const r = await or.gerar(prompt, modelo,
       { raciocinio: raciocinioPedido(), temperatura: tempLLM });
     const t = r.tele;
     // a telemetria vai para onde o log e o benchmark ao vivo sempre a leram
