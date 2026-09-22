@@ -5,7 +5,7 @@
 // ── PORQUE EXISTE ───────────────────────────────────────────────────────────
 // Numa arena que mede modelos, o assento tem de ser neutro: se o Rei A ganha
 // mais por ser A, cada vitória de um modelo que jogou como A está contaminada.
-// Medido em 23/09/2026 com o jogador-base contra ele próprio — dois jogadores
+// Medido em 22/09/2026 com o jogador-base contra ele próprio — dois jogadores
 // IDÊNTICOS — em 300 seeds: **o Rei A ganhou 64%** (z≈5). Não é acaso.
 //
 // Isto separa as duas causas que se misturam nesse número:
