@@ -2556,6 +2556,16 @@
     L.push("Armies march along the ROAD NETWORK that connects the villages, never in a straight line. Travel time is measured along the roads: a village that looks close on the map can be far by road. See the ROAD NETWORK block in the report.");
     L.push("An army STOPS at the first village on its path that is not yours and fights there, even if you ordered a more distant destination. You cannot march past an enemy or neutral village to hit one behind it.");
     L.push("Troops sent from DIFFERENT villages never add up, even when they arrive at the same target on the same turn: each send fights alone, one at a time.");
+    // ── A ESTRADA TAMBEM E CAMPO DE BATALHA (23/09) ──────────────────────────
+    // O P4 so dizia que na estrada "nao ha bonus". Nunca disse que dois
+    // exercitos inimigos que se encontram numa estrada LUTAM ali -- e na P1 de
+    // 23/09 o Super 120B raciocinou, com o texto a frente, que as duas colunas
+    // passavam uma pela outra e cada uma tomava a aldeia da outra ("They will
+    // meet on the road? Or do they fight at the destination?"). Era uma regra
+    // do motor que o Rei nao tinha como saber.
+    if (cfg.regraEstrada !== false) {
+      L.push("Enemy armies that meet ON A ROAD fight right there: head-on, or when one catches up with the other on the same stretch of road. It is an open-field battle: BOTH armies count their ATTACK, and neither gets a location bonus; a tie is decided by chance. The losing army is destroyed entirely; the winner takes losses and keeps marching. Armies on different roads never meet, even where the roads look close on the map.");
+    }
     L.push("You may also send troops to a village YOU already own: they march the same way and, on arrival, join that village's garrison as reinforcements.");
     L.push(`Each troop type has a speed: ${en("lanceiro")} (slow), ${en("arqueiro")} (medium), ${en("cavaleiro")} (fast). A MIXED army marches at the speed of its SLOWEST troop. The report shows travel time per speed (e.g. "march from [x]: 5 slow / 3 medium / 2 fast turns").`);
     L.push("Marching takes turns, and during those turns the enemy keeps building and moving. The defense you see in the report is TODAY'S defense, not the defense on arrival.");

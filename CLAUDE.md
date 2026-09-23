@@ -183,6 +183,9 @@ continuarem a render o texto antigo.
   troço, a coluna do Rei (origem → destino), o resultado, o exército destruído,
   as baixas e as forças efetivas. Antes dizia só "your army won the field".
   Plurais ingleses certos (`spearmen`), que o parser já aceitava.
+- **A regra da estrada** (`regraEstrada`, 23/09): inimigos que se encontram numa
+  estrada lutam ali, os dois com o ATAQUE, sem bónus, e o perdedor é destruído. O P4
+  não o dizia, e o Super 120B concluiu que as colunas passavam uma pela outra.
 
 ### 5.1 Fog of war
 

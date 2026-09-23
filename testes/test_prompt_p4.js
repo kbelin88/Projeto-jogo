@@ -487,6 +487,14 @@ t("F2 plurais ingleses: spearmen, nunca 'spearmans' -- e o parser aceita", () =>
   assert.ok(!/spearmans/.test(p), "o prompt ainda diz 'spearmans'");
   assert.strictEqual(E.normalizarTipo("spearmen"), "lanceiro");
 });
+t("F4 as regras dizem que inimigos que se encontram na estrada lutam ali", () => {
+  const e = stJogo();
+  const p = promptDe(e, "A");
+  assert.ok(/Enemy armies that meet ON A ROAD fight right there/.test(p));
+  assert.ok(/BOTH armies count their ATTACK/.test(p), "na estrada os dois contam o ATAQUE (resolverCombateEstrada)");
+  const sem = promptDe(stJogo({ regraEstrada: false }), "A");
+  assert.ok(!/meet ON A ROAD/.test(sem));
+});
 t("F3 com relatoEstrada:false volta a frase curta de antes", () => {
   const e = comEstrada({ relatoEstrada: false });
   const linhas = promptDe(e, "A").split("\n").filter((l) => /ON THE ROAD/.test(l));
