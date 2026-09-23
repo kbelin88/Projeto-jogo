@@ -2564,7 +2564,7 @@
     // meet on the road? Or do they fight at the destination?"). Era uma regra
     // do motor que o Rei nao tinha como saber.
     if (cfg.regraEstrada !== false) {
-      L.push("Enemy armies that meet ON A ROAD fight right there: head-on, or when one catches up with the other on the same stretch of road. It is an open-field battle: BOTH armies count their ATTACK, and neither gets a location bonus; a tie is decided by chance. The losing army is destroyed entirely; the winner takes losses and keeps marching. Armies on different roads never meet, even where the roads look close on the map.");
+      L.push("Enemy armies that meet ON A ROAD fight right there: head-on, or when one catches up with the other on the same stretch of road. It is an open-field battle: BOTH armies count their ATTACK, and neither gets a location bonus; a tie is decided by chance. The losing army is destroyed entirely; the winner takes losses and keeps marching. Armies on different roads never meet, even where the roads look close on the map. Your own armies never fight each other: they pass freely.");
     }
     L.push("You may also send troops to a village YOU already own: they march the same way and, on arrival, join that village's garrison as reinforcements.");
     L.push(`Each troop type has a speed: ${en("lanceiro")} (slow), ${en("arqueiro")} (medium), ${en("cavaleiro")} (fast). A MIXED army marches at the speed of its SLOWEST troop. The report shows travel time per speed (e.g. "march from [x]: 5 slow / 3 medium / 2 fast turns").`);

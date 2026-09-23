@@ -492,6 +492,8 @@ t("F4 as regras dizem que inimigos que se encontram na estrada lutam ali", () =>
   const p = promptDe(e, "A");
   assert.ok(/Enemy armies that meet ON A ROAD fight right there/.test(p));
   assert.ok(/BOTH armies count their ATTACK/.test(p), "na estrada os dois contam o ATAQUE (resolverCombateEstrada)");
+  // cruzaramNaEstrada: mesmo dono nunca luta (o Ultra perguntou-se, na P3 de 23/09)
+  assert.ok(/Your own armies never fight each other/.test(p));
   const sem = promptDe(stJogo({ regraEstrada: false }), "A");
   assert.ok(!/meet ON A ROAD/.test(sem));
 });
