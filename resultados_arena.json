@@ -14,23 +14,23 @@
  },
  "nvidia/nemotron-3-super-120b-a12b:free": {
   "estado": "TESTADO",
-  "partidas": 4,
-  "vitorias": 2,
+  "partidas": "4 na contagem antiga + 2 em 23/09 (⚠️ contagem antiga POR REFAZER: os ficheiros mostram muito mais partidas contra LLM desde 19/08, varias perdidas para o dots)",
+  "vitorias": "2 na contagem antiga + 0 em 23/09",
   "atqUnidade": "1.68–2.65",
   "counterInimigo": "0.29–0.50 (17/08); agregado 0.48 em 18/08",
   "latenciaMediana": "~140–148 s (máx 1371 s)",
   "formato": "ok (3 de 30 respostas cortadas por `length` em P2)",
-  "nota": "**a 1ª vitória por dominância do projeto** (T24, 17/08); venceu dos dois lados do A/B de assento. Em 18/08 perdeu 8×16 para o Ultra 550B com o atq/unid mais baixo que já fez (1.68, 62% de lanceiro)"
+  "nota": "**a 1ª vitória por dominância do projeto** (T24, 17/08); venceu dos dois lados do A/B de assento. Em 18/08 perdeu 8×16 para o Ultra 550B com o atq/unid mais baixo que já fez (1.68, 62% de lanceiro) || 23/09: perdeu as duas para o dots, uma de cada lado (5x19 como B no T32, 6x18 como A no T25); 27 envios como A contra 76 do dots. 25-32% de respostas vazias (string vazia sem usage). Na P1 raciocinou que duas colunas em sentidos opostos passavam uma pela outra -- o P4 nao tinha a regra da estrada (entrou em e4ed586)."
  },
  "nvidia/nemotron-3-ultra-550b-a55b:free": {
   "estado": "TESTADO",
-  "partidas": 3,
-  "vitorias": 2,
+  "partidas": "3 na contagem antiga + 2 em 23/09 (1 completa, 1 interrompida)",
+  "vitorias": "2 na contagem antiga + 0 em 23/09",
   "atqUnidade": "2.46–2.63",
   "counterInimigo": "0.33 (17/08); agregado 0.66 em 18/08",
-  "latenciaMediana": "324 s em P2 (167–500 s em 17/08)",
-  "formato": "ok (1 `error` em 28 chamadas)",
-  "nota": "venceu o Super 120B **16×8** em 30 turnos (4h14) construindo 3% de lanceiro contra 62% do adversário. Forte e caríssimo em relógio"
+  "latenciaMediana": "324 s em P2 (167–500 s em 17/08); 146 s em 23/09 (P3)",
+  "formato": "ok (1 `error` em 28 chamadas); 23/09: 2 invalidas em 41 turnos na P3, e na P4 respostas vazias a partir do T18 -- o endpoint deixou de responder (pedido minimo sem resposta em 120 s, enquanto o Super respondia em 1,5 s)",
+  "nota": "venceu o Super 120B **16×8** em 30 turnos (4h14) construindo 3% de lanceiro contra 62% do adversário. Forte e caríssimo em relógio || 23/09: perdeu 6x18 para o dots como A no T41 depois de 82 conquistas, com 200 envios e so 2 respostas invalidas -- mais agencia que o dots (134) e menos eficacia (conquistou em 49% dos combates contra 72%). Leu e usou a regra nova da estrada. Revanche (P4, como B) interrompida no T22 a perder 7x17: o endpoint do Ultra caiu, nao o modelo."
  },
  "nvidia/nemotron-nano-12b-v2-vl:free": {
   "estado": "TESTADO",
@@ -62,11 +62,11 @@
  },
  "dots-studio/dots-3-note-preview:free": {
   "estado": "TESTADO",
-  "partidas": 15,
-  "vitorias": "12 (9 como Rei A, 3 como Rei B) — 0 derrotas; 3 sem decisao (limite/interrompida)",
-  "latenciaMediana": "95-204 s em partida em 28/08; 89-91 s em 22/09 (a sonda de 1 turno dava 35 s)",
-  "formato": "ok em 28/08 (1 resposta cortada em 52); em 22/09 ~45% das respostas vazias, sem matar a partida",
-  "nota": "INVICTO em 15 partidas contra LLM (19/08 a 22/09), e dos DOIS lados da mesa: 9 vitorias como A e 3 como B -- venceu o Super 120B e o MiniMax M3 sentado em B. Contado dos ficheiros em 22/09; a entrada anterior dizia '2 confirmadas' e depois '4', porque ninguem tinha contado. E o 2o modelo mais rodado da Arena, atras da regua (lightning). Fornecedor diferente dos Nemotron, util quando o pool da Nvidia esta degradado. ⚠️ A sonda de 1 turno subestimou a latencia em 3-6x. Em 22/09 teve quase metade das respostas vazias e ganhou na mesma -- o que separa modelos aqui e AGENCIA, nao validade. Candidato natural a regua nova."
+  "partidas": 19,
+  "vitorias": "15 (10 como Rei A, 5 como Rei B) — 0 derrotas; 4 sem decisao (limite/interrompida)",
+  "latenciaMediana": "95-204 s em partida em 28/08; 89-91 s em 22/09 (a sonda de 1 turno dava 35 s); 146-158 s em 23/09 (com duas partidas em paralelo)",
+  "formato": "ok em 28/08 (1 resposta cortada em 52); em 22/09 ~45% das respostas vazias, sem matar a partida; em 23/09 24-28% de respostas vazias",
+  "nota": "INVICTO em 15 partidas contra LLM (19/08 a 22/09), e dos DOIS lados da mesa: 9 vitorias como A e 3 como B -- venceu o Super 120B e o MiniMax M3 sentado em B. Contado dos ficheiros em 22/09; a entrada anterior dizia '2 confirmadas' e depois '4', porque ninguem tinha contado. E o 2o modelo mais rodado da Arena, atras da regua (lightning). Fornecedor diferente dos Nemotron, util quando o pool da Nvidia esta degradado. ⚠️ A sonda de 1 turno subestimou a latencia em 3-6x. Em 22/09 teve quase metade das respostas vazias e ganhou na mesma -- o que separa modelos aqui e AGENCIA, nao validade. Candidato natural a regua nova. || 23/09 (bateria p4-bateria-0923, runner ja SIMULTANEO): +3 vitorias por dominancia, contadas dos ficheiros -- 19x5 ao Super como A (T32), 18x6 ao Super como B (T25), 18x6 ao Ultra 550B como B (T41, 82 conquistas, a partida mais disputada medida), e 1 interrompida (P4, 17x7 como A no T22, o endpoint do Ultra caiu). ⚠️ Ate 22/09 o runner executava a ordem de A antes de B decidir: as partidas anteriores tem esse vies."
  },
  "google/gemma-4-26b-a4b-it:free": {
   "estado": "SONDADO — OK (no retry)",
