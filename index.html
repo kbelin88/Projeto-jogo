@@ -43,7 +43,7 @@
        teve — entao os botoes de zoom caiam no fluxo normal, no fim do
        documento, ABAIXO DA DOBRA e sem clique possivel. Achado ao auditar o
        item 2; e um caso literal do "nao consigo clicar em alguns lugares". */
-    position: fixed;
+    position: fixed; z-index: 7;   /* acima do mapa 3D (#palco3d, z-index 0) */
     bottom: 10px; right: 10px; pointer-events: auto;
     display: flex; flex-direction: column; gap: 6px;
   }
@@ -248,6 +248,7 @@
   #zoombar { transition: right .25s ease; }
   #gamebar {
     position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+    z-index: 7;   /* acima do mapa 3D (#palco3d, z-index 0) -- sem isto, tapada (23/09) */
     pointer-events: auto; display: flex; align-items: center; gap: 8px;
     background: rgba(40,28,14,.82); border: 2px solid #6b4a22; border-radius: 8px;
     padding: 6px 10px; color: #f5e9c8; text-shadow: 1px 1px 2px #000; user-select: none;
@@ -1136,10 +1137,14 @@
     const palco = document.createElement("div");
     palco.id = "palco3d";
     palco.style.cssText = "position:fixed;inset:0;z-index:0";
-    // appendChild e nao insertBefore: o palco tem `z-index:0` e toda a interface
-    // do jogo esta acima disso, portanto a ordem no DOM nao decide nada. Era
-    // `insertBefore` por causa do canvas plano, que ja nao pinta.
-    document.body.appendChild(palco);
+    // ⚠ O PALCO ENTRA PRIMEIRO NO BODY. Em 22/09 isto passou a `appendChild`
+    // com a ideia de que "toda a interface esta acima do z-index:0" -- e nao
+    // esta: a #gamebar e a #zoombar sao `fixed` SEM z-index, e entre elementos
+    // no mesmo nivel quem decide e a ordem no DOM. O mapa, posto no fim,
+    // pintava-se por cima das duas e o Lucas ficou sem a barra de baixo (sem
+    // replay, sem play) e sem o zoom. Primeiro no body, fica por baixo de tudo
+    // o que vem depois, tenha z-index ou nao.
+    document.body.insertBefore(palco, document.body.firstChild);
     import("./sonda3d/mapa3d.js")
       .then((m) => m.iniciar(palco))
       .then((mapa) => {
