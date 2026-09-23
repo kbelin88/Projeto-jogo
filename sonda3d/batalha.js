@@ -32,55 +32,23 @@ const LARG_M = 3.2;              // entre homens da mesma fileira
 // isso sao ~950 bonecos animados -- a placa nao aguenta e nem se veem todos.
 // Fica um punhado; as mais velhas fecham para dar lugar as novas.
 const MAX_VIVAS = 6;
-// ⚠ E QUANTOS MARCADORES. Com o rescaldo de 12 s e uma partida movimentada
-// chegaram a estar 37 ao mesmo tempo no mapa (medido, 22/09) -- deixa de ser um
-// sinal e passa a ser ruido. Os mais velhos apagam-se.
-const MAX_MARCAS = 12;
-// o marcador sozinho (combate sem cena) vive menos: ninguem tem de ir la ver
-const RESCALDO_MARCA_S = 5.0;
-// ── O RESCALDO ──────────────────────────────────────────────────────────────
-// Acabada a luta, o campo fica: corpos no chao, flechas espetadas e o marcador
-// aceso. E o que dá tempo a quem viu o sinal de longe para levar a camara la --
-// o Lucas quer mandar na camara, e sem rescaldo chegava sempre tarde (22/09).
-const RESCALDO_S = 12.0;
-
-// ── O MARCADOR ──────────────────────────────────────────────────────────────
-// Espadas cruzadas e os dois números, com tamanho FIXO no ecrã (como as placas
-// das colunas). É o que faz uma batalha existir para quem está a olhar para a
-// Ibéria inteira: as figuras têm dez píxeis a essa distância, o marcador não.
-const CORES = { A: "#5b9bf0", B: "#e2655a", null: "#b8b19c" };
-function telaMarcador(donoV, nV, donoP, nP) {
-  const c = document.createElement("canvas");
-  c.width = 340; c.height = 140;
-  const g = c.getContext("2d");
-  g.fillStyle = "rgba(12,9,5,.88)";
-  g.beginPath();
-  g.roundRect(6, 30, 328, 78, 16);
-  g.fill();
-  g.lineWidth = 5;
-  g.strokeStyle = "rgba(240,214,150,.85)";
-  g.stroke();
-  g.font = "700 54px system-ui, sans-serif";
-  g.textBaseline = "middle";
-  g.textAlign = "right";
-  g.fillStyle = CORES[donoV] || CORES.null;
-  g.fillText(String(nV), 140, 70);
-  g.textAlign = "left";
-  g.fillStyle = CORES[donoP] || CORES.null;
-  g.fillText(String(nP), 200, 70);
-  // as espadas cruzadas, desenhadas a mão (uma fonte de emoji não é igual em
-  // todos os sistemas, e este símbolo tem de sair sempre igual)
-  g.strokeStyle = "#f0d9a0";
-  g.lineWidth = 7;
-  g.lineCap = "round";
-  for (const s of [1, -1]) {
-    g.beginPath();
-    g.moveTo(170 - s * 22, 44);
-    g.lineTo(170 + s * 22, 96);
-    g.stroke();
-  }
-  return c;
-}
+// ── A BATALHA CABE NO TURNO (23/09) ────────────────────────────────────────
+// A cena media-se em SEGUNDOS: no minimo 5 de luta e 12 de rescaldo, com um
+// marcador "1x4" por cima. A 1x (2 s por turno) isso sao ~8 turnos com a
+// batalha no mapa enquanto o jogo seguia -- as barras acumulavam-se e as
+// colunas passavam por elas (o Lucas, 23/09). No motor o combate de estrada
+// resolve-se DENTRO do turno; o desenho tem de fazer o mesmo.
+//
+// Agora a cena mede-se no RELOGIO DO REPLAY (turno + fracao): comeca no
+// instante do encontro e acaba em `fimT` (ver `janelaCena` na ponte3d.js),
+// no maximo um quarto de turno depois do fim do turno. Pausar o replay pausa
+// a batalha; gravar a 0.35x da uma batalha mais lenta. Sem marcador, sem
+// rescaldo: os caidos apagam-se no ultimo quarto da cena e, quando ela acaba,
+// a estrada esta limpa.
+//
+// Sem relogio (jogo ao vivo, bancada `encontro.html`) cai no modo antigo, em
+// segundos -- mas tambem sem rescaldo.
+const APAGAR_DESDE = 0.75;       // fracao da cena em que os caidos comecam a apagar-se
 
 export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
   const vivas = [];
@@ -117,7 +85,8 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
   const _m = new THREE.Matrix4(), _cima = new THREE.Vector3(0, 1, 0);
 
   function lancar(de, para) {
-    const tv = 0.7 + de.distanceTo(para) / 32;
+    // voo curto: a batalha inteira pode durar meio segundo a 1x
+    const tv = 0.35 + de.distanceTo(para) / 48;
     const v = para.clone().sub(de).divideScalar(tv);
     v.y -= 0.5 * GRAV * tv;
     voo.push({ o: de.clone(), v, t: 0, tv, cravada: -1 });
@@ -130,7 +99,8 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
       f.t += dt;
       if (f.t >= f.tv) { f.t = f.tv; f.cravada = 0; }
     }
-    while (voo.length && voo[0].cravada > 6) voo.shift();
+    // cravadas saem depressa: nada da batalha fica na estrada para o turno seguinte
+    while (voo.length && voo[0].cravada > 0.8) voo.shift();
     let n = 0;
     for (const f of voo) {
       _o.set(f.o.x + f.v.x * f.t, f.o.y + f.v.y * f.t + 0.5 * GRAV * f.t * f.t,
@@ -214,13 +184,6 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
   function abrir(b) {
     if (feitas.has(b.id)) return null;
     feitas.set(b.id, Date.now());
-    // ── O MARCADOR E DE TODOS; A CENA E DE ALGUNS (22/09) ───────────────────
-    // Num turno cheio ha dez combates de estrada e so cabem seis cenas -- os
-    // outros quatro nao tinham NADA, e o Lucas leu isso como "nesta estrada nao
-    // houve batalha". Agora o marcador nasce sempre: onde nao ha figuras, ha
-    // pelo menos as espadas cruzadas e os dois numeros, que e o que diz que ali
-    // se lutou.
-    const comCena = vivas.filter((x) => !x.soMarca).length < MAX_VIVAS;
     const dir = new THREE.Vector3(Math.cos(b.rumo), 0, Math.sin(b.rumo)).normalize();
     const lado = new THREE.Vector3(-dir.z, 0, dir.x);
     const hostes = {};
@@ -230,7 +193,7 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
       const dono = quem === "venc" ? b.vencedor : b.perdedor;
       const homens = [];
       let fundo = 0;
-      for (const bl of (comCena ? reparte(comp || {}) : [])) {
+      for (const bl of reparte(comp || {})) {
         for (let k = 0; k < bl.n; k++) {
           const f = figura(bl.tipo, dono);
           if (!f) continue;
@@ -261,50 +224,25 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
       chaves.push(chaveLuta(dono, b.de, b.para), chaveLuta(dono, b.para, b.de));
     }
     for (const c of chaves) emLuta.add(c);
-    const somaT = (o) => ["lanceiro", "arqueiro", "cavaleiro"]
-      .reduce((s, k) => s + ((o && o[k]) || 0), 0);
-    const tex = new THREE.CanvasTexture(telaMarcador(
-      b.vencedor, somaT(b.compVenc) || b.totalVenc || 0,
-      b.perdedor, somaT(b.compPerd) || 0));
-    tex.colorSpace = THREE.SRGBColorSpace;
-    const marca = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: tex, sizeAttenuation: false, depthTest: false, transparent: true,
-      toneMapped: false }));
-    marca.center.set(0.5, 0);
-    // medido no ecra: com 0,075 de largura o numero lia-se mal na vista de ilha
-    // inteira, que e justamente de onde se procura uma batalha
-    marca.scale.set(0.105, 0.043, 1);
-    marca.position.copy(b.pos).add(new THREE.Vector3(0, 6, 0));
-    marca.renderOrder = 960;
-    cena.add(marca);
-    const ba = { chaves, pos: b.pos.clone(), dir, lado, hostes, t: 0, marca,
-                 soMarca: !comCena,
-                 dur: b.segundos || 7.0, perdeVenc, proxTiro: 0.4, proxGolpe: 1.0,
+    // a janela no relogio do replay; sem ela, segundos (jogo ao vivo, bancada)
+    const noRelogio = Number.isFinite(b.inicioT) && Number.isFinite(b.fimT) && b.fimT > b.inicioT;
+    const ba = { chaves, pos: b.pos.clone(), dir, lado, hostes, t: 0, u: 0,
+                 inicioT: noRelogio ? b.inicioT : null, fimT: noRelogio ? b.fimT : null,
+                 dur: b.segundos || 3.0, perdeVenc, proxTiro: 0, proxGolpe: 0,
                  nasceu: (typeof performance !== "undefined" ? performance.now() : Date.now()),
                  tombados: { venc: 0, perd: 0 } };
     vivas.push(ba);
-    // dois tetos: as CENAS (caras) e os MARCADORES (baratos, mas a mais viram
-    // ruido no mapa). Em ambos, o mais velho sai primeiro.
-    while (vivas.filter((x) => !x.soMarca).length > MAX_VIVAS) {
-      const i = vivas.findIndex((x) => !x.soMarca);
-      fechar(vivas[i]);
-      vivas.splice(i, 1);
-    }
-    while (vivas.length > MAX_MARCAS) {
-      const i = vivas.findIndex((x) => x.soMarca);
-      const k = i >= 0 ? i : 0;
-      fechar(vivas[k]);
-      vivas.splice(k, 1);
-    }
+    // o teto de cenas: a mais velha sai primeiro
+    while (vivas.length > MAX_VIVAS) fechar(vivas.shift());
     return ba;
   }
 
   function fechar(ba) {
     for (const c of (ba.chaves || [])) emLuta.delete(c);
-    if (ba.marca) {
-      cena.remove(ba.marca);
-      if (ba.marca.material.map) ba.marca.material.map.dispose();
-      ba.marca.material.dispose();
+    // uma chave pode ser de DUAS cenas no mesmo troco: so se liberta a marcha
+    // quando nenhuma outra viva a segura
+    for (const outra of vivas) {
+      if (outra !== ba) for (const c of (outra.chaves || [])) emLuta.add(c);
     }
     for (const quem of ["venc", "perd"]) {
       for (const f of ba.hostes[quem].homens) {
@@ -323,20 +261,47 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
     return vivos.length ? vivos[(Math.random() * vivos.length) | 0] : null;
   }
 
-  function passo(dt) {
-    moverFlechas(dt);
+  // `relogio` = turno + fracao do replay (null ao vivo e na bancada);
+  // `msTurno` = quanto dura um turno no ecra agora, para converter o relogio em
+  // segundos de animacao
+  let relogioAnt = null;
+  function passo(dt, relogio, msTurno) {
+    const temRelogio = Number.isFinite(relogio);
+    // o tempo de ANIMACAO desta chamada: no replay e o que o relogio andou
+    // (pausado = zero, e a cena congela com o resto); sem relogio, o do ecra
+    let dtAnim = dt;
+    if (temRelogio) {
+      const d = relogioAnt === null ? 0 : relogio - relogioAnt;
+      dtAnim = Math.max(0, Math.min(1, d)) * (msTurno || 2000) / 1000;
+    }
+    relogioAnt = temRelogio ? relogio : null;
+    moverFlechas(dtAnim);
     if (feitas.size > 200) {
       const agora = Date.now();
       for (const [id, quando] of feitas) if (agora - quando > MEMORIA_MS) feitas.delete(id);
     }
     for (let i = vivas.length - 1; i >= 0; i--) {
       const ba = vivas[i];
-      ba.t += dt;
-      const u = Math.min(1, ba.t / ba.dur);
+      ba.t += dtAnim;
+      let u, durS;
+      if (ba.fimT !== null) {
+        // saiu do replay, ou voltou atras no replay: a cena nao pertence a
+        // este momento -- fecha
+        if (!temRelogio || relogio < ba.inicioT - 0.02) { fechar(ba); vivas.splice(i, 1); continue; }
+        u = Math.max(0, Math.min(1, (relogio - ba.inicioT) / (ba.fimT - ba.inicioT)));
+        durS = (ba.fimT - ba.inicioT) * (msTurno || 2000) / 1000;
+      } else {
+        u = Math.min(1, ba.t / ba.dur);
+        durS = ba.dur;
+      }
+      ba.u = u;
+      // os golpes e as flechas espalham-se pela cena, seja ela de meio segundo
+      // (1x) ou de tres (0.35x)
+      const cadTiro = Math.max(0.08, durS / 7), cadGolpe = Math.max(0.1, durS / 5);
 
       // ── AS FLECHAS ABREM E OS GOLPES FECHAM ───────────────────────────────
-      if (ba.t >= ba.proxTiro && u < 0.85) {
-        ba.proxTiro = ba.t + 0.35;
+      if (ba.t >= ba.proxTiro && u < 0.6) {
+        ba.proxTiro = ba.t + cadTiro;
         for (const quem of ["venc", "perd"]) {
           const h = ba.hostes[quem];
           const arq = h.homens.filter((x) => x.tipo === "arqueiro" && !x.caido);
@@ -350,8 +315,8 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
           lancar(_mao, alvo.raiz.position.clone().setY(alvo.chao + 1.0));
         }
       }
-      if (ba.t >= ba.proxGolpe && u < 0.95) {
-        ba.proxGolpe = ba.t + 0.55;
+      if (ba.t >= ba.proxGolpe && u > 0.15 && u < 0.7) {
+        ba.proxGolpe = ba.t + cadGolpe;
         for (const quem of ["venc", "perd"]) {
           const h = ba.hostes[quem];
           const lutam = h.homens.filter((x) => x.tipo !== "arqueiro" && !x.caido);
@@ -360,83 +325,67 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
       }
 
       // ── QUEM CAI, E QUANDO ────────────────────────────────────────────────
-      // O perdedor cai TODO até ao fim da cena (o motor aniquila-o); o vencedor
-      // cai só a proporção que o motor cobrou, e mais devagar.
-      const devemPerd = Math.round(ba.hostes.perd.homens.length * Math.min(1, u / 0.92));
+      // O perdedor cai TODO (o motor aniquila-o) ate 70% da cena; o vencedor
+      // cai so a proporcao que o motor cobrou, ate 60%.
+      const devemPerd = Math.round(ba.hostes.perd.homens.length * Math.min(1, u / 0.7));
       while (ba.tombados.perd < devemPerd) {
         const alvo = alvoAoAcaso(ba.hostes.perd);
         if (!alvo || !tombar(alvo)) break;
         ba.tombados.perd++;
       }
-      const devemVenc = Math.round(ba.perdeVenc * Math.min(1, u / 0.8));
+      const devemVenc = Math.round(ba.perdeVenc * Math.min(1, u / 0.6));
       while (ba.tombados.venc < devemVenc) {
         const alvo = alvoAoAcaso(ba.hostes.venc);
         if (!alvo || !tombar(alvo)) break;
         ba.tombados.venc++;
       }
 
-      // ── O AVANÇO E A QUEDA ────────────────────────────────────────────────
+      // ── O AVANCO, A QUEDA E O APAGAR ──────────────────────────────────────
+      const tQueda = Math.max(0.12, Math.min(0.6, durS * 0.2));
+      const apaga = u > APAGAR_DESDE ? (u - APAGAR_DESDE) / (1 - APAGAR_DESDE) : 0;
       for (const quem of ["venc", "perd"]) {
         const h = ba.hostes[quem];
         for (const f of h.homens) {
           if (f.caido) {
-            f.caido.t = Math.min(1, f.caido.t + dt / 0.6);
+            f.caido.t = Math.min(1, f.caido.t + dtAnim / tQueda);
             const q = f.caido.t;
             f.raiz.rotation.x = -(Math.PI / 2) * q * q * (3 - 2 * q);
             f.raiz.position.y = f.chao - 0.4 * q;
+            if (apaga > 0) opacidade(f, 1 - apaga);
             continue;
           }
-          f.mix.update(dt);
+          f.mix.update(dtAnim);
           if (f.pose === "bater" && (f.acao.bater.paused
               || f.acao.bater.time >= f.acao.bater.getClip().duration - 1e-3)) pose(f, "parar");
-          // as duas frentes fecham 2,5 m no primeiro terço da cena
-          const avanco = Math.min(1, u / 0.33) * 2.5;
+          // as duas frentes fecham 2,5 m no primeiro terco da cena
+          const avanco = Math.min(1, u / 0.3) * 2.5;
           f.raiz.position.copy(f.base).addScaledVector(h.dir, avanco);
         }
       }
 
-      // ── O RESCALDO ────────────────────────────────────────────────────────
-      // Passada a luta, o campo fica mais um bocado: corpos, flechas e o
-      // marcador a apagar-se devagar. As marchas destes dois já podem seguir --
-      // por isso as chaves saem de `emLuta` aqui, e não no fim.
-      if (u >= 1 && !ba.rescaldo) {
-        ba.rescaldo = true;
-        for (const c of (ba.chaves || [])) emLuta.delete(c);
-        // ── QUEM FICOU DE PE, SEGUE CAMINHO ─────────────────────────────────
-        // O rescaldo deixava os sobreviventes parados em formacao durante doze
-        // segundos -- "a tropa fica parada depois", disse o Lucas. No campo
-        // ficam os MORTOS; o vencedor volta a marchar (a coluna dele reaparece
-        // assim que as chaves saem de `emLuta`, na linha acima).
-        for (const quem of ["venc", "perd"]) {
-          const h = ba.hostes[quem];
-          h.homens = h.homens.filter((f) => {
-            if (f.caido) return true;
-            cena.remove(f.raiz);
-            f.mix.stopAllAction();
-            f.raiz.traverse((o) => {
-              if (o.isMesh && o.material && o.material.dispose) o.material.dispose();
-            });
-            return false;
-          });
-        }
-      }
-      if (ba.marca) {
-        const resto = ba.soMarca ? RESCALDO_MARCA_S : RESCALDO_S;
-      const sobra = ba.rescaldo ? Math.max(0, 1 - (ba.t - ba.dur) / resto) : 1;
-        ba.marca.material.opacity = 0.25 + 0.75 * sobra;
-      }
-      // ⚠ E PELO RELOGIO TAMBEM: com a pagina escondida o navegador estrangula
-      // o rAF e o `dt` deixa de correr -- as cenas ficavam abertas para sempre,
-      // e foi assim que se acumularam 59 (21/09).
+      // ── ACABOU: A ESTRADA FICA LIMPA ──────────────────────────────────────
+      // Sem rescaldo. Fecha a cena e liberta as marchas: o vencedor volta ao
+      // desenho da estrada e segue (no replay, o `progMarcha` fa-lo recuperar
+      // o atraso ate ao fim do turno).
       const agora = (typeof performance !== "undefined" ? performance.now() : Date.now());
-      const restoFim = ba.soMarca ? RESCALDO_MARCA_S : RESCALDO_S;
-      if (ba.t >= ba.dur + restoFim
-          || agora - ba.nasceu > (ba.dur + restoFim) * 1000 + 15000) {
+      // ⚠ sem relogio, tambem pelo relogio do ecra: com a pagina escondida o rAF
+      // e estrangulado e o `dt` deixa de correr (acumularam-se 59, 21/09)
+      const esquecida = ba.fimT === null && agora - ba.nasceu > ba.dur * 1000 + 15000;
+      if (u >= 1 || esquecida) {
         fechar(ba);
         vivas.splice(i, 1);
       }
     }
     return vivas.length;
+  }
+
+  // apagar uma figura caida (o material e da figura, clonado em `figura`)
+  function opacidade(f, a) {
+    f.raiz.traverse((o) => {
+      if (!o.isMesh || !o.material) return;
+      if (!o.material.transparent) { o.material.transparent = true; o.material.needsUpdate = true; }
+      o.material.opacity = Math.max(0, a);
+    });
   }
 
   return {
@@ -447,32 +396,27 @@ export function criarBatalhas({ cena, fontes, escala = 2.2, formacao = null }) {
     aLutar(dono, de, para) { return emLuta.has(chaveLuta(dono, de, para)); },
     // onde esta a batalha mais nova a decorrer -- e para la que a camara vai
     ondeEsta() {
-      // a mais nova que ainda esta a LUTAR (o rescaldo nao vale a pena seguir)
       for (let i = vivas.length - 1; i >= 0; i--) {
-        if (!vivas[i].soMarca && vivas[i].t < vivas[i].dur) {
-          return { pos: vivas[i].pos.clone(), falta: vivas[i].dur - vivas[i].t };
-        }
+        if (vivas[i].u < 1) return { pos: vivas[i].pos.clone(), falta: (1 - vivas[i].u) * vivas[i].dur };
       }
       return null;
     },
     // onde estao TODAS, para quem quiser levar a camara a mao
     lista() {
-      return vivas.map((b) => ({ pos: b.pos.clone(), t: Math.round(b.t * 10) / 10,
-                                 dur: b.dur, rescaldo: !!b.rescaldo,
-                                 soMarca: !!b.soMarca,
+      return vivas.map((b) => ({ pos: b.pos.clone(), u: Math.round(b.u * 100) / 100,
+                                 inicioT: b.inicioT, fimT: b.fimT,
                                  figuras: b.hostes.venc.homens.length
                                         + b.hostes.perd.homens.length,
-                                 // de pe = ainda a lutar; no rescaldo tem de ser 0
                                  dePe: b.hostes.venc.homens.filter((f) => !f.caido).length
                                      + b.hostes.perd.homens.filter((f) => !f.caido).length }));
     },
     // para conferir de fora sem partida nenhuma
     get diagnostico() {
-      return vivas.map((b) => ({ t: Math.round(b.t * 10) / 10, dur: b.dur,
-        caidos: b.tombados.perd + b.tombados.venc, soMarca: !!b.soMarca,
+      return vivas.map((b) => ({ u: Math.round(b.u * 100) / 100, inicioT: b.inicioT, fimT: b.fimT,
+        caidos: b.tombados.perd + b.tombados.venc,
         figuras: b.hostes.venc.homens.length + b.hostes.perd.homens.length,
-        // as colunas que esta cena esconde (dono|de>para); no rescaldo, nenhuma
-        chaves: b.rescaldo ? [] : (b.chaves || []).slice() }));
+        // as colunas que esta cena esconde (dono|de>para)
+        chaves: (b.chaves || []).slice() }));
     },
   };
 }

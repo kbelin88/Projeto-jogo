@@ -27,6 +27,7 @@ const fs = require("fs");
 const path = require("path");
 const RAIZ = path.join(__dirname, "..");
 const E = require(path.join(RAIZ, "engine.js"));
+const { janelaCena } = require(path.join(RAIZ, "ponte3d.js"));
 
 const PASSOS = 50;                                // amostras dentro de um turno
 
@@ -41,9 +42,10 @@ function ondeEsta(estado, m, r) {
 const idDe = (m) => m.dono + ":" + m.origemId + ">" + m.destinoId;
 
 // um turno: `antes` sao as marchas no inicio do turno; `eventos` os combates de
-// estrada que o motor registou nesse turno; `limite(m)` diz ate que fracao do
-// turno o DESENHO deixa a marcha andar (1 = o turno todo)
-function cruzamentosDoTurno(estado, antes, eventos, limite) {
+// estrada que o motor registou nesse turno; `desenho(m, r)` diz em que fracao
+// do turno do MOTOR o ecra mostra a marcha no instante `r` da animacao, ou
+// null se ela nao esta na estrada (dentro de uma cena, ou morta)
+function cruzamentosDoTurno(estado, antes, eventos, desenho) {
   const lutas = new Set();
   for (const e of eventos) {
     const a = e.atacante + ":" + e.atkOrigemId + ">" + e.atkDestinoId;
@@ -58,12 +60,10 @@ function cruzamentosDoTurno(estado, antes, eventos, limite) {
       let prev = null;
       for (let k = 0; k <= PASSOS; k++) {
         const r = k / PASSOS;
-        // quem ja lutou neste passo saiu da estrada: o perdedor morreu, e o
-        // vencedor esta dentro da cena (o mapa esconde-o enquanto ela corre)
-        const fora = (m) => limite(m) < 1 && r >= limite(m);
-        if (fora(m1) || fora(m2)) { prev = null; continue; }
-        const p1 = ondeEsta(estado, m1, r);
-        const p2 = ondeEsta(estado, m2, r);
+        const r1 = desenho(m1, r), r2 = desenho(m2, r);
+        if (r1 === null || r2 === null) { prev = null; continue; }
+        const p1 = ondeEsta(estado, m1, r1);
+        const p2 = ondeEsta(estado, m2, r2);
         if (!p1 || !p2 || p1.chave !== p2.chave) { prev = null; continue; }
         const dif = p1.u - p2.u;
         if (prev !== null && Math.sign(dif) !== 0 && Math.sign(prev) !== 0 && Math.sign(dif) !== Math.sign(prev)) {
@@ -106,7 +106,7 @@ function simular(nSeeds, flags) {
       E.rodarTurno(st, { A: E.jogadorBurro, B: E.jogadorBurro });
       const evs = st.log.slice(nLog).filter((e) => e.tipo === "combate_estrada" && e.turno === st.turno);
       nLutas += evs.length;
-      const lim = limitesDoDesenho(evs);
+      const lim = desenhoDoTurno(evs);
       for (const x of cruzamentosDoTurno(st, antes, evs, lim)) tudo.push(Object.assign(x, { turno: st.turno, seed }));
       v = E.checarVitoria(st);
     }
@@ -114,19 +114,31 @@ function simular(nSeeds, flags) {
   return { tudo, nLutas };
 }
 
-// Ate onde o desenho deixa cada marcha andar num turno com combate: se o
-// evento traz `sEncontro` (a fracao do turno em que se encontraram), a marcha
-// que lutou para ai; senao anda o turno inteiro, como sempre andou.
-function limitesDoDesenho(evs) {
-  const lim = new Map();
+// O QUE O ECRA FAZ num turno com combates de estrada -- a mesma regra do
+// `progMarcha` do index.html (23/09):
+//   * ate ao encontro, a marcha anda como o motor;
+//   * o perdedor entra na cena no instante `s` e nao volta;
+//   * o vencedor fica na cena durante `janelaCena(s)` e depois recupera o
+//     atraso ate ao fim do turno; se lutou duas vezes, fica na primeira.
+function desenhoDoTurno(evs) {
+  const lu = new Map();
   for (const e of evs) {
     if (e.sEncontro == null) continue;
-    // um vencedor pode lutar duas vezes no mesmo passo: para na PRIMEIRA
-    for (const k of [e.atacante + ":" + e.atkOrigemId + ">" + e.atkDestinoId,
-                     e.defensor + ":" + e.defOrigemId + ">" + e.defDestinoId])
-      lim.set(k, Math.min(e.sEncontro, lim.has(k) ? lim.get(k) : 1));
+    for (const [k, dono] of [[e.atacante + ":" + e.atkOrigemId + ">" + e.atkDestinoId, e.atacante],
+                             [e.defensor + ":" + e.defOrigemId + ">" + e.defDestinoId, e.defensor]]) {
+      const ja = lu.get(k), venceu = e.vencedorDono === dono;
+      lu.set(k, ja ? { s: Math.min(ja.s, e.sEncontro), venceu: ja.venceu && venceu, n: ja.n + 1 }
+                   : { s: e.sEncontro, venceu, n: 1 });
+    }
   }
-  return (m) => (lim.has(idDe(m)) ? lim.get(idDe(m)) : 1);
+  return (m, r) => {
+    const x = lu.get(idDe(m));
+    if (!x || r < x.s) return r;
+    if (!x.venceu || x.n > 1) return x.s === 1 && r === 1 ? 1 : null;
+    const fim = x.s + janelaCena(x.s);
+    if (r <= fim || fim >= 1) return null;
+    return x.s + (r - fim) / (1 - fim) * (1 - x.s);
+  };
 }
 
 // ── modo 2: um replay gravado ──────────────────────────────────────────────
@@ -141,12 +153,12 @@ function doReplay(caminho) {
     const antes = fr.movimentos || [];
     const evs = (prox.eventos || []).filter((e) => e.tipo === "combate_estrada");
     nLutas += evs.length;
-    for (const x of cruzamentosDoTurno(st, antes, evs, limitesDoDesenho(evs))) tudo.push(Object.assign(x, { turno: prox.turno }));
+    for (const x of cruzamentosDoTurno(st, antes, evs, desenhoDoTurno(evs))) tudo.push(Object.assign(x, { turno: prox.turno }));
   }
   return { tudo, nLutas };
 }
 
-module.exports = { simular, doReplay, cruzamentosDoTurno };
+module.exports = { simular, doReplay, cruzamentosDoTurno, desenhoDoTurno };
 if (require.main !== module) return;
 
 const iRep = process.argv.indexOf("--replay");

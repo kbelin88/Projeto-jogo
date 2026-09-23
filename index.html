@@ -1127,7 +1127,8 @@
     ? Ponte3D.criar({ Engine })
     : { sincronizar() {}, empurrarPara3D() {}, eventosDeEstrada() { return []; } };
   function sincronizarPonte() {
-    if (_ponte) _ponte.sincronizar({ M3D, game, reiObservado, progMarcha, eventosPorVir });
+    if (_ponte) _ponte.sincronizar({ M3D, game, reiObservado, progMarcha, eventosPorVir,
+                                     relogio: relogioReplay });
   }
   function empurrarPara3D() { sincronizarPonte(); _ponte.empurrarPara3D(); }
   function eventosDeEstrada() { sincronizarPonte(); return _ponte.eventosDeEstrada(); }
@@ -1757,8 +1758,21 @@
   function progMarcha(m) {
     // quem vai lutar na estrada neste turno para no instante do encontro
     const enc = encontrosPorVir();
-    const s = enc && enc.para.get(chaveMarchaRep(m.dono, m.origemId, m.destinoId));
-    const f = s !== undefined && s !== null ? Math.min(repFrac, s) : repFrac;
+    const lu = enc && enc.para.get(chaveMarchaRep(m.dono, m.origemId, m.destinoId));
+    let f = repFrac;
+    if (lu) {
+      f = Math.min(repFrac, lu.s);
+      // ── O VENCEDOR SEGUE (23/09) ──────────────────────────────────────────
+      // A cena dura `janelaCena(s)` do turno (ponte3d.js). Acabada ela, o
+      // vencedor volta a andar e recupera o atraso ate ao fim do turno, para
+      // estar onde o motor o pos quando o quadro seguinte chegar. Quem luta
+      // duas vezes no mesmo turno fica parado na primeira (a segunda cena
+      // abre onde ele esta).
+      if (lu.venceu && lu.n === 1) {
+        const fim = lu.s + janelaDaCena(lu.s);
+        if (repFrac > fim && fim < 1) f = lu.s + (repFrac - fim) / (1 - fim) * (1 - lu.s);
+      }
+    }
     return m.turnosTotal
       ? Math.min(progTeto(m), (m.turnosTotal - m.turnosRestantes + f) / m.turnosTotal)
       : 1;
@@ -1785,19 +1799,30 @@
     let v = null;
     if (fr && fr.eventos) {
       const lista = fr.eventos.filter((e) => e.tipo === "combate_estrada" && e.sEncontro != null);
+      // por coluna: o instante da PRIMEIRA luta, se a ganhou, e quantas teve
       const para = new Map();
       for (const e of lista) {
-        // um vencedor pode lutar duas vezes no mesmo turno: para na primeira
-        for (const k of [chaveMarchaRep(e.atacante, e.atkOrigemId, e.atkDestinoId),
-                         chaveMarchaRep(e.defensor, e.defOrigemId, e.defDestinoId)]) {
+        for (const [k, dono] of [[chaveMarchaRep(e.atacante, e.atkOrigemId, e.atkDestinoId), e.atacante],
+                                 [chaveMarchaRep(e.defensor, e.defOrigemId, e.defDestinoId), e.defensor]]) {
           const ja = para.get(k);
-          para.set(k, ja === undefined ? e.sEncontro : Math.min(ja, e.sEncontro));
+          const venceu = e.vencedorDono === dono;
+          if (!ja) para.set(k, { s: e.sEncontro, venceu, n: 1 });
+          else para.set(k, { s: Math.min(ja.s, e.sEncontro), venceu: ja.venceu && venceu, n: ja.n + 1 });
         }
       }
       if (lista.length) v = { lista, para };
     }
     _encRep = { dados: rep.dados, idx: rep.idx, v };
     return v;
+  }
+  // a mesma conta da ponte (uma so); sem a ponte carregada, meio turno
+  function janelaDaCena(s) {
+    return (typeof Ponte3D !== "undefined" && Ponte3D && Ponte3D.janelaCena)
+      ? Ponte3D.janelaCena(s) : 0.5;
+  }
+  // o relogio do replay (turno do quadro + fracao da animacao); ao vivo, null
+  function relogioReplay() {
+    return (emReplay && rep && game) ? game.turno + repFrac : null;
   }
   // os combates do quadro seguinte cujo instante a animacao ja passou
   function eventosPorVir() {

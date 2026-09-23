@@ -1,13 +1,12 @@
 // Smoke10batalha.js — as regras da cena de batalha, trancadas.
 //
 // ── PORQUE EXISTE ───────────────────────────────────────────────────────────
-// Três defeitos vistos pelo Lucas no replay, os três medidos no jogo a correr:
-//   1. "em algumas estradas a batalha não acontece" — num turno cheio há 10
-//      combates e só cabem 6 cenas; os outros não tinham nada. Agora o
-//      MARCADOR nasce sempre, mesmo sem figuras (`soMarca`).
-//   2. "a tropa fica parada depois" — o rescaldo deixava os sobreviventes de
-//      pé. Agora ficam só os mortos e o vencedor volta a marchar.
-//   3. as colunas em combate atravessavam-se por cima da cena — quem está a
+// Defeitos vistos pelo Lucas no replay, medidos no jogo a correr:
+//   1. (23/09) "a barra 1x4 fica no mapa varios turnos" — a cena media-se em
+//      SEGUNDOS (5 de luta + 12 de rescaldo = ~8 turnos a 1x) e as barras
+//      acumulavam-se. Agora a cena cabe no TURNO: mede-se no relogio do
+//      replay, acaba em `fimT`, e nao ha marcador nem rescaldo.
+//   2. as colunas em combate atravessavam-se por cima da cena — quem está a
 //      lutar sai do desenho da marcha (`emLuta` / `aLutar`).
 //
 // Isto é um teste de LEITURA: não há WebGL no Node. Tranca a intenção no
@@ -26,15 +25,24 @@ const conferir = (ok, msg) => {
   if (!ok) { falhas++; console.error("FALHOU: " + msg); } else console.log("ok: " + msg);
 };
 
-// 1. todo combate ganha marcador, mesmo sem cena
-conferir(/soMarca/.test(batalha),
-  "ha combates so com marcador (`soMarca`) quando o teto de cenas enche");
-conferir(/MAX_VIVAS/.test(batalha) && /MAX_MARCAS/.test(batalha),
-  "ha um teto para as cenas e outro para os marcadores");
-
-// 2. no rescaldo ficam só os mortos
-conferir(/rescaldo[\s\S]{0,900}filter\(\(f\) => \{[\s\S]{0,200}if \(f\.caido\) return true;/.test(batalha),
-  "no rescaldo so os caidos ficam (os de pe saem da cena)");
+// 1. a batalha cabe no turno
+const codigo = batalha.split("\n").filter((l) => !/^\s*\/\//.test(l)).join("\n");
+conferir(!/Sprite|telaMarcador|CanvasTexture/.test(codigo),
+  "nao ha marcador (a barra 1x4) por cima da batalha");
+conferir(!/RESCALDO/.test(codigo),
+  "nao ha rescaldo: quando a cena acaba, a estrada fica limpa");
+conferir(/ba\.fimT/.test(codigo) && /relogio - ba\.inicioT/.test(codigo),
+  "a cena mede-se no relogio do replay (inicioT -> fimT), nao em segundos");
+conferir(/if \(u >= 1 \|\| esquecida\)[\s\S]{0,80}fechar\(ba\)/.test(codigo),
+  "a cena fecha quando chega ao fim da janela");
+const ponte = fs.readFileSync(path.join(RAIZ, "ponte3d.js"), "utf8");
+const P = require(path.join(RAIZ, "ponte3d.js"));
+conferir(P.janelaCena(0) <= 1 && P.janelaCena(0.99) <= 0.25 + 1e-9 && P.janelaCena(0.5) <= 0.5,
+  "a janela da cena nunca passa de um quarto de turno para la do fim do turno");
+conferir(/relogio: relogio\(\)/.test(ponte) && /relogio: relogioReplay/.test(jogo),
+  "o jogo passa o relogio do replay ao mapa");
+conferir(/batalhas\.passo\(dts, relogioJogo, msPorTurno\)/.test(mapa),
+  "o mapa anda a cena com o relogio do jogo");
 
 // 3. quem luta não marcha
 conferir(/emLuta/.test(batalha) && /aLutar/.test(batalha),

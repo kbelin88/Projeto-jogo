@@ -29,12 +29,26 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
+  // ── QUANTO DURA UMA BATALHA DE ESTRADA, EM TURNOS (23/09) ──────────────────
+  // Uma conta, um sitio: o mapa usa-a para a cena, o `progMarcha` do jogo para
+  // saber quando o vencedor volta a andar. `s` e o instante do encontro no
+  // turno (`sEncontro` do motor, 0 a 1). A cena ocupa 60% do que falta do
+  // turno, e nunca menos de um quarto de turno -- um encontro mesmo no fim do
+  // turno transborda no maximo 0,25 para o seguinte. Sem `s` (replays de antes
+  // de 23/09), meio turno.
+  function janelaCena(s) {
+    if (s === null || s === undefined || !Number.isFinite(s)) return 0.5;
+    return Math.max(0.25, 0.6 * (1 - s));
+  }
+
   function criar(dep) {
     const Engine = dep.Engine;
     // o que vem do jogo; `sincronizar` mantem-nos em dia
     let M3D = null, game = null;
     let reiObservado = function () { return null; };
     let progMarcha = function () { return 1; };
+    // o relogio do replay: turno + fracao (null ao vivo, onde nao ha fracao)
+    let relogio = function () { return null; };
     // os combates de estrada do quadro SEGUINTE cujo instante ja passou na
     // animacao (so no replay; ao vivo nao ha quadro seguinte)
     let eventosPorVir = function () { return []; };
@@ -44,6 +58,7 @@
       if ("game" in d) game = d.game;
       if (typeof d.reiObservado === "function") reiObservado = d.reiObservado;
       if (typeof d.progMarcha === "function") progMarcha = d.progMarcha;
+      if (typeof d.relogio === "function") relogio = d.relogio;
       if (typeof d.eventosPorVir === "function") eventosPorVir = d.eventosPorVir;
     }
 
@@ -104,6 +119,8 @@
         // A composicao do VENCEDOR nao vem no evento (o motor so guarda a do
         // perdedor, que sai inteiro); tira-se da marcha dele, que sobreviveu.
         eventos: eventosDeEstrada(),
+        // a cena de batalha mede-se neste relogio, e nao em segundos
+        relogio: relogio(),
       });
     }
 
@@ -135,6 +152,16 @@
         // antecipado, a marcha do vencedor ainda e a de ANTES da luta: as
         // baixas ja estao la dentro e nao se somam outra vez
         const totalVenc = somaT(compVenc) + (antecipado ? 0 : (e.baixasVencedor || 0));
+        // ── A JANELA DA CENA NO RELOGIO DO REPLAY ────────────────────────────
+        // O encontro deu-se no turno `e.turno`, a fracao `sEncontro` dele: no
+        // relogio (turno do quadro + fracao da animacao) isso e e.turno-1+s.
+        // Sem relogio (ao vivo) a cena fica em segundos, no mapa.
+        const agoraT = relogio();
+        let inicioT = null, fimT = null;
+        if (Number.isFinite(agoraT)) {
+          inicioT = e.sEncontro != null ? e.turno - 1 + e.sEncontro : agoraT;
+          fimT = inicioT + janelaCena(e.sEncontro);
+        }
         saida.push({
           tipo: "combate_estrada",
           id: e.turno + "|" + e.trechoDeId + ">" + e.trechoParaId + "|"
@@ -142,7 +169,7 @@
           turno: e.turno, de: a.slug, para: b.slug, t,
           vencedor: e.vencedorDono, perdedor: e.perdedorDono,
           compVenc, compPerd: Object.assign({}, e.perdedorTropas || {}),
-          totalVenc,
+          totalVenc, inicioT, fimT,
           baixasVenc: e.baixasVencedor || 0,
         });
       }
@@ -151,5 +178,5 @@
     return { sincronizar, empurrarPara3D, eventosDeEstrada };
   }
 
-  return { criar };
+  return { criar, janelaCena };
 });

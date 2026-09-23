@@ -1037,6 +1037,9 @@ transformed.y += onda * transformed.x * 0.05;`);
   // Entao mede-se: quanto tempo levou o ultimo turno? E a marcha espalha-se
   // por esse tempo. Ninguem tem de configurar nada.
   let msPorTurno = 4000, turnoAnterior = null, marcadoEm = 0;
+  // o relogio do replay (turno + fracao), que o jogo manda em `atualizar`; e
+  // nele que a cena de batalha se mede (23/09). null ao vivo e nas bancadas.
+  let relogioJogo = null;
   function relogioDoTurno(turno) {
     if (turno === turnoAnterior) return;
     const agora = performance.now();
@@ -1112,8 +1115,8 @@ transformed.y += onda * transformed.x * 0.05;`);
   // ⚠ DESLIGADA POR OMISSAO (22/09). O Lucas quer mandar na camara e ir ele ver
   // a batalha; uma camara que salta sozinha tira-lhe isso das maos. Quem quiser
   // o modo automatico (gravar video, por exemplo) liga com `seguirBatalhas(true)`
-  // ou com a tecla B no jogo. O que garante que a batalha se ENCONTRA e o
-  // marcador de espadas cruzadas, que se ve de qualquer distancia.
+  // ou com a tecla B no jogo. (O marcador de espadas cruzadas saiu em 23/09:
+  // ficava varios turnos no mapa. A batalha agora cabe no turno.)
   let seguirCena = false;
   function irVer(p, segundos) {
     if (!seguirCena || performance.now() - toqueCam < 5000) return;
@@ -1162,10 +1165,6 @@ transformed.y += onda * transformed.x * 0.05;`);
     // resultado e o do motor na mesma -- o que muda e onde se filma.
     const t = Math.max(0.12, Math.min(0.88, ev.t === undefined ? 0.5 : ev.t));
     const rumo = noCaminho(via, via.inv ? (1 - t) * via.comp : t * via.comp, _pb);
-    // com a camara a ir ver, o corte por distancia deixa de fazer sentido: ela
-    // vai la ter. So se corta se o jogador tiver tomado a camara e estiver longe.
-    // (nao se corta por distancia: o marcador e para ser visto de longe, e e
-    // dali que o Lucas decide ir la)
     const feita = asBatalhas().abrir({
       id: ev.id || (ev.turno + "|" + ev.de + ">" + ev.para + "|" + ev.vencedor),
       de: ev.de, para: ev.para,
@@ -1173,14 +1172,14 @@ transformed.y += onda * transformed.x * 0.05;`);
       vencedor: ev.vencedor, perdedor: ev.perdedor,
       compVenc: ev.compVenc || {}, compPerd: ev.compPerd || {},
       totalVenc: ev.totalVenc || 1, baixasVenc: ev.baixasVenc || 0,
-      // (a camara so vai ver a primeira; as outras correm onde estao)
-      // a cena tem de caber DENTRO do turno: um turno pode levar 5 s com o
-      // jogador burro e tres minutos com um raciocinador (ver `msPorTurno`)
-      // nunca abaixo de 5 s: mais curto que isso e a cena acaba antes de se ter
-      // olhado para ela
-      segundos: ev.segundos || Math.max(5.0, Math.min(9.0, msPorTurno / 1000 * 0.7)),
+      // a janela no relogio do replay (ponte3d.js, `janelaCena`): a batalha
+      // cabe no turno em que aconteceu
+      inicioT: ev.inicioT, fimT: ev.fimT,
+      // sem relogio (ao vivo): segundos, e tambem so dentro do turno
+      segundos: ev.segundos || Math.max(1.5, Math.min(5.0, msPorTurno / 1000 * 0.6)),
     });
-    if (feita) irVer(_pb, feita.dur || 5);
+    if (feita) irVer(_pb, feita.fimT !== null && relogioJogo !== null
+      ? Math.max(0.5, (feita.fimT - relogioJogo) * msPorTurno / 1000) : feita.dur);
     return feita;
   }
 
@@ -1510,7 +1509,7 @@ transformed.y += onda * transformed.x * 0.05;`);
     // os tocadores so andam para os que estao a vista: um mixer parado nao
     // custa nada, e sao 48 poços por tipo
     const dts = dtQuadro / 1000;
-    if (batalhas) batalhas.passo(dts);
+    if (batalhas) batalhas.passo(dts, relogioJogo, msPorTurno);
     moverCamCena(dts);
     // ── O PASSO SEGUE A MARCHA ────────────────────────────────────────────
     // Um ciclo do lanceiro cobre ~0,7 m de chao. Se a coluna anda a 1,4 m/s,
@@ -1700,6 +1699,7 @@ transformed.y += onda * transformed.x * 0.05;`);
       ligadoAoJogo = true;
       marchas = estado.marchas || [];
       relogioDoTurno(estado.turno);
+      relogioJogo = Number.isFinite(estado.relogio) ? estado.relogio : null;
       // ── OS COMBATES DE ESTRADA ────────────────────────────────────────────
       // Chegam ja com o trecho e a fracao (o jogo converte), porque o evento do
       // motor traz o sitio em coordenadas do MAPA 2D e aqui anda-se em metros.
