@@ -27,7 +27,7 @@ const fs = require("fs");
 const path = require("path");
 const RAIZ = path.join(__dirname, "..");
 const E = require(path.join(RAIZ, "engine.js"));
-const { janelaCena } = require(path.join(RAIZ, "ponte3d.js"));
+const { planoDoTurno } = require(path.join(RAIZ, "ponte3d.js"));
 
 const PASSOS = 50;                                // amostras dentro de um turno
 
@@ -114,31 +114,12 @@ function simular(nSeeds, flags) {
   return { tudo, nLutas };
 }
 
-// O QUE O ECRA FAZ num turno com combates de estrada -- a mesma regra do
-// `progMarcha` do index.html (23/09):
-//   * ate ao encontro, a marcha anda como o motor;
-//   * o perdedor entra na cena no instante `s` e nao volta;
-//   * o vencedor fica na cena durante `janelaCena(s)` e depois recupera o
-//     atraso ate ao fim do turno; se lutou duas vezes, fica na primeira.
+// O QUE O ECRA FAZ num turno com combates de estrada: a MESMA conta que o
+// jogo usa (`planoDoTurno`, ponte3d.js) -- o mapa pausa em cada luta, as duas
+// colunas param frente a frente, a perdedora some.
 function desenhoDoTurno(evs) {
-  const lu = new Map();
-  for (const e of evs) {
-    if (e.sEncontro == null) continue;
-    for (const [k, dono] of [[e.atacante + ":" + e.atkOrigemId + ">" + e.atkDestinoId, e.atacante],
-                             [e.defensor + ":" + e.defOrigemId + ">" + e.defDestinoId, e.defensor]]) {
-      const ja = lu.get(k), venceu = e.vencedorDono === dono;
-      lu.set(k, ja ? { s: Math.min(ja.s, e.sEncontro), venceu: ja.venceu && venceu, n: ja.n + 1 }
-                   : { s: e.sEncontro, venceu, n: 1 });
-    }
-  }
-  return (m, r) => {
-    const x = lu.get(idDe(m));
-    if (!x || r < x.s) return r;
-    if (!x.venceu || x.n > 1) return x.s === 1 && r === 1 ? 1 : null;
-    const fim = x.s + janelaCena(x.s);
-    if (r <= fim || fim >= 1) return null;
-    return x.s + (r - fim) / (1 - fim) * (1 - x.s);
-  };
+  const plano = planoDoTurno(evs);
+  return (m, r) => (plano.visivel(idDe(m), r) ? plano.f(idDe(m), r) : null);
 }
 
 // ── modo 2: um replay gravado ──────────────────────────────────────────────

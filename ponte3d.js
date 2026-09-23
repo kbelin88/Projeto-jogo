@@ -41,6 +41,94 @@
     return Math.max(0.25, 0.6 * (1 - s));
   }
 
+  // ── O QUE SE VE DE UMA LUTA DE ESTRADA (23/09, a proposta do Lucas) ────────
+  // "Ao olhar o jogo de cima, voce ve as caixas azuis e vermelhas a correr pelo
+  // mapa; quando duas vem uma em direcao a outra, param uma de frente para a
+  // outra, a perdedora some, e a outra continua."
+  //
+  // Nao ha cena de figuras no jogo -- ela abria noutro sitio do troco e
+  // escondia as duas colunas, que no ecra "sumiam". Quem luta sao as colunas.
+  //
+  // ⚠ O MAPA INTEIRO PAUSA, nao so as duas. Parar so quem luta atrasava a
+  // vencedora em relacao ao motor, e nesse atraso outras colunas inimigas
+  // passavam por ela sem lutar (321 em 4014 combates do jogador-base, medido
+  // com o `medir-cruzamentos.js`). Com uma pausa de TODOS no instante de cada
+  // luta ninguem se desencontra do motor. As pausas cabem no turno: o resto do
+  // movimento anda um pouco mais depressa para as compensar.
+  //
+  // `planoDoTurno(eventos)` recebe os combates de estrada do turno (com
+  // `sEncontro`) e devolve, para a animacao `r` (0 a 1 entre dois quadros):
+  //   f(chave, r)       -> a fracao do turno do MOTOR em que a coluna se desenha
+  //   visivel(chave, r) -> se a coluna ainda se ve (a perdedora some)
+  // `chave` = dono:origem>destino. Uma conta so: o jogo e o medidor usam esta.
+  const FOLGA_LUTA = 0.05;     // param um pouco ANTES do encontro: frente a frente, sem se sobreporem
+  const PAUSA_MAX = 0.15;      // uma pausa, em fracao do turno de animacao
+  const PAUSAS_TOTAL = 0.45;   // todas as pausas de um turno juntas nunca passam disto
+  const JUNTAR = 0.02;         // lutas a menos disto umas das outras partilham a pausa
+  const chaveLuta = (dono, de, para) => dono + ":" + de + ">" + para;
+  function planoDoTurno(eventos) {
+    const lutas = (eventos || []).filter((e) => e.tipo === "combate_estrada" && Number.isFinite(e.sEncontro));
+    const inst = [];
+    for (const s of lutas.map((e) => e.sEncontro).sort((a, b) => a - b)) {
+      if (!inst.length || s - inst[inst.length - 1] > JUNTAR) inst.push(s);
+    }
+    const H = inst.length ? Math.min(PAUSA_MAX, PAUSAS_TOTAL / inst.length) : 0;
+    const anda = 1 - H * inst.length;          // parte da animacao em movimento
+    // as pausas no eixo da animacao: entre `a` e `b` o motor esta parado em `s`
+    const pausas = [];
+    let sAnt = 0, fimAnt = 0;
+    for (const s of inst) {
+      const a = fimAnt + (s - sAnt) * anda;
+      pausas.push({ s, a, b: a + H });
+      sAnt = s; fimAnt = a + H;
+    }
+    function motor(r) {
+      let sP = 0, bP = 0;
+      for (const p of pausas) {
+        if (r < p.a) return sP + (r - bP) / anda;
+        if (r <= p.b) return p.s;
+        sP = p.s; bP = p.b;
+      }
+      return Math.min(1, sP + (r - bP) / anda);
+    }
+    const pausaDe = (s) => {
+      let melhor = null;
+      for (const p of pausas) if (p.s <= s + 1e-9) melhor = p;
+      return melhor;
+    };
+    const porColuna = new Map();
+    for (const e of lutas) {
+      for (const [k, dono] of [[chaveLuta(e.atacante, e.atkOrigemId, e.atkDestinoId), e.atacante],
+                               [chaveLuta(e.defensor, e.defOrigemId, e.defDestinoId), e.defensor]]) {
+        if (!porColuna.has(k)) porColuna.set(k, []);
+        porColuna.get(k).push({ s: e.sEncontro, venceu: e.vencedorDono === dono });
+      }
+    }
+    for (const l of porColuna.values()) l.sort((a, b) => a.s - b.s);
+    function f(k, r) {
+      const re = motor(r);
+      const l = porColuna.get(k);
+      if (!l) return re;
+      // a ultima luta desta coluna cujo "parar" ja chegou
+      let lu = null;
+      for (const x of l) if (re >= x.s - FOLGA_LUTA) lu = x;
+      if (!lu) return re;
+      if (re <= lu.s || lu.s >= 1) return Math.max(0, lu.s - FOLGA_LUTA);
+      // depois da luta a vencedora recupera a folga ate ao fim do turno
+      return re - FOLGA_LUTA * (1 - re) / (1 - lu.s);
+    }
+    function visivel(k, r) {
+      const l = porColuna.get(k);
+      if (!l) return true;
+      const perdeu = l.find((x) => !x.venceu);
+      if (!perdeu) return true;
+      const p = pausaDe(perdeu.s);
+      // some a meio da pausa da luta dela
+      return p ? r < (p.a + p.b) / 2 : motor(r) < perdeu.s;
+    }
+    return { f, visivel, motor, pausas };
+  }
+
   function criar(dep) {
     const Engine = dep.Engine;
     // o que vem do jogo; `sincronizar` mantem-nos em dia
@@ -49,6 +137,8 @@
     let progMarcha = function () { return 1; };
     // o relogio do replay: turno + fracao (null ao vivo, onde nao ha fracao)
     let relogio = function () { return null; };
+    // a coluna ainda se ve? (a perdedora de uma luta de estrada some)
+    let visivel = function () { return true; };
     // os combates de estrada do quadro SEGUINTE cujo instante ja passou na
     // animacao (so no replay; ao vivo nao ha quadro seguinte)
     let eventosPorVir = function () { return []; };
@@ -59,6 +149,7 @@
       if (typeof d.reiObservado === "function") reiObservado = d.reiObservado;
       if (typeof d.progMarcha === "function") progMarcha = d.progMarcha;
       if (typeof d.relogio === "function") relogio = d.relogio;
+      if (typeof d.visivel === "function") visivel = d.visivel;
       if (typeof d.eventosPorVir === "function") eventosPorVir = d.eventosPorVir;
     }
 
@@ -83,7 +174,7 @@
             lembrada: ve ? null : (lb ? lb.turno : null),
           };
         }),
-        marchas: (game.movimentos || []).map((m) => {
+        marchas: (game.movimentos || []).filter((m) => visivel(m)).map((m) => {
           // a posicao e a do MOTOR (`posicaoRota` anda pelo peso da rota, nao por
           // pixel), mas com o progresso ja avancado dentro do turno -- entrega-se
           // um `turnosRestantes` fracionario a mesma funcao em vez de reimplementar
@@ -118,8 +209,10 @@
         // slugs, portanto a conversao e aqui: slug + fracao ao longo do trecho.
         // A composicao do VENCEDOR nao vem no evento (o motor so guarda a do
         // perdedor, que sai inteiro); tira-se da marcha dele, que sobreviveu.
-        eventos: eventosDeEstrada(),
-        // a cena de batalha mede-se neste relogio, e nao em segundos
+        // ⚠ SEM CENA DE FIGURAS NO JOGO (23/09): quem luta sao as proprias
+        // colunas (ver `planoDoTurno` acima). O `eventosDeEstrada` continua a existir
+        // -- e o que o Smoke8 confronta com o motor, e o que a bancada usa.
+        eventos: [],
         relogio: relogio(),
       });
     }
@@ -178,5 +271,5 @@
     return { sincronizar, empurrarPara3D, eventosDeEstrada };
   }
 
-  return { criar, janelaCena };
+  return { criar, janelaCena, planoDoTurno };
 });

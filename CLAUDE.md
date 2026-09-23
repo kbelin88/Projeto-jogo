@@ -276,7 +276,7 @@ o HUD e o log, sem mapa.
 | ficheiro | o que é |
 |---|---|
 | `sonda3d/mapa3d.js` | o mapa: carrega, povoa, anima as marchas, abre as cenas |
-| `sonda3d/batalha.js` | a cena da batalha de estrada — a MESMA no jogo e nas bancadas |
+| `sonda3d/batalha.js` | a cena de figuras da batalha de estrada — só na bancada `encontro.html` desde 23/09 (no jogo lutam as colunas) |
 | `sonda3d/mapa.html` | o mapa sozinho, sem jogo |
 | `sonda3d/encontro.html` | bancada: duas colunas encontram-se e o evento é o do motor |
 | `sonda3d/marcha.html` | bancada: uma tropa a ir e vir |
@@ -319,9 +319,15 @@ estão em `ferramentas/cena/` e `assets/texturas/`.
   quando dois inimigos estão no MESMO ponto no MESMO instante (`encontroNoPasso`,
   exato: a marcha anda a velocidade constante dentro do passo), resolve os
   encontros por ordem de tempo e grava no evento o instante (`sEncontro`) e o
-  ponto. O replay para as duas colunas nesse instante e abre a cena ali
-  (`progMarcha` + `eventosPorVir` no `index.html`). Trancado por
-  `test_varredura_estrada.js` e `test_sem_atravessar.js`.
+  ponto. **No ecrã, quem luta são as próprias colunas** (desde 23/09, a proposta
+  do Lucas): o mapa INTEIRO pausa no instante de cada luta, as duas caixas param
+  frente a frente, a perdedora some e tudo continua (`planoDoTurno` na
+  `ponte3d.js`, uma conta só para o jogo e para o `medir-cruzamentos.js`). A cena
+  de figuras (`batalha.js`) já não abre no jogo — ficava noutro sítio do troço,
+  escondia as duas colunas e deixava uma barra "1×4" vários turnos no mapa; vive
+  só na bancada `encontro.html`. Pausar só as duas desencontrava a vencedora do
+  motor e outras colunas passavam por ela (321 em 4014); pausar todas dá 0.
+  Trancado por `test_varredura_estrada.js`, `test_sem_atravessar.js` e `Smoke8estrada`.
 - **O progresso de uma marcha tem uma implementação só** (`progMarcha` no
   `index.html`), injetada na `ponte3d.js`.
 - **Estradas e aldeias são zona protegida** no relevo (90 m à volta de cada

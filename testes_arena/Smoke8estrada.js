@@ -94,8 +94,34 @@ console.log("\n=== (C) a cena do choque, no mapa 3D ===");
 const ponte = fs.readFileSync(path.join(__dirname, "..", "ponte3d.js"), "utf8");
 ok("a ponte converte o evento do motor para o mapa",
   /function eventosDeEstrada\(\)/.test(ponte) && /combate_estrada/.test(ponte));
-ok("e o que ela devolve entra no `atualizar` do mapa",
-  /eventos: eventosDeEstrada\(\)/.test(ponte));
+// 23/09: no jogo a luta ja nao e uma cena de figuras -- sao as proprias
+// colunas: o mapa pausa, as duas param frente a frente, a perdedora some.
+// Confere-se com um combate REAL do motor, pela mesma funcao que o jogo usa.
+{
+  const P = require(path.join(__dirname, "..", "ponte3d.js"));
+  const st = E.criarEstadoInicial(Object.assign({}, E.CONFIG, { seed: 7 }));
+  let ev = null;
+  for (let i = 0; i < 40 && !ev; i++) {
+    const n = st.log.length;
+    E.rodarTurno(st, { A: E.jogadorBurro, B: E.jogadorBurro });
+    ev = st.log.slice(n).find((x) => x.tipo === "combate_estrada" && x.sEncontro > 0.1 && x.sEncontro < 0.9);
+  }
+  const k = (d, o, de) => d + ":" + o + ">" + de;
+  const plano = P.planoDoTurno([ev]);
+  const kV = ev.vencedorDono === ev.atacante ? k(ev.atacante, ev.atkOrigemId, ev.atkDestinoId) : k(ev.defensor, ev.defOrigemId, ev.defDestinoId);
+  const kP = ev.vencedorDono === ev.atacante ? k(ev.defensor, ev.defOrigemId, ev.defDestinoId) : k(ev.atacante, ev.atkOrigemId, ev.atkDestinoId);
+  const pa = plano.pausas[0];
+  ok("o jogo mostra a luta pelas COLUNAS: o mapa pausa no instante do encontro",
+    pa && plano.motor((pa.a + pa.b) / 2) === ev.sEncontro, pa && `pausa ${pa.a.toFixed(2)}-${pa.b.toFixed(2)} da animacao`);
+  ok("as duas param ANTES do encontro, frente a frente",
+    plano.f(kV, pa.a) < ev.sEncontro && plano.f(kP, pa.a) < ev.sEncontro);
+  ok("a perdedora some durante a pausa; a vencedora continua a ver-se",
+    plano.visivel(kP, pa.a) && !plano.visivel(kP, pa.b) && plano.visivel(kV, 1));
+  ok("e a vencedora chega ao fim do turno onde o motor a pos",
+    Math.abs(plano.f(kV, 1) - 1) < 1e-9);
+  ok("o index.html usa este plano para o progresso e para esconder a perdedora",
+    /Ponte3D\.planoDoTurno\(lista\)/.test(html) && /visivel: marchaVisivel/.test(html));
+}
 ok("e o index.html liga-a ao jogo",
   /Ponte3D\.criar\(/.test(html) && /_ponte\.empurrarPara3D\(\)/.test(html));
 const mapa3d = fs.readFileSync(

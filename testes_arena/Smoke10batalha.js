@@ -43,6 +43,10 @@ conferir(/relogio: relogio\(\)/.test(ponte) && /relogio: relogioReplay/.test(jog
   "o jogo passa o relogio do replay ao mapa");
 conferir(/batalhas\.passo\(dts, relogioJogo, msPorTurno\)/.test(mapa),
   "o mapa anda a cena com o relogio do jogo");
+// 23/09 (tarde): no JOGO a cena de figuras ja nao abre -- quem luta sao as
+// colunas (Smoke8estrada confere a pausa, o frente a frente e a perdedora a sumir)
+conferir(/eventos: \[\],/.test(ponte),
+  "no jogo nao se abre a cena de figuras: a ponte manda `eventos: []` ao mapa");
 
 // 3. quem luta não marcha
 conferir(/emLuta/.test(batalha) && /aLutar/.test(batalha),
