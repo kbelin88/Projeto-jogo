@@ -35,6 +35,15 @@ node variantes2.js 150
 | `trechos.js '<regex>' <n> <partidas>` | amostra de frases do raciocínio que batem na regex |
 | `variantes.js`, `variantes2.js`, `perfil.js` | políticas do jogador-base no motor (margem, retaguarda, fatiamento) |
 | `p5_prototipo.js` | o P4 e o P5 do mesmo turno real, lado a lado (numa CÓPIA do motor) |
+| `sonda_casos.js` | escolhe os turnos-teste da sonda (onde o Rei errou) |
+| `sonda_p5.js` | a mesma decisão pedida com P4 e P5, avaliada pelo motor (`--seco` e `--burro` correm sem rede) |
+| `sonda_comum.js` | reconstruir um turno e avaliar uma ordem (partilhado pela sonda) |
+
+**Cuidado com a simultaneidade.** Tudo o que diz "o que o Rei podia saber" usa a
+`fotografia` de antes das ordens (`reexec.js`, fase `"pre"`). Na fase `"pos"` as ordens
+dos DOIS lados já correram: o inimigo pode ter tirado tropa do alvo, gasto a madeira ou
+mandado um reforço que o Rei nunca viu. Duas conclusões desta pesquisa estiveram erradas
+por isso durante a noite, e foram corrigidas (ver o relatório, §4).
 
 `saidas_partidas.txt` e `saidas_motor.txt` guardam as saídas da noite de 25/09.
 
