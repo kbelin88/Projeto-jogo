@@ -8,7 +8,9 @@
 // Cada mudanca e INFORMACAO (uma regra que o motor ja executa, ou um numero
 // que o motor ja sabe). Nenhuma diz o que fazer.
 //
-// uso: node p5_prototipo.js <partida.txt> <turno> <A|B> <dir_saida>
+// uso: node p5_prototipo.js <partida.txt> <turno> <A|B> <dir_saida> [componentes]
+//   componentes: "padrao" (regras,combate,marcha=intencao — o P5 de 26/09), ou
+//   uma lista: regras, combate, marcha[=composicao], dist (P5-6), estoque (P5-7)
 "use strict";
 const fs = require("fs");
 const path = require("path");
@@ -90,22 +92,41 @@ function eventoAldeiaP5(ev, me, visao) {
   return `King ${ev.atacante} attacked the ${alvoTag} village ${onde}: ${venceu ? "conquered it" : "failed, their army was destroyed"}.`;
 }
 
-// P5-5: o exercito inimigo avistado — de onde, quanto, e para QUEM vai
-function linhaMarchaInimigaP5(m, visao, me) {
+// P5-5: o exercito inimigo avistado — para QUEM vai (e, so no modo
+// "composicao", de onde e quanto; o Lucas tirou isso em 26/09: mexe no fog)
+function linhaMarchaInimigaP5(m, visao, me, modo) {
   const alvo = visao.minhas.find((a) => a.id === m.destinoId) ? "YOUR village"
     : ((visao.alvos.find((a) => a.id === m.destinoId) || {}).dono === null ? "a NEUTRAL village"
       : "THEIR OWN village (a reinforcement)");
   const t = m.turnosRestantes;
+  if (modo !== "composicao") return `- enemy army marching toward ${nomeDe(visao, m.destinoId)} - ${alvo} - arrives in ${t} turn${t === 1 ? "" : "s"}`;
   return `- enemy army of ${comp(m.tropas)} from ${nomeDe(visao, m.origemId)} marching to ${nomeDe(visao, m.destinoId)} - ${alvo} - arrives in ${t} turn${t === 1 ? "" : "s"}`;
 }
 
-function montarP5(E, estado, dono) {
+// Os componentes do P5, ligaveis um a um. O PADRAO e o P5 depois das decisoes
+// do Lucas (26/09): fog intocado (sem P5-7, marcha sem origem nem composicao),
+// e o P5-6 so se um teste isolado o justificar.
+const COMPONENTES = ["regras", "combate", "marcha", "dist", "estoque"];
+const PADRAO = { regras: true, combate: true, marcha: "intencao", dist: false, estoque: false };
+// "regras,combate" -> {regras:true, combate:true, ...false}; "marcha=composicao" aceita
+function lerComponentes(spec) {
+  if (!spec || spec === "padrao") return Object.assign({}, PADRAO);
+  const c = { regras: false, combate: false, marcha: false, dist: false, estoque: false };
+  for (const parte of spec.split(",").filter(Boolean)) {
+    const [k, v] = parte.split("=");
+    if (!COMPONENTES.includes(k)) throw new Error(`componente P5 desconhecido: ${k} (validos: ${COMPONENTES.join(", ")})`);
+    c[k] = k === "marcha" ? (v || "intencao") : true;
+  }
+  return c;
+}
+
+function montarP5(E, estado, dono, comp = PADRAO) {
   const visao = E.montarVisao(estado, dono);
   const p4 = E.montarPrompt(visao, { rejeicaoNoFim: true });
-  let txt = regrasP5(p4);
+  let txt = comp.regras ? regrasP5(p4) : p4;
 
   // eventos de aldeia: troca linha a linha as frases de combate do P4
-  const combates = (visao.eventos || []).filter((ev) => ev.tipo === "combate");
+  const combates = comp.combate ? (visao.eventos || []).filter((ev) => ev.tipo === "combate") : [];
   for (const ev of combates) {
     const euAtaquei = ev.atacante === dono;
     const quem = euAtaquei ? "You" : "King " + ev.atacante;
@@ -120,14 +141,14 @@ function montarP5(E, estado, dono) {
   }
 
   // marchas inimigas avistadas
-  for (const m of (visao.transito || []).filter((x) => x.dono !== dono)) {
+  for (const m of (comp.marcha ? visao.transito || [] : []).filter((x) => x.dono !== dono)) {
     const fraseP4 = `- enemy army marching toward [${m.destinoId}]`;
     const i = txt.indexOf(fraseP4);
     if (i < 0) continue;
     const fim = txt.indexOf("\n", i);
     const linhaP4 = txt.slice(i, fim);
     if (!new RegExp(`arrives in ${m.turnosRestantes} turn`).test(linhaP4)) continue;
-    txt = txt.slice(0, i) + linhaMarchaInimigaP5(m, visao, dono) + txt.slice(fim);
+    txt = txt.slice(0, i) + linhaMarchaInimigaP5(m, visao, dono, comp.marcha) + txt.slice(fim);
   }
 
   // P5-6 (OPCIONAL — decisao do Lucas): onde esta o exercito que ja existe
@@ -139,13 +160,13 @@ function montarP5(E, estado, dono) {
     if ((adj[a.id] || []).some((v) => inimigo.has(v))) fronteira += k; else interior += k;
   }
   const totalLinha = /^TOTAL: .*$/m;
-  txt = txt.replace(totalLinha, (l) => `${l}\n  at home: ${interior} in INTERIOR villages (no enemy neighbour), ${fronteira} in BORDER villages`);
+  if (comp.dist) txt = txt.replace(totalLinha, (l) => `${l}\n  at home: ${interior} in INTERIOR villages (no enemy neighbour), ${fronteira} in BORDER villages`);
 
   // P5-7 (OPCIONAL — decisao do Lucas, mexe no fog): o estoque das aldeias
   // inimigas VISIVEIS. A defesa de um alvo pode saltar num turno so (Teruel,
   // P3 T11: 8 -> 23 com 90 de madeira guardada); em 22 de 26 ataques que
   // falharam assim, o estoque ja o dizia.
-  for (const a of visao.alvos.filter((x) => x.visivel && x.dono !== null && x.dono !== dono)) {
+  for (const a of (comp.estoque ? visao.alvos : []).filter((x) => x.visivel && x.dono !== null && x.dono !== dono)) {
     const real = estado.aldeias.find((x) => x.id === a.id);
     const re = new RegExp(`^(\\[${a.id}\\][^\\n]*\\| ENEMY[^\\n]*)$`, "m");
     txt = txt.replace(re, (l) => `${l} | stock: wood ${real.recursos.madeira}, iron ${real.recursos.ferro}`);
@@ -153,11 +174,11 @@ function montarP5(E, estado, dono) {
   return { p4, p5: txt };
 }
 
-module.exports = { carregarMotorP5, montarP5, regrasP5 };
+module.exports = { carregarMotorP5, montarP5, regrasP5, lerComponentes, PADRAO };
 
 // ---- 3. CLI: reexecuta a partida e fotografa o turno pedido ------------------
 if (require.main === module) {
-  const [txtPath, turnoStr, lado, outDir] = process.argv.slice(2);
+  const [txtPath, turnoStr, lado, outDir, spec] = process.argv.slice(2);
   if (!txtPath || !turnoStr || !lado || !outDir) {
     console.error("uso: node p5_prototipo.js <partida.txt> <turno> <A|B> <dir_saida>");
     process.exit(1);
@@ -171,7 +192,7 @@ if (require.main === module) {
   for (let t = 1; t <= P.maxT && !feito; t++) {
     E.tick(g);
     if (t === alvo) {
-      const { p4, p5 } = montarP5(E, g, lado);
+      const { p4, p5 } = montarP5(E, g, lado, lerComponentes(spec));
       fs.mkdirSync(outDir, { recursive: true });
       const base = path.join(outDir, `${path.basename(txtPath, ".txt")}_T${t}_${lado}`);
       fs.writeFileSync(base + ".P4.txt", p4);

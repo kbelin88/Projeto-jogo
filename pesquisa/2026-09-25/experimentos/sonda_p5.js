@@ -8,6 +8,7 @@
 // uso:
 //   node sonda_p5.js <casos.json> <backend:modelo> [--n 3] [--temp 0] [--saida dir]
 //   node sonda_p5.js <casos.json> --seco
+//   [--p5 padrao|regras|combate|dist|...]  componentes do P5 (p5_prototipo.js)
 //
 // --seco  nao chama modelo nenhum: responde com a ORDEM QUE O REI DEU na partida
 //         (a mesma para P4 e P5). Serve para validar o avaliador: o turno
@@ -20,7 +21,7 @@
 "use strict";
 const fs = require("fs");
 const path = require("path");
-const { carregarMotorP5, montarP5 } = require("./p5_prototipo.js");
+const { carregarMotorP5, montarP5, lerComponentes } = require("./p5_prototipo.js");
 const { carregar, estadoNoTurno, avaliar, somar, RAIZ } = require("./sonda_comum.js");
 
 const args = process.argv.slice(2);
@@ -35,6 +36,10 @@ const burro = modelo === "--burro";
 const N = (seco || burro) ? 1 : Number(opt("--n", 3));
 const temp = Number(opt("--temp", 0));
 const saida = opt("--saida", null);
+// --p5 escolhe os componentes do P5 (ver p5_prototipo.js); por omissao o de 26/09
+const compP5 = lerComponentes(opt("--p5", "padrao"));
+// --casos 0-9 ou 3,7,12: corre so esses (para dividir a sonda em fatias)
+const fatia = opt("--casos", null);
 if (saida) fs.mkdirSync(saida, { recursive: true });
 
 const E = carregarMotorP5();
@@ -61,10 +66,15 @@ async function main() {
   }
   const res = [];   // {categoria, prompt, valido, aval}
   let conferidos = 0, batem = 0;
+  const escolhidos = new Set(!fatia ? casos.map((_, i) => i) : fatia.split(",").flatMap((x) => {
+    const [a, b] = x.split("-").map(Number); return b === undefined ? [a] : Array.from({ length: b - a + 1 }, (_, k) => a + k);
+  }));
+  console.log(`P5 = ${JSON.stringify(compP5)}`);
   for (const [i, c] of casos.entries()) {
+    if (!escolhidos.has(i)) continue;
     const P = partida(c);
     const g = estadoNoTurno(E, P, c.turno);
-    const { p4, p5 } = montarP5(E, g, c.lado);
+    const { p4, p5 } = montarP5(E, g, c.lado, compP5);
     for (const [nome, prompt] of [["P4", p4], ["P5", p5]]) {
       for (let k = 0; k < N; k++) {
         let ordem = null, valido = false, cru = "";
@@ -81,7 +91,7 @@ async function main() {
           valido = !!p.ok; ordem = p.ordem;
         }
         const aval = avaliar(E, P, c.turno, c.lado, ordem);
-        res.push({ categoria: c.categoria, modelo: c.modelo, prompt: nome, valido, aval });
+        res.push({ caso: i, categoria: c.categoria, modelo: c.modelo, prompt: nome, valido, aval });
         if (saida && !seco) fs.writeFileSync(path.join(saida, `caso${i}_${nome}_${k}.txt`), cru);
         // no seco, o turno seguinte do avaliador tem de bater com o da PARTIDA
         // REAL: reexecutada ate t+1 por outro caminho (todas as ordens do log),
