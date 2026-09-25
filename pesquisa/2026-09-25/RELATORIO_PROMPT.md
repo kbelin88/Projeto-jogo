@@ -520,3 +520,26 @@ um LLM.
 
 Se nada disto mexer, o problema não é de informação: é de capacidade ou de agência, e o
 prompt não é a alavanca.
+
+### Andamento (sessão na nuvem, 25–26/09)
+
+- **Credencial**: funciona. A chave é injetada pelo proxy do ambiente
+  (`/api/v1/key` → 200, conta free, 1000 pedidos/dia). ⚠️ O `fetch` do Node 22 **ignora o
+  `HTTPS_PROXY`**: vai direto e leva 401. Correr tudo com `NODE_USE_ENV_PROXY=1` e qualquer
+  valor em `OPENROUTER_API_KEY` (o `rei.js` exige a variável; o proxy troca-a).
+- **Passo 1, catálogo**: 21 modelos `:free` (eram 24 em 22/09). O dots e o Super 120B
+  continuam lá. O dots respondeu pelo `clienteor.js`. O Super deu **404 do provedor Nvidia
+  em 1 de 2 pedidos**: vivo, mas intermitente.
+- **O P5 da sonda passou a seguir as decisões acima** (`p5_prototipo.js`): saiu o P5-7
+  (estoque inimigo), e o P5-5 perdeu a composição **e a origem**. A origem não estava no
+  fog do P4, e a aldeia de onde a coluna saiu pode estar no escuro. Fica a linha do P4 com
+  a intenção: `- enemy army marching toward [17] Zaragoza - YOUR village - arrives in 1 turn`.
+  Os itens ligam-se um a um (`--itens regras,combate,intencao,interior` no `sonda_p5.js`)
+  para o passo 3. Com todos desligados, o P5 é **byte a byte** o P4.
+- **Corrigido de passagem**: com a composição fora, várias colunas para o mesmo destino
+  ficavam só com a primeira linha anotada. Agora são todas (23 de 23 na partida de teste).
+- **Validado sem cota** numa partida do jogador-base (seed 3): `--seco` reproduz 9/9 casos,
+  `--burro` dá 100% JSON válido. Acréscimo ao prompt por item: regras +431 caracteres,
+  combate +312 a +1040, intenção 0 a +110, interior +78.
+- **Bloqueio**: as partidas de 23/09 (`resultados/p4-bateria-0923/P1..P4_*.txt`) não estão
+  na sessão nem em ramo nenhum. Sem elas não há casos para o passo 2.

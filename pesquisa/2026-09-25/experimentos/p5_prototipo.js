@@ -78,7 +78,7 @@ function eventoAldeiaP5(ev, me, visao) {
   const venceu = ev.vencedor === "atacante";
   if (ev.atacante === me) {
     const cab = `You attacked ${onde} with ${comp(ev.atkTropas)} (${forcas("its")})`;
-    if (venceu) return `${cab}: VICTORY, conquered. You lost ${tropas(ev.baixasTropas)}; ${tropas(ev.sobreviventesForca)} stay there as its new garrison.`;
+    if (venceu) return `${cab}: VICTORY, conquered. You lost ${tropas(ev.baixasTropas)}; ${tropas(ev.sobreviventesForca)} ${ev.sobreviventesForca === 1 ? "stays" : "stay"} there as its new garrison.`;
     return `${cab}: DEFEAT. Your whole army was destroyed; the defenders lost ${tropas(ev.baixasTropas)} (${ev.sobreviventesForca} left).`;
   }
   if (ev.defensorDono === me) {
@@ -90,22 +90,33 @@ function eventoAldeiaP5(ev, me, visao) {
   return `King ${ev.atacante} attacked the ${alvoTag} village ${onde}: ${venceu ? "conquered it" : "failed, their army was destroyed"}.`;
 }
 
-// P5-5: o exercito inimigo avistado — de onde, quanto, e para QUEM vai
-function linhaMarchaInimigaP5(m, visao, me) {
-  const alvo = visao.minhas.find((a) => a.id === m.destinoId) ? "YOUR village"
-    : ((visao.alvos.find((a) => a.id === m.destinoId) || {}).dono === null ? "a NEUTRAL village"
-      : "THEIR OWN village (a reinforcement)");
-  const t = m.turnosRestantes;
-  return `- enemy army of ${comp(m.tropas)} from ${nomeDe(visao, m.origemId)} marching to ${nomeDe(visao, m.destinoId)} - ${alvo} - arrives in ${t} turn${t === 1 ? "" : "s"}`;
+// P5-5: o exercito inimigo avistado — para QUEM vai (a intencao).
+// Decisao do Lucas (26/09): o fog nao se mexe. Sai a COMPOSICAO; a origem
+// tambem nao entra (a aldeia de onde saiu pode estar no escuro). Fica so a
+// leitura do dono do destino, que o Rei ja ve na mesma linha.
+function intencaoMarcha(m, visao) {
+  if (visao.minhas.find((a) => a.id === m.destinoId)) return "YOUR village";
+  const a = visao.alvos.find((x) => x.id === m.destinoId) || {};
+  return a.dono === null ? "a NEUTRAL village" : "THEIR OWN village (a reinforcement)";
 }
 
-function montarP5(E, estado, dono) {
+// Os itens do P5, ligaveis um a um (o passo 3 do §12 isola cada grupo):
+//   regras   P5-1/2/3  counter no exercito inteiro, atrito, guarnicao nova
+//   combate  P5-4      combate de aldeia com numeros
+//   intencao P5-5      para quem vai o exercito inimigo avistado
+//   interior P5-6      a linha interior x fronteira sob o TOTAL
+// O P5-7 (estoque inimigo) saiu por decisao do Lucas (26/09): mexe no fog.
+const ITENS_P5 = ["regras", "combate", "intencao", "interior"];
+
+function montarP5(E, estado, dono, itens) {
+  const liga = new Set(itens || ITENS_P5);
+  for (const k of liga) if (!ITENS_P5.includes(k)) throw new Error("item P5 desconhecido: " + k);
   const visao = E.montarVisao(estado, dono);
   const p4 = E.montarPrompt(visao, { rejeicaoNoFim: true });
-  let txt = regrasP5(p4);
+  let txt = liga.has("regras") ? regrasP5(p4) : p4;
 
   // eventos de aldeia: troca linha a linha as frases de combate do P4
-  const combates = (visao.eventos || []).filter((ev) => ev.tipo === "combate");
+  const combates = liga.has("combate") ? (visao.eventos || []).filter((ev) => ev.tipo === "combate") : [];
   for (const ev of combates) {
     const euAtaquei = ev.atacante === dono;
     const quem = euAtaquei ? "You" : "King " + ev.atacante;
@@ -119,41 +130,31 @@ function montarP5(E, estado, dono) {
     if (fraseP4) txt = txt.replace(fraseP4, "- " + eventoAldeiaP5(ev, dono, visao));
   }
 
-  // marchas inimigas avistadas
-  for (const m of (visao.transito || []).filter((x) => x.dono !== dono)) {
-    const fraseP4 = `- enemy army marching toward [${m.destinoId}]`;
-    const i = txt.indexOf(fraseP4);
-    if (i < 0) continue;
-    const fim = txt.indexOf("\n", i);
-    const linhaP4 = txt.slice(i, fim);
-    if (!new RegExp(`arrives in ${m.turnosRestantes} turn`).test(linhaP4)) continue;
-    txt = txt.slice(0, i) + linhaMarchaInimigaP5(m, visao, dono) + txt.slice(fim);
+  // marchas inimigas avistadas: cada linha do P4 ganha a intencao, que so
+  // depende do destino (varias colunas para o mesmo destino: todas a ganham)
+  if (liga.has("intencao")) {
+    const porDestino = new Map((visao.transito || []).filter((x) => x.dono !== dono).map((m) => [m.destinoId, m]));
+    txt = txt.replace(/^- enemy army marching toward \[(\d+)\]([^\n]*), arrives in (\d+) turns?$/gm, (l, id, nm, t) => {
+      const m = porDestino.get(Number(id));
+      return m ? `- enemy army marching toward [${id}]${nm} - ${intencaoMarcha(m, visao)} - arrives in ${t} turn${t === "1" ? "" : "s"}` : l;
+    });
   }
 
-  // P5-6 (OPCIONAL — decisao do Lucas): onde esta o exercito que ja existe
-  const adj = visao.estradas || {};
-  const inimigo = new Set(visao.alvos.filter((a) => a.dono !== null && a.dono !== dono).map((a) => a.id));
-  let interior = 0, fronteira = 0;
-  for (const a of visao.minhas) {
-    const k = nT(a.tropas);
-    if ((adj[a.id] || []).some((v) => inimigo.has(v))) fronteira += k; else interior += k;
-  }
-  const totalLinha = /^TOTAL: .*$/m;
-  txt = txt.replace(totalLinha, (l) => `${l}\n  at home: ${interior} in INTERIOR villages (no enemy neighbour), ${fronteira} in BORDER villages`);
-
-  // P5-7 (OPCIONAL — decisao do Lucas, mexe no fog): o estoque das aldeias
-  // inimigas VISIVEIS. A defesa de um alvo pode saltar num turno so (Teruel,
-  // P3 T11: 8 -> 23 com 90 de madeira guardada); em 22 de 26 ataques que
-  // falharam assim, o estoque ja o dizia.
-  for (const a of visao.alvos.filter((x) => x.visivel && x.dono !== null && x.dono !== dono)) {
-    const real = estado.aldeias.find((x) => x.id === a.id);
-    const re = new RegExp(`^(\\[${a.id}\\][^\\n]*\\| ENEMY[^\\n]*)$`, "m");
-    txt = txt.replace(re, (l) => `${l} | stock: wood ${real.recursos.madeira}, iron ${real.recursos.ferro}`);
+  // P5-6 (nao decidido pelo Lucas: testar isolado): onde esta o exercito
+  if (liga.has("interior")) {
+    const adj = visao.estradas || {};
+    const inimigo = new Set(visao.alvos.filter((a) => a.dono !== null && a.dono !== dono).map((a) => a.id));
+    let interior = 0, fronteira = 0;
+    for (const a of visao.minhas) {
+      const k = nT(a.tropas);
+      if ((adj[a.id] || []).some((v) => inimigo.has(v))) fronteira += k; else interior += k;
+    }
+    txt = txt.replace(/^TOTAL: .*$/m, (l) => `${l}\n  at home: ${interior} in INTERIOR villages (no enemy neighbour), ${fronteira} in BORDER villages`);
   }
   return { p4, p5: txt };
 }
 
-module.exports = { carregarMotorP5, montarP5, regrasP5 };
+module.exports = { carregarMotorP5, montarP5, regrasP5, ITENS_P5 };
 
 // ---- 3. CLI: reexecuta a partida e fotografa o turno pedido ------------------
 if (require.main === module) {

@@ -6,8 +6,12 @@
 // perde, que envios convergem, quanta tropa ficou na retaguarda).
 //
 // uso:
-//   node sonda_p5.js <casos.json> <backend:modelo> [--n 3] [--temp 0] [--saida dir]
+//   node sonda_p5.js <casos.json> <backend:modelo> [--n 3] [--temp 0] [--saida dir] [--itens a,b]
 //   node sonda_p5.js <casos.json> --seco
+//
+// --itens escolhe o que o P5 leva (omissao: todos): regras (P5-1/2/3),
+//         combate (P5-4), intencao (P5-5 sem composicao), interior (P5-6).
+//         O passo 3 do §12 corre um grupo por vez contra o P4.
 //
 // --seco  nao chama modelo nenhum: responde com a ORDEM QUE O REI DEU na partida
 //         (a mesma para P4 e P5). Serve para validar o avaliador: o turno
@@ -16,11 +20,13 @@
 //         jogador-base. Exercita o caminho inteiro (prompt -> texto -> parser ->
 //         avaliacao) sem rede nem cota.
 //
-// Chave: OPENROUTER_API_KEY no .env da raiz (como o runner).
+// Chave: OPENROUTER_API_KEY no .env da raiz (como o runner). Na nuvem, com a
+// chave injetada pelo proxy: NODE_USE_ENV_PROXY=1 (o fetch do Node 22 ignora
+// o HTTPS_PROXY sem isso, vai direto e leva 401) e qualquer valor na variavel.
 "use strict";
 const fs = require("fs");
 const path = require("path");
-const { carregarMotorP5, montarP5 } = require("./p5_prototipo.js");
+const { carregarMotorP5, montarP5, ITENS_P5 } = require("./p5_prototipo.js");
 const { carregar, estadoNoTurno, avaliar, somar, RAIZ } = require("./sonda_comum.js");
 
 const args = process.argv.slice(2);
@@ -35,6 +41,9 @@ const burro = modelo === "--burro";
 const N = (seco || burro) ? 1 : Number(opt("--n", 3));
 const temp = Number(opt("--temp", 0));
 const saida = opt("--saida", null);
+const itens = opt("--itens", ITENS_P5.join(",")).split(",").filter(Boolean);
+if (!seco && !burro && process.env.HTTPS_PROXY && !process.env.NODE_USE_ENV_PROXY)
+  console.error("aviso: HTTPS_PROXY definido sem NODE_USE_ENV_PROXY=1 -- o fetch vai ignorar o proxy");
 if (saida) fs.mkdirSync(saida, { recursive: true });
 
 const E = carregarMotorP5();
@@ -64,7 +73,7 @@ async function main() {
   for (const [i, c] of casos.entries()) {
     const P = partida(c);
     const g = estadoNoTurno(E, P, c.turno);
-    const { p4, p5 } = montarP5(E, g, c.lado);
+    const { p4, p5 } = montarP5(E, g, c.lado, itens);
     for (const [nome, prompt] of [["P4", p4], ["P5", p5]]) {
       for (let k = 0; k < N; k++) {
         let ordem = null, valido = false, cru = "";
@@ -97,7 +106,7 @@ async function main() {
     }
     process.stdout.write(`\r${i + 1}/${casos.length} casos`);
   }
-  console.log("\n");
+  console.log(`\nP5 com: ${itens.join(", ")}\n`);
   if (seco) console.log(`validacao do avaliador (seco): ${batem}/${conferidos} casos reproduzem o turno gravado\n`);
 
   // tabela: por categoria, P4 contra P5
@@ -112,6 +121,6 @@ async function main() {
     console.log(`== ${cat}`);
     for (const pr of ["P4", "P5"]) console.log("  " + linha(pr, res.filter((r) => r.prompt === pr && (cat === "TODOS" || r.categoria === cat))));
   }
-  if (saida) fs.writeFileSync(path.join(saida, "resultado.json"), JSON.stringify(res, null, 1));
+  if (saida) fs.writeFileSync(path.join(saida, "resultado.json"), JSON.stringify({ modelo, temp, n: N, itens, res }, null, 1));
 }
 main().catch((e) => { console.error(e); process.exit(1); });
