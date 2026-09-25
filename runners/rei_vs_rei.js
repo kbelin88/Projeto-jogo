@@ -10,7 +10,14 @@
 // SEM sanity-ping (economiza cota): se o backend estiver fora, o 1o turno falha
 // como erroRede e o log mostra. Modelos REMOTOS gastam — invocacao deliberada.
 "use strict";
-const Engine = require("../engine.js");
+// PROMPT_P5=<itens> (26/09): joga com o P5 EXPERIMENTAL da pesquisa de 25/09
+// (pesquisa/2026-09-25/experimentos/p5_prototipo.js), itens separados por
+// virgula: regras,combate,intencao,interior. O motor passa a ser a COPIA do
+// prototipo: as mesmas regras, so com mais campos no evento de combate de
+// aldeia (o P5-4 le-os). O cabecalho do log diz que prompt correu.
+const P5 = process.env.PROMPT_P5 ? require("../pesquisa/2026-09-25/experimentos/p5_prototipo.js") : null;
+const itensP5 = P5 ? process.env.PROMPT_P5.split(",").filter(Boolean) : null;
+const Engine = P5 ? P5.carregarMotorP5() : require("../engine.js");
 const Rei = require("../rei.js");
 const fs = require("fs");
 const path = require("path");
@@ -46,7 +53,8 @@ const etiqueta = etiquetaDe.A + " vs " + etiquetaDe.B;
 // decisor de um lado: LLM (async, com registro) ou burro (sync). Devolve o
 // mesmo formato de registro para o log sair igual dos dois lados.
 async function decidirLado(estado, dono) {
-  if (cliente[dono]) return (await Rei.decidirRei(estado, dono, cliente[dono])).registro;
+  if (cliente[dono]) return (await Rei.decidirRei(estado, dono, cliente[dono],
+    P5 ? { montar: (e, d) => P5.montarP5(Engine, e, d, itensP5).p5 } : undefined)).registro;
   const visao = Engine.montarVisao(estado, dono);
   const ordem = Engine.jogadorBurro(visao);
   const diag = Engine.diagnosticarOrdem(estado, dono, ordem);
@@ -148,6 +156,7 @@ const mesaTxt = " | mesa: " + (cfg.visaoEspelhada !== false ? "ordem espelhada" 
 out("condicoes: ambiente=" + (cfg.layout || "v1") + " | temp=0 | prompt=" +
   (cfg.promptP4 === true ? "P4 EN (esquema declarado, sem exemplo, sem minimos, vitoria real, reforco, quantidade)" : "P2 (minimo por alvo)") +
   (cfg.fogOfWar === true ? " + FOG OF WAR" : "") +
+  (P5 ? " + P5 EXPERIMENTAL (" + itensP5.join(",") + ")" : "") +
   " + combate v3 (atq/def, counter " + cfg.bonus_forca_triangulo + ") + clamp | " + regrasTxt + mesaTxt +
   // O cabecalho tem de descrever a partida que CORREU, nao a intencao.
   // Estava cravado "thinking=on" e mentiu na P1 de 31/08: a partida corria

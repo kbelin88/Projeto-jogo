@@ -300,7 +300,10 @@ function criarReiIA(cliente) {
 // prompt -> resposta crua -> ordem parseada -> aceito/rejeitado.
 async function decidirRei(estado, dono, cliente, opcoesPrompt) {
   const visao = Engine.montarVisao(estado, dono);
-  const prompt = Engine.montarPrompt(visao, opcoesPrompt || { rejeicaoNoFim: true }); // P4 (17/08): rejeicoes no fim por padrao, igual ao browser
+  // opcoesPrompt.montar (26/09): um prompt EXPERIMENTAL (o P5 da pesquisa de
+  // 25/09), so pelo runner com PROMPT_P5. Sem ele, o P4 de sempre.
+  const prompt = opcoesPrompt && opcoesPrompt.montar ? opcoesPrompt.montar(estado, dono)
+    : Engine.montarPrompt(visao, opcoesPrompt || { rejeicaoNoFim: true }); // P4 (17/08): rejeicoes no fim por padrao, igual ao browser
   let cru = "", raciocinio = null, erroRede = null;
   try { const r = await cliente.gerar(prompt); cru = r.texto; raciocinio = r.raciocinio; }
   catch (e) { erroRede = e.message; }
