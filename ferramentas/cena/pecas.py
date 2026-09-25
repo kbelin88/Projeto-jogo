@@ -52,9 +52,14 @@ COR = {
     "rocha_monte": (0.120, 0.115, 0.104, 1),
     "areia":      (0.420, 0.345, 0.215, 1),
     "prado":      (0.115, 0.170, 0.055, 1),   # o chao do mapa (11/09)   # praias (11/09): a coisa clara da costa
+    "prado_algarve": (0.115, 0.170, 0.055, 1),
     "folha":      (0.036, 0.076, 0.020, 1),
     "folha2":     (0.058, 0.098, 0.026, 1),
     "folha3":     (0.086, 0.104, 0.030, 1),
+    # o Algarve (25/09): o pinheiro-manso e verde-escuro e fechado; a oliveira
+    # e verde-acinzentada, quase prata ao sol
+    "folha_pinho": (0.020, 0.036, 0.009, 1),
+    "folha_oliva": (0.055, 0.066, 0.038, 1),
     "reboco":     (0.400, 0.340, 0.252, 1),   # taipa caiada
     "reboco2":    (0.330, 0.268, 0.190, 1),
     "viga":       (0.052, 0.030, 0.016, 1),   # o prumo escuro do enxaimel
@@ -102,6 +107,7 @@ FAMILIA = {
     "reboco": "taipa", "reboco2": "taipa",
     "relva": "erva", "relva_seca": "erva", "horta": "erva", "folha": "erva",
     "folha2": "erva", "folha3": "erva", "la": "erva",
+    "folha_pinho": "erva", "folha_oliva": "erva",
     "terra": "solo", "caminho": "solo", "lavrado": "solo", "areia": "solo",
     "prado": "erva",
 }
@@ -212,6 +218,8 @@ FICHEIRO = {
     # o mesmo ladrilho da relva, mas em 7 m: o chao tem 2,8 km e a
     # 3,2 m o padrao lia-se como ruido a distancia de jogo
     "prado":      ("prado", 10.0, 0.35),   # pasta tratada pelo tex_prado.py
+    # o campo do sul (COSTA2): a mesma fotografia, seca e dourada (tex_prado_algarve.py)
+    "prado_algarve": ("prado_algarve", 10.0, 0.35),
     "alicerce":   ("alicerce", 2.6, 1.0),
     "reboco":     ("taipa", 3.4, 0.6),
     "reboco2":    ("taipa", 3.0, 0.6),
@@ -1127,6 +1135,52 @@ def proto_arvore_folha(alt=12.0, folha="folha2"):
         bpy.ops.object.shade_smooth()
         p.append(_novo(o, folha, 0))
     return _guardar(_juntar(p))
+
+
+def proto_pinheiro_manso(alt=14.0, folha="folha_pinho", semente=0):
+    """o pinheiro-manso do Algarve: tronco alto e nu, a copa um GUARDA-SOL.
+
+    A silhueta e o que o identifica a distancia de mapa: nada de cone nem de
+    bola -- uma tampa larga e achatada la em cima, e o tronco a ver-se por
+    baixo dela. Varios lobos achatados, desencontrados, para a borda nao ser
+    um disco.
+    """
+    import random as _r
+    rnd = _r.Random(semente)
+    partes = [_cil(0, 0, 0, alt * 0.034, alt * 0.74, "madeira", 6)]
+    R = alt * 0.40
+    zc = alt * 0.74
+    lobos = [(0.0, 0.0, 1.0)] + [
+        (math.cos(a) * R * 0.46, math.sin(a) * R * 0.46, 0.62 + 0.18 * rnd.random())
+        for a in (0.3, 1.6, 2.9, 4.1, 5.3)]
+    for dx, dy, k in lobos:
+        bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2, radius=R * 0.58 * k,
+                                              location=(dx, dy, zc + alt * 0.06 * k))
+        o = bpy.context.object
+        o.scale = (1.0, 1.0, 0.36)
+        _aplicar_escala()
+        bpy.ops.object.shade_smooth()
+        partes.append(_novo(o, folha, 0))
+    return _guardar(_juntar(partes))
+
+
+def proto_oliveira(alt=6.0, folha="folha_oliva", semente=0):
+    """a oliveira: tronco curto e grosso, copa redonda, baixa e irregular"""
+    import random as _r
+    rnd = _r.Random(semente)
+    partes = [_cil(0, 0, 0, alt * 0.075, alt * 0.42, "madeira", 6)]
+    R = alt * 0.42
+    for i in range(4):
+        a = i * 1.7 + rnd.random()
+        bpy.ops.mesh.primitive_ico_sphere_add(
+            subdivisions=2, radius=R * (0.62 + 0.2 * rnd.random()),
+            location=(math.cos(a) * R * 0.35, math.sin(a) * R * 0.35, alt * (0.62 + 0.08 * rnd.random())))
+        o = bpy.context.object
+        o.scale = (1.0, 1.0, 0.70)
+        _aplicar_escala()
+        bpy.ops.object.shade_smooth()
+        partes.append(_novo(o, folha, 0))
+    return _guardar(_juntar(partes))
 
 
 def proto_arbusto(raio=1.1, folha="folha3"):

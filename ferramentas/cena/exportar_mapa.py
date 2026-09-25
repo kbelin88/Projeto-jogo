@@ -236,6 +236,7 @@ print("SONDA escala: 1 unidade de viewBox = %.3f m  ->  o mapa mede %.0f x %.0f 
 # cada tipo de bosque, em coordenadas do bosque) e as 380 transformacoes. O
 # navegador compoe as duas — a mesma conta que o mapa ja faz com os sprites.
 import cozer_mata as CM                                        # noqa: E402
+CM.ALGARVE = COSTA2
 
 bosques = []
 for i, (nome, quantas, raio, folhosas) in enumerate(CM.BOSQUES):
@@ -1495,7 +1496,7 @@ for ca, cb, di, dj in beiras:
             for idx in faces[-1])
 
 PRADO_SECO = (1.18, 1.06, 0.74)        # multiplicam a fotografia tratada
-DUNA = (1.45, 1.22, 0.62)              # COSTA2: a erva seca de duna, junto a praia
+DUNA = (1.00, 0.93, 0.74)              # COSTA2: a erva seca de duna (byte: nunca acima de 1)
 PRADO_HUMIDO = (0.82, 0.99, 0.80)
 _ij = {v: k for k, v in indice.items()}          # vertice da grelha -> (i, j)
 
@@ -1508,8 +1509,28 @@ def _cor_prado(vi):
     h = float(_prado[j, i])
     # um granulado lento por cima, para o verde nao ser uma chapa so
     n = 0.045 * math.sin(verts[vi][0] * 0.021 + verts[vi][1] * 0.017)
-    base = tuple(PRADO_SECO[k] + (PRADO_HUMIDO[k] - PRADO_SECO[k]) * h + n
-                 for k in range(3))
+    if COSTA2:
+        # ── O CAMPO MEDITERRANICO (25/09) ────────────────────────────────
+        # Era um relvado: verde cheio e igual em todo o lado. No Algarve o
+        # campo e erva SECA, amarelo-azeitona, com manchas grandes de mato
+        # mais escuro e clareiras de palha -- em centenas de metros, que e a
+        # escala a que a camara de gravacao o ve.
+        x, y = verts[vi][0], verts[vi][1]
+        mato = 0.5 + 0.5 * math.sin(x * 0.0093 + math.sin(y * 0.0071) * 1.7)                    * math.sin(y * 0.0081 - math.sin(x * 0.0063) * 1.3)
+        palha = max(0.0, math.sin(x * 0.0041 + y * 0.0029) * math.sin(x * 0.0023 - y * 0.0052))
+        # ⚠ A COR DE VERTICE E UM BYTE: nao passa de 1,0. A fotografia ja vem
+        # seca e dourada (prado_algarve); aqui so se ESCURECE -- tirar vermelho e
+        # azul devolve o verde onde a regiao e humida, e o mato e mais escuro
+        seco = (1.00, 0.97, 0.90)
+        verde = (0.74, 0.96, 0.66)
+        escuro = (0.56, 0.70, 0.46)
+        base = tuple(seco[k] + (verde[k] - seco[k]) * (0.35 + 0.45 * h) + n for k in range(3))
+        base = tuple(base[k] + (escuro[k] - base[k]) * 0.85 * max(0.0, mato - 0.45) / 0.55
+                     for k in range(3))
+        base = tuple(base[k] + (DUNA[k] - base[k]) * 0.6 * palha for k in range(3))
+    else:
+        base = tuple(PRADO_SECO[k] + (PRADO_HUMIDO[k] - PRADO_SECO[k]) * h + n
+                     for k in range(3))
     if COSTA2:
         # ── A ERVA DE DUNA (25/09) ───────────────────────────────────────
         # A relva descia verde e cheia ate a areia, com uma beira seca --
@@ -1530,7 +1551,7 @@ chao.data.materials.append(
     # `claro`: a fotografia da relva e escura, como a do caminho era
     # o `claro` nao vai no glTF (o factor do glTF nao passa de 1): a
     # fotografia ja sai clara do `tex_prado.py`
-    P.material_uv("prado", rugosidade=0.95, cor_vertice=True))
+    P.material_uv("prado_algarve" if COSTA2 else "prado", rugosidade=0.95, cor_vertice=True))
 # ── DUAS RANHURAS: O PRADO E A ROCHA ────────────────────────────────────────
 # A margem estava no mesmo material do chao, e por isso o penhasco era relva a
 # escorrer ate a agua. Uma ranhura propria e a diferenca entre uma ilha com

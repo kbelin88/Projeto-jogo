@@ -104,6 +104,12 @@ export async function iniciar(hospedeiro, opcoes = {}) {
       sh.uniforms.costaN = { value: new THREE.Vector2(m.W, m.H) };
     }
     matMar.userData.sh = sh;
+    // ── A AGUA DO ALGARVE (25/09) ─────────────────────────────────────────
+    // `{ agua: "algarve" }`: turquesa claro junto a areia, verde-agua a meio,
+    // azul fundo ao largo, e manchas escuras de rocha e algas no raso. So a
+    // bancada da costa a liga, ate o Lucas a aprovar.
+    if (opcoes.agua === "algarve")
+      sh.defines = Object.assign(sh.defines || {}, { ALGARVE: "" });
     sh.vertexShader = `varying vec3 vMar;
 ` + sh.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
 vMar = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
@@ -124,14 +130,27 @@ if (all(greaterThan(cuv, vec2(0.0))) && all(lessThan(cuv, vec2(1.0))))
   dCosta = texture2D(costa, cuv).r * 255.0;
 #endif
 float fundo = smoothstep(3.0, 150.0, dCosta);
+#ifdef ALGARVE
+vec3 aRaso = vec3(0.26, 0.78, 0.74), aMeio = vec3(0.04, 0.50, 0.62), aAlto = vec3(0.020, 0.20, 0.40);
+diffuseColor.rgb = mix(mix(aRaso, aMeio, smoothstep(2.0, 50.0, dCosta)), aAlto, smoothstep(40.0, 300.0, dCosta));
+// manchas de rocha e de algas no fundo raso: o que da ao turquesa o ar de agua limpa
+float mRo = sin(vMar.x * 0.043 + sin(vMar.z * 0.021) * 2.0) * sin(vMar.z * 0.037 + sin(vMar.x * 0.017) * 2.0);
+float noRaso = (1.0 - smoothstep(20.0, 90.0, dCosta)) * smoothstep(6.0, 16.0, dCosta);
+diffuseColor.rgb *= 1.0 - 0.35 * smoothstep(0.35, 0.85, mRo) * noRaso;
+// menos transparente no raso: o fundo que se via era cinzento (a parede e o
+// relevo submersos, sem areia), e lia-se como uma faixa suja na beira
+#define ALFA_RASO 0.74
+#else
+#define ALFA_RASO 0.45
 diffuseColor.rgb = mix(vec3(0.040, 0.235, 0.245), diffuseColor.rgb, fundo);
+#endif
 // a espuma: uma fita de ~4 m que respira, com a beira a ondular
 float ondaE = sin(vMar.x * 0.31 + tempo * 1.2) * 0.5 + sin(vMar.z * 0.27 - tempo * 0.9) * 0.5;
 float faixa = 1.0 - smoothstep(0.0, 4.0 + ondaE * 1.5, dCosta);
 float espuma = clamp(faixa * (0.6 + 0.4 * sin(dCosta * 1.4 - tempo * 1.7)), 0.0, 1.0);
 diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.85, 0.88, 0.88), espuma * 0.8);
 // transparente no raso: e o que deixa ver o fundo junto a costa
-diffuseColor.a = max(mix(0.45, 1.0, smoothstep(0.0, 35.0, dCosta)), espuma);`)
+diffuseColor.a = max(mix(ALFA_RASO, 1.0, smoothstep(0.0, 35.0, dCosta)), espuma);`)
       .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>
 roughnessFactor = mix(roughnessFactor, 0.95, espuma);`)
       .replace("#include <normal_fragment_begin>", `#include <normal_fragment_begin>
@@ -143,6 +162,12 @@ float o3 = sin(mp.x * 0.031 + mp.y * -0.037 + tempo * 1.47);
 float calma = 0.3 + 0.7 * fundo;
 normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 0.024) * calma);`);
   };
+  if (opcoes.agua === "algarve") {
+    // a este angulo de camara o reflexo do ceu dominava e o mar saia quase
+    // BRANCO (bancada, 25/09): menos espelho, e a cor da agua aparece
+    matMar.envMapIntensity = 0.25;
+    matMar.roughness = 0.62;
+  }
   const mar = new THREE.Mesh(new THREE.PlaneGeometry(LX * 4, LY * 4), matMar);
   mar.rotation.x = -Math.PI / 2;
   mar.position.y = 0;

@@ -48,6 +48,13 @@ BOSQUES = [
 ]
 
 
+# ── O ALGARVE (25/09) ───────────────────────────────────────────────────────
+# Com ALGARVE ligado (o forno liga-o com COSTA2=1): pinheiros-mansos e
+# oliveiras, mais espacados -- o campo do sul nao e floresta fechada, sao
+# arvores soltas com erva seca entre elas.
+ALGARVE = False
+
+
 def construir(nome, quantas, raio, folhosas, semente):
     rnd = random.Random(semente)
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -64,6 +71,11 @@ def construir(nome, quantas, raio, folhosas, semente):
     FOLHOSAS = [P.proto_arvore_folha(16.0, "folha2"),
                 P.proto_arvore_folha(12.0, "folha3")]
     ARBUSTOS = [P.proto_arbusto(1.3, "folha3"), P.proto_arbusto(0.9, "folha2")]
+    if ALGARVE:
+        PINHEIROS = [P.proto_pinheiro_manso(15.0, "folha_pinho", 1),
+                     P.proto_pinheiro_manso(11.5, "folha_pinho", 2)]
+        FOLHOSAS = [P.proto_oliveira(6.5, "folha_oliva", 3), P.proto_oliveira(5.0, "folha_oliva", 4)]
+        quantas = max(3, int(quantas * 0.45))
 
     # ── o chão do bosque ────────────────────────────────────────────────────
     # Uma mancha de sombra e folhada, com a orla irregular. Sem ela as árvores
@@ -86,7 +98,8 @@ def construir(nome, quantas, raio, folhosas, semente):
             a = rnd.random() * 2 * math.pi
             d = raio * 0.88 * math.sqrt(rnd.random())
             x, y = d * math.cos(a), d * math.sin(a)
-            if all((x - ox) ** 2 + (y - oy) ** 2 > 9 for ox, oy in postas):
+            # 3 m entre troncos; no Algarve 7 m (copas soltas, erva entre elas)
+            if all((x - ox) ** 2 + (y - oy) ** 2 > (49 if ALGARVE else 9) for ox, oy in postas):
                 postas.append((x, y))
                 break
         else:
