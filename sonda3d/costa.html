@@ -1,0 +1,117 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Bancada da costa</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0d1418; color: #e8dcc0;
+               font: 13px system-ui, sans-serif; overflow: hidden; }
+  #palco { position: fixed; inset: 0; }
+  #hud { position: fixed; top: 12px; left: 12px; z-index: 5; width: 250px;
+         background: rgba(20,15,8,.88); border: 1px solid #6b5836;
+         border-radius: 8px; padding: 10px 12px; }
+  #hud h1 { font-size: 13px; margin: 0 0 8px; letter-spacing: .06em; }
+  #hud button { display: block; width: 100%; margin: 5px 0; padding: 6px; cursor: pointer;
+                background: #3a2e18; color: #e8dcc0; border: 1px solid #6b5836; border-radius: 5px; }
+  #hud p { color: #cbbd94; font-style: italic; line-height: 1.45; margin: 8px 0 0; }
+  #carga { position: fixed; inset: 0; display: flex; align-items: center;
+           justify-content: center; background: #0d1418; z-index: 9;
+           font-size: 15px; color: #cbbd94; }
+</style>
+<div id="palco"></div>
+<div id="carga">a montar a bancada da costa...</div>
+<div id="hud">
+  <h1>BANCADA &mdash; A COSTA</h1>
+  <button data-v="gravacao">vista de gravação</button>
+  <button data-v="praia">praia de perto</button>
+  <button data-v="falesia">falésia de perto</button>
+  <p>Forno: <code>BANCADA=faro MARGEM=900 COSTA2=1</code> &rarr; <code>costa.glb</code>. As vistas são sempre as mesmas,
+     para o antes e o depois se compararem do mesmo sítio.</p>
+</div>
+
+<script type="module">
+// ── PORQUE EXISTE (25/09) ───────────────────────────────────────────────────
+// O Lucas quer a costa mais bonita (praia, falesia, agua), a lembrar o
+// Algarve, e quer ve-la num mapa de teste ANTES de ir para o jogo. A bancada
+// do forno (BANCADA=...) faz o recorte; esta pagina acha nele, sozinha, uma
+// PRAIA (terra baixa e plana junto a agua) e uma FALESIA (terra alta junto a
+// agua), e poe a camara sempre nos mesmos sitios -- o antes e o depois so se
+// comparam se forem vistos do mesmo lugar.
+// fresco a cada abertura: numa bancada o modulo e o forno mudam a cada volta,
+// e o navegador servia a versao da cache (a volta nova "nao mudava nada")
+const { iniciar } = await import("./mapa3d.js?t=" + Date.now());
+
+addEventListener("error", (e) => queixa(e.message));
+addEventListener("unhandledrejection", (e) => queixa(String(e.reason)));
+function queixa(msg) {
+  const c = document.getElementById("carga");
+  if (c) c.innerHTML = "<b style='color:#e0a0a0'>nao consegui montar a cena</b><br>" + msg;
+}
+
+const mapa = await iniciar(document.getElementById("palco"), { cena: "costa" });
+const { THREE, cena, cam, ctrl } = mapa;
+
+// ── ONDE ESTA A COSTA ───────────────────────────────────────────────────────
+// Lanca raios de cima numa grelha e guarda a altura do chao. Costa = um ponto
+// de terra com agua (nada, ou abaixo de 0,5 m) a menos de 40 m. Praia se a
+// terra ali e baixa; falesia se e alta.
+const solo = [];
+// o chao sao estas malhas do forno; o mar e as figuras ficam de fora
+const CHAO = new Set(["chao_1", "chao_2", "areia", "rocha_topo", "chao_aldeia", "campos"]);
+cena.traverse((o) => { if (o.isMesh && CHAO.has(o.name)) solo.push(o); });
+const ray = new THREE.Raycaster();
+const baixo = new THREE.Vector3(0, -1, 0);
+const cs = Object.values(mapa.MAPA.aldeias);
+const cx = cs.reduce((s, a) => s + a.p[0], 0) / cs.length;
+const cy = cs.reduce((s, a) => s + a.p[1], 0) / cs.length;
+const R = 880, PASSO = 40;   // 40 m: 2 mil raios, e a pagina abre em segundos
+function alturaEm(x, y) {
+  ray.set(new THREE.Vector3(x, 500, -y), baixo);
+  const h = ray.intersectObjects(solo, false)[0];
+  return h ? h.point.y : null;
+}
+const G = new Map();
+for (let x = cx - R; x <= cx + R; x += PASSO)
+  for (let y = cy - R; y <= cy + R; y += PASSO) G.set(x + "," + y, alturaEm(x, y));
+// agua: sem chao (ou chao abaixo de 0,5 m) DENTRO do recorte -- fora dele
+// tambem nao ha chao, e isso nao e mar
+const dentro = (x, y) => Math.abs(x - cx) < R - 60 && Math.abs(y - cy) < R - 60;
+const agua = (x, y) => { const h = G.get(x + "," + y); return dentro(x, y) && (h === null || h === undefined || h < 0.5); };
+let praia = null, falesia = null;
+for (const [k, h] of G) {
+  if (h === null || h < 0.5) continue;
+  if (!dentro(...k.split(",").map(Number))) continue;
+  const [x, y] = k.split(",").map(Number);
+  let perto = null;
+  for (const [dx, dy] of [[PASSO, 0], [-PASSO, 0], [0, PASSO], [0, -PASSO], [2 * PASSO, 0], [-2 * PASSO, 0], [0, 2 * PASSO], [0, -2 * PASSO]])
+    if (agua(x + dx, y + dy)) { perto = [dx, dy]; break; }
+  if (!perto) continue;
+  if (h < 4 && (!praia || h < praia.h)) praia = { x, y, h, mar: perto };
+  if (h > 15 && (!falesia || h > falesia.h)) falesia = { x, y, h, mar: perto };
+}
+window.COSTA = { praia, falesia, centro: [cx, cy] };
+
+function olhar(p, dist, alto) {
+  // do lado do mar, a olhar para terra
+  const n = Math.hypot(p.mar[0], p.mar[1]) || 1;
+  const ux = p.mar[0] / n, uy = p.mar[1] / n;
+  const alvo = new THREE.Vector3(p.x, p.h * 0.5, -p.y);
+  ctrl.target.copy(alvo);
+  cam.position.set(p.x + ux * dist + uy * dist * 0.35, alvo.y + alto, -(p.y + uy * dist - ux * dist * 0.35));
+  ctrl.update();
+}
+const VISTAS = {
+  gravacao() {
+    const p = praia || falesia;
+    ctrl.target.set(p ? p.x : cx, 0, -(p ? p.y : cy));
+    cam.position.set((p ? p.x : cx) + 250, 420, -(p ? p.y : cy) + 420);
+    ctrl.update();
+  },
+  praia() { if (praia) olhar(praia, 120, 45); },
+  falesia() { if (falesia) olhar(falesia, 170, 30); },
+};
+window.vista = (v) => VISTAS[v] && VISTAS[v]();
+for (const b of document.querySelectorAll("#hud button")) b.onclick = () => window.vista(b.dataset.v);
+Object.assign(window, { mapa, cena, cam, ctrl, THREE });
+window.vista("gravacao");
+document.getElementById("carga").remove();
+window.PRONTO = true;
+</script>

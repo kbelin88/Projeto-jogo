@@ -47,6 +47,8 @@ COR = {
     "colmo2":     (0.205, 0.132, 0.048, 1),
     "pedra":      (0.185, 0.172, 0.150, 1),
     "falesia":    (0.120, 0.115, 0.104, 1),
+    # a cor ja vem na imagem (tex_falesia_algarve.py); a tinta e neutra
+    "falesia_algarve": (0.80, 0.66, 0.46, 1),
     "rocha_monte": (0.120, 0.115, 0.104, 1),
     "areia":      (0.420, 0.345, 0.215, 1),
     "prado":      (0.115, 0.170, 0.055, 1),   # o chao do mapa (11/09)   # praias (11/09): a coisa clara da costa
@@ -194,6 +196,10 @@ FICHEIRO = {
     # um ladrilho de 3 m repete vinte vezes e le-se como papel de parede.
     # A 9 m os estratos tem tamanho de estratos.
     "falesia":    ("falesia", 13.0, 1.0),
+    # ── A FALESIA DO ALGARVE (25/09, COSTA2=1) ────────────────────────────
+    # calcario dourado em bancos horizontais, gerado por codigo; 24 m por
+    # ladrilho, como o METROS do tex_falesia_algarve.py
+    "falesia_algarve": ("falesia_algarve", 24.0, 1.0),
     # ── A PEDRA DAS MONTANHAS (20/09) ────────────────────────────────────
     # A MESMA fotografia da falesia, com o ladrilho 3,5x menor. O defeito dos
     # "quadrados todos iguais" era o TAMANHO, e nao a fotografia: a 13 m os

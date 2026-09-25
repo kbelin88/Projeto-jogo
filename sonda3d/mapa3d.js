@@ -47,8 +47,11 @@ export async function iniciar(hospedeiro, opcoes = {}) {
   // para experimentar sem esperar pelo mapa todo. O modulo e o mesmo: o que
   // se ve na bancada e o que o jogo vai ver.
   const CENA = opcoes.cena || null;
-  const FICH_JSON = (CENA || "mapa3d") + ".json";
-  const FICH_GLB = CENA ? CENA + ".glb" : "pecas.glb";
+  // numa bancada o forno reescreve o ficheiro a cada volta: sem isto o
+  // navegador servia o da cache e a volta nova parecia nao ter mudado nada
+  const FRESCO = CENA ? "?t=" + Date.now() : "";
+  const FICH_JSON = (CENA || "mapa3d") + ".json" + FRESCO;
+  const FICH_GLB = CENA ? CENA + ".glb" + FRESCO : "pecas.glb";
   const cfgSol = await (await fetch(BASE + "cena.json")).json();
   const MAPA = await (await fetch(BASE + FICH_JSON)).json();
   const [LX, LY] = MAPA.mapa_m;
@@ -582,11 +585,22 @@ float slRocha() {
       // so punha pedra em encostas que hoje sao de relva. Fica GUARDADA
       // (`forcaRocha: 1`) e o que vai para o jogo e o triplanar na parede da
       // costa, que e onde a fotografia estica.
+      // ── A FALESIA DO ALGARVE USA O UV DO FORNO (25/09) ──────────────────
+      // O triplanar misturava duas projecoes nas paredes inclinadas: com uma
+      // pedra cinzenta nao se notava, com bancos dourados horizontais dava
+      // bancos cruzados e a media deles -- cinzento. O forno (COSTA2) ja
+      // desdobra a parede com o `u` ao longo da costa e o `v` na altura, que
+      // e exatamente o que os bancos precisam.
+      const algarve = eRocha && /algarve/i.test(ch.material.name);
+      // e tambem sem o anti-ladrilho: ele desloca a imagem por celulas
+      // triangulares, e em bancos horizontais isso corta-os NA DIAGONAL (visto
+      // na bancada). A repeticao ja a quebra a torcao do UV no forno.
+      if (algarve) continue;
       semLadrilho(ch.material, {
         texRocha,
         escalaRocha: 1 / 13.0,           // o ladrilho da falesia, em metros
         forcaRocha: 0.0,
-        triplanarProprio: eRocha,
+        triplanarProprio: eRocha && !algarve,
       });
     }
   }

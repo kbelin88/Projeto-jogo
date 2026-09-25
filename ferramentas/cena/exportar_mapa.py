@@ -131,9 +131,20 @@ BANCADA = [c.strip() for c in os.environ.get("BANCADA", "").split(",") if c.stri
 # `montanhas.glb`/`montanhas.json` e NAO toca em nada do jogo -- nem no
 # `bancada.*`, nem no `_relevo_final.npy`, que e a regua das estradas.
 MONTANHAS = bool(os.environ.get("MONTANHAS"))
+# ── A COSTA DO ALGARVE (25/09) ──────────────────────────────────────────────
+# COSTA2=1: a falesia em calcario dourado, com bancos horizontais em vez de
+# listas verticais, e o tom quente. So com BANCADA enquanto o Lucas nao aprovar
+# -- o mapa do jogo nao muda.
+COSTA2 = os.environ.get("COSTA2") == "1"
+if COSTA2 and not os.environ.get("BANCADA"):
+    raise SystemExit("COSTA2=1 so com BANCADA=... (ainda em teste)")
 # com BANCADA sai `montanhas.*`; no mapa inteiro sai `mapa_montanhas.*` -- o
 # `pecas.glb`/`mapa3d.json` do jogo nunca sao escritos com montanhas de teste
 NOME_SAIDA = ("montanhas" if os.environ.get("BANCADA") else "mapa_montanhas")     if MONTANHAS else "bancada"
+# a bancada da costa (COSTA2) sai em `costa.*`: a `bancada.*` e de Lisboa-Santarem
+# e a `bancada.html` precisa dela como esta
+if COSTA2:
+    NOME_SAIDA = "costa"
 N_MONTES = int(os.environ.get("N_MONTES", "3" if os.environ.get("BANCADA") else "7"))
 MARGEM_BANCADA = float(os.environ.get("MARGEM", "700" if MONTANHAS else "320"))
 # a oclusao assada custa minutos; na bancada e sempre, no mapa inteiro so a pedido
@@ -687,6 +698,10 @@ print("SONDA praia: %d de %d celulas de costa com areal esculpido; "
 # da areia sai de uma curva de nivel sobre ele, e uma mascara de 0 e 1 voltava
 # a dar a escada da grelha. A mata le o mesmo peso, mais abaixo.
 AREIA_TOPO = 2.6          # ate onde a areia sobe, em metros acima do mar
+# COSTA2: a areia sobe a duna -- a faixa de 2,6 m lia-se estreita e cinzenta
+# (bancada, 25/09); o Algarve tem areal largo ao pe da falesia
+if COSTA2:
+    AREIA_TOPO = 5.0
 AREIA_ONDA = 0.9          # a beira seca ondula +-0,9 m: nunca e uma regua
 _rho_areia = _caixa((1.0 - _rocha) * (1.0 - _p)
                     * np.clip((120.0 - _dm) / 40.0, 0.0, 1.0), 6).astype(np.float32)
@@ -1319,6 +1334,16 @@ def _tom_rocha(ex, ey, ez):
       * ao longo da costa ha manchas lentas, porque nem toda a falesia e da
         mesma pedra nem apanha o mesmo sol.
     """
+    if COSTA2:
+        # ── O TOM DO CALCARIO ────────────────────────────────────────────
+        # A cor vem da imagem; aqui so luz: o pe molhado mais escuro e
+        # QUENTE (e nao azulado), e manchas lentas ao longo da costa.
+        t = max(0.0, min(1.0, (ez - 0.5) / 6.0))
+        b = 0.58 + 0.44 * t
+        b *= (1.0 + 0.07 * math.sin(ex * 0.0071 + ey * 0.0093)
+                  + 0.04 * math.sin(ex * 0.024 - ey * 0.017))
+        b = max(0.40, min(1.08, b))
+        return (b, b * (0.92 + 0.02 * t), b * (0.78 + 0.04 * t))
     t = max(0.0, min(1.0, (ez + 4.0) / 22.0))
     b = 0.62 + 0.42 * t
     b *= (1.0 + 0.11 * math.sin(ex * 0.0071 + ey * 0.0093)
@@ -1372,16 +1397,42 @@ for c, (mx, my) in _pos.items():
 # talude, que uma parede a prumo dos 20 m aos -18 nao tem.
 MAR = 2.0                 # a que altura passa o anel da linha de agua
 meio, pe = {}, {}
+# ── OS BANCOS DA FALESIA (COSTA2) ───────────────────────────────────────────
+# Entre o topo e a linha de agua, NB aneis a alturas proporcionais (a
+# topologia tem de ser a mesma em todos os cantos, senao as faces nao ligam).
+# Cada anel sai ou recua conforme a ALTURA ABSOLUTA -- os bancos sao
+# horizontais, e isso tem de valer para a costa inteira, nao canto a canto. As
+# rugas verticais (contrafortes de 20 em 20 m) caem para um terco: eram elas,
+# com a parede de faces planas, que davam as listas verticais.
+NB = 6
+bancos_c = {}
+
+
+def _banco(z):
+    """quanto este nivel sai (+) ou recua (-) da parede, em metros"""
+    return 1.1 * math.sin(z * 0.62) + 0.55 * math.sin(z * 1.71 + 0.8)
+
+
 for c, (dx, dy) in dir_canto.items():
     n = math.hypot(dx, dy) or 1.0
     dx, dy = dx / n, dy / n
     ex, ey, vz = verts[indice[c]]
     f = _fora(ex, ey, FLARE)
-    g = _rugas(ex, ey)
+    g = _rugas(ex, ey) * (0.33 if COSTA2 else 1.0)
     # o anel do meio e o que se VE: e nele que as rugas contam, e a sua altura
     # tambem varia, senao a linha de agua e uma regua ao longo de 2 km
     zm = min(MAR + 1.6 * math.sin(ex * 0.13 - ey * 0.11), vz - 1.0)
     om = f * 0.45 + g
+    if COSTA2:
+        aneis = []
+        for k in range(1, NB):
+            t = k / NB
+            zk = vz + (zm - vz) * t
+            ok = om * t + _banco(zk) * min(1.0, (vz - zk) / 3.0)
+            aneis.append(len(verts))
+            verts.append((ex + dx * ok, ey + dy * ok, zk))
+            cor_rocha[aneis[-1]] = _tom_rocha(ex, ey, zk)
+        bancos_c[c] = aneis
     meio[c] = len(verts)
     verts.append((ex + dx * om, ey + dy * om, zm))
     op = f + g * 0.7
@@ -1391,17 +1442,60 @@ for c, (dx, dy) in dir_canto.items():
     cor_rocha[meio[c]] = _tom_rocha(ex, ey, zm)
     cor_rocha[pe[c]] = _tom_rocha(ex, ey, -FUNDO)
 
+def _aneis(c):
+    """os indices dos aneis deste canto, de cima para baixo"""
+    return [indice[c]] + bancos_c.get(c, []) + [meio[c], pe[c]]
+
+
+# ── O UV DA FALESIA DO ALGARVE: A COSTA DESENROLADA (COSTA2) ───────────────
+# O `_uv_rocha` escolhia o eixo `u` face a face (x ou y) e torcia o `v` ao longo
+# da costa -- para a pedra antiga isso escondia a repeticao; com bancos
+# horizontais INCLINAVA-OS (visto de frente na bancada) e abria costuras nas
+# esquinas. Aqui `u` e a distancia percorrida AO LONGO da linha de costa
+# (continua de canto para canto) e `v` e a altura exata: os bancos sao
+# horizontais por construcao.
+arco = {}
+if COSTA2:
+    for c0 in vizinho:
+        if c0 in arco:
+            continue
+        arco[c0] = 0.0
+        pilha = [c0]
+        while pilha:
+            c = pilha.pop()
+            xa, ya = verts[indice[c]][0], verts[indice[c]][1]
+            for nb in vizinho[c]:
+                if nb in arco:
+                    continue
+                xb, yb = verts[indice[nb]][0], verts[indice[nb]][1]
+                arco[nb] = arco[c] + math.hypot(xb - xa, yb - ya)
+                pilha.append(nb)
+    canto_de = {}
+    for c in dir_canto:
+        for idx in _aneis(c):
+            canto_de[idx] = c
+
+
+def _uv_algarve(idx):
+    a = arco.get(canto_de.get(idx), 0.0)
+    # uma onda lenta no `u` so (nunca no `v`): quebra a repeticao de 16 m
+    return (a + 6.0 * math.sin(a * 0.013) + 3.0 * math.sin(a * 0.047), verts[idx][2])
+
+
 for ca, cb, di, dj in beiras:
-    for cima, baixo in ((indice, meio), (meio, pe)):
-        faces.append((cima[ca], cima[cb], baixo[cb], baixo[ca]))
+    A, B = _aneis(ca), _aneis(cb)
+    for k in range(len(A) - 1):
+        faces.append((A[k], B[k], B[k + 1], A[k + 1]))
         saia.append(len(faces) - 1)
         # guardado por FACE e nao por vertice: as esquinas partilham o pe e
         # discordariam sobre qual e o eixo dominante
         uvs_face[len(faces) - 1] = dict(
-            (idx, _uv_rocha(verts[idx][0], verts[idx][1], verts[idx][2], di, dj))
+            (idx, _uv_algarve(idx) if COSTA2
+             else _uv_rocha(verts[idx][0], verts[idx][1], verts[idx][2], di, dj))
             for idx in faces[-1])
 
 PRADO_SECO = (1.18, 1.06, 0.74)        # multiplicam a fotografia tratada
+DUNA = (1.45, 1.22, 0.62)              # COSTA2: a erva seca de duna, junto a praia
 PRADO_HUMIDO = (0.82, 0.99, 0.80)
 _ij = {v: k for k, v in indice.items()}          # vertice da grelha -> (i, j)
 
@@ -1414,8 +1508,20 @@ def _cor_prado(vi):
     h = float(_prado[j, i])
     # um granulado lento por cima, para o verde nao ser uma chapa so
     n = 0.045 * math.sin(verts[vi][0] * 0.021 + verts[vi][1] * 0.017)
-    return tuple(PRADO_SECO[k] + (PRADO_HUMIDO[k] - PRADO_SECO[k]) * h + n
+    base = tuple(PRADO_SECO[k] + (PRADO_HUMIDO[k] - PRADO_SECO[k]) * h + n
                  for k in range(3))
+    if COSTA2:
+        # ── A ERVA DE DUNA (25/09) ───────────────────────────────────────
+        # A relva descia verde e cheia ate a areia, com uma beira seca --
+        # "a grama vai quadrada para cima da praia". Junto a praia (perto da
+        # agua e baixo) ela seca e amarelece, e a passagem para a areia deixa
+        # de ser uma linha.
+        z = verts[vi][2]
+        perto = max(0.0, min(1.0, (90.0 - float(_dm[j, i])) / 70.0))
+        baixo = max(0.0, min(1.0, (AREIA_TOPO + 14.0 - z) / 12.0))
+        w = min(1.0, 1.6 * perto * baixo * float(_rho_areia[j, i]))
+        return tuple(base[k] + (DUNA[k] - base[k]) * w for k in range(3))
+    return base
 
 
 chao = P._novo(P._malha("chao", verts, faces, "relva", bisel=0), "relva")
@@ -1430,7 +1536,7 @@ chao.data.materials.append(
 # escorrer ate a agua. Uma ranhura propria e a diferenca entre uma ilha com
 # costa e um tapete recortado.
 chao.data.materials.append(
-    P.material_uv("falesia", rugosidade=0.96, cor_vertice=True))
+    P.material_uv("falesia_algarve" if COSTA2 else "falesia", rugosidade=0.96, cor_vertice=True))
 for _f in saia:
     chao.data.polygons[_f].material_index = 1
 # ── O CHAO E SUAVE (17/09) ──────────────────────────────────────────────────
@@ -1440,7 +1546,9 @@ for _f in saia:
 # as paredes da falesia (depois de N_GRELHA) continuam de arestas vivas -- e a
 # aresta entre as duas fica viva por ser a fronteira de uma face plana.
 for _pl in chao.data.polygons:
-    _pl.use_smooth = _pl.index < N_GRELHA
+    # com COSTA2 a parede tambem e suave: as faces planas, cada uma com a sua
+    # luz, eram metade das listas verticais
+    _pl.use_smooth = COSTA2 or _pl.index < N_GRELHA
 _uvc = chao.data.uv_layers.new(name="UVMap")
 _cvc = chao.data.color_attributes.new(name="Col", type="BYTE_COLOR",
                                       domain="CORNER")
@@ -1525,8 +1633,14 @@ def _fita(valor, levanta, cor_de):
     return va, fa, cores
 
 
-def _pousar(nome, va, fa, cores, tinta, rugosidade):
-    """poe a fita na cena, com UV em metros e a cor de vertice ligada"""
+def _pousar(nome, va, fa, cores, tinta, rugosidade, uv_altura=False):
+    """poe a fita na cena, com UV em metros e a cor de vertice ligada.
+
+    `uv_altura` (COSTA2, o labio de rocha): o `v` e a ALTURA e o `u` corre ao
+    longo da encosta. Projetada de cima, a textura de bancos horizontais sai
+    na DIAGONAL numa encosta -- e o labio e a maior parte do que se ve de uma
+    falesia do Algarve (medido na bancada, 25/09).
+    """
     if not fa:
         return 0.0
     ob = P._novo(P._malha(nome, va, fa, tinta, bisel=0), tinta)
@@ -1536,9 +1650,15 @@ def _pousar(nome, va, fa, cores, tinta, rugosidade):
     uv = ob.data.uv_layers.new(name="UVMap")
     cv = ob.data.color_attributes.new(name="Col", type="BYTE_COLOR", domain="CORNER")
     for pol in ob.data.polygons:
+        # o eixo horizontal que corre AO LONGO da encosta: o perpendicular a
+        # direcao em que ela desce (a normal projetada no chao)
+        ao_longo_x = abs(pol.normal.y) >= abs(pol.normal.x)
         for li in pol.loop_indices:
             vi = ob.data.loops[li].vertex_index
-            uv.data[li].uv = (va[vi][0], va[vi][1])   # metros, como o chao da aldeia
+            if uv_altura:
+                uv.data[li].uv = (va[vi][0] if ao_longo_x else va[vi][1], va[vi][2])
+            else:
+                uv.data[li].uv = (va[vi][0], va[vi][1])   # metros, como o chao da aldeia
             cv.data[li].color = (*cores[vi], 1.0)
     for col in list(ob.users_collection):
         col.objects.unlink(ob)
@@ -1561,6 +1681,10 @@ def _valor_areia(vi):
 def _cor_areia(p):
     s = min(max((p[2] - 0.4) / 1.0, 0.0), 1.0)      # molhada ate 0,4 m
     k = 0.62 + 0.38 * s
+    if COSTA2:
+        # dourada, e a molhada mais escura e mais quente (nao acinzentada)
+        k = 0.70 + 0.40 * s
+        return (k * 1.08, k * 0.95, k * 0.72)
     return (k, k * 0.97, k * 0.92)
 
 
@@ -1580,6 +1704,11 @@ print("SONDA areia: %d triangulos, %d vertices, %.0f m2 (%.1f ha)"
 # as serras do interior sao outro assunto, e sao verdes.
 ROCHA_DECLIVE = 26.0
 ROCHA_ONDA = 7.0
+if COSTA2:
+    # a ondulacao de 7 graus furava a fita de rocha em triangulos verdes, e a
+    # 26 graus sobravam dentes de relva na encosta da falesia
+    ROCHA_ONDA = 2.5
+    ROCHA_DECLIVE = 20.0
 LABIO = 9.0               # quantos metros de rocha transbordam a beira
 _gz_y, _gz_x = np.gradient(relevo.astype(np.float32), py, px)
 _declive = np.degrees(np.arctan(np.hypot(_gz_x, _gz_y))).astype(np.float32)
@@ -1605,11 +1734,14 @@ def _valor_rocha(vi):
 
 def _cor_rocha_topo(p):
     k = 0.86 + 0.14 * math.sin(p[0] * 0.0083 + p[1] * 0.0061)
+    if COSTA2:
+        return (k, k * 0.93, k * 0.80)          # a luz quente do Algarve
     return (k, k * 0.99, k * 0.97)
 
 
 _vr, _fr, _cr = _fita(_valor_rocha, ROCHA_LEVANTA, _cor_rocha_topo)
-_area_r = _pousar("rocha_topo", _vr, _fr, _cr, "falesia", 0.96)
+_area_r = _pousar("rocha_topo", _vr, _fr, _cr, "falesia_algarve" if COSTA2 else "falesia", 0.96,
+                  uv_altura=COSTA2)
 print("SONDA labio de rocha: %d triangulos, %.0f m2 (%.1f ha)"
       % (len(_fr), _area_r, _area_r / 1e4))
 
