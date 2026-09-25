@@ -27,7 +27,7 @@ const fs = require("fs");
 const path = require("path");
 const RAIZ = path.join(__dirname, "..");
 const E = require(path.join(RAIZ, "engine.js"));
-const { planoDoTurno } = require(path.join(RAIZ, "ponte3d.js"));
+const { planoDoTurno, chaveMarcha } = require(path.join(RAIZ, "ponte3d.js"));
 
 const PASSOS = 50;                                // amostras dentro de um turno
 
@@ -39,7 +39,8 @@ function ondeEsta(estado, m, r) {
   return { chave: lo + "-" + hi, u: p.aId === lo ? p.t : 1 - p.t };
 }
 
-const idDe = (m) => m.dono + ":" + m.origemId + ">" + m.destinoId;
+// a identidade de uma marcha: a mesma do jogo (id do motor, ou a chave antiga)
+const idDe = (m) => chaveMarcha(m);
 
 // um turno: `antes` sao as marchas no inicio do turno; `eventos` os combates de
 // estrada que o motor registou nesse turno; `desenho(m, r)` diz em que fracao
@@ -48,8 +49,8 @@ const idDe = (m) => m.dono + ":" + m.origemId + ">" + m.destinoId;
 function cruzamentosDoTurno(estado, antes, eventos, desenho) {
   const lutas = new Set();
   for (const e of eventos) {
-    const a = e.atacante + ":" + e.atkOrigemId + ">" + e.atkDestinoId;
-    const d = e.defensor + ":" + e.defOrigemId + ">" + e.defDestinoId;
+    const a = e.atkId != null ? "#" + e.atkId : e.atacante + ":" + e.atkOrigemId + ">" + e.atkDestinoId;
+    const d = e.defId != null ? "#" + e.defId : e.defensor + ":" + e.defOrigemId + ">" + e.defDestinoId;
     lutas.add(a + "|" + d); lutas.add(d + "|" + a);
   }
   const achados = [];

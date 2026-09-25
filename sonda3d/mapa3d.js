@@ -1310,7 +1310,12 @@ transformed.y += onda * transformed.x * 0.05;`);
       for (const m of marchas) {
         const via = eixoDe[m.de + ">" + m.para];
         if (!via) { motivo = "sem via para " + m.de + ">" + m.para; continue; }
-        const chave = m.dono + "|" + m.de + ">" + m.para + "|" + (m.tipo || "");
+        // ⚠ UMA CHAVE POR COLUNA (25/09). Era dono|troco|tipo: seis colunas
+        // vermelhas de lanceiros no troco Valencia>Murcia partilhavam-na (P1,
+        // T31) e o `tSuave` misturava-lhes as posicoes -- coladas, a deslizar,
+        // a sumir juntas. A ponte manda um id por coluna.
+        const chave = m.id != null ? "c" + m.id + "|" + m.de + ">" + m.para
+          : m.dono + "|" + m.de + ">" + m.para + "|" + (m.tipo || "");
         vistas.add(chave);
         // quem esta numa batalha a decorrer nao marcha: quem o desenha e a cena
         if (batalhas && batalhas.aLutar(m.dono, m.de, m.para)) continue;

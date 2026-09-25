@@ -1759,7 +1759,7 @@
     // num turno com lutas de estrada o mapa inteiro pausa em cada uma, e quem
     // luta para frente a frente (`planoDoTurno`, ponte3d.js)
     const enc = encontrosPorVir();
-    const f = enc ? enc.plano.f(chaveMarchaRep(m.dono, m.origemId, m.destinoId), repFrac) : repFrac;
+    const f = enc ? enc.plano.f(chaveMarchaRep(m), repFrac) : repFrac;
     return m.turnosTotal
       ? Math.min(progTeto(m), (m.turnosTotal - m.turnosRestantes + f) / m.turnosTotal)
       : 1;
@@ -1777,7 +1777,11 @@
   // Medido com `ferramentas/medir-cruzamentos.js`: 0 colunas inimigas que se
   // atravessam no desenho, em 60 partidas e 4014 combates.
   // `var`, como o `_ponte`: o draw() pode correr antes destas linhas
-  var chaveMarchaRep = function (dono, de, para) { return dono + ":" + de + ">" + para; };
+  // a identidade de uma marcha: a MESMA conta da ponte (`chaveMarcha`)
+  var chaveMarchaRep = function (m) {
+    return (typeof Ponte3D !== "undefined" && Ponte3D && Ponte3D.chaveMarcha)
+      ? Ponte3D.chaveMarcha(m) : m.dono + ":" + m.origemId + ">" + m.destinoId;
+  };
   var _encRep = { dados: null, idx: -1, v: null };
   function encontrosPorVir() {
     if (!emReplay || !rep || !rep.dados) return null;
@@ -1795,7 +1799,7 @@
   // a perdedora de uma luta de estrada deixa de se ver
   function marchaVisivel(m) {
     const enc = encontrosPorVir();
-    return enc ? enc.plano.visivel(chaveMarchaRep(m.dono, m.origemId, m.destinoId), repFrac) : true;
+    return enc ? enc.plano.visivel(chaveMarchaRep(m), repFrac) : true;
   }
   // o relogio do replay (turno do quadro + fracao da animacao); ao vivo, null
   function relogioReplay() {

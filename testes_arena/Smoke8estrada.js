@@ -106,10 +106,13 @@ ok("a ponte converte o evento do motor para o mapa",
     E.rodarTurno(st, { A: E.jogadorBurro, B: E.jogadorBurro });
     ev = st.log.slice(n).find((x) => x.tipo === "combate_estrada" && x.sEncontro > 0.1 && x.sEncontro < 0.9);
   }
-  const k = (d, o, de) => d + ":" + o + ">" + de;
+  // a identidade das duas colunas: o id que o motor lhes deu (25/09), a mesma
+  // chave que o jogo usa (`P.chaveMarcha`)
+  const kA = P.chaveMarcha({ id: ev.atkId }), kD = P.chaveMarcha({ id: ev.defId });
   const plano = P.planoDoTurno([ev]);
-  const kV = ev.vencedorDono === ev.atacante ? k(ev.atacante, ev.atkOrigemId, ev.atkDestinoId) : k(ev.defensor, ev.defOrigemId, ev.defDestinoId);
-  const kP = ev.vencedorDono === ev.atacante ? k(ev.defensor, ev.defOrigemId, ev.defDestinoId) : k(ev.atacante, ev.atkOrigemId, ev.atkDestinoId);
+  const kV = ev.vencedorDono === ev.atacante ? kA : kD;
+  const kP = ev.vencedorDono === ev.atacante ? kD : kA;
+  ok("o evento de estrada traz o id das duas marchas", Number.isFinite(ev.atkId) && Number.isFinite(ev.defId) && ev.atkId !== ev.defId);
   const pa = plano.pausas[0];
   ok("o jogo mostra a luta pelas COLUNAS: o mapa pausa no instante do encontro",
     pa && plano.motor((pa.a + pa.b) / 2) === ev.sEncontro, pa && `pausa ${pa.a.toFixed(2)}-${pa.b.toFixed(2)} da animacao`);

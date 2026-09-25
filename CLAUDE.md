@@ -61,6 +61,7 @@ gabarito escrito antes do experimento, artefato publicado antes da próxima fase
 | `ferramentas/medir-assento.js` | a mesa é neutra? (jogador-base contra ele próprio, dos dois lados) |
 | `ferramentas/medir-tropa-inicial.js` | que parte da força fica parada nas aldeias de partida |
 | `ferramentas/acompanhar-partida.js` | partida a correr: os Reis estão a AGIR? (turno a turno, alarme de turnos sem envio) |
+| `ferramentas/verificar-replay.js` | **antes de gravar**: atravessamentos, identidades repetidas no desenho, saltos, costuras entre turnos — tudo a 0 ou não se grava |
 | `ferramentas/medir-cruzamentos.js` | colunas que se atravessam no desenho sem lutar (jogador-base, ou `--replay`) |
 
 ### Os testes
@@ -328,6 +329,10 @@ estão em `ferramentas/cena/` e `assets/texturas/`.
   só na bancada `encontro.html`. Pausar só as duas desencontrava a vencedora do
   motor e outras colunas passavam por ela (321 em 4014); pausar todas dá 0.
   Trancado por `test_varredura_estrada.js`, `test_sem_atravessar.js` e `Smoke8estrada`.
+- **Cada marcha tem um `id` do motor** (`idMarcha`, 25/09), gravado no replay e nos
+  eventos de estrada (`atkId`/`defId`). O desenho identifica colunas por ele
+  (`chaveMarcha`/`idsDesenho` na `ponte3d.js`); a chave antiga `dono|troço|tipo`
+  juntava seis colunas numa só e o mapa misturava-lhes as posições (P1, T31).
 - **O progresso de uma marcha tem uma implementação só** (`progMarcha` no
   `index.html`), injetada na `ponte3d.js`.
 - **Estradas e aldeias são zona protegida** no relevo (90 m à volta de cada

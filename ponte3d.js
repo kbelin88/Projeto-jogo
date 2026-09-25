@@ -65,7 +65,29 @@
   const PAUSA_MAX = 0.15;      // uma pausa, em fracao do turno de animacao
   const PAUSAS_TOTAL = 0.45;   // todas as pausas de um turno juntas nunca passam disto
   const JUNTAR = 0.02;         // lutas a menos disto umas das outras partilham a pausa
-  const chaveLuta = (dono, de, para) => dono + ":" + de + ">" + para;
+  // ── A IDENTIDADE DE UMA MARCHA (25/09) ──────────────────────────────────
+  // O id que o motor da a cada marcha. Replays de antes de 25/09 nao o tem, e
+  // ai volta a chave antiga (dono:origem>destino) -- que colide quando o mesmo
+  // Rei manda duas colunas da mesma aldeia ao mesmo destino.
+  function chaveMarcha(m) {
+    return m.id != null ? "#" + m.id : m.dono + ":" + m.origemId + ">" + m.destinoId;
+  }
+  // A identidade de CADA coluna no desenho, para uma lista de marchas de um
+  // quadro: o id do motor; em replays antigos, a chave antiga + o turno de
+  // partida + a ordem entre iguais (o mesmo Rei pode mandar duas colunas da
+  // mesma aldeia ao mesmo destino no mesmo turno -- 3 vezes na P1 de 23/09).
+  // A ordem da lista de marchas e estavel de um quadro para o seguinte.
+  function idsDesenho(movimentos, turno) {
+    const vistos = new Map();
+    return (movimentos || []).map((m) => {
+      if (m.id != null) return "#" + m.id;
+      const base = chaveMarcha(m) + "@" + (turno - ((m.turnosTotal || 0) - (m.turnosRestantes || 0)));
+      const n = vistos.get(base) || 0;
+      vistos.set(base, n + 1);
+      return n ? base + "/" + n : base;
+    });
+  }
+  const chaveLuta = (id, dono, de, para) => (id != null ? "#" + id : dono + ":" + de + ">" + para);
   function planoDoTurno(eventos) {
     const lutas = (eventos || []).filter((e) => e.tipo === "combate_estrada" && Number.isFinite(e.sEncontro));
     const inst = [];
@@ -98,24 +120,38 @@
     };
     const porColuna = new Map();
     for (const e of lutas) {
-      for (const [k, dono] of [[chaveLuta(e.atacante, e.atkOrigemId, e.atkDestinoId), e.atacante],
-                               [chaveLuta(e.defensor, e.defOrigemId, e.defDestinoId), e.defensor]]) {
+      for (const [k, dono] of [[chaveLuta(e.atkId, e.atacante, e.atkOrigemId, e.atkDestinoId), e.atacante],
+                               [chaveLuta(e.defId, e.defensor, e.defOrigemId, e.defDestinoId), e.defensor]]) {
         if (!porColuna.has(k)) porColuna.set(k, []);
         porColuna.get(k).push({ s: e.sEncontro, venceu: e.vencedorDono === dono });
       }
     }
     for (const l of porColuna.values()) l.sort((a, b) => a.s - b.s);
+    // ── A VENCEDORA FECHA A FOLGA DENTRO DA PAUSA (25/09) ──────────────────
+    // Recuperar o atraso DEPOIS da luta dava dois defeitos medidos pelo
+    // verificar-replay.js: um salto de ~10 px quando a coluna lutava duas vezes
+    // no mesmo turno, e uma costura na troca de quadro quando a luta era no
+    // ultimo instante. Agora a vencedora avanca ate ao ponto do encontro na
+    // segunda metade da pausa -- com o mapa parado -- e quando ele volta a andar
+    // ja esta onde o motor a tem. Nao ha atraso para recuperar.
     function f(k, r) {
       const re = motor(r);
       const l = porColuna.get(k);
       if (!l) return re;
-      // a ultima luta desta coluna cujo "parar" ja chegou
-      let lu = null;
-      for (const x of l) if (re >= x.s - FOLGA_LUTA) lu = x;
-      if (!lu) return re;
-      if (re <= lu.s || lu.s >= 1) return Math.max(0, lu.s - FOLGA_LUTA);
-      // depois da luta a vencedora recupera a folga ate ao fim do turno
-      return re - FOLGA_LUTA * (1 - re) / (1 - lu.s);
+      // `piso`: onde a coluna ja chegou numa luta anterior deste turno -- a
+      // paragem da seguinte nunca fica atras disso (a coluna recuava 0,014)
+      let piso = 0;
+      for (const x of l) {
+        const p = pausaDe(x.s);
+        if (p && r > p.b) { piso = Math.max(piso, p.s); continue; }   // esta luta ja passou
+        if (!p) continue;
+        const parada = Math.max(piso, x.s - FOLGA_LUTA);
+        if (r < p.a) return Math.min(re, parada);        // a caminho dela
+        const meio = (p.a + p.b) / 2;
+        if (r <= meio || !x.venceu) return parada;       // frente a frente
+        return parada + (p.s - parada) * (r - meio) / Math.max(1e-9, p.b - meio);
+      }
+      return re;
     }
     function visivel(k, r) {
       const l = porColuna.get(k);
@@ -174,7 +210,11 @@
             lembrada: ve ? null : (lb ? lb.turno : null),
           };
         }),
-        marchas: (game.movimentos || []).filter((m) => visivel(m)).map((m) => {
+        marchas: (function () {
+          const todas = game.movimentos || [];
+          const ids = idsDesenho(todas, game.turno);
+          return todas.map((m, i) => [m, ids[i]]).filter(([m]) => visivel(m));
+        })().map(([m, idDesenho]) => {
           // a posicao e a do MOTOR (`posicaoRota` anda pelo peso da rota, nao por
           // pixel), mas com o progresso ja avancado dentro do turno -- entrega-se
           // um `turnosRestantes` fracionario a mesma funcao em vez de reimplementar
@@ -190,7 +230,7 @@
           // se o Rei escolhido nao ve nenhuma das duas pontas, a marcha nao
           // aparece -- e o mesmo criterio do relatorio que ele recebe
           if (vis && !vis.has(a.id) && !vis.has(b.id)) return null;
-          return { de: a.slug, para: b.slug, t: pos.t, dono: m.dono,
+          return { id: idDesenho, de: a.slug, para: b.slug, t: pos.t, dono: m.dono,
                    // ── A COMPOSICAO INTEIRA, E NAO O TIPO DOMINANTE ──────────
                    // Isto achatava o exercito a UM tipo, e o mapa desenhava doze
                    // arqueiros para um exercito que levava lanceiros la dentro.
@@ -271,5 +311,5 @@
     return { sincronizar, empurrarPara3D, eventosDeEstrada };
   }
 
-  return { criar, janelaCena, planoDoTurno };
+  return { criar, janelaCena, planoDoTurno, chaveMarcha, idsDesenho };
 });

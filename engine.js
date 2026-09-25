@@ -1149,6 +1149,20 @@
     // avisa o modelo do redirecionamento). Nao e rejeicao — a ordem FOI executada.
     const mov = { dono: o.dono, origemId, destinoId: destinoReal, destinoPedido: destinoId, tropas: carga, caminho,
       turnosRestantes: turnos, turnosTotal: turnos };
+    // ── CADA MARCHA TEM NOME (25/09) ─────────────────────────────────────────
+    // O desenho identificava colunas por dono+troco+tipo, ou por dono+origem+
+    // destino. As duas chaves colidem: na P1 de 23/09, T31, seis colunas
+    // vermelhas de lanceiros partilhavam a chave `Valencia>Murcia`, e o mapa
+    // misturava-lhes as posicoes (coladas, a deslizar, a sumir juntas) -- em 25%
+    // dos momentos da partida havia pelo menos uma colisao. Um numero por marcha,
+    // dado aqui, acaba com a familia inteira. O contador sobrevive a um estado
+    // rehidratado (RETOMAR_DE): recomeca acima do maior id em transito.
+    if (estado.config.idMarcha !== false) {
+      if (!Number.isFinite(estado.proxMarcha)) {
+        estado.proxMarcha = 1 + (estado.movimentos || []).reduce((mx, m) => Math.max(mx, m.id || 0), 0);
+      }
+      mov.id = estado.proxMarcha++;
+    }
     estado.movimentos.push(mov);
     return mov;
   }
@@ -1411,6 +1425,7 @@
       trechoDeId: pa.aId, trechoParaId: pa.bId,
       FatkEf: Math.round(FatkEf), FdefEf: Math.round(FdefEf),
       atkOrigemId: atk.origemId, atkDestinoId: atk.destinoId,
+      atkId: atk.id, defId: def.id,
       defOrigemId: def.origemId, defDestinoId: def.destinoId,
       vencedorOrigemId: vencedor.origemId, vencedorDestinoId: vencedor.destinoId,
       perdedorDono: perdedor.dono,
