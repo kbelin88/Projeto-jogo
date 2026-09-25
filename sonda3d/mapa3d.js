@@ -851,6 +851,9 @@ transformed.y += onda * transformed.x * 0.05;`);
   // medido no ecra: `scale` aqui vale cerca de 1,67 vezes a fracao da
   // altura do ecra, portanto 0,085 da uma placa de ~150 px num 1080p
   const ESC_GRANDE = 0.030;
+  // a 0,030 a placa grande tem ~53 px num 1080p: duas do mesmo Rei a menos de
+  // 48 px no ecra tapam-se, e juntam-se numa (`desenharPlacas`)
+  const PX_JUNTAR_PLACAS = 48;
   const ESC_PEQUENA = 0.036;
   // ── A PLACA DE TIPO E SO O NUMERO (17/09) ───────────────────────────────
   // Tinha "18 archers": com as figuras animadas o tipo ja se ve nelas, e o nome
@@ -1257,22 +1260,40 @@ transformed.y += onda * transformed.x * 0.05;`);
     // feita a partir dos bonecos. Doze figuras podem valer duzentos homens;
     // quem diz quantos são é o motor, e é isso que a placa mostra.
     let nb = 0;
+    // ── AS PLACAS DO MESMO REI QUE SE TAPAM VIRAM UMA (25/09) ──────────────
+    // De longe cada coluna tinha a sua placa grande, e varias colunas do mesmo
+    // Rei no mesmo troco empilhavam placas umas por cima das outras (795
+    // amostras so na P1 de 23/09, medido com o verificar-replay.js): ilegivel,
+    // e e esta a vista das gravacoes. Placas do mesmo Rei a menos de uma placa
+    // de distancia NO ECRA juntam-se numa, com a SOMA das tropas (o numero
+    // continua a ser o do motor). De perto, abertas por tipo, nada muda.
+    const juntas = [];
+    for (const { via, bruto, m } of lista) {
+      noCaminho(via, bruto, _p);
+      const dist = cam.position.distanceTo(_p);
+      if (ALT_FIGURA * pxPorMetro(dist) >= PX_PLACA_ABRE) continue;
+      const aqui = _p.clone();
+      const pxM = pxPorMetro(dist);
+      const g = juntas.find((j) => j.dono === m.dono && j.pos.distanceTo(aqui) * pxM < PX_JUNTAR_PLACAS);
+      if (g) g.tropas += m.tropas || 0;
+      else juntas.push({ dono: m.dono, tropas: m.tropas || 0, pos: aqui });
+    }
+    for (const j of juntas) {
+      if (nb >= estandartes.length) break;
+      const sp = estandartes[nb++];
+      sp.visible = true;
+      sp.material.map = placaGrande(j.dono, j.tropas);
+      sp.material.opacity = 1;
+      sp.material.needsUpdate = true;
+      sp.center.set(0.5, 0);
+      sp.position.copy(j.pos);
+      sp.position.y += ALT_FIGURA * 1.35;
+      sp.scale.set(ESC_GRANDE, ESC_GRANDE, 1);
+    }
     for (const { via, bruto, m } of lista) {
       noCaminho(via, bruto, _p);
       const px = ALT_FIGURA * pxPorMetro(cam.position.distanceTo(_p));
       const aberta = px >= PX_PLACA_ABRE;
-
-      if (!aberta && nb < estandartes.length) {
-        const sp = estandartes[nb++];
-        sp.visible = true;
-        sp.material.map = placaGrande(m.dono, m.tropas || 0);
-        sp.material.opacity = 1;
-        sp.material.needsUpdate = true;
-        sp.center.set(0.5, 0);
-        _p.y += ALT_FIGURA * 1.35;
-        sp.position.copy(_p);
-        sp.scale.set(ESC_GRANDE, ESC_GRANDE, 1);
-      }
       if (aberta && m.composicao) {
         for (const bl of blocosDe(via, bruto, m)) {
           if (nb >= estandartes.length) break;
@@ -1598,6 +1619,8 @@ transformed.y += onda * transformed.x * 0.05;`);
                // Tem de ser SEMPRE zero: e o numero que trancou a limpeza.
                figurasAntigas: 0,
                porDesenhar: nSemPoco,
+               // placas acesas agora (as do mesmo Rei que se tapavam juntam-se)
+               placasVisiveis: estandartes.filter((s) => s.visible).length,
                tiposComMalha: Object.keys(animados),
                viasConhecidas: Object.keys(eixoDe).length,
                ultimoMotivo: motivo };
