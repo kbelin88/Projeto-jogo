@@ -992,6 +992,12 @@
       conquista: false,
     };
 
+    // AS BAIXAS EM TROPAS (25/09). O `baixasForca` acima e PODER (fracao x
+    // Fatk), e o P4 escrevia-o como "your losses: N troops": errado em 183 de
+    // 223 vitorias das partidas de 23/09 (910 ditas, 444 reais; com cavaleiros,
+    // 4x). O combate de estrada ja contava tropas (`baixasVencedor`). Campo
+    // ADITIVO: `baixasForca` fica como estava, para o .txt e para quem o le.
+    const tropasAntes = contarTropas(atacanteVence ? exercito.tropas : alvo.tropas);
     if (atacanteVence) {
       // sobreviventes do atacante viram a guarnicao tipada da aldeia tomada
       const sobrevivente = Object.assign({}, exercito.tropas);
@@ -1002,10 +1008,12 @@
       alvo.construindo = [];
       rep.conquista = true;
       rep.sobreviventesForca = contarTropas(alvo.tropas); // contagem de sobreviventes (nao poder)
+      rep.baixasTropas = tropasAntes - rep.sobreviventesForca;
     } else {
       // defensor segura (rei ou neutra); atacante eliminado; defensor sofre baixas
       aplicarBaixas(estado, alvo.tropas, fracao);
       rep.sobreviventesForca = contarTropas(alvo.tropas);
+      rep.baixasTropas = tropasAntes - rep.sobreviventesForca;
     }
     return rep;
   }
@@ -2237,7 +2245,12 @@
       const euAtaquei = ev.atacante === me;
       const quem = euAtaquei ? "You" : "King " + ev.atacante;
       if (ev.vencedor === "atacante") {
-        const baixas = euAtaquei ? ` (your losses: ${ev.baixasForca} troops)` : "";
+        // baixasTropas (25/09): as tropas que o motor tirou de facto. Sem o
+        // campo (eventos antigos, ou a flag baixasReais desligada), o texto de
+        // antes, byte a byte -- que dizia FORCA com o rotulo de tropas.
+        const baixas = !euAtaquei ? ""
+          : ev.baixasTropas != null ? ` (your losses: ${ev.baixasTropas} troop${ev.baixasTropas === 1 ? "" : "s"})`
+          : ` (your losses: ${ev.baixasForca} troops)`;
         return `${quem} attacked [${ev.alvoId}] ${ev.alvoNome}: VICTORY, conquered${baixas}`;
       }
       const perdeu = euAtaquei ? " (your army was lost)" : "";
@@ -2545,8 +2558,9 @@
     // combate de estrada volta a frase curta de antes de 23/09
     const nomeEv = cfg.relatoEstrada !== false ? ((id) => nomePorIdSeguro(visao, id)) : null;
     for (const ev of evs) {
-      const evTxt = (ev.tipo === "combate_estrada" && cfg.relatoEstrada === false)
+      let evTxt = (ev.tipo === "combate_estrada" && cfg.relatoEstrada === false)
         ? Object.assign({}, ev, { trechoDeId: null }) : ev;
+      if (ev.tipo === "combate" && cfg.baixasReais === false) evTxt = Object.assign({}, ev, { baixasTropas: null });
       L.push("- " + eventoTextoEN(evTxt, me, nomeEv));
     }
 

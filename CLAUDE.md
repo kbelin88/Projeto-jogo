@@ -189,6 +189,10 @@ continuarem a render o texto antigo.
 - **A regra da estrada** (`regraEstrada`, 23/09): inimigos que se encontram numa
   estrada lutam ali, os dois com o ATAQUE, sem bónus, e o perdedor é destruído. O P4
   não o dizia, e o Super 120B concluiu que as colunas passavam uma pela outra.
+- **Baixas do atacante em TROPAS** (`baixasReais`, 25/09): "your losses: N troops"
+  escrevia a FORÇA perdida (`baixasForca`), errada em 82% das vitórias de 23/09 (o
+  dobro, em média). Agora lê `baixasTropas`, que o evento de aldeia passou a levar.
+  Ver `pesquisa/2026-09-25/`.
 
 ### 5.1 Fog of war
 

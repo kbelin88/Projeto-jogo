@@ -504,4 +504,50 @@ t("F3 com relatoEstrada:false volta a frase curta de antes", () => {
   for (const l of linhas) assert.ok(/^- Armies met ON THE ROAD: your army (won|was beaten in) the field/.test(l), l);
 });
 
+// ── AS BAIXAS DO ATACANTE SAO TROPAS (25/09) ────────────────────────────────
+// O P4 escrevia a FORCA perdida com o rotulo "troops": 183 de 223 vitorias
+// erradas nas partidas de 23/09 (pesquisa/2026-09-25, bug_baixas.js). Aqui o
+// numero do prompt e conferido contra o exercito que MARCHOU e a guarnicao que
+// FICOU, contados fora do evento.
+t("F5 'your losses: N troops' e o numero de tropas que o motor tirou", () => {
+  const n = (t) => (t.lanceiro || 0) + (t.arqueiro || 0) + (t.cavaleiro || 0);
+  let conferidas = 0, comCavaleiro = 0;
+  for (const seed of [1, 2, 3, 4, 5]) {
+    const e = stJogo({ seed });
+    for (let turno = 0; turno < 30 && !E.checarVitoria(e); turno++) {
+      const marchas = e.movimentos.map((m) => ({ id: m.id, dono: m.dono, destinoId: m.destinoId, tropas: Object.assign({}, m.tropas), Fatk: E.ataqueDe(m.tropas, e.config) }));
+      E.tick(e);
+      // so as marchas que CHEGARAM neste tick, intactas (sem luta de estrada),
+      // e so quando uma unica bate com o evento (2 arqueiros e 1 cavaleiro
+      // tem o mesmo Fatk; e uma marcha para outro destino pode parar aqui)
+      const aindaMarcham = new Set(e.movimentos.map((m) => m.id));
+      const naEstrada = new Set();
+      for (const x of e.log) if (x.turno === e.turno && x.tipo === "combate_estrada") { naEstrada.add(x.atkId); naEstrada.add(x.defId); }
+      for (const ev of e.log.filter((x) => x.turno === e.turno && x.tipo === "combate" && x.vencedor === "atacante")) {
+        const cands = marchas.filter((x) => x.dono === ev.atacante && x.destinoId === ev.alvoId && x.Fatk === ev.Fatk && !naEstrada.has(x.id) && !aindaMarcham.has(x.id));
+        if (cands.length !== 1) continue;
+        const m = cands[0];
+        const perdidas = n(m.tropas) - ev.sobreviventesForca;
+        assert.strictEqual(ev.baixasTropas, perdidas, `evento: ${ev.baixasTropas} != ${perdidas} seed ${seed} T${e.turno} alvo ${ev.alvoId} marcha ${JSON.stringify(m.tropas)} sobrev ${ev.sobreviventesForca}`);
+        const linha = promptDe(e, ev.atacante).split("\n").find((l) => l.startsWith(`- You attacked [${ev.alvoId}]`) && /VICTORY/.test(l));
+        assert.ok(linha, "a vitoria tem de aparecer no prompt de quem atacou");
+        assert.ok(linha.includes(`(your losses: ${perdidas} troop${perdidas === 1 ? "" : "s"})`), linha + " -- perdeu " + perdidas);
+        conferidas++;
+        if (m.tropas.cavaleiro) comCavaleiro++;
+      }
+      E.executarOrdem(e, "A", E.jogadorBurro(E.montarVisao(e, "A")));
+      E.executarOrdem(e, "B", E.jogadorBurro(E.montarVisao(e, "B")));
+    }
+  }
+  assert.ok(conferidas >= 20, "poucas vitorias conferidas: " + conferidas);
+  assert.ok(comCavaleiro > 0, "nenhuma vitoria com cavaleiro -- era onde o erro chegava a 4x");
+});
+t("F6 com baixasReais:false volta o texto de antes (a FORCA, com o rotulo antigo)", () => {
+  const e = aposTurnos(6, { baixasReais: false });
+  const ev = e.log.find((x) => x.turno === e.turno && x.tipo === "combate" && x.vencedor === "atacante");
+  assert.ok(ev, "a seed 1 tem de ter uma vitoria no turno 6");
+  const p = promptDe(e, ev.atacante);
+  assert.ok(p.includes(`(your losses: ${ev.baixasForca} troops)`), "o texto antigo, byte a byte");
+});
+
 console.log("\ntest_prompt_p4: " + ok + " testes OK");

@@ -18,7 +18,7 @@ const cfgIberia = () => { const c = JSON.parse(JSON.stringify(E.CONFIG_V3_ARQUIV
   // percorre as aldeias e quem resolve primeiro nas chegadas), e portanto o
   // estado que alimenta esta baseline. Desligadas pela mesma regra 2.
   c.visaoEspelhada = false; c.chegadaSorteada = false;
-  c.encontroNoTempo = false; c.relatoEstrada = false; c.idMarcha = false; return c; };
+  c.encontroNoTempo = false; c.relatoEstrada = false; c.idMarcha = false; c.baixasReais = false; return c; };
 function estadoNoTurno(n) {
   const e = E.criarEstadoInicial(cfgIberia());
   const d = { A: (v) => E.jogadorBurro(v), B: (v) => E.jogadorBurro(v) };
