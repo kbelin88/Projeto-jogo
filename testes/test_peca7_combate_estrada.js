@@ -9,7 +9,9 @@
 // ============================================================
 "use strict";
 const Engine = require("../engine.js");
-const CONFIG = Engine.CONFIG;
+// o mapa daqui tem um troco de 12 unidades, mais curto que o alcance do jogo
+// (30, 25/09): estes testes guardam o encontro POR PONTO, sem alcance
+const CONFIG = Object.assign({}, Engine.CONFIG, { alcanceEstrada: 0 });
 // Combate v3: choque em campo aberto usa ATAQUE dos dois lados. lanceiro atq=1,
 // entao N lanceiros -> forca N (numeros abaixo em unidades de ataque).
 

@@ -13,6 +13,10 @@
 //                     mistura-lhes as posicoes (o bug Valencia-Murcia, 25/09)
 //   saltos            uma coluna que anda num instante mais do que pode andar
 //   costuras          onde uma coluna acaba um turno e onde comeca o seguinte
+//   coladas           duas colunas INIMIGAS no mesmo troco, mais perto que o
+//                     alcance (30), sem estarem a lutar -- "marcham juntas" (o T31
+//                     da P1 de 23/09). Com o alcance no motor (25/09) nao existe;
+//                     em replays antigos pode existir, e entao nao se grava.
 //   empilhadas        duas caixas quase no mesmo ponto (informativo: do mesmo
 //                     rei e normal; inimigas fora de luta, nao)
 //
@@ -32,7 +36,9 @@ function verificar(rep, seed) {
   const st = E.criarEstadoInicial(Object.assign({}, E.CONFIG, { seed: seed || rep.seed || 1 }));
   const nome = (id) => (st.aldeias.find((a) => a.id === id) || {}).nome || id;
   const out = { quadros: rep.frames.length, combatesEstrada: 0, atravessamentos: [], identidades: [],
-                saltos: [], costuras: [], empilhadasInimigas: 0, empilhadasMesmoRei: 0, semId: 0 };
+                saltos: [], costuras: [], coladas: [], empilhadasInimigas: 0, empilhadasMesmoRei: 0, semId: 0 };
+  const alcance = E.CONFIG.alcanceEstrada || 30;
+  const jaColadas = new Set();
   let fimAnterior = null;
   for (let i = 0; i + 1 < rep.frames.length; i++) {
     const fr = rep.frames[i], prox = rep.frames[i + 1];
@@ -57,7 +63,7 @@ function verificar(rep, seed) {
       if (!plano.visivel(chaveMarcha(m), r)) return null;
       const f = plano.f(chaveMarcha(m), r);
       const p = E.posicaoRota(st, Object.assign({}, m, { turnosRestantes: m.turnosRestantes - f }));
-      return p ? { x: p.x, y: p.y, f } : null;
+      return p ? { x: p.x, y: p.y, f, troco: Math.min(p.aId, p.bId) + "-" + Math.max(p.aId, p.bId) } : null;
     };
     // costura: o fim do turno anterior tem de ser o comeco deste
     if (fimAnterior) {
@@ -90,8 +96,25 @@ function verificar(rep, seed) {
         prev.set(k, q);
         pts.push({ m, q });
       }
+      // quem esta a lutar AGORA (a menos de 0,06 de turno de uma luta sua):
+      // perto de outra coluna nesse momento e normal -- e a luta, ou um encontro
+      // de tres no mesmo instante. Fora disso, inimigas coladas e defeito.
+      const re = plano.motor(r);
+      const aLutar = new Set();
+      for (const e of evs) {
+        if (Math.abs(re - e.sEncontro) > 0.06) continue;
+        aLutar.add(e.atkId != null ? "#" + e.atkId : e.atacante + ":" + e.atkOrigemId + ">" + e.atkDestinoId);
+        aLutar.add(e.defId != null ? "#" + e.defId : e.defensor + ":" + e.defOrigemId + ">" + e.defDestinoId);
+      }
       for (let a = 0; a < pts.length; a++) for (let b = a + 1; b < pts.length; b++) {
-        if (Math.hypot(pts[a].q.x - pts[b].q.x, pts[a].q.y - pts[b].q.y) >= PERTO) continue;
+        const A = pts[a], B = pts[b];
+        const dist = Math.hypot(A.q.x - B.q.x, A.q.y - B.q.y);
+        if (A.m.dono !== B.m.dono && A.q.troco === B.q.troco && dist < alcance - 1
+            && !aLutar.has(chaveMarcha(A.m)) && !aLutar.has(chaveMarcha(B.m))) {
+          const k = prox.turno + "|" + [idDesenho(A.m), idDesenho(B.m)].sort().join("&");
+          if (!jaColadas.has(k)) { jaColadas.add(k); out.coladas.push({ turno: prox.turno, a: idDesenho(A.m), b: idDesenho(B.m), dist: +dist.toFixed(1) }); }
+        }
+        if (dist >= PERTO) continue;
         if (pts[a].m.dono === pts[b].m.dono) out.empilhadasMesmoRei++; else out.empilhadasInimigas++;
       }
     }
@@ -131,6 +154,7 @@ falhas += linha("atravessamentos", r.atravessamentos);
 falhas += linha("identidades", r.identidades);
 falhas += linha("saltos", r.saltos);
 falhas += linha("costuras", r.costuras);
+falhas += linha("coladas", r.coladas);
 console.log(`  ..  empilhadas (amostras): ${r.empilhadasMesmoRei} do mesmo rei, ${r.empilhadasInimigas} inimigas`);
 console.log(falhas ? `\nNAO GRAVAR: ${falhas} defeito(s).` : "\nPODE GRAVAR: nenhum defeito medido.");
 process.exit(falhas ? 1 : 0);

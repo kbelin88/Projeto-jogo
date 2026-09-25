@@ -61,7 +61,7 @@ gabarito escrito antes do experimento, artefato publicado antes da próxima fase
 | `ferramentas/medir-assento.js` | a mesa é neutra? (jogador-base contra ele próprio, dos dois lados) |
 | `ferramentas/medir-tropa-inicial.js` | que parte da força fica parada nas aldeias de partida |
 | `ferramentas/acompanhar-partida.js` | partida a correr: os Reis estão a AGIR? (turno a turno, alarme de turnos sem envio) |
-| `ferramentas/verificar-replay.js` | **antes de gravar**: atravessamentos, identidades repetidas no desenho, saltos, costuras entre turnos — tudo a 0 ou não se grava |
+| `ferramentas/verificar-replay.js` | **antes de gravar**: atravessamentos, identidades repetidas no desenho, saltos, costuras entre turnos, inimigas coladas sem lutar — tudo a 0 ou não se grava. Replays de antes de 25/09 não passam (o motor antigo só fazia lutar no mesmo ponto) |
 | `ferramentas/medir-cruzamentos.js` | colunas que se atravessam no desenho sem lutar (jogador-base, ou `--replay`) |
 
 ### Os testes
@@ -133,8 +133,10 @@ julga — a análise é do Lucas.
   Exército misto anda à velocidade da tropa mais lenta. Uma marcha **pára na 1ª
   aldeia não-sua** do caminho. Envios de aldeias diferentes **não somam** — lutam
   um de cada vez.
-- **Estrada:** dois exércitos inimigos que estão no **mesmo ponto do mesmo troço
-  no mesmo instante** lutam ali (de frente ou um a alcançar o outro), e o
+- **Estrada:** dois exércitos inimigos no mesmo troço lutam quando chegam a menos
+  de **30 unidades do mapa** um do outro (`alcanceEstrada`, 25/09 — ~uma caixa na
+  moldura de gravação; antes era no mesmo ponto, e na P1 duas colunas marcharam
+  coladas um turno inteiro sem lutar), de frente ou uma a alcançar a outra, e o
   **perdedor é aniquilado**. Os encontros resolvem-se por ordem de tempo dentro do
   turno (`encontroNoTempo`, 23/09; antes bastava os troços percorridos se
   sobreporem no espaço, e 3,3% das "lutas" eram de quem nunca se tinha visto).
@@ -321,8 +323,10 @@ estão em `ferramentas/cena/` e `assets/texturas/`.
   exato: a marcha anda a velocidade constante dentro do passo), resolve os
   encontros por ordem de tempo e grava no evento o instante (`sEncontro`) e o
   ponto. **No ecrã, quem luta são as próprias colunas** (desde 23/09, a proposta
-  do Lucas): o mapa INTEIRO pausa no instante de cada luta, as duas caixas param
-  frente a frente, a perdedora some e tudo continua (`planoDoTurno` na
+  do Lucas): o mapa INTEIRO entra em câmara lenta suave no instante de cada luta
+  (25/09: as paragens secas + aceleração pareciam o PC a engasgar), o turno fica
+  mais comprido em vez de apressado, as duas caixas ficam frente a frente, a
+  perdedora some e tudo continua (`planoDoTurno` na
   `ponte3d.js`, uma conta só para o jogo e para o `medir-cruzamentos.js`). A cena
   de figuras (`batalha.js`) já não abre no jogo — ficava noutro sítio do troço,
   escondia as duas colunas e deixava uma barra "1×4" vários turnos no mapa; vive

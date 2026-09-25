@@ -42,7 +42,7 @@ console.log(`test_sem_atravessar: ${r.nLutas} combates de estrada, 0 colunas atr
       if (v) break;
     }
     const r = verificar({ frames }, seed);
-    for (const k of ["atravessamentos", "identidades", "saltos", "costuras"]) {
+    for (const k of ["atravessamentos", "identidades", "saltos", "costuras", "coladas"]) {
       assert.strictEqual(r[k].length, 0, `seed ${seed}: ${k} ${JSON.stringify(r[k].slice(0, 2))}`);
     }
     console.log(`test_sem_atravessar: seed ${seed}, ${frames.length - 1} turnos, ${r.combatesEstrada} combates de estrada -- verificador limpo`);

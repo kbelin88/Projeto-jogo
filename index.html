@@ -1844,7 +1844,10 @@
       aplicarFrame(rep.dados.frames[rep.idx++]);
       atualizarProgresso();
       const cadencia = parseInt(document.getElementById("grepVel").value, 10) || 2000;
-      await animarEntreQuadros(cadencia, meuRun);
+      // um turno com lutas de estrada dura mais: as lutas sao em camara lenta,
+      // e o resto anda a velocidade de sempre (`planoDoTurno`, ponte3d.js)
+      const enc = encontrosPorVir();
+      await animarEntreQuadros(cadencia * (enc ? enc.plano.duracao : 1), meuRun);
     }
   }
 

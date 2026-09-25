@@ -113,15 +113,18 @@ ok("a ponte converte o evento do motor para o mapa",
   const kV = ev.vencedorDono === ev.atacante ? kA : kD;
   const kP = ev.vencedorDono === ev.atacante ? kD : kA;
   ok("o evento de estrada traz o id das duas marchas", Number.isFinite(ev.atkId) && Number.isFinite(ev.defId) && ev.atkId !== ev.defId);
-  const pa = plano.pausas[0];
-  ok("o jogo mostra a luta pelas COLUNAS: o mapa pausa no instante do encontro",
-    pa && plano.motor((pa.a + pa.b) / 2) === ev.sEncontro, pa && `pausa ${pa.a.toFixed(2)}-${pa.b.toFixed(2)} da animacao`);
-  ok("as duas param ANTES do encontro, frente a frente",
-    plano.f(kV, pa.a) < ev.sEncontro && plano.f(kP, pa.a) < ev.sEncontro);
-  ok("a perdedora some durante a pausa; a vencedora continua a ver-se",
-    plano.visivel(kP, pa.a) && !plano.visivel(kP, pa.b) && plano.visivel(kV, 1));
-  ok("e a vencedora chega ao fim do turno onde o motor a pos",
-    Math.abs(plano.f(kV, 1) - 1) < 1e-9);
+  const vale = plano.lentos[0];
+  const dr = 1 / 2000;
+  const vel = (r) => (plano.motor(r + dr) - plano.motor(r)) / dr;
+  ok("o jogo mostra a luta pelas COLUNAS: no encontro o mapa abranda (camara lenta), nao para seco",
+    vale && Math.abs(plano.motor(vale.r) - ev.sEncontro) < 0.01 && vel(vale.r) < 0.5 && vel(vale.r) > 0,
+    vale && `velocidade no fundo do vale ${vel(vale.r).toFixed(2)} do normal; turno ${plano.duracao.toFixed(2)}x`);
+  ok("fora das lutas anda a velocidade de sempre (o turno fica mais comprido, nao mais apressado)",
+    Math.abs(vel(0.01) * 1 - plano.duracao) < 0.05);
+  ok("a perdedora para no encontro e some no fundo do vale; a vencedora continua a ver-se",
+    plano.f(kP, 0.99) <= ev.sEncontro + 1e-9 && plano.visivel(kP, vale.r - 0.05) && !plano.visivel(kP, 0.99) && plano.visivel(kV, 1));
+  ok("e a vencedora anda sempre com o motor, e chega ao fim do turno onde ele a pos",
+    Math.abs(plano.f(kV, 1) - 1) < 1e-9 && Math.abs(plano.f(kV, vale.r) - plano.motor(vale.r)) < 1e-9);
   ok("o index.html usa este plano para o progresso e para esconder a perdedora",
     /Ponte3D\.planoDoTurno\(lista\)/.test(html) && /visivel: marchaVisivel/.test(html));
 }

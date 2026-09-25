@@ -266,6 +266,15 @@
     c.vitoriaPorDominancia = true;
     c.vitoriaFracao = 0.75;
     c.vitoriaTurnos = 2;
+    // ── ALCANCE NA ESTRADA (25/09) ────────────────────────────────────────────
+    // Dois exercitos inimigos no mesmo troco lutam quando chegam a menos disto
+    // um do outro (unidades do mapa, as dos x/y das aldeias), e nao so quando se
+    // tocam num ponto. Na P1 de 23/09, T31, uma coluna azul saiu de Valencia
+    // atras de uma vermelha, no mesmo sentido, e so a "tocou" no ultimo instante
+    // do turno, a porta de Murcia: o turno inteiro marcharam coladas no ecra. 30
+    // e ~uma caixa de largura na moldura de gravacao (1920 px): lutam quando as
+    // caixas se encostam, frente a frente. Ausente ou 0 = o encontro por ponto.
+    c.alcanceEstrada = 30;
     // PROMPT P4 (17/08, sessao Fable): prompt em INGLES, sem exemplo com valores
     // (esquema declarado), sem "para tomar" (o minimo pre-calculado saiu do jogo
     // a pedido do Lucas: o prompt informa, nao recomenda), com a condicao de
@@ -1294,6 +1303,7 @@
   // vem atras a alcancar quem vai a frente.
   function encontroNoPasso(estado, m1, m2) {
     let melhor = null;
+    const alcance = estado.config.alcanceEstrada || 0;
     for (const p of trocosNoTempo(estado, m1)) {
       for (const q of trocosNoTempo(estado, m2)) {
         if (p.lo !== q.lo || p.hi !== q.hi) continue;
@@ -1303,6 +1313,19 @@
         const uq = (x) => (q.s1 > q.s0 ? q.u0 + (x - q.s0) / (q.s1 - q.s0) * (q.u1 - q.u0) : q.u0);
         const f0 = up(S0) - uq(S0), f1 = up(S1) - uq(S1);
         let sE = null;
+        if (alcance > 0) {
+          // o alcance em fracao DESTE troco (os trocos tem comprimentos diferentes)
+          const A = aldeiaPorId(estado, p.lo), B = aldeiaPorId(estado, p.hi);
+          const c = alcance / Math.max(1e-6, Math.hypot(A.x - B.x, A.y - B.y));
+          // o primeiro instante em que a distancia entre os dois cabe no alcance
+          if (Math.abs(f0) <= c) sE = S0;
+          else if (f0 > c && f1 <= c) sE = S0 + (S1 - S0) * (f0 - c) / (f0 - f1);
+          else if (f0 < -c && f1 >= -c) sE = S0 + (S1 - S0) * (-c - f0) / (f1 - f0);
+          if (sE === null || (melhor && sE >= melhor.s)) continue;
+          melhor = { s: sE, lo: p.lo, hi: p.hi, u: (up(sE) + uq(sE)) / 2,
+                     sentido1: p.sentido, sentido2: q.sentido, alcance };
+          continue;
+        }
         // tolerancia nas duas pontas: tocar-se exatamente no fim do passo da
         // -1e-16 ou +1e-16 conforme o arredondamento, e isso nao pode decidir
         if (Math.abs(f0) < 1e-9) sE = S0;
@@ -1437,6 +1460,8 @@
     // em que ponto do turno se encontraram (0 = no inicio, 1 = no fim): e a
     // hora a que o replay para as duas colunas e abre a cena
     if (enc) ev.sEncontro = Math.round(enc.s * 10000) / 10000;
+    // lutaram a esta distancia (o desenho deixa-os parar frente a frente ali)
+    if (enc && enc.alcance) ev.alcance = enc.alcance;
     estado.log.push(ev);
     return { vencedor, perdedor, ev };
   }

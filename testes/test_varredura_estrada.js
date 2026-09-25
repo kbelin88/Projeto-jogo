@@ -96,7 +96,8 @@ t("frente a frente no mesmo troco: lutam sempre que andaram", () => {
 // A varredura diz SE os trocos se sobrepoem no espaco; o encontro diz QUANDO e
 // ONDE os dois estiveram no mesmo ponto. E o que o replay usa para parar as
 // duas colunas e abrir a cena ali, em vez de as deixar atravessar-se.
-const noTempo = () => { const st = estado(); st.config.encontroNoTempo = true; return st; };
+// o encontro POR PONTO (sem alcance); o alcance tem o teste dele no fim
+const noTempo = () => { const st = estado(); st.config.encontroNoTempo = true; st.config.alcanceEstrada = 0; return st; };
 // onde a marcha esta a fracao `s` do passo, medido a partir da ponta de id menor
 const ondeEsta = (st, m, s) => {
   const p = E.posicaoRota(st, Object.assign({}, m, { turnosRestantes: m.turnosRestantes + 1 - s }));
@@ -160,6 +161,38 @@ t("o evento leva o instante e o sitio do encontro", () => {
   const A = E.aldeiaPorId(st, p[0]), B = E.aldeiaPorId(st, p[1]);
   assert.ok(Math.abs(ev.x - (A.x + B.x) / 2) < 1e-6 && Math.abs(ev.y - (A.y + B.y) / 2) < 1e-6,
     "o combate devia ser no MEIO do troco");
+});
+
+// ── O ALCANCE (25/09) ───────────────────────────────────────────────────────
+// Com alcance, lutam no PRIMEIRO instante em que ficam a essa distancia um do
+// outro -- e nao antes. Era o caso da P1, T31: duas colunas no mesmo sentido,
+// coladas o turno inteiro, que so se "tocavam" no ultimo instante.
+t("alcance: lutam ao chegar a 30 unidades, e no primeiro instante em que isso acontece", () => {
+  const st = estado();
+  st.config.alcanceEstrada = 30;
+  const p = ["lisboa", "santarem"].map((s) => idDe(st, s));
+  const A = E.aldeiaPorId(st, p[0]), B = E.aldeiaPorId(st, p[1]);
+  const L = Math.hypot(A.x - B.x, A.y - B.y);
+  const a = exercito("A", p, 4, 3), b = exercito("B", p.slice().reverse(), 4, 3);
+  const enc = E.encontroNoPasso(st, a, b);
+  // no passo cada um anda de 0 a 25% do troco: a distancia vai de L a L/2
+  if (L / 2 > 30) { assert.strictEqual(enc, null, "longe demais para lutar ja"); return; }
+  assert.ok(enc, "deviam lutar neste passo");
+  const onde = (m, s) => { const q = E.posicaoRota(st, Object.assign({}, m, { turnosRestantes: m.turnosRestantes + 1 - s })); return q; };
+  const pa = onde(a, enc.s), pb = onde(b, enc.s);
+  const d = Math.hypot(pa.x - pb.x, pa.y - pb.y);
+  assert.ok(Math.abs(d - 30) < 1e-6 || (enc.s === 0 && d <= 30), "lutaram a " + d);
+});
+t("alcance: no mesmo sentido, a coluna de tras que chega a 30 da da frente luta ali", () => {
+  const st = estado();
+  st.config.alcanceEstrada = 30;
+  const p = ["lisboa", "santarem", "coimbra"].map((s) => idDe(st, s));
+  // a da frente (lenta) ja vai a meio; a de tras (rapida) sai de Lisboa
+  const frente = exercito("B", p, 8, 4);          // no passo: 50% -> 62,5% da rota
+  const tras = exercito("A", p, 2, 1);            // no passo: 0% -> 50% da rota
+  const enc = E.encontroNoPasso(st, frente, tras);
+  const semAlcance = (() => { st.config.alcanceEstrada = 0; const r = E.encontroNoPasso(st, frente, tras); st.config.alcanceEstrada = 30; return r; })();
+  if (enc && semAlcance) assert.ok(enc.s <= semAlcance.s, "com alcance luta antes (ou ao mesmo tempo) do que por ponto");
 });
 
 console.log("test_varredura_estrada: " + ok + " testes ok");

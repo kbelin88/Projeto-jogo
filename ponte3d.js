@@ -49,22 +49,32 @@
   // Nao ha cena de figuras no jogo -- ela abria noutro sitio do troco e
   // escondia as duas colunas, que no ecra "sumiam". Quem luta sao as colunas.
   //
-  // ⚠ O MAPA INTEIRO PAUSA, nao so as duas. Parar so quem luta atrasava a
+  // ⚠ O MAPA INTEIRO ABRANDA, nao so as duas. Parar so quem luta atrasava a
   // vencedora em relacao ao motor, e nesse atraso outras colunas inimigas
-  // passavam por ela sem lutar (321 em 4014 combates do jogador-base, medido
-  // com o `medir-cruzamentos.js`). Com uma pausa de TODOS no instante de cada
-  // luta ninguem se desencontra do motor. As pausas cabem no turno: o resto do
-  // movimento anda um pouco mais depressa para as compensar.
+  // passavam por ela sem lutar (321 em 4014 combates do jogador-base).
+  //
+  // ── CAMARA LENTA, E NAO PARAGENS (25/09) ─────────────────────────────────
+  // A 1.a versao parava o mapa SECO em cada luta e acelerava o resto para caber
+  // no turno: na P1, T30, cinco paragens e o resto a 1,82x -- para, corre, para,
+  // corre, e o Lucas viu "como se o PC estivesse sobrecarregado e fosse
+  // travando". Agora cada luta e um VALE de velocidade suave (cos^2) a volta do
+  // instante do encontro, e o turno fica mais comprido pelo tempo das lutas em
+  // vez de apressar o resto: fora das lutas tudo anda a velocidade de sempre.
+  // No fundo do vale as duas colunas estao frente a frente (a distancia do
+  // alcance do motor), a perdedora some, e a vencedora segue.
   //
   // `planoDoTurno(eventos)` recebe os combates de estrada do turno (com
   // `sEncontro`) e devolve, para a animacao `r` (0 a 1 entre dois quadros):
   //   f(chave, r)       -> a fracao do turno do MOTOR em que a coluna se desenha
   //   visivel(chave, r) -> se a coluna ainda se ve (a perdedora some)
-  // `chave` = dono:origem>destino. Uma conta so: o jogo e o medidor usam esta.
-  const FOLGA_LUTA = 0.05;     // param um pouco ANTES do encontro: frente a frente, sem se sobreporem
-  const PAUSA_MAX = 0.15;      // uma pausa, em fracao do turno de animacao
-  const PAUSAS_TOTAL = 0.45;   // todas as pausas de um turno juntas nunca passam disto
-  const JUNTAR = 0.02;         // lutas a menos disto umas das outras partilham a pausa
+  //   duracao           -> quanto mais comprido e este turno (1 = normal)
+  // Uma conta so: o jogo e o medidor usam esta.
+  const FOLGA_LUTA = 0.03;     // replays sem alcance: a perdedora para um pouco antes do ponto
+  const LENTO = 0.3;           // tempo que cada luta acrescenta ao turno (fracao de um turno)
+  const LENTO_TOTAL = 0.9;     // o turno nunca fica mais do que 1,9x o normal
+  const VALE = 0.05;           // meia-largura do vale, em fracao do turno do motor
+  const JUNTAR = 0.02;         // lutas a menos disto partilham o vale
+  const N_TABELA = 800;
   // ── A IDENTIDADE DE UMA MARCHA (25/09) ──────────────────────────────────
   // O id que o motor da a cada marcha. Replays de antes de 25/09 nao o tem, e
   // ai volta a chave antiga (dono:origem>destino) -- que colide quando o mesmo
@@ -94,75 +104,65 @@
     for (const s of lutas.map((e) => e.sEncontro).sort((a, b) => a - b)) {
       if (!inst.length || s - inst[inst.length - 1] > JUNTAR) inst.push(s);
     }
-    const H = inst.length ? Math.min(PAUSA_MAX, PAUSAS_TOTAL / inst.length) : 0;
-    const anda = 1 - H * inst.length;          // parte da animacao em movimento
-    // as pausas no eixo da animacao: entre `a` e `b` o motor esta parado em `s`
-    const pausas = [];
-    let sAnt = 0, fimAnt = 0;
-    for (const s of inst) {
-      const a = fimAnt + (s - sAnt) * anda;
-      pausas.push({ s, a, b: a + H });
-      sAnt = s; fimAnt = a + H;
-    }
-    function motor(r) {
-      let sP = 0, bP = 0;
-      for (const p of pausas) {
-        if (r < p.a) return sP + (r - bP) / anda;
-        if (r <= p.b) return p.s;
-        sP = p.s; bP = p.b;
+    const A = inst.length ? Math.min(LENTO, LENTO_TOTAL / inst.length) : 0;
+    // densidade de tempo de animacao por unidade de tempo do motor: 1 + vales
+    const w = (s) => {
+      let v = 1;
+      for (const si of inst) {
+        const x = s - si;
+        if (Math.abs(x) < VALE) { const c = Math.cos(Math.PI * x / (2 * VALE)); v += (A / VALE) * c * c; }
       }
-      return Math.min(1, sP + (r - bP) / anda);
-    }
-    const pausaDe = (s) => {
-      let melhor = null;
-      for (const p of pausas) if (p.s <= s + 1e-9) melhor = p;
-      return melhor;
+      return v;
     };
+    // tabela acumulada: tempo de animacao ate cada instante do motor
+    const acc = new Float64Array(N_TABELA + 1);
+    for (let i = 1; i <= N_TABELA; i++) {
+      const s0 = (i - 1) / N_TABELA, s1 = i / N_TABELA;
+      acc[i] = acc[i - 1] + (w(s0) + 4 * w((s0 + s1) / 2) + w(s1)) / 6 / N_TABELA;
+    }
+    const duracao = acc[N_TABELA];
+    function motor(r) {
+      if (!inst.length) return r;
+      const alvo = Math.max(0, Math.min(1, r)) * duracao;
+      let lo = 0, hi = N_TABELA;
+      while (hi - lo > 1) { const m = (lo + hi) >> 1; if (acc[m] <= alvo) lo = m; else hi = m; }
+      const d = acc[hi] - acc[lo];
+      return (lo + (d > 0 ? (alvo - acc[lo]) / d : 0)) / N_TABELA;
+    }
+    // em que instante da ANIMACAO o motor passa por `s`
+    const animEm = (s) => {
+      const i = Math.max(0, Math.min(N_TABELA, Math.round(s * N_TABELA)));
+      return acc[i] / duracao;
+    };
+    const lentos = inst.map((s) => ({ s, r: animEm(s) }));
     const porColuna = new Map();
     for (const e of lutas) {
       for (const [k, dono] of [[chaveLuta(e.atkId, e.atacante, e.atkOrigemId, e.atkDestinoId), e.atacante],
                                [chaveLuta(e.defId, e.defensor, e.defOrigemId, e.defDestinoId), e.defensor]]) {
         if (!porColuna.has(k)) porColuna.set(k, []);
-        porColuna.get(k).push({ s: e.sEncontro, venceu: e.vencedorDono === dono });
+        // com alcance (25/09) lutam a distancia de uma caixa e param ali; replays
+        // antigos lutavam no mesmo ponto, e a perdedora para um pouco antes
+        porColuna.get(k).push({ s: e.sEncontro, venceu: e.vencedorDono === dono,
+                               folga: e.alcance ? 0 : FOLGA_LUTA });
       }
     }
     for (const l of porColuna.values()) l.sort((a, b) => a.s - b.s);
-    // ── A VENCEDORA FECHA A FOLGA DENTRO DA PAUSA (25/09) ──────────────────
-    // Recuperar o atraso DEPOIS da luta dava dois defeitos medidos pelo
-    // verificar-replay.js: um salto de ~10 px quando a coluna lutava duas vezes
-    // no mesmo turno, e uma costura na troca de quadro quando a luta era no
-    // ultimo instante. Agora a vencedora avanca ate ao ponto do encontro na
-    // segunda metade da pausa -- com o mapa parado -- e quando ele volta a andar
-    // ja esta onde o motor a tem. Nao ha atraso para recuperar.
+    // A vencedora anda sempre com o motor (nao ha atraso para recuperar); a
+    // perdedora para no ponto do encontro e some pouco depois, no fundo do vale.
     function f(k, r) {
       const re = motor(r);
       const l = porColuna.get(k);
       if (!l) return re;
-      // `piso`: onde a coluna ja chegou numa luta anterior deste turno -- a
-      // paragem da seguinte nunca fica atras disso (a coluna recuava 0,014)
-      let piso = 0;
-      for (const x of l) {
-        const p = pausaDe(x.s);
-        if (p && r > p.b) { piso = Math.max(piso, p.s); continue; }   // esta luta ja passou
-        if (!p) continue;
-        const parada = Math.max(piso, x.s - FOLGA_LUTA);
-        if (r < p.a) return Math.min(re, parada);        // a caminho dela
-        const meio = (p.a + p.b) / 2;
-        if (r <= meio || !x.venceu) return parada;       // frente a frente
-        return parada + (p.s - parada) * (r - meio) / Math.max(1e-9, p.b - meio);
-      }
-      return re;
+      const perdeu = l.find((x) => !x.venceu);
+      return perdeu ? Math.min(re, Math.max(0, perdeu.s - perdeu.folga)) : re;
     }
     function visivel(k, r) {
       const l = porColuna.get(k);
       if (!l) return true;
       const perdeu = l.find((x) => !x.venceu);
-      if (!perdeu) return true;
-      const p = pausaDe(perdeu.s);
-      // some a meio da pausa da luta dela
-      return p ? r < (p.a + p.b) / 2 : motor(r) < perdeu.s;
+      return !perdeu || motor(r) < perdeu.s + VALE * 0.3;
     }
-    return { f, visivel, motor, pausas };
+    return { f, visivel, motor, lentos, duracao };
   }
 
   function criar(dep) {
