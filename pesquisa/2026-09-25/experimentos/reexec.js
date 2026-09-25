@@ -31,7 +31,12 @@ function reexec(P, onTurno){
   }
   return div;
 }
-module.exports={carregar,reexec};
+// FOTOGRAFIA do mapa ANTES das ordens (fase "pre"): e o que o Rei via. No
+// "pos" as ordens simultaneas ja correram -- o inimigo pode ter tirado tropa
+// do alvo, ou gasto a madeira --, e prever com esse estado da um otimismo que
+// o Rei nunca teve.
+function fotografia(g){const f={}; for(const a of g.aldeias) f[a.id]={id:a.id,dono:a.dono,tipo:a.tipo,capital:a.capital,tropas:Object.assign({},a.tropas),recursos:Object.assign({},a.recursos)}; return f;}
+module.exports={carregar,reexec,fotografia};
 if(require.main===module){
   const extra=process.argv[3]?JSON.parse(process.argv[3]):{};
   const P=carregar(process.argv[2],extra); const d=reexec(P);

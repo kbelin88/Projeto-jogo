@@ -1,15 +1,17 @@
-const {carregar,reexec}=require("./reexec.js");const E=require(require("path").join(__dirname,"..","..","..","engine.js"));const path=require("path");
+const {carregar,reexec,fotografia}=require("./reexec.js");const E=require(require("path").join(__dirname,"..","..","..","engine.js"));const path=require("path");
 const tot={};
 for(const f of process.argv.slice(2)){
   const P=carregar(f); const nomes={}; for(const l of["A","B"]){const m=new RegExp("Rei "+l+" \\(openrouter:([^)]+)\\)").exec(P.txt); nomes[l]=m[1].split("/")[1].replace(":free","").slice(0,18);}
   const vivos=new Map(); let conhecidos=new Set();
   const cls={};
+  let foto=null, visPre=null;
   reexec(P,(g,t,fase)=>{
+    if(fase==="pre"){ foto=fotografia(g); visPre={A:E.montarVisao(g,"A"),B:E.montarVisao(g,"B")}; }
     if(fase==="pos"){
       for(const m of g.movimentos){ if(conhecidos.has(m.id)) continue; conhecidos.add(m.id);
         const alvo=g.aldeias.find(a=>a.id===m.destinoId); if(alvo.dono===m.dono) continue;
-        const p=E.preverCombate(g,m.tropas,alvo);
-        const vis=E.montarVisao(g,m.dono).alvos.find(a=>a.id===alvo.id);
+        const p=E.preverCombate(g,m.tropas,foto[alvo.id]);   // o alvo como o Rei o via
+        const vis=visPre[m.dono].alvos.find(a=>a.id===alvo.id);
         // envios do MESMO dono ao MESMO alvo neste turno
         vivos.set(m.id,{dono:m.dono,t,alvo:alvo.id,Fatk:E.ataqueDe(m.tropas,g.config),ok0:p.atacanteVence,vis:vis&&vis.visivel,ratio:p.FatkEf/Math.max(1,p.FdefEf),v:p.v});
       }

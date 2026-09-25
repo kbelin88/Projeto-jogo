@@ -1,3 +1,7 @@
+// bug_baixas.js — o "your losses: N troops" do P4 de 23/09 contra as tropas
+// realmente perdidas. Mede o texto ANTIGO (baixasForca, que e PODER): a partir
+// de 25/09 o prompt le baixasTropas (flag baixasReais), e este script fica como
+// a prova do que as partidas de 23/09 leram.
 const {carregar,reexec}=require("./reexec.js");const E=require(require("path").join(__dirname,"..","..","..","engine.js"));
 const n=t=>(t.lanceiro||0)+(t.arqueiro||0)+(t.cavaleiro||0);
 let tot=0,difer=0,ex=[]; const soma={dito:0,real:0};

@@ -39,13 +39,14 @@ Não havia chave de API nesta sessão, então **nenhuma proposta foi testada com
    (mediana de 83–100%) com ~1,5× a defesa, e falha 15–32% dos ataques. O Super falha
    35–48%, e o Ultra 23–51%.
 5. **Os ataques falham por dois motivos, e cada um tem conserto diferente:**
-   - **Super**: mais da metade das derrotas já estava perdida quando deu a ordem
+   - **Super**: **76%** das derrotas (22 de 29) já estavam perdidas quando deu a ordem
      (atacou com 0,12–0,8× a defesa que via). Além disso, planeja o reino como **um só
      exército agrupado por tipo** e reparte-o em envios de várias aldeias ao mesmo
      alvo, que o motor não soma (54% dos ataques numa partida).
-   - **Ultra**: 85% das derrotas **ganhavam na hora da ordem**. A defesa cresceu durante
-     a marcha, por **construção** (a aldeia gastou madeira guardada) ou **reforço** (um
-     exército inimigo já a caminho, visível no prompt, mas sem tamanho nem intenção).
+   - **Ultra**: 82% das derrotas (28 de 34) **ganhavam na hora da ordem**. A defesa cresceu durante
+     a marcha, por **construção** (a aldeia gastou madeira guardada, e o estoque do alvo
+     previa isso em 22 de 26 casos) ou por **reforço** que o inimigo ordenou **no mesmo
+     turno**. Este último é simultâneo e nenhum prompt o pode mostrar.
 6. **Bug no prompt: "your losses: N troops" está errado em 82% das vitórias.** O motor
    põe ali a *força* perdida, não as tropas: o prompt disse 910 tropas perdidas quando
    foram 444. O custo de atacar aparece dobrado, e quadruplicado com cavaleiros.
@@ -62,8 +63,8 @@ Não havia chave de API nesta sessão, então **nenhuma proposta foi testada com
    informação** (combate de aldeia com números, exército inimigo com tamanho e rumo) e
    **2 opções de design para o Lucas decidir** (distribuição do exército; estoque das
    aldeias inimigas visíveis). Nenhuma diz ao Rei o que fazer. Protótipo funcional em
-   `experimentos/p5_prototipo.js`, renderizado sobre turnos reais (+700–900 chars por
-   prompt).
+   `experimentos/p5_prototipo.js`, renderizado sobre turnos reais (+800–1 060 chars por
+   prompt, com todas as opções).
 
 ---
 
@@ -175,7 +176,10 @@ Dois fenômenos que se somam:
   (47 spearman, 13 archer, 27 knight)` do topo do relatório é exatamente esse agrupamento.
   Depois reparte o plano em envios por aldeia, e o motor faz cada um lutar sozinho. Nessa
   partida, **54% dos ataques do Super** saíram em grupos convergentes (várias aldeias ao
-  mesmo alvo no mesmo turno). Nos outros modelos a fração fica em 7–22%. Noutros turnos o
+  mesmo alvo no mesmo turno). Em 7 desses 9 grupos nenhum envio vencia sozinho, e em 4
+  **os envios somados venceriam**: era o ataque que o Rei planejou, desfeito pela regra.
+  Nos outros modelos a fração fica em 7–22%, e quase sempre com um envio que já vencia
+  sozinho. Noutros turnos o
   mesmo Super escreve *"troops from different villages never add up"*: **conhece a regra
   quando a lê, e perde-a quando planeja.**
 
@@ -183,24 +187,32 @@ Dois fenômenos que se somam:
 
 ## 4. Por que os ataques falham
 
-Cada ataque foi classificado com o estado do motor **no instante da ordem**, usando
-`preverCombate`, a mesma conta do combate:
+Cada ataque foi classificado com o alvo **como o Rei o via**: o estado do motor depois do
+tick e antes das ordens (as ordens são simultâneas, e o inimigo pode tirar tropa do alvo
+no mesmo turno). A conta é a `preverCombate`, a mesma do combate:
 
 | modelo | ataques de aldeia que falharam | já perdiam na ordem | ganhavam na ordem, a defesa mudou na marcha |
 |---|---|---|---|
-| Super (P1+P2) | 29 | **16 (55%)** | 13 |
-| Ultra (P3+P4) | 34 | 5 | **29 (85%)** |
+| Super (P1+P2) | 29 | **22 (76%)**, com 0,12–0,8× a defesa | 7 |
+| Ultra (P3+P4) | 34 | 6 | **28 (82%)** |
 | dots (4 partidas) | 26 | 6 | 20 |
 
-**Por que a defesa mudou** (as 65 que ganhavam na ordem):
+**Por que a defesa mudou** (as ~55 que ganhavam na ordem):
 
 | causa | casos | o prompt avisava? |
 |---|---|---|
-| **construção** durante a marcha | ~35 | não. Ex.: Teruel (P3 T11) tinha 90 de madeira e treinou 6 lanceiros no turno do ataque: defesa **8 → 23**. Em **25 de 29** falhas deste tipo contra aldeias de Rei, **o estoque do alvo já pagava defesa suficiente** (pior caso: tudo em lanceiros). O prompt não mostra estoque de aldeia inimiga. |
-| **reforço** inimigo chegou antes | ~25 | **em parte**: em 34 destas falhas um exército inimigo **já marchava para o alvo** quando o Rei deu a ordem. Com o alvo à vista (o caso normal, porque se ataca a partir de uma vizinha), o prompt dizia *"enemy army marching toward [13] Teruel, arrives in 1 turn"*, **sem tamanho, sem origem, sem dizer se é reforço**. |
-| parou numa aldeia antes do alvo | 4 | a regra está no P4 |
+| **construção** durante a marcha | 32 | não. Ex.: Teruel (P3 T11) tinha 90 de madeira e treinou 6 lanceiros no turno do ataque: defesa **8 → 23**. Em **22 de 26** falhas deste tipo contra aldeias de Rei, **o estoque do alvo, antes das ordens, já pagava defesa suficiente** (pior caso: tudo em lanceiros). O prompt não mostra estoque de aldeia inimiga. |
+| **reforço** inimigo chegou antes | 21 | **quase nunca podia**: só em **2** destas falhas o reforço já marchava antes da ordem. Nas outras, o inimigo ordenou-o **no mesmo turno** (27 marchas), e as ordens são simultâneas. Nenhum texto o mostraria. Antecipar isto é estratégia: as guarnições das aldeias inimigas vizinhas do alvo, que o Rei vê, são o reforço possível. |
+| parou numa aldeia antes do alvo | 1 | a regra está no P4 |
 
-Os raciocínios mostram a dúvida literal, dezenas de vezes:
+*(Duas correções feitas durante a noite, pelo mesmo motivo: as ordens são simultâneas.
+Uma primeira versão dizia "34 ataques com o reforço já a caminho na hora da ordem", e a
+conta incluía as marchas que o inimigo ordenou no mesmo turno. E a previsão "ganhava na
+ordem" usava o alvo DEPOIS das ordens, quando o inimigo já podia ter tirado tropa de lá.
+Os scripts usam agora a fotografia de antes das ordens (`fotografia` em `reexec.js`).)*
+
+A linha que o Rei vê quando há marchas inimigas avistadas continua a gerar dúvida, dezenas
+de vezes, mesmo sem ter causado estas derrotas:
 > *"This means next turn, the enemy army will be at [8] Toledo, reinforcing it or
 > attacking it?"* (Ultra, P3)
 > *"Where is it coming from? The report says 'enemy army marching toward [12] Madrid,
@@ -304,9 +316,9 @@ Critério do projeto: **"o prompt informa, não recomenda."** Cada item está cl
 | **P5-2** | 🔧 | a regra exata do atrito: perdedor destruído (**também o atacante contra aldeia**); vencedor perde tropas no valor de **metade** da força efetiva do perdedor, **o mesmo seja qual for o tamanho do vencedor**; defensor que segura perde igual | §5: a dúvida mais frequente; muitos palpites errados | +330 chars |
 | **P5-3** | 🔧 | "When an attack conquers a village, the surviving attackers stay there as its new garrison." | §5 | +100 chars |
 | **P5-4** | ➕ | **combate de aldeia com números**, como o de estrada: tropas enviadas, força vs defesa, baixas reais, o que resta. Também quando o Rei é o **defensor** ("King B attacked YOUR [2] Evora with … : REPELLED. You lost 2 troops (5 left)") | §7: voltar com igual ou menos força 61% (Super); "DEFEAT" hoje não diz por quanto | +80 chars por combate |
-| **P5-5** | ➕/⚖️ | exército inimigo avistado com **origem, composição e intenção**: *"enemy army of 3 spearmen, 15 archers, 3 knights from [1] Santarem marching to [7] Salamanca - THEIR OWN village (a reinforcement) - arrives in 1 turn"* | §4: 34 ataques deram a ordem com um reforço inimigo já a caminho do alvo; dúvida literal "reinforcing or attacking?" | +70 chars por exército |
+| **P5-5** | ➕/⚖️ | exército inimigo avistado com **origem, composição e intenção**: *"enemy army of 3 spearmen, 15 archers, 3 knights from [1] Santarem marching to [7] Salamanca - THEIR OWN village (a reinforcement) - arrives in 1 turn"* | §4: **fraca** para derrotas (só 2 reforços eram visíveis na ordem); forte como dúvida recorrente ("reinforcing or attacking?", "where is it coming from?") | +70 chars por exército |
 | **P5-6** | ⚖️ | uma linha sob o TOTAL: *"at home: 75 in INTERIOR villages (no enemy neighbour), 17 in BORDER villages"* | §2: a alavanca nº 1 do motor; §1.2: 50–70% do exército no interior | +70 chars |
-| **P5-7** | ⚖️ | estoque das aldeias **inimigas visíveis**: *"… \| stock: wood 90, iron 80"* | §4: previa 25 de 29 falhas por construção (alarme de pior caso: tocaria em 32% dos ataques que venceram) | +30 chars por aldeia inimiga visível |
+| **P5-7** | ⚖️ | estoque das aldeias **inimigas visíveis**: *"… \| stock: wood 90, iron 80"* | §4: previa 22 de 26 falhas por construção (alarme de pior caso: tocaria em 36% dos ataques que venceram) | +30 chars por aldeia inimiga visível |
 
 **P5-5, a parte "⚖️"**: a *intenção* (reforço, ataque ou neutra) é só a leitura do dono
 do destino, que o Rei já vê, então é ➕ puro. A *composição* é que é design: hoje o fog
@@ -323,8 +335,8 @@ exército de fato está.
 **P5-7, por que ⚖️**: mostra estado inimigo que hoje é invisível. É o maior acréscimo de
 informação da lista, e o que mais pode mudar o jogo.
 
-Tamanho do P5 completo sobre turnos reais: **+700 a +900 caracteres** (~+200 tokens,
-~+5% do prompt de 3–5k tokens).
+Tamanho do P5 completo (as 8 propostas) sobre 6 turnos reais: **+794 a +1 059
+caracteres** (~+250 tokens, ~+7% de um prompt de 11–15 mil caracteres).
 
 ### O que eu NÃO proponho, e por quê
 
@@ -359,18 +371,46 @@ O prompt não se testa no motor. Proposta de bateria A/B, no formato do projeto
 | métrica | script | o que se espera se o P5 funcionar |
 |---|---|---|
 | ataques que já perdiam na ordem | `falhas.js` | ↓ sobretudo no Super (P5-1, 2, 4) |
-| falhas por reforço visível | `mudou.js` | ↓ (P5-5) |
 | voltar ao alvo com ≤ força | `memoria.js` | ↓ (P5-4) |
 | fração da guarnição por ataque | `fatia.js` | ↑ (P5-2: o atacante derrotado morre todo) |
 | envios convergentes | `convergentes.js` | ↓ no Super (P5-4 mostra cada um a morrer sozinho) |
 | retaguarda que sai | `retaguarda.js` | ↑ só se o P5-6 entrar |
 | taxa de vitória | — | **não** é a métrica principal: 8 partidas não dão para ela |
 
-**Sonda barata antes da bateria** (minutos, não horas): pegar 10 turnos reais onde um
-modelo errou (os de §4), gerar o P4 e o P5 com `p5_prototipo.js` e pedir a **mesma
-decisão** aos dois prompts, 3× cada. Compara ordens, não partidas. É o tipo de
-experimento em que o "gabarito escrito antes" funciona bem: para cada turno já se sabe
-qual ordem perde (o motor diz).
+### A sonda (pronta, validada, à espera de cota)
+
+Antes da bateria, uma sonda de **minutos**: a **mesma decisão** pedida com o P4 e com o
+P5, em turnos reais onde um modelo errou, e cada resposta avaliada pelo motor. Compara
+ordens, não partidas. O gabarito existe antes de perguntar.
+
+```bash
+cd pesquisa/2026-09-25/experimentos
+node sonda_casos.js /tmp/casos.json 3 resultados/p4-bateria-0923/*.txt   # 30 turnos-teste
+node sonda_p5.js /tmp/casos.json --seco        # valida o avaliador (sem rede)
+node sonda_p5.js /tmp/casos.json --burro       # valida o caminho inteiro (sem rede)
+node sonda_p5.js /tmp/casos.json openrouter:dots-studio/dots-3-note-preview:free --n 3 --saida /tmp/sonda
+```
+
+- **Os turnos-teste** (`sonda_casos.js`): até 3 por (modelo, categoria), nas 4 partidas.
+  São 30 casos em 4 categorias: `ja_perdia` (ordenou um ataque que já perdia),
+  `reforco_visivel`, `apos_falha` (o turno em que o relato da derrota chega) e
+  `retaguarda_parada` (≥20 tropas atrás e moveu <10%).
+- **A avaliação** (`sonda_comum.js`), por resposta: JSON válido; ataques que já perdiam;
+  ataques contra reforço visível; grupos convergentes; fração da guarnição enviada;
+  retaguarda movida. Depois, **o turno seguinte a sério**: executa a ordem avaliada mais
+  a ordem **real** que o inimigo deu nesse turno (está no `.txt`), corre o tick e conta
+  vitórias e derrotas.
+- **Validada sem rede**: no modo `--seco` (responde com a ordem que o Rei de fato deu), o
+  avaliador reproduz o turno seguinte da partida real em **30 de 30** casos. Essa
+  partida real é reexecutada por outro caminho, com todas as ordens do log. O modo
+  `--burro` passa o caminho inteiro (prompt → JSON EN → parser → avaliação) com 100% de
+  JSON válido.
+- **Custo**: 30 casos × 2 prompts × 3 respostas = 180 chamadas, ~1–3 h no free-tier com
+  o dots (mais rápido em paralelo com outro modelo). O teto é de 1000/dia.
+- **O que diz se o P5 funciona**: queda de "já perdiam" em `ja_perdia` e `apos_falha`,
+  subida da "guarnição enviada", queda dos grupos convergentes no Super, e mais V/D no
+  turno seguinte. Com 3 respostas por caso e temperatura 0, parte da variância é do
+  provedor. Vale correr `--temp 0.7` também.
 
 ---
 
@@ -419,6 +459,7 @@ reexecutado a partir das ordens, e `reexec.js` confere contra cada `placar`).
 | `raciocinio.js`, `trechos.js` | dúvidas de regra nos raciocínios; trechos por regex |
 | `variantes.js`, `variantes2.js`, `perfil.js` | as políticas do §2 no motor |
 | `p5_prototipo.js <partida.txt> <turno> <A\|B> <dir>` | o P4 e o P5 do mesmo turno, lado a lado |
+| `sonda_casos.js`, `sonda_p5.js`, `sonda_comum.js` | a sonda P4 × P5 do §9 |
 
 As saídas desta noite estão em `experimentos/saidas_partidas.txt` e
 `experimentos/saidas_motor.txt`. Os prompts renderizados **não** vão para o git (mesma

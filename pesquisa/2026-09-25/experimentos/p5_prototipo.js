@@ -109,10 +109,14 @@ function montarP5(E, estado, dono) {
   for (const ev of combates) {
     const euAtaquei = ev.atacante === dono;
     const quem = euAtaquei ? "You" : "King " + ev.atacante;
-    const fraseP4 = ev.vencedor === "atacante"
-      ? `- ${quem} attacked [${ev.alvoId}] ${ev.alvoNome}: VICTORY, conquered${euAtaquei ? ` (your losses: ${ev.baixasForca} troops)` : ""}`
-      : `- ${quem} attacked [${ev.alvoId}] ${ev.alvoNome}: DEFEAT${euAtaquei ? " (your army was lost)" : ""}`;
-    if (txt.includes(fraseP4)) txt = txt.replace(fraseP4, "- " + eventoAldeiaP5(ev, dono, visao));
+    // a frase do P4: com a flag baixasReais (25/09) em tropas, antes em forca
+    const bt = ev.baixasTropas;
+    const frases = ev.vencedor === "atacante"
+      ? [`- ${quem} attacked [${ev.alvoId}] ${ev.alvoNome}: VICTORY, conquered${euAtaquei ? ` (your losses: ${bt} troop${bt === 1 ? "" : "s"})` : ""}`,
+         `- ${quem} attacked [${ev.alvoId}] ${ev.alvoNome}: VICTORY, conquered${euAtaquei ? ` (your losses: ${ev.baixasForca} troops)` : ""}`]
+      : [`- ${quem} attacked [${ev.alvoId}] ${ev.alvoNome}: DEFEAT${euAtaquei ? " (your army was lost)" : ""}`];
+    const fraseP4 = frases.find((f) => txt.includes(f));
+    if (fraseP4) txt = txt.replace(fraseP4, "- " + eventoAldeiaP5(ev, dono, visao));
   }
 
   // marchas inimigas avistadas
@@ -139,7 +143,7 @@ function montarP5(E, estado, dono) {
 
   // P5-7 (OPCIONAL — decisao do Lucas, mexe no fog): o estoque das aldeias
   // inimigas VISIVEIS. A defesa de um alvo pode saltar num turno so (Teruel,
-  // P3 T11: 8 -> 23 com 90 de madeira guardada); em 25 de 29 ataques que
+  // P3 T11: 8 -> 23 com 90 de madeira guardada); em 22 de 26 ataques que
   // falharam assim, o estoque ja o dizia.
   for (const a of visao.alvos.filter((x) => x.visivel && x.dono !== null && x.dono !== dono)) {
     const real = estado.aldeias.find((x) => x.id === a.id);

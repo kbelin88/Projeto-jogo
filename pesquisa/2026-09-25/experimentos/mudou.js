@@ -1,17 +1,22 @@
 // para ataques que ganhavam na ordem e falharam: o que mudou?
-const {carregar,reexec}=require("./reexec.js");const E=require(require("path").join(__dirname,"..","..","..","engine.js"));const path=require("path");
+const {carregar,reexec,fotografia}=require("./reexec.js");const E=require(require("path").join(__dirname,"..","..","..","engine.js"));const path=require("path");
 const n=t=>(t.lanceiro||0)+(t.arqueiro||0)+(t.cavaleiro||0);
 for(const f of process.argv.slice(2)){
   const P=carregar(f); const nomes={}; for(const l of["A","B"]){const m=new RegExp("Rei "+l+" \\(openrouter:([^)]+)\\)").exec(P.txt); nomes[l]=m[1].split("/")[1].replace(":free","").slice(0,14);}
   const vivos=new Map(), vistos=new Set(); const out={};
+  let marchasPre=[], foto=null;
   reexec(P,(g,t,fase)=>{
+    // as marchas que JA existiam antes das ordens: so essas o Rei podia ver
+    // (as que o inimigo ordena no mesmo turno sao simultaneas, invisiveis)
+    if(fase==="pre"){ marchasPre=g.movimentos.map(m=>({id:m.id,dono:m.dono,destinoId:m.destinoId})); foto=fotografia(g); }
     if(fase==="pos"){
       // envios deste turno, agrupados por dono+alvo
       const novos=g.movimentos.filter(m=>!vistos.has(m.id)); novos.forEach(m=>vistos.add(m.id));
       for(const m of novos){const alvo=g.aldeias.find(a=>a.id===m.destinoId); if(alvo.dono===m.dono) continue;
         const irmaos=novos.filter(x=>x!==m&&x.dono===m.dono&&x.destinoId===m.destinoId).length;
-        const inimigoRumo=g.movimentos.filter(x=>x.dono!==m.dono&&x.destinoId===m.destinoId).length;
-        vivos.set(m.id,{dono:m.dono,t,alvo:alvo.id,donoAlvo:alvo.dono,Fatk:E.ataqueDe(m.tropas,g.config),ok0:E.preverCombate(g,m.tropas,alvo).atacanteVence,def0:Math.round(E.forcaDefesa(g,alvo)),tr0:n(alvo.tropas),irmaos,inimigoRumo,turnos:m.turnosRestantes,dest:m.destinoId});}
+        const inimigoRumo=marchasPre.filter(x=>x.dono!==m.dono&&x.destinoId===m.destinoId).length;
+        const inimigoMesmoTurno=g.movimentos.filter(x=>x.dono!==m.dono&&x.destinoId===m.destinoId&&!marchasPre.some(p=>p.id===x.id)).length;
+        vivos.set(m.id,{dono:m.dono,t,alvo:alvo.id,donoAlvo:alvo.dono,Fatk:E.ataqueDe(m.tropas,g.config),ok0:E.preverCombate(g,m.tropas,foto[alvo.id]).atacanteVence,def0:E.defesaDe(foto[alvo.id].tropas,g.config)  /* CRUA, como o ev.Fdef */,tr0:n(alvo.tropas),irmaos,inimigoRumo,inimigoMesmoTurno,turnos:m.turnosRestantes,dest:m.destinoId});}
       return;}
     const evs=g.log.filter(e=>e.turno===g.turno); const ids=new Set(g.movimentos.map(m=>m.id));
     for(const [id,r] of vivos){ if(ids.has(id)) continue; vivos.delete(id); if(!r.ok0) continue;
@@ -30,7 +35,8 @@ for(const f of process.argv.slice(2)){
       }
       const k=nomes[r.dono]; out[k]=out[k]||{}; out[k][causa]=(out[k][causa]||0)+1;
       if(r.irmaos){const k2="(tinha outros envios ao mesmo alvo)"; out[k][k2]=(out[k][k2]||0)+1;}
-      if(r.inimigoRumo){const k3="(inimigo ja marchava p/ o alvo na hora da ordem)"; out[k][k3]=(out[k][k3]||0)+1;}
+      if(r.inimigoRumo){const k3="(inimigo JA marchava p/ o alvo antes da ordem: visivel)"; out[k][k3]=(out[k][k3]||0)+1;}
+      if(r.inimigoMesmoTurno){const k4="(inimigo ordenou reforco no MESMO turno: invisivel)"; out[k][k4]=(out[k][k4]||0)+1;}
     }
   });
   console.log("\n"+path.basename(f).slice(9)); for(const k in out) console.log("  "+k.padEnd(15),JSON.stringify(out[k]));
