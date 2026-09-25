@@ -475,3 +475,48 @@ regra dos `prompts-reconstruidos` de 28/08). Regeneram-se com o `p5_prototipo.js
 **Limites**: 4 partidas, 3 modelos, e o dots vence todas. Parte do que separa o dots pode
 ser só o modelo. As variantes do motor são omniscientes. Nenhuma proposta foi vista por
 um LLM.
+
+---
+
+## 12. Decisões do Lucas e próximos testes (26/09)
+
+
+- **Não se mexe no fog.** Sai o **P5-7** (estoque das aldeias inimigas). Do **P5-5** sai a
+  *composição* do exército inimigo avistado; a *intenção* ("vai para uma aldeia DELES / SUA /
+  neutra") fica, porque só lê o dono do destino, que o Rei já vê.
+- **As tropas continuam a mexer-se à mão.** Nada de ordem permanente ou ponto de reunião
+  automático: a logística é parte do que se mede.
+- **O P5-6** (linha interior × fronteira) não foi decidido. Testar isolado, e só entra se o
+  número o justificar.
+- O Claude conduz os testes nesta sessão na nuvem e escolhe os modelos.
+
+### Pré-requisitos
+
+- `OPENROUTER_API_KEY` como variável de ambiente do ambiente cloud (nunca no git, nunca no
+  chat). O `rei.js` lê `process.env` antes do `.env`.
+- `openrouter.ai` nos domínios permitidos da rede do ambiente.
+- As partidas de 23/09 (`P1..P4_*.txt`) anexadas de novo à sessão: não estão no git.
+
+### Ordem
+
+1. **Catálogo**: `node ferramentas/dump-modelos-free.js`. Os `:free` somem em 24 h.
+2. **Sonda P4 × P5** (`experimentos/sonda_p5.js`), com o P5 **sem** P5-7 e sem composição.
+   Casos: `sonda_casos.js` sobre as 4 partidas. Modelos: dots (a régua nova) e Super 120B
+   (o que mais erra, e por isso o que mais tem a mostrar). 3 respostas por caso, temp 0.
+3. **Isolar**: P5-1/2/3 (regras) × P5-4 (combate com números) × P5-6 (distribuição), cada
+   um contra o P4, no modelo que mais mexer no passo 2.
+4. **Partidas**: só o que a sonda aprovar. Par dots × Super, seeds 3 e 5, os dois assentos,
+   contra as 4 partidas de 23/09 como base. Métricas com os scripts de `experimentos/`.
+5. Resultados em `resultados/p5-sonda-<data>/` (fora do git), com um `DIARIO.md`. O
+   resumo e os números vão para `pesquisa/2026-09-2x/`.
+
+### Gabarito escrito antes (o que conta como "o P5 funciona")
+
+- **"já perdiam na ordem"** cai em `ja_perdia` e `apos_falha`;
+- a **fração da guarnição enviada** sobe;
+- os **grupos convergentes** do Super caem;
+- **JSON válido** não cai (o P5 é mais comprido);
+- **mais V do que D no turno seguinte**, na soma dos casos.
+
+Se nada disto mexer, o problema não é de informação: é de capacidade ou de agência, e o
+prompt não é a alavanca.
