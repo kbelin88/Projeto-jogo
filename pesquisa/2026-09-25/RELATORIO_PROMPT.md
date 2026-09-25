@@ -4,8 +4,9 @@ Pedido do Lucas: *"me ajudar a identificar problemas e melhorias no prompt… a 
 aproveita as tropas das aldeias iniciais… não concentra tropas, envia ataques pequenos…
 que tenha memória e que saiba o resultado das suas ações passadas."*
 
-**Nada de produção foi tocado.** O jogo, o motor e o prompt estão como estavam. Tudo o
-que está aqui saiu de medições reproduzíveis (`experimentos/`, ver §11) sobre:
+**Uma única mudança de produção, num commit separado para revisão**: a correção do bug
+das baixas (§6), atrás da flag `baixasReais`, com testes. Todo o resto é pesquisa. Saiu
+de medições reproduzíveis (`experimentos/`, ver §11) sobre:
 
 - **as 4 partidas de 23/09** que o Lucas mandou (P1–P4: dots × Super 120B, dots × Ultra
   550B, 120 turnos no total). Os replays não estavam disponíveis, então **reconstruí o
@@ -24,7 +25,8 @@ Não havia chave de API nesta sessão, então **nenhuma proposta foi testada com
 ## 0. Resumo (se só der para ler isto)
 
 1. **As 12 tropas iniciais saem.** Nas 4 partidas os três modelos esvaziam a capital no
-   turno 1–2, quase sempre com as 12. A premissa literal não se confirma. O que fica
+   turno 1–2: metade dos lados manda as 12 de uma vez, e os outros repartem-nas pelas duas
+   vizinhas. A premissa literal não se confirma. O que fica
    parado é **a produção**: cada aldeia gera ~2 tropas por turno, e 50–70% do exército
    vive em aldeias sem vizinho inimigo.
 2. **No motor, a retaguarda decide o jogo.** Com tudo o resto igual, levar a produção
@@ -51,12 +53,12 @@ Não havia chave de API nesta sessão, então **nenhuma proposta foi testada com
    põe ali a *força* perdida, não as tropas: o prompt disse 910 tropas perdidas quando
    foram 444. O custo de atacar aparece dobrado, e quadruplicado com cavaleiros.
    Viola a regra de ouro do projeto: *o número que o decisor lê tem de ser o que o motor
-   executa*.
+   executa*. **Corrigido neste ramo** (commit `6d77fd2`, flag `baixasReais`).
 7. **A memória de resultados é pobre onde mais importa.** O combate de estrada ganhou
    números em 23/09, mas o de aldeia ainda diz só "DEFEAT". Depois de falhar, o Super
    volta ao mesmo alvo com a **mesma força ou menos em 61%** das vezes, e falha de novo.
 8. **Três regras que o motor executa são vagas no P4**, e os modelos gastam raciocínio a
-   adivinhá-las em quase todo turno: o alcance do counter (o exército todo ou só uma
+   adivinhá-las turno após turno: o alcance do counter (o exército todo ou só uma
    parte?), o atrito (quanto perde quem ganha? o atacante derrotado morre todo?) e o
    que acontece às tropas depois de conquistar.
 9. **Proposta**: um P5 com **4 correções de verdade** (bug + 3 regras), **2 acréscimos de
@@ -416,9 +418,14 @@ node sonda_p5.js /tmp/casos.json openrouter:dots-studio/dots-3-note-preview:free
 
 ## 10. Caminhos além do texto
 
-1. **Corrigir o P5-0 já, mesmo sem P5.** É um bug de verdade. Mas muda o texto que o
-   modelo lê, então entra atrás de uma flag (`baixasReais`), e ela vai para as listas
-   "desligadas" do `test_lote_c`/`test_lote_e`.
+1. **O P5-0 já está feito, sem esperar pelo P5** (commit `6d77fd2`). É um bug de
+   verdade, mas muda o texto que o modelo lê. Por isso entrou atrás da flag
+   `baixasReais` (ligada por omissão), que está nas listas "desligadas" do
+   `test_lote_c`/`test_lote_e`. Dois testes novos travam o comportamento: o F5 confere o
+   número do prompt contra a marcha que chegou e a guarnição que ficou, em 5 seeds, e o
+   F6 garante o texto antigo com a flag desligada. **Consequência para o benchmark**: as
+   partidas daqui em diante leem o custo certo, e as de antes leram o dobro. Vale uma
+   linha no `MODELOS_ARENA`.
 2. **Acrescentar ao evento de combate de aldeia os campos que o protótipo cria**
    (`atkTropas`, `defTropasAntes`, `baixasTropas`). São aditivos e não mudam texto
    nenhum. Servem para o `.txt`, para o `analisar-log.js` e para o replay, mesmo antes
