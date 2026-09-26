@@ -15,8 +15,16 @@
 // virgula: regras,combate,intencao,interior. O motor passa a ser a COPIA do
 // prototipo: as mesmas regras, so com mais campos no evento de combate de
 // aldeia (o P5-4 le-os). O cabecalho do log diz que prompt correu.
-const P5 = process.env.PROMPT_P5 ? require("../pesquisa/2026-09-25/experimentos/p5_prototipo.js") : null;
-const itensP5 = P5 ? process.env.PROMPT_P5.split(",").filter(Boolean) : null;
+// PROMPT_P5_A / PROMPT_P5_B (26/09): o prompt POR LADO, para o A/B dentro da
+// mesma partida (o mesmo modelo dos dois lados, um com o P4 e o outro com o
+// experimental): os dois bracos correm no mesmo momento por construcao, e o
+// :free muda de comportamento em horas. "P4" (ou vazio) = o P4.
+const itensLado = {};
+for (const lado of ["A", "B"]) {
+  const v = process.env["PROMPT_P5_" + lado] != null ? process.env["PROMPT_P5_" + lado] : (process.env.PROMPT_P5 || "");
+  itensLado[lado] = v && v !== "P4" ? v.split(",").filter(Boolean) : null;
+}
+const P5 = (itensLado.A || itensLado.B) ? require("../pesquisa/2026-09-25/experimentos/p5_prototipo.js") : null;
 const Engine = P5 ? P5.carregarMotorP5() : require("../engine.js");
 const Rei = require("../rei.js");
 const fs = require("fs");
@@ -54,7 +62,7 @@ const etiqueta = etiquetaDe.A + " vs " + etiquetaDe.B;
 // mesmo formato de registro para o log sair igual dos dois lados.
 async function decidirLado(estado, dono) {
   if (cliente[dono]) return (await Rei.decidirRei(estado, dono, cliente[dono],
-    P5 ? { montar: (e, d) => P5.montarP5(Engine, e, d, itensP5).p5 } : undefined)).registro;
+    itensLado[dono] ? { montar: (e, d) => P5.montarP5(Engine, e, d, itensLado[dono]).p5 } : undefined)).registro;
   const visao = Engine.montarVisao(estado, dono);
   const ordem = Engine.jogadorBurro(visao);
   const diag = Engine.diagnosticarOrdem(estado, dono, ordem);
@@ -156,7 +164,7 @@ const mesaTxt = " | mesa: " + (cfg.visaoEspelhada !== false ? "ordem espelhada" 
 out("condicoes: ambiente=" + (cfg.layout || "v1") + " | temp=0 | prompt=" +
   (cfg.promptP4 === true ? "P4 EN (esquema declarado, sem exemplo, sem minimos, vitoria real, reforco, quantidade)" : "P2 (minimo por alvo)") +
   (cfg.fogOfWar === true ? " + FOG OF WAR" : "") +
-  (P5 ? " + P5 EXPERIMENTAL (" + itensP5.join(",") + ")" : "") +
+  (P5 ? " + P5 EXPERIMENTAL (A: " + (itensLado.A ? itensLado.A.join(",") : "P4") + " | B: " + (itensLado.B ? itensLado.B.join(",") : "P4") + ")" : "") +
   " + combate v3 (atq/def, counter " + cfg.bonus_forca_triangulo + ") + clamp | " + regrasTxt + mesaTxt +
   // O cabecalho tem de descrever a partida que CORREU, nao a intencao.
   // Estava cravado "thinking=on" e mentiu na P1 de 31/08: a partida corria
