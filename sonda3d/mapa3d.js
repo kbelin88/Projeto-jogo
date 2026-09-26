@@ -55,18 +55,11 @@ export async function iniciar(hospedeiro, opcoes = {}) {
   const cfgSol = await (await fetch(BASE + "cena.json")).json();
   const MAPA = await (await fetch(BASE + FICH_JSON)).json();
   const [LX, LY] = MAPA.mapa_m;
-  // ── UMA ALDEIA FEITA A MAO (26/09) ──────────────────────────────────────
-  // `semAldeias: ["faro"]` tira do desenho as pecas do forno dessa aldeia (e o
-  // mastro), para uma aldeia feita a parte no Blender (`faro_aldeia.glb`,
-  // `ferramentas/cena/exportar_faro.py`) entrar no lugar dela. As pecas tiradas
-  // ficam em `MAPA.tiradas`: e pelos portoes delas que se sabe para onde a
-  // porta nova tem de olhar. So a bancada da costa usa isto, por agora.
-  MAPA.tiradas = {};
-  for (const cid of opcoes.semAldeias || []) {
-    MAPA.tiradas[cid] = MAPA.copias.filter((c) => c._cid === cid);
-    MAPA.copias = MAPA.copias.filter((c) => c._cid !== cid);
-    if (MAPA.mastros) delete MAPA.mastros[cid];
-  }
+  // ── A AGUA VEM DO FORNO (26/09) ─────────────────────────────────────────
+  // A costa do Algarve e a agua turquesa sao um par: o forno que coze uma
+  // escreve a outra no JSON (`agua`). Uma opcao que o jogo tivesse de lembrar
+  // de passar e uma regra que, mais cedo ou mais tarde, nao esta ligada.
+  const AGUA = opcoes.agua || MAPA.agua || null;
 
   const rend = new THREE.WebGLRenderer({ canvas: tela, antialias: true,
                                          logarithmicDepthBuffer: true });
@@ -120,7 +113,7 @@ export async function iniciar(hospedeiro, opcoes = {}) {
     // `{ agua: "algarve" }`: turquesa claro junto a areia, verde-agua a meio,
     // azul fundo ao largo, e manchas escuras de rocha e algas no raso. So a
     // bancada da costa a liga, ate o Lucas a aprovar.
-    if (opcoes.agua === "algarve")
+    if (AGUA === "algarve")
       sh.defines = Object.assign(sh.defines || {}, { ALGARVE: "" });
     sh.vertexShader = `varying vec3 vMar;
 ` + sh.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
@@ -174,7 +167,7 @@ float o3 = sin(mp.x * 0.031 + mp.y * -0.037 + tempo * 1.47);
 float calma = 0.3 + 0.7 * fundo;
 normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 0.024) * calma);`);
   };
-  if (opcoes.agua === "algarve") {
+  if (AGUA === "algarve") {
     // a este angulo de camara o reflexo do ceu dominava e o mar saia quase
     // BRANCO (bancada, 25/09): menos espelho, e a cor da agua aparece
     matMar.envMapIntensity = 0.25;
@@ -639,6 +632,28 @@ float slRocha() {
         forcaRocha: 0.0,
         triplanarProprio: eRocha && !algarve,
       });
+    }
+  }
+
+  // ── AS ALDEIAS NOVAS (26/09) ────────────────────────────────────────────
+  // As povoacoes no estilo de Faro (`ferramentas/cena/aldeia2.py`) nao sao
+  // pecas repetidas: cada uma e geometria propria, e o forno junta TODAS numa
+  // malha por material (`aldeia2_cal`, `aldeia2_telha`...). ~25 desenhos para
+  // as 24 aldeias.
+  for (const [nome, lista] of Object.entries(banco)) {
+    if (!/^aldeia2_/.test(nome)) continue;
+    for (const ch of lista) {
+      ch.castShadow = true;
+      ch.receiveShadow = true;
+      if (nome === "aldeia2_empedrado") {
+        // o largo fica 8 cm acima do chao da aldeia, que tem desvio de
+        // poligono -8/-16 para vencer a estrada: sem um maior, o largo sumia
+        ch.material.polygonOffset = true;
+        ch.material.polygonOffsetFactor = -12;
+        ch.material.polygonOffsetUnits = -24;
+      }
+      cena.add(ch);
+      nTri += contaTri(ch);
     }
   }
 

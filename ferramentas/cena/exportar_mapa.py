@@ -36,6 +36,7 @@ import numpy as np
 sys.path.append(os.path.join(os.getcwd(), "ferramentas", "cena"))
 import pecas as P                                          # noqa: E402
 import cozer as C                                          # noqa: E402
+import aldeia2 as A2                                       # noqa: E402
 
 ARGS = [int(a) for a in (sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
         if a.isdigit()]
@@ -132,18 +133,23 @@ BANCADA = [c.strip() for c in os.environ.get("BANCADA", "").split(",") if c.stri
 # `bancada.*`, nem no `_relevo_final.npy`, que e a regua das estradas.
 MONTANHAS = bool(os.environ.get("MONTANHAS"))
 # ── A COSTA DO ALGARVE (25/09) ──────────────────────────────────────────────
-# COSTA2=1: a falesia em calcario dourado, com bancos horizontais em vez de
-# listas verticais, e o tom quente. So com BANCADA enquanto o Lucas nao aprovar
-# -- o mapa do jogo nao muda.
-COSTA2 = os.environ.get("COSTA2") == "1"
-if COSTA2 and not os.environ.get("BANCADA"):
-    raise SystemExit("COSTA2=1 so com BANCADA=... (ainda em teste)")
+# COSTA2: a falesia em calcario dourado, com bancos horizontais em vez de
+# listas verticais, e o tom quente. Aprovada na bancada (25/09) e levada ao
+# mapa inteiro a 26/09 ("vamos levar tudo para o jogo"): ligada por omissao,
+# COSTA2=0 volta a costa antiga.
+COSTA2 = os.environ.get("COSTA2", "1") != "0"
+# ── AS ALDEIAS NOVAS (26/09) ────────────────────────────────────────────────
+# ALDEIA2: as povoacoes no estilo de Faro, que o Lucas viu montar no Blender e
+# aprovou -- muralha de pedra, casas caiadas, capitais com castelo e Se
+# (`aldeia2.py`). Deixam de ser pecas instanciadas: cada aldeia e geometria
+# propria, junta por material (`aldeia2_<material>`). ALDEIA2=0 volta as antigas.
+ALDEIA2 = os.environ.get("ALDEIA2", "1") != "0"
 # com BANCADA sai `montanhas.*`; no mapa inteiro sai `mapa_montanhas.*` -- o
 # `pecas.glb`/`mapa3d.json` do jogo nunca sao escritos com montanhas de teste
 NOME_SAIDA = ("montanhas" if os.environ.get("BANCADA") else "mapa_montanhas")     if MONTANHAS else "bancada"
 # a bancada da costa (COSTA2) sai em `costa.*`: a `bancada.*` e de Lisboa-Santarem
 # e a `bancada.html` precisa dela como esta
-if COSTA2:
+if os.environ.get("COSTA2") == "1" and os.environ.get("BANCADA"):
     NOME_SAIDA = "costa"
 N_MONTES = int(os.environ.get("N_MONTES", "3" if os.environ.get("BANCADA") else "7"))
 MARGEM_BANCADA = float(os.environ.get("MARGEM", "700" if MONTANHAS else "320"))
@@ -180,8 +186,20 @@ def rumos_metricos(cid):
     return saida
 
 
+A2_ALDEIAS = []          # (cid, perfil, portoes): a geometria sai depois do patamar
 for cid in cidades:
     perfil = REDE["c"][cid]["t"]
+    if ALDEIA2:
+        # um portao por molho de estradas, os mesmos que a peca antiga fazia
+        portoes = P.portoes_por_estradas(rumos_metricos(cid), 99) or [math.radians(-64)]
+        mx, my = em_metros(REDE["c"][cid]["x"], REDE["c"][cid]["y"])
+        fora = A2.PERFIS[perfil]["raio"] + 2.0
+        bocas[cid] = [{"p": [round(mx + fora * math.cos(g), 2), round(my + fora * math.sin(g), 2)],
+                       "rumo": round(g, 4)} for g in portoes]
+        centros[cid] = [round(mx, 2), round(my, 2)]
+        A2_ALDEIAS.append((cid, perfil, portoes))
+        print("SONDA %-11s %-8s aldeia2, %d portoes" % (cid, perfil, len(portoes)), flush=True)
+        continue
     P.registar(True)
     C.construir(perfil, cidade=cid, rumos_m=rumos_metricos(cid))   # limpa a cena e monta a povoacao
     reg = P.REGISTO
@@ -820,6 +838,18 @@ print("SONDA relevo: %.0f m de amplitude, declive p50 %.1f / p95 %.1f graus, "
 # ── e agora tudo assenta ────────────────────────────────────────────────────
 for c in copias:
     c["p"][2] = round(c["p"][2] + patamares.get(c.get("_cid", ""), 0.0), 2)
+# ── AS ALDEIAS NOVAS ASSENTAM NO CHAO DA ALDEIA ─────────────────────────────
+# O `chao_aldeia` (mais abaixo) fica 0,62 m acima do patamar; a aldeia pousa
+# nele, 2 cm enterrada para nao se ver a costura.
+A2_G = A2.Malhas()
+for _i, (cid, perfil, portoes) in enumerate(A2_ALDEIAS):
+    cx, cy = centros[cid]
+    _m = A2.construir(A2_G, perfil, portoes, 11 + _i * 7, (cx, cy, patamares[cid] + 0.60))
+    # o mastro no alto da menagem: e ali que o jogo hasteia a cor do dono
+    mastros[cid] = [[round(cx + _m[0], 2), round(cy + _m[1], 2), round(0.60 + _m[2], 2), 1.0]]
+if A2_ALDEIAS:
+    A2.objetos(A2_G, cena)
+    print("SONDA aldeias novas: %d, %d triangulos" % (len(A2_ALDEIAS), A2_G.triangulos()), flush=True)
 for m in manchas:
     m["z"] = round(altura_em(m["p"][0], m["p"][1]), 2)
 
@@ -1079,6 +1109,21 @@ for m in manchas:
         m["p"] = [round(m["p"][0] + vetor[0] / L * (R - pior + 0.5), 1),
                   round(m["p"][1] + vetor[1] / L * (R - pior + 0.5), 1)]
         empurradas += 1
+# ── E NAO HA MATA DENTRO DA MURALHA (26/09) ─────────────────────────────────
+# As manchas fugiam das estradas e nao das aldeias: com as aldeias novas, de
+# largo e casas espacadas, via-se um pinheiro no meio do Porto e copas por cima
+# do muro. A mancha inteira sai para fora do raio da aldeia, com folga.
+for m in manchas:
+    Rm = _raio_arr.get(m["b"], 0.0) * m.get("e", 1.0) + COPA
+    for cid, c in centros.items():
+        Rv = C.PERFIS[REDE["c"][cid]["t"]]["raio"] + 4.0 + Rm
+        dx_, dy_ = m["p"][0] - c[0], m["p"][1] - c[1]
+        d_ = math.hypot(dx_, dy_)
+        if d_ < Rv:
+            if d_ < 1e-3:
+                dx_, dy_, d_ = 1.0, 0.0, 1.0
+            m["p"] = [round(c[0] + dx_ / d_ * (Rv + 0.5), 1), round(c[1] + dy_ / d_ * (Rv + 0.5), 1)]
+            empurradas += 1
 antes_emp = len(manchas)
 # `em_terra` le a MASCARA, e desde que a praia mergulha isso ja nao chega: uma
 # mancha pode estar em terra pela mascara e a meio metro DEBAIXO de agua pelo
@@ -1149,11 +1194,14 @@ for cid, c in centros.items():
 chaoAldeia = P._novo(P._malha("chao_aldeia", vc, fc, "terra", bisel=0), "terra")
 chaoAldeia.data.materials.clear()
 chaoAldeia.data.materials.append(
-    P.material_uv("terra", rugosidade=0.95, claro=1.7))
+    A2.material("chao") if ALDEIA2 else P.material_uv("terra", rugosidade=0.95, claro=1.7))
 _uvA = chaoAldeia.data.uv_layers.new(name="UVMap")
+# a terra batida das aldeias novas e a fotografia de Faro, a 3 m por ladrilho
+_k_uv = 1.0 / A2.MATS["chao"]["metros"] if ALDEIA2 else 1.0
 for _p in chaoAldeia.data.polygons:
     for _li in _p.loop_indices:
-        _uvA.data[_li].uv = uvc[chaoAldeia.data.loops[_li].vertex_index]
+        _u = uvc[chaoAldeia.data.loops[_li].vertex_index]
+        _uvA.data[_li].uv = (_u[0] * _k_uv, _u[1] * _k_uv)
 for col in list(chaoAldeia.users_collection):
     col.objects.unlink(chaoAldeia)
 cena.objects.link(chaoAldeia)
@@ -2152,7 +2200,10 @@ with open(os.path.join(SAIDA, NOME_SAIDA + ".json" if (BANCADA or MONTANHAS) els
                            for c, ms in mastros.items()},
                # na bancada das montanhas: onde esta cada estilo, para a pagina
                # apontar a camara
-               "montanhas": MONTES}, f, separators=(",", ":"))
+               "montanhas": MONTES,
+               # a agua turquesa do Algarve vai com a costa nova: o jogo le-a
+               # daqui, e nao de uma opcao que alguem tem de lembrar de passar
+               "agua": "algarve" if COSTA2 else None}, f, separators=(",", ":"))
 _saiu = NOME_SAIDA + ".json" if (BANCADA or MONTANHAS) else "mapa3d.json"
 print("SONDA -> sonda3d/%s  (%.0f KB)  em %.1f s"
       % (_saiu, os.path.getsize(os.path.join(SAIDA, _saiu)) / 1024, time.time() - t0))

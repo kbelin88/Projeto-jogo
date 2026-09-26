@@ -298,6 +298,14 @@ na skill `video-arena`.
 (dezenas de MB): quem clona tem de cozer. As ferramentas do forno e as texturas
 estão em `ferramentas/cena/` e `assets/texturas/`.
 
+Desde 26/09 o forno coze, por omissão, a **costa do Algarve** (`COSTA2`: falésia
+dourada em bancos, pinheiros-mansos, água turquesa — o `mapa3d.json` leva
+`agua: "algarve"`) e as **aldeias novas** (`ALDEIA2`, `ferramentas/cena/aldeia2.py`:
+o estilo de Faro que o Lucas aprovou — muralha de pedra, casas caiadas; as
+capitais com castelo e Sé). As aldeias novas não são peças instanciadas: saem
+juntas numa malha por material (`aldeia2_*`). `COSTA2=0` / `ALDEIA2=0` voltam ao
+antigo.
+
 ### 7.3 As armadilhas do glTF (todas custaram horas)
 
 - **O glTF NÃO leva grafos de nós.** Do material só sobrevivem uma imagem e o

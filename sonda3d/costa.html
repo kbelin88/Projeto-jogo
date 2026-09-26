@@ -23,9 +23,9 @@
   <button data-v="gravacao">vista de gravação</button>
   <button data-v="praia">praia de perto</button>
   <button data-v="falesia">falésia de perto</button>
-  <button data-v="aldeia">Faro (Blender)</button>
+  <button data-v="aldeia">Faro</button>
   <button data-v="praca">Faro: a praça</button>
-  <p>Forno: <code>BANCADA=faro MARGEM=900 COSTA2=1</code> &rarr; <code>costa.glb</code>. As vistas são sempre as mesmas,
+  <p>Forno: <code>BANCADA=faro MARGEM=900 OCLUSAO=0 COSTA2=1</code> &rarr; <code>costa.glb</code>. As vistas são sempre as mesmas,
      para o antes e o depois se compararem do mesmo sítio.</p>
 </div>
 
@@ -48,40 +48,10 @@ function queixa(msg) {
   if (c) c.innerHTML = "<b style='color:#e0a0a0'>nao consegui montar a cena</b><br>" + msg;
 }
 
-const mapa = await iniciar(document.getElementById("palco"),
-                           { cena: "costa", agua: "algarve", semAldeias: ["faro"] });
+const mapa = await iniciar(document.getElementById("palco"), { cena: "costa" });
 const { THREE, cena, cam, ctrl } = mapa;
-
-// ── FARO FEITA NO BLENDER (26/09) ───────────────────────────────────────────
-// A aldeia que o Lucas pediu "mais medieval, mas viva": montada a mao no
-// Blender, exportada por `ferramentas/cena/exportar_faro.py`. Entra no sitio
-// da aldeia do forno (que o `semAldeias` tirou), com a porta a olhar para
-// onde olhava o primeiro portao da antiga -- e por la que a estrada chega.
-const { GLTFLoader } = await import("./vendor/loaders/GLTFLoader.js");
+// Faro: desde 26/09 a aldeia nova vem do proprio forno (ALDEIA2, `aldeia2.py`)
 const FARO = mapa.MAPA.aldeias.faro;
-const faroGlb = await new Promise((ok, mal) =>
-  new GLTFLoader().load("faro_aldeia.glb?t=" + Date.now(), ok, undefined, mal));
-const faro = faroGlb.scene;
-{
-  const portoes = (mapa.MAPA.tiradas.faro || []).filter((c) => /^portao/.test(mapa.MAPA.pecas[c.peca] || ""));
-  const pt = portoes[0];
-  // a porta da aldeia nova esta em -Y (rumo -90 graus)
-  const rumo = pt ? Math.atan2(pt.p[1] - FARO.p[1], pt.p[0] - FARO.p[0]) : -Math.PI / 2;
-  faro.rotation.y = rumo + Math.PI / 2;
-  // Blender (x, y, z) -> three (x, z, -y); 4 cm acima do chao da aldeia do forno
-  faro.position.set(FARO.p[0], FARO.z + 0.04, -FARO.p[1]);
-  faro.traverse((o) => {
-    if (!o.isMesh) return;
-    o.castShadow = true; o.receiveShadow = true;
-    if (/chao|empedrado/.test(o.material.name)) {
-      o.castShadow = false;
-      o.material.polygonOffset = true;
-      o.material.polygonOffsetFactor = -10;
-      o.material.polygonOffsetUnits = -20;
-    }
-  });
-  cena.add(faro);
-}
 
 // ── ONDE ESTA A COSTA ───────────────────────────────────────────────────────
 // Lanca raios de cima numa grelha e guarda a altura do chao. Costa = um ponto
@@ -122,12 +92,7 @@ for (const [k, h] of G) {
   if (h > 15 && (!falesia || h > falesia.h)) falesia = { x, y, h, mar: perto };
 }
 window.COSTA = { praia, falesia, centro: [cx, cy] };
-window.FARO = faro;
-// o disco de terra da aldeia do forno fica 17 cm acima do plano e com desvio
-// de poligono: tapava o chao da aldeia nova (via-se cinzento-claro por dentro
-// da muralha). Na bancada so ha Faro, entao sai o disco todo -- depois dos
-// raios da costa, que o usam como chao.
-cena.traverse((o) => { if (o.isMesh && o.name === "chao_aldeia") o.visible = false; });
+
 
 function olhar(p, dist, alto) {
   // do lado do mar, a olhar para terra
