@@ -41,6 +41,10 @@ const burro = modelo === "--burro";
 const N = (seco || burro) ? 1 : Number(opt("--n", 3));
 const temp = Number(opt("--temp", 0));
 const saida = opt("--saida", null);
+// --paralelo K: pede K respostas ao mesmo tempo numa pre-busca que grava tudo
+// em --saida; o laco principal so le. Os modelos pensam 2-10 min por resposta
+// e o teto do free tier (20/min) nao morde com K pequeno.
+const paralelo = Number(opt("--paralelo", 1));
 const itens = opt("--itens", ITENS_P5.join(",")).split(",").filter(Boolean);
 if (!seco && !burro && process.env.HTTPS_PROXY && !process.env.NODE_USE_ENV_PROXY)
   console.error("aviso: HTTPS_PROXY definido sem NODE_USE_ENV_PROXY=1 -- o fetch vai ignorar o proxy");
@@ -68,6 +72,36 @@ async function main() {
     const Rei = require(path.join(RAIZ, "rei.js"));
     cliente = Rei.criarCliente(modelo, { temperatura: temp, silencioso: true });
   }
+  // Erro de REDE repete a chamada (ate 2 vezes, como o runner) e nunca se
+  // grava: na retomada pede-se de novo. Resposta VAZIA do modelo grava-se e
+  // conta como JSON invalido (e o degrau 0).
+  async function pedir(prompt, arq) {
+    let cru = "", erroRede = null;
+    for (let tent = 0; tent < 3; tent++) {
+      try { cru = (await cliente.gerar(prompt)).texto || ""; erroRede = null; break; }
+      catch (e) { cru = ""; erroRede = e.message; console.error(`  erro de rede (tentativa ${tent + 1}): ${e.message}`); }
+    }
+    if (!erroRede && arq) fs.writeFileSync(arq, cru);
+    return { cru, erroRede };
+  }
+  if (cliente && saida && paralelo > 1) {
+    const fila = [];
+    for (const [i, c] of casos.entries()) {
+      const g = estadoNoTurno(E, partida(c), c.turno);
+      const { p4, p5 } = montarP5(E, g, c.lado, itens);
+      for (const [nome, prompt] of [["P4", p4], ["P5", p5]])
+        for (let k = 0; k < N; k++) {
+          const arq = path.join(saida, `caso${i}_${nome}_${k}.txt`);
+          if (!fs.existsSync(arq)) fila.push({ prompt, arq });
+        }
+    }
+    let feitas = 0;
+    const total = fila.length;
+    await Promise.all(Array.from({ length: paralelo }, async () => {
+      while (fila.length) { const t = fila.shift(); await pedir(t.prompt, t.arq); process.stdout.write(`\rpre-busca ${++feitas}/${total}`); }
+    }));
+    console.log("");
+  }
   const res = [];   // {categoria, prompt, valido, aval}
   let conferidos = 0, batem = 0;
   for (const [i, c] of casos.entries()) {
@@ -88,18 +122,10 @@ async function main() {
           // RETOMADA: uma resposta ja gravada em --saida nao se pede outra vez
           // (o container pode reiniciar a meio de horas de sonda)
           const arq = saida ? path.join(saida, `caso${i}_${nome}_${k}.txt`) : null;
-          // Erro de REDE repete a chamada (ate 2 vezes, como o runner) e nunca
-          // se grava: na retomada pede-se de novo. Resposta VAZIA do modelo
-          // grava-se e conta como JSON invalido (e o degrau 0).
           let erroRede = null;
           if (arq && fs.existsSync(arq)) cru = fs.readFileSync(arq, "utf8");
-          else {
-            for (let tent = 0; tent < 3; tent++) {
-              try { cru = (await cliente.gerar(prompt)).texto || ""; erroRede = null; break; }
-              catch (e) { cru = ""; erroRede = e.message; console.error(`  erro de rede (tentativa ${tent + 1}): ${e.message}`); }
-            }
-            if (!erroRede && arq) fs.writeFileSync(arq, cru);
-          }
+          else if (paralelo > 1 && saida) erroRede = "falhou na pre-busca";
+          else ({ cru, erroRede } = await pedir(prompt, arq));
           if (erroRede) { res.push({ categoria: c.categoria, modelo: c.modelo, prompt: nome, erroRede }); continue; }
           const p = E.parsearOrdem(cru);
           valido = !!p.ok; ordem = p.ordem;
