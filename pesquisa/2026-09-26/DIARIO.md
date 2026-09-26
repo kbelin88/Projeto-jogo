@@ -56,3 +56,28 @@ Se nada disto mexer, o problema não é de informação: é de capacidade ou de 
   separar: **as 17 foram pedidas de novo** (pode favorecer um pouco o JSON válido, igual
   em P4 e P5). Daqui em diante: erro de rede repete até 2 vezes e nunca se grava; resposta
   vazia do modelo grava-se e conta como inválida.
+
+## Resultado 1 — sonda P4 × P5 completo (26/09, 08:54)
+
+19 casos × 3 respostas por prompt, temp 0. Tabelas inteiras: `sonda/*_todos.tabela.txt`;
+caso a caso: `node sonda_pareada.js sonda/<r>/resultado.json`.
+
+| critério do gabarito | dots | Super 120B |
+|---|---|---|
+| "já perdiam" cai em `ja_perdia` e `apos_falha` | 30→29% e 5→20% | **59→38%** e **14→42%** |
+| guarnição enviada (mediana) sobe | 100→100% | 50→53% |
+| grupos convergentes caem | 6→6 | **17→10** |
+| JSON válido não cai | 96→96% | 91→95% |
+| mais V do que D no turno seguinte | 50V 25D → 58V 23D | **54V 40D → 42V 48D** |
+
+- **Caso a caso nada é significativo** (teste de sinais; o menor p é 0,27, "já perdiam"
+  do Super: P5 abaixo em 9 casos, acima em 4).
+- **O ruído é do tamanho do efeito.** Com temp 0, as 3 respostas do Super ao MESMO prompt
+  variam de 0 a 6 ataques. A piora do Super em `apos_falha` vem quase toda de 2 respostas
+  (caso 2 k2: 6 ataques, os 6 já perdidos; caso 0 k0: 4 de 6).
+- Hipótese testada e **não confirmada**: a regra de atrito do P5-2 ("o defensor que segura
+  também perde") convidaria a desgastar com ataques pequenos. Envios de 1–2 tropas:
+  Super 43%→38%, dots 38%→35%. Planos que falam em desgastar: 1→2 e 2→6 em ~55.
+- **Veredito: o P5 inteiro não passa no gabarito.** No dots não mexe nada. No Super mexe
+  em direções opostas. Passo 3: isolar cada grupo no Super, reaproveitando as respostas
+  P4 (o prompt P4 é idêntico).

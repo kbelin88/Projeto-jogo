@@ -126,12 +126,12 @@ async function main() {
           if (arq && fs.existsSync(arq)) cru = fs.readFileSync(arq, "utf8");
           else if (paralelo > 1 && saida) erroRede = "falhou na pre-busca";
           else ({ cru, erroRede } = await pedir(prompt, arq));
-          if (erroRede) { res.push({ categoria: c.categoria, modelo: c.modelo, prompt: nome, erroRede }); continue; }
+          if (erroRede) { res.push({ caso: i, categoria: c.categoria, modelo: c.modelo, prompt: nome, erroRede }); continue; }
           const p = E.parsearOrdem(cru);
           valido = !!p.ok; ordem = p.ordem;
         }
         const aval = avaliar(E, P, c.turno, c.lado, ordem);
-        res.push({ categoria: c.categoria, modelo: c.modelo, prompt: nome, valido, aval });
+        res.push({ caso: i, k, categoria: c.categoria, modelo: c.modelo, prompt: nome, valido, aval });
         // no seco, o turno seguinte do avaliador tem de bater com o da PARTIDA
         // REAL: reexecutada ate t+1 por outro caminho (todas as ordens do log),
         // e nao com o proprio avaliador
