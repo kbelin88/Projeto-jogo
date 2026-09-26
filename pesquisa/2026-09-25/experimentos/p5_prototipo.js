@@ -106,10 +106,12 @@ function intencaoMarcha(m, visao) {
 //   intencao P5-5      para quem vai o exercito inimigo avistado
 //   interior P5-6      a linha interior x fronteira sob o TOTAL
 // O P5-7 (estoque inimigo) saiu por decisao do Lucas (26/09): mexe no fog.
-const ITENS_P5 = ["regras", "combate", "intencao", "interior"];
+//   placebo            CONTROLE: uma linha sem informacao no mesmo sitio do
+//                      P5-6. Mede o efeito de mexer no prompt, seja no que for.
+const ITENS_P5 = ["regras", "combate", "intencao", "interior", "placebo"];
 
 function montarP5(E, estado, dono, itens) {
-  const liga = new Set(itens || ITENS_P5);
+  const liga = new Set(itens || ITENS_P5.filter((k) => k !== "placebo"));
   for (const k of liga) if (!ITENS_P5.includes(k)) throw new Error("item P5 desconhecido: " + k);
   const visao = E.montarVisao(estado, dono);
   const p4 = E.montarPrompt(visao, { rejeicaoNoFim: true });
@@ -151,6 +153,7 @@ function montarP5(E, estado, dono, itens) {
     }
     txt = txt.replace(/^TOTAL: .*$/m, (l) => `${l}\n  at home: ${interior} in INTERIOR villages (no enemy neighbour), ${fronteira} in BORDER villages`);
   }
+  if (liga.has("placebo")) txt = txt.replace(/^TOTAL: .*$/m, (l) => `${l}\n  (the list of your villages follows below)`);
   return { p4, p5: txt };
 }
 

@@ -81,3 +81,29 @@ caso a caso: `node sonda_pareada.js sonda/<r>/resultado.json`.
 - **Veredito: o P5 inteiro não passa no gabarito.** No dots não mexe nada. No Super mexe
   em direções opostas. Passo 3: isolar cada grupo no Super, reaproveitando as respostas
   P4 (o prompt P4 é idêntico).
+
+## Resultado 2 — cada grupo isolado, no Super (26/09, ~10:00)
+
+Mesmos 19 casos × 3 respostas. O P4 é o MESMO conjunto de respostas do Resultado 1.
+
+| grupo | JSON ok | ataques | já perdiam | convergentes | guarnição | V/D seguinte | sinais (já perdiam / ataques) |
+|---|---|---|---|---|---|---|---|
+| P4 | 91% | 111 | 41% | 17 | 50% | 54V 40D | — |
+| regras (P5-1/2/3) | 91% | 81 | 25% | 7 | 63% | 42V 39D | p=0,39 / **0,05** |
+| combate (P5-4) | 86% | 91 | 33% | 5 | 60% | 48V 42D | 0,18 / 0,48 |
+| intenção (P5-5) | 91% | 77 | 22% | 3 | 55% | 46V 41D | 0,09 / 0,18 |
+| interior (P5-6) | 88% | 94 | 30% | 9 | 60% | 46V 42D | 0,61 / 1,00 |
+| os quatro juntos | 95% | 97 | 34% | 10 | 53% | 42V 48D | 0,27 / 0,80 |
+
+**Suspeita: o efeito não depende do conteúdo.** Os quatro grupos, até a linha
+interior × fronteira (que não diz nada sobre combate), fazem o mesmo: menos ataques,
+menos "já perdiam", menos convergentes. Duas explicações possíveis:
+
+1. **tempo/provedor**: as respostas P4 foram colhidas antes (06:51–08:54, parte sem
+   paralelo) e as variantes depois; o provedor gratuito pode ter mudado;
+2. **qualquer mudança no prompt** mexe no Super, seja qual for.
+
+Controle lançado: **P4 outra vez + placebo** (o P4 com uma linha sem informação,
+"(the list of your villages follows below)", no sítio da linha do P5-6), no mesmo
+momento e com o mesmo paralelismo. Se o P4 novo já tiver menos ataques do que o velho, é
+(1); se o placebo mexer como os grupos, é (2); se nenhum dos dois, os grupos informam.

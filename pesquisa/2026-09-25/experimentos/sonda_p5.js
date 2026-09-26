@@ -45,7 +45,7 @@ const saida = opt("--saida", null);
 // em --saida; o laco principal so le. Os modelos pensam 2-10 min por resposta
 // e o teto do free tier (20/min) nao morde com K pequeno.
 const paralelo = Number(opt("--paralelo", 1));
-const itens = opt("--itens", ITENS_P5.join(",")).split(",").filter(Boolean);
+const itens = opt("--itens", ITENS_P5.filter((k) => k !== "placebo").join(",")).split(",").filter(Boolean);
 if (!seco && !burro && process.env.HTTPS_PROXY && !process.env.NODE_USE_ENV_PROXY)
   console.error("aviso: HTTPS_PROXY definido sem NODE_USE_ENV_PROXY=1 -- o fetch vai ignorar o proxy");
 if (saida) fs.mkdirSync(saida, { recursive: true });
