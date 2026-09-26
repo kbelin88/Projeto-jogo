@@ -85,7 +85,13 @@ async function main() {
           const p = E.parsearOrdem(cru);
           valido = !!p.ok; ordem = p.ordem;
         } else {
-          try { cru = (await cliente.gerar(prompt)).texto || ""; } catch (e) { cru = ""; console.error(`  erro de rede: ${e.message}`); }
+          // RETOMADA: uma resposta ja gravada em --saida nao se pede outra vez
+          // (o container pode reiniciar a meio de horas de sonda)
+          const arq = saida ? path.join(saida, `caso${i}_${nome}_${k}.txt`) : null;
+          if (arq && fs.existsSync(arq) && fs.statSync(arq).size > 0) cru = fs.readFileSync(arq, "utf8");
+          else {
+            try { cru = (await cliente.gerar(prompt)).texto || ""; } catch (e) { cru = ""; console.error(`  erro de rede: ${e.message}`); }
+          }
           const p = E.parsearOrdem(cru);
           valido = !!p.ok; ordem = p.ordem;
         }
