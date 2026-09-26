@@ -21,7 +21,7 @@ correm no mesmo motor.
 ## Ordem
 
 1. ✅ Catálogo (25/09 23:35): 21 `:free`; dots, Super e Ultra vivos.
-2. ⏳ Base P4: 4 partidas em `partidas/P4_*`.
+2. ✅ Base P4: 4 partidas em `partidas/P4_*`. **O dots vence as 4** (18 aldeias, T15–17).
 3. Sonda P4 × P5 (`sonda_p5.js`) nos turnos-teste dessas partidas, dots e Super, 3
    respostas por caso, temp 0.
 4. Isolar os grupos (`--itens regras` / `combate` / `intencao` / `interior`) no modelo que
@@ -44,3 +44,10 @@ Se nada disto mexer, o problema não é de informação: é de capacidade ou de 
 ## Registo
 
 - 25/09 23:44 — lançadas as 4 partidas de base, em paralelo.
+- 26/09 00:37–00:50 — as 4 de base acabaram (17, 15, 17, 16 turnos; 53–67 min cada). O
+  container reiniciou depois disso: nada se perdeu.
+- 26/09 — `sonda_casos.js` sobre as 4: **19 casos** (dots: ja_perdia 3, apos_falha 3,
+  reforco_visivel 1, retaguarda_parada 3; Super: ja_perdia 3, apos_falha 3,
+  retaguarda_parada 3). `--seco` reproduz 19/19.
+- 26/09 — sonda P4 × P5 (itens todos) lançada: dots e Super em paralelo, 3 respostas por
+  caso, temp 0 → 114 chamadas por modelo. A sonda passou a retomar das respostas gravadas.
