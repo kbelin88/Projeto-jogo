@@ -107,3 +107,35 @@ Controle lançado: **P4 outra vez + placebo** (o P4 com uma linha sem informaç�
 "(the list of your villages follows below)", no sítio da linha do P5-6), no mesmo
 momento e com o mesmo paralelismo. Se o P4 novo já tiver menos ataques do que o velho, é
 (1); se o placebo mexer como os grupos, é (2); se nenhum dos dois, os grupos informam.
+
+## Resultado 3 — o controle (26/09, ~11:05): era o RELÓGIO, não o prompt
+
+P4 pedido outra vez + placebo, no mesmo momento, 19 casos × 3.
+
+| comparação (pareada por caso) | ataques | já perdiam | convergentes | saldo V−D | p (sinais) |
+|---|---|---|---|---|---|
+| **P4 novo − P4 velho** (o mesmo prompt, horas depois) | **−11,0** | **−8,7** | −3,7 | −5,3 | 0,29–0,42 |
+| placebo − P4 novo | +3,0 | +0,7 | −0,3 | +0,7 | ≥0,63 |
+| regras − P4 novo | — | 0,0 | — | +1,7 | 1,00 |
+| combate − P4 novo | — | +3,3 | — | +2,7 | 0,34–0,79 |
+| intenção − P4 novo | — | −1,0 | — | +2,3 | 0,63–1,00 |
+| interior − P4 novo | — | +2,7 | — | +2,0 | 0,39–1,00 |
+
+Totais do P4 novo: 78 ataques, 26% já perdiam, 6 convergentes, 39V 41D (o P4 velho:
+111, 41%, 17, 54V 40D). **O mesmo prompt, no mesmo modelo, com temp 0, mudou tanto em
+três horas quanto qualquer grupo do P5.** Contra o P4 da mesma hora, nenhum grupo mexe.
+
+**Conclusões**
+
+1. **Na decisão de um turno, o P5 não muda o jogo do Super nem do dots.** Pelo gabarito:
+   o problema, pelo menos o que a sonda vê, não é de informação.
+2. **A lição de método vale mais do que o P5:** o `:free` do OpenRouter não é
+   estacionário. Um A/B só vale com os dois braços **intercalados no mesmo momento**
+   (a sonda completa do Resultado 1 fazia isso; o isolamento reaproveitou P4 velho e
+   enganou-se). Vale também para as partidas: a base P4 da madrugada não serve de
+   controle para partidas P5 corridas de dia.
+3. **O que a sonda NÃO vê:** efeitos de vários turnos (o P5-4 serve à memória: "voltar
+   ao alvo com ≤ força"). Isso só se mede em partidas, P4 e P5 lado a lado.
+4. **As correções de verdade (P5-0..3) não pioram nada** (JSON válido igual ou maior,
+   nenhuma métrica pior contra o controle). Entrar ou não no jogo é decisão do Lucas: são
+   verdade, mas mudam o benchmark.

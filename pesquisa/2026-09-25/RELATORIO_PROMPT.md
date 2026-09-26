@@ -543,3 +543,12 @@ prompt não é a alavanca.
   combate +312 a +1040, intenção 0 a +110, interior +78.
 - **Bloqueio**: as partidas de 23/09 (`resultados/p4-bateria-0923/P1..P4_*.txt`) não estão
   na sessão nem em ramo nenhum. Sem elas não há casos para o passo 2.
+
+### Resultado dos testes (26/09) — ver `pesquisa/2026-09-26/DIARIO.md`
+
+- Base nova: 4 partidas P4 (dots × Super, seeds 3 e 5, dois assentos), **o dots vence as 4**.
+- Sonda P4 × P5 (19 casos, 3 respostas): **nenhum efeito significativo** no dots nem no
+  Super, nem com o P5 inteiro nem com cada grupo isolado.
+- O efeito que o isolamento parecia mostrar era **deriva do provedor**: o mesmo P4, três
+  horas depois, deu −30% de ataques e −15 pontos de "já perdiam". Um placebo não mexe.
+- **Um A/B no `:free` só vale com os braços intercalados no mesmo momento.**
