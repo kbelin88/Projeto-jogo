@@ -24,6 +24,9 @@ const metr = {
   "ataques que ja perdiam": (a) => a.jaPerdiam,
   "ataques": (a) => a.ataques,
   "grupos convergentes": (a) => a.gruposConvergentes,
+  "retaguarda levada a fronteira": (a) => a.retaguardaParaFronteira || 0,
+  "retaguarda que sai": (a) => a.retaguardaMovida,
+  "maior ataque (tropas)": (a) => a.maiorAtaque || 0,
 };
 console.log(`${d.modelo || ""}  itens: ${(d.itens || []).join(",")}  |  ${casos.length} casos, ${B} - ${A} por caso (media das respostas)`);
 for (const [nome, f] of Object.entries(metr)) {

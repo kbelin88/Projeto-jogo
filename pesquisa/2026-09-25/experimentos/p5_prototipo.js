@@ -108,10 +108,30 @@ function intencaoMarcha(m, visao) {
 // O P5-7 (estoque inimigo) saiu por decisao do Lucas (26/09): mexe no fog.
 //   placebo            CONTROLE: uma linha sem informacao no mesmo sitio do
 //                      P5-6. Mede o efeito de mexer no prompt, seja no que for.
-const ITENS_P5 = ["regras", "combate", "intencao", "interior", "placebo"];
+//
+// Os BRACOS de formato (26/09, a pergunta do Lucas: "levar tropas a fronteira e
+// acumular deve ser algo no nosso prompt"), fora do P5 por omissao:
+//   avaliacao  o JSON ganha "assessment" ANTES das ordens: onde estao as tuas
+//              tropas, onde e a frente, o que cada aldeia faz. Estrutura o
+//              raciocinio; nao diz o que fazer.
+//   semtotal   tira a linha TOTAL (o "reino = um exercito so").
+//   conselho   CONTROLE POSITIVO: diz o que fazer. Quebra "o prompt informa,
+//              nao recomenda" DE PROPOSITO: se nem isto move a retaguarda, o
+//              prompt nao e a alavanca. So para diagnostico, nunca para o jogo.
+const ITENS_P5 = ["regras", "combate", "intencao", "interior", "placebo", "avaliacao", "semtotal", "conselho"];
+const FORA_DO_PADRAO = new Set(["placebo", "avaliacao", "semtotal", "conselho"]);
+
+// troca que FALHA alto se a ancora sumir (um braco que nao muda nada e um
+// braco que mente)
+function troca(txt, de, para) {
+  const antes = txt;
+  txt = txt.replace(de, para);
+  if (txt === antes) throw new Error("ancora do braco nao encontrada: " + String(de).slice(0, 60));
+  return txt;
+}
 
 function montarP5(E, estado, dono, itens) {
-  const liga = new Set(itens || ITENS_P5.filter((k) => k !== "placebo"));
+  const liga = new Set(itens || ITENS_P5.filter((k) => !FORA_DO_PADRAO.has(k)));
   for (const k of liga) if (!ITENS_P5.includes(k)) throw new Error("item P5 desconhecido: " + k);
   const visao = E.montarVisao(estado, dono);
   const p4 = E.montarPrompt(visao, { rejeicaoNoFim: true });
@@ -152,6 +172,19 @@ function montarP5(E, estado, dono, itens) {
       if ((adj[a.id] || []).some((v) => inimigo.has(v))) fronteira += k; else interior += k;
     }
     txt = txt.replace(/^TOTAL: .*$/m, (l) => `${l}\n  at home: ${interior} in INTERIOR villages (no enemy neighbour), ${fronteira} in BORDER villages`);
+  }
+  if (liga.has("semtotal")) txt = troca(txt, /^TOTAL: .*\n/m, "");
+  if (liga.has("avaliacao")) {
+    txt = troca(txt, '- "plan": your NOTE TO YOUR NEXT TURN',
+      '- "assessment": FIRST, before any order: where your troops are right now (which villages hold how many, INTERIOR or BORDER), where the front with the enemy is, and what each of your villages will do this turn. 3 to 8 lines.\n- "plan": your NOTE TO YOUR NEXT TURN');
+    txt = troca(txt, '  "build": [', '  "assessment": "<where your troops are, where the front is, what each village does this turn>",\n  "build": [');
+  }
+  if (liga.has("conselho")) {
+    txt = troca(txt, "=== FOG OF WAR ===",
+      "=== STRATEGY ADVICE ===\n" +
+      "Troops in INTERIOR villages (no enemy neighbour) cannot reach the enemy from there and are not threatened by it: while they stay there they do not fight. " +
+      "Strong players march them every turn to their BORDER villages, gather a large garrison there, and then attack ONE target with the WHOLE garrison of one village, " +
+      "with a clear margin over its defense. Many small attacks from different villages lose one by one.\n\n=== FOG OF WAR ===");
   }
   if (liga.has("placebo")) txt = txt.replace(/^TOTAL: .*$/m, (l) => `${l}\n  (the list of your villages follows below)`);
   return { p4, p5: txt };

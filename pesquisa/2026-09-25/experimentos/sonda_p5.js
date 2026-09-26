@@ -45,7 +45,15 @@ const saida = opt("--saida", null);
 // em --saida; o laco principal so le. Os modelos pensam 2-10 min por resposta
 // e o teto do free tier (20/min) nao morde com K pequeno.
 const paralelo = Number(opt("--paralelo", 1));
-const itens = opt("--itens", ITENS_P5.filter((k) => k !== "placebo").join(",")).split(",").filter(Boolean);
+const itens = opt("--itens", null);
+// --bracos "P4|avaliacao|semtotal|conselho" (26/09): varios prompts no MESMO
+// run, intercalados caso a caso e baralhados na pre-busca -- o :free muda de
+// comportamento em horas, e um braco pedido noutra hora nao se compara.
+// "P4" e o P4; cada outro braco e uma lista de itens separada por virgulas.
+// Sem --bracos: P4 contra P5 (os itens de --itens, ou o P5 por omissao).
+const bracos = opt("--bracos", null)
+  ? opt("--bracos").split("|").map((b) => ({ rotulo: b.replace(/,/g, "+"), itens: b === "P4" ? null : b.split(",") }))
+  : [{ rotulo: "P4", itens: null }, { rotulo: "P5", itens: itens ? itens.split(",").filter(Boolean) : undefined }];
 if (!seco && !burro && process.env.HTTPS_PROXY && !process.env.NODE_USE_ENV_PROXY)
   console.error("aviso: HTTPS_PROXY definido sem NODE_USE_ENV_PROXY=1 -- o fetch vai ignorar o proxy");
 if (saida) fs.mkdirSync(saida, { recursive: true });
@@ -75,6 +83,9 @@ async function main() {
   // Erro de REDE repete a chamada (ate 2 vezes, como o runner) e nunca se
   // grava: na retomada pede-se de novo. Resposta VAZIA do modelo grava-se e
   // conta como JSON invalido (e o degrau 0).
+  function promptsDo(g, lado) {
+    return bracos.map((b) => [b.rotulo, b.itens === null ? montarP5(E, g, lado, []).p4 : montarP5(E, g, lado, b.itens).p5]);
+  }
   async function pedir(prompt, arq) {
     let cru = "", erroRede = null;
     for (let tent = 0; tent < 3; tent++) {
@@ -88,13 +99,13 @@ async function main() {
     const fila = [];
     for (const [i, c] of casos.entries()) {
       const g = estadoNoTurno(E, partida(c), c.turno);
-      const { p4, p5 } = montarP5(E, g, c.lado, itens);
-      for (const [nome, prompt] of [["P4", p4], ["P5", p5]])
+      for (const [nome, prompt] of promptsDo(g, c.lado))
         for (let k = 0; k < N; k++) {
           const arq = path.join(saida, `caso${i}_${nome}_${k}.txt`);
           if (!fs.existsSync(arq)) fila.push({ prompt, arq });
         }
     }
+    for (let j = fila.length - 1; j > 0; j--) { const r = Math.floor(Math.random() * (j + 1)); [fila[j], fila[r]] = [fila[r], fila[j]]; }
     let feitas = 0;
     const total = fila.length;
     await Promise.all(Array.from({ length: paralelo }, async () => {
@@ -107,8 +118,7 @@ async function main() {
   for (const [i, c] of casos.entries()) {
     const P = partida(c);
     const g = estadoNoTurno(E, P, c.turno);
-    const { p4, p5 } = montarP5(E, g, c.lado, itens);
-    for (const [nome, prompt] of [["P4", p4], ["P5", p5]]) {
+    for (const [nome, prompt] of promptsDo(g, c.lado)) {
       for (let k = 0; k < N; k++) {
         let ordem = null, valido = false, cru = "";
         if (seco) {
@@ -146,7 +156,7 @@ async function main() {
     }
     process.stdout.write(`\r${i + 1}/${casos.length} casos`);
   }
-  console.log(`\nP5 com: ${itens.join(", ")}\n`);
+  console.log(`\nbracos: ${bracos.map((b) => b.rotulo + (b.itens ? "" : "")).join(" | ")}\n`);
   if (seco) console.log(`validacao do avaliador (seco): ${batem}/${conferidos} casos reproduzem o turno gravado\n`);
 
   // tabela: por categoria, P4 contra P5
@@ -157,13 +167,13 @@ async function main() {
     const lista = lista0.filter((r) => !r.erroRede);
     const s = somar(lista.map((r) => r.aval));
     const val = lista.filter((r) => r.valido).length;
-    return `${rot.padEnd(22)} resp ${String(lista.length).padStart(3)} | JSON ok ${pct(val, lista.length).padStart(4)} | ataques ${String(s.ataques).padStart(3)} | ja perdiam ${pct(s.jaPerdiam, s.ataques).padStart(4)} | contra reforco visivel ${String(s.contraReforcoVisivel).padStart(2)} | grupos convergentes ${String(s.gruposConvergentes).padStart(2)} | guarnicao enviada ${s.fracGuarnicaoMediana == null ? "  -" : (100 * s.fracGuarnicaoMediana).toFixed(0).padStart(3) + "%"} | retaguarda movida ${pct(s.retaguardaMovida, s.retaguardaTropas).padStart(4)} | no turno seguinte: ${s.venceram}V ${s.perderam}D`;
+    return `${rot.padEnd(22)} resp ${String(lista.length).padStart(3)} | JSON ok ${pct(val, lista.length).padStart(4)} | ataques ${String(s.ataques).padStart(3)} | ja perdiam ${pct(s.jaPerdiam, s.ataques).padStart(4)} | contra reforco visivel ${String(s.contraReforcoVisivel).padStart(2)} | grupos convergentes ${String(s.gruposConvergentes).padStart(2)} | guarnicao enviada ${s.fracGuarnicaoMediana == null ? "  -" : (100 * s.fracGuarnicaoMediana).toFixed(0).padStart(3) + "%"} | retaguarda movida ${pct(s.retaguardaMovida, s.retaguardaTropas).padStart(4)} | ret->fronteira ${pct(s.retaguardaParaFronteira, s.retaguardaTropas).padStart(4)} | maior ataque/exercito ${pct(s.maiorAtaque, s.exercitoEmCasa).padStart(4)} | no turno seguinte: ${s.venceram}V ${s.perderam}D`;
   };
   const cats = [...new Set(res.map((r) => r.categoria))].sort();
   for (const cat of cats.concat(["TODOS"])) {
     console.log(`== ${cat}`);
-    for (const pr of ["P4", "P5"]) console.log("  " + linha(pr, res.filter((r) => r.prompt === pr && (cat === "TODOS" || r.categoria === cat))));
+    for (const b of bracos) console.log("  " + linha(b.rotulo, res.filter((r) => r.prompt === b.rotulo && (cat === "TODOS" || r.categoria === cat))));
   }
-  if (saida) fs.writeFileSync(path.join(saida, "resultado.json"), JSON.stringify({ modelo, temp, n: N, itens, res }, null, 1));
+  if (saida) fs.writeFileSync(path.join(saida, "resultado.json"), JSON.stringify({ modelo, temp, n: N, bracos, itens: bracos.slice(1).map((b) => b.rotulo), res }, null, 1));
 }
 main().catch((e) => { console.error(e); process.exit(1); });

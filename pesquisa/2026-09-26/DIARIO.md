@@ -139,3 +139,45 @@ três horas quanto qualquer grupo do P5.** Contra o P4 da mesma hora, nenhum gru
 4. **As correções de verdade (P5-0..3) não pioram nada** (JSON válido igual ou maior,
    nenhuma métrica pior contra o controle). Entrar ou não no jogo é decisão do Lucas: são
    verdade, mas mudam o benchmark.
+
+## Pergunta 2 — o formato do prompt prende as tropas atrás? (26/09, tarde)
+
+O Lucas: *"não acredito que um LLM, com todo o treino que recebeu, não consiga levar as
+tropas para a fronteira e acumular. Deve ser algo no nosso prompt."*
+
+**Na base**, o Super tira da retaguarda 9–16% por turno; o dots 14–71%. O P4 já dá o dado
+logístico ("from here to your nearest border village [18] Castellon: 2 slow / 1 medium")
+e o Super deixa 9 lanceiros parados em Tarragona e Girona ao lado dele.
+
+**Hipóteses de formato:**
+1. tudo no P4 empurra para "atacar daqui, agora" ("attack power if all sent" em cada
+   aldeia, "march from [x]" em cada alvo); reforçar é uma frase nas regras, e acumular é um
+   plano de dois turnos;
+2. o modelo responde JSON direto, sem espaço para ver o tabuleiro inteiro antes de dar
+   ordens;
+3. o `TOTAL` por tipo faz o reino parecer UM exército.
+
+**Braços** (intercalados no mesmo run, `sonda_p5.js --bracos "P4|avaliacao|semtotal|conselho"`):
+- `P4` — controle;
+- `avaliacao` — o JSON ganha `"assessment"` ANTES das ordens (onde estão as tropas,
+  onde é a frente, o que cada aldeia faz); estrutura, não recomenda;
+- `semtotal` — sem a linha `TOTAL`;
+- `conselho` — **controle positivo**: diz que tropa no interior não luta e que um jogador
+  forte a leva à fronteira e ataca com a guarnição inteira. Quebra "o prompt informa, não
+  recomenda" de propósito; **só diagnóstico**.
+
+**Casos**: os 12 turnos de `retaguarda_parada` das 4 partidas de base (6 de cada modelo;
+≥20 tropas atrás e moveu <10%). `--seco` reproduz 12/12. 3 respostas por braço, temp 0,
+dots e Super.
+
+**Métricas novas** (`sonda_comum.js`): `ret->fronteira` = tropa da retaguarda levada a
+aldeias PRÓPRIAS de fronteira, sobre a tropa da retaguarda; `maior ataque/exército`.
+
+**Gabarito (antes de perguntar):**
+- se o **`conselho`** NÃO subir claramente a retaguarda que sai / levada à fronteira (P5
+  acima do P4 na maioria dos 12 casos), **o prompt não é a alavanca** para a logística:
+  nem dizendo o que fazer o modelo faz;
+- se o `conselho` subir e `avaliacao`/`semtotal` não, a informação está lá e o que falta
+  é a RECOMENDAÇÃO: decisão do Lucas ("o prompt informa, não recomenda");
+- se `avaliacao` ou `semtotal` subirem (maioria dos casos, JSON válido sem cair), é
+  **formato**, e entra sem quebrar a regra.

@@ -34,7 +34,10 @@ function avaliar(E, P, t, lado, ordem) {
   const g = estadoNoTurno(E, P, t);
   const inimigo = lado === "A" ? "B" : "A";
   const r = { ataques: 0, jaPerdiam: 0, contraReforcoVisivel: 0, gruposConvergentes: 0, fracGuarnicao: [],
-              retaguardaTropas: 0, retaguardaMovida: 0, reforcos: 0, chegaram: 0, venceram: 0, perderam: 0, tropasPerdidasEmDerrota: 0 };
+              retaguardaTropas: 0, retaguardaMovida: 0, reforcos: 0, chegaram: 0, venceram: 0, perderam: 0, tropasPerdidasEmDerrota: 0,
+              // logistica (26/09): tropa da retaguarda levada a aldeias PROPRIAS de
+              // fronteira, e o maior ataque como fracao do exercito em casa
+              retaguardaParaFronteira: 0, exercitoEmCasa: 0, maiorAtaque: 0 };
   if (!ordem) return r;
   const diag = E.diagnosticarOrdem(g, lado, ordem);
   const envios = diag.aceitoEnvios || [];
@@ -54,6 +57,13 @@ function avaliar(E, P, t, lado, ordem) {
     r.fracGuarnicao.push(nT(e.tropas) / Math.max(1, nT(aldeia(e.origemId).tropas)));
   }
   for (const id in porAlvo) if (porAlvo[id].size > 1) r.gruposConvergentes++;
+  const ehRet = (a) => g.estradas.adj[a.id].every((v) => aldeia(v).dono === lado);
+  for (const a of E.aldeiasDe(g, lado)) r.exercitoEmCasa += nT(a.tropas);
+  for (const e of envios) {
+    const o = aldeia(e.origemId), d = aldeia(e.destinoId);
+    if (d.dono === lado && ehRet(o) && !ehRet(d)) r.retaguardaParaFronteira += nT(e.tropas);
+    if (d.dono !== lado) r.maiorAtaque = Math.max(r.maiorAtaque, nT(e.tropas));
+  }
   for (const a of E.aldeiasDe(g, lado)) {
     const ret = g.estradas.adj[a.id].every((v) => aldeia(v).dono === lado);
     if (ret) { r.retaguardaTropas += nT(a.tropas); r.retaguardaMovida += saiuDe[a.id] || 0; }
@@ -78,7 +88,8 @@ function avaliar(E, P, t, lado, ordem) {
 // soma de varias avaliacoes (varias respostas, varios casos)
 function somar(lista) {
   const s = { n: lista.length, ataques: 0, jaPerdiam: 0, contraReforcoVisivel: 0, gruposConvergentes: 0, fracGuarnicao: [],
-              retaguardaTropas: 0, retaguardaMovida: 0, reforcos: 0, chegaram: 0, venceram: 0, perderam: 0 };
+              retaguardaTropas: 0, retaguardaMovida: 0, reforcos: 0, chegaram: 0, venceram: 0, perderam: 0,
+              retaguardaParaFronteira: 0, exercitoEmCasa: 0, maiorAtaque: 0 };
   for (const r of lista) {
     for (const k of Object.keys(s)) if (typeof s[k] === "number" && k !== "n") s[k] += r[k] || 0;
     s.fracGuarnicao.push(...(r.fracGuarnicao || []));
