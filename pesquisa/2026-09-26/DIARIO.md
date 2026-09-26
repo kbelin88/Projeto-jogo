@@ -51,3 +51,8 @@ Se nada disto mexer, o problema não é de informação: é de capacidade ou de 
   retaguarda_parada 3). `--seco` reproduz 19/19.
 - 26/09 — sonda P4 × P5 (itens todos) lançada: dots e Super em paralelo, 3 respostas por
   caso, temp 0 → 114 chamadas por modelo. A sonda passou a retomar das respostas gravadas.
+- 26/09 — o container reiniciou a meio da sonda (dots 59/114, Super 67/114). Havia 17
+  respostas vazias, mas só 6 erros de rede no log, e pelos arquivos não dá para as
+  separar: **as 17 foram pedidas de novo** (pode favorecer um pouco o JSON válido, igual
+  em P4 e P5). Daqui em diante: erro de rede repete até 2 vezes e nunca se grava; resposta
+  vazia do modelo grava-se e conta como inválida.

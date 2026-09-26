@@ -88,16 +88,24 @@ async function main() {
           // RETOMADA: uma resposta ja gravada em --saida nao se pede outra vez
           // (o container pode reiniciar a meio de horas de sonda)
           const arq = saida ? path.join(saida, `caso${i}_${nome}_${k}.txt`) : null;
-          if (arq && fs.existsSync(arq) && fs.statSync(arq).size > 0) cru = fs.readFileSync(arq, "utf8");
+          // Erro de REDE repete a chamada (ate 2 vezes, como o runner) e nunca
+          // se grava: na retomada pede-se de novo. Resposta VAZIA do modelo
+          // grava-se e conta como JSON invalido (e o degrau 0).
+          let erroRede = null;
+          if (arq && fs.existsSync(arq)) cru = fs.readFileSync(arq, "utf8");
           else {
-            try { cru = (await cliente.gerar(prompt)).texto || ""; } catch (e) { cru = ""; console.error(`  erro de rede: ${e.message}`); }
+            for (let tent = 0; tent < 3; tent++) {
+              try { cru = (await cliente.gerar(prompt)).texto || ""; erroRede = null; break; }
+              catch (e) { cru = ""; erroRede = e.message; console.error(`  erro de rede (tentativa ${tent + 1}): ${e.message}`); }
+            }
+            if (!erroRede && arq) fs.writeFileSync(arq, cru);
           }
+          if (erroRede) { res.push({ categoria: c.categoria, modelo: c.modelo, prompt: nome, erroRede }); continue; }
           const p = E.parsearOrdem(cru);
           valido = !!p.ok; ordem = p.ordem;
         }
         const aval = avaliar(E, P, c.turno, c.lado, ordem);
         res.push({ categoria: c.categoria, modelo: c.modelo, prompt: nome, valido, aval });
-        if (saida && !seco) fs.writeFileSync(path.join(saida, `caso${i}_${nome}_${k}.txt`), cru);
         // no seco, o turno seguinte do avaliador tem de bater com o da PARTIDA
         // REAL: reexecutada ate t+1 por outro caminho (todas as ordens do log),
         // e nao com o proprio avaliador
@@ -117,7 +125,10 @@ async function main() {
 
   // tabela: por categoria, P4 contra P5
   const pct = (a, b) => (b ? (100 * a / b).toFixed(0) + "%" : "-");
-  const linha = (rot, lista) => {
+  const perdidas = res.filter((r) => r.erroRede).length;
+  if (perdidas) console.log(`${perdidas} resposta(s) perdidas por erro de rede (fora das contas; a retomada pede-as de novo)\n`);
+  const linha = (rot, lista0) => {
+    const lista = lista0.filter((r) => !r.erroRede);
     const s = somar(lista.map((r) => r.aval));
     const val = lista.filter((r) => r.valido).length;
     return `${rot.padEnd(22)} resp ${String(lista.length).padStart(3)} | JSON ok ${pct(val, lista.length).padStart(4)} | ataques ${String(s.ataques).padStart(3)} | ja perdiam ${pct(s.jaPerdiam, s.ataques).padStart(4)} | contra reforco visivel ${String(s.contraReforcoVisivel).padStart(2)} | grupos convergentes ${String(s.gruposConvergentes).padStart(2)} | guarnicao enviada ${s.fracGuarnicaoMediana == null ? "  -" : (100 * s.fracGuarnicaoMediana).toFixed(0).padStart(3) + "%"} | retaguarda movida ${pct(s.retaguardaMovida, s.retaguardaTropas).padStart(4)} | no turno seguinte: ${s.venceram}V ${s.perderam}D`;
