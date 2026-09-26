@@ -118,8 +118,19 @@ function intencaoMarcha(m, visao) {
 //   conselho   CONTROLE POSITIVO: diz o que fazer. Quebra "o prompt informa,
 //              nao recomenda" DE PROPOSITO: se nem isto move a retaguarda, o
 //              prompt nao e a alavanca. So para diagnostico, nunca para o jogo.
-const ITENS_P5 = ["regras", "combate", "intencao", "interior", "placebo", "avaliacao", "semtotal", "conselho"];
-const FORA_DO_PADRAO = new Set(["placebo", "avaliacao", "semtotal", "conselho"]);
+//
+// As VERDADES DE SEGURANCA (26/09, noite): o Sonnet e o Luna deixam 51-59% do
+// exercito no interior depois das ordens (a politica REFORCA deixa 4%), e os
+// planos dizem porque: "kept spearmen home to defend Lisboa". Tres coisas que
+// o motor executa e o P4 cala, conferidas no motor antes de escritas:
+//   alcance  o interior so e atacavel depois de cair uma vizinha (8842 ataques
+//            do burro: 49 a aldeias interiores, todos com a vizinha tomada no
+//            mesmo turno)
+//   capital  perder a PROPRIA capital nao perde o jogo nem tem efeito especial
+//   vigia    toda coluna inimiga ja em marcha para uma aldeia tua aparece
+//            (2041 de 2041); so a ordenada neste turno nao
+const ITENS_P5 = ["regras", "combate", "intencao", "interior", "placebo", "avaliacao", "semtotal", "conselho", "alcance", "capital", "vigia"];
+const FORA_DO_PADRAO = new Set(["placebo", "avaliacao", "semtotal", "conselho", "alcance", "capital", "vigia"]);
 
 // troca que FALHA alto se a ancora sumir (um braco que nao muda nada e um
 // braco que mente)
@@ -186,6 +197,15 @@ function montarP5(E, estado, dono, itens) {
       "Strong players march them every turn to their BORDER villages, gather a large garrison there, and then attack ONE target with the WHOLE garrison of one village, " +
       "with a clear margin over its defense. Many small attacks from different villages lose one by one.\n\n=== FOG OF WAR ===");
   }
+  if (liga.has("alcance")) txt = troca(txt, "You cannot march past an enemy or neutral village to hit one behind it.",
+    "You cannot march past an enemy or neutral village to hit one behind it. The same rule protects your INTERIOR villages (no enemy neighbour): " +
+    "every road into one of them passes through another of your villages, where an enemy army stops and fights. An interior village can only be attacked " +
+    "after the enemy has taken one of your villages next to it, which can happen earlier in the same turn.");
+  if (liga.has("capital")) txt = troca(txt, "taking it is NOT required to win.",
+    "taking it is NOT required to win. The same holds for YOUR capital: losing it does not lose the game and has no special effect - a capital is a village with a bigger defense bonus.");
+  if (liga.has("vigia")) txt = troca(txt, "The enemy is under the same rule: they see you only where their villages and armies reach.",
+    "The enemy is under the same rule: they see you only where their villages and armies reach. " +
+    "Every enemy army already on the march toward one of YOUR villages is always shown to you under ARMIES ON THE MARCH, whatever the fog; only an army ordered this same turn is not.");
   if (liga.has("placebo")) txt = txt.replace(/^TOTAL: .*$/m, (l) => `${l}\n  (the list of your villages follows below)`);
   return { p4, p5: txt };
 }

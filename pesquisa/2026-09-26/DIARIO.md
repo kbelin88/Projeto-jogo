@@ -181,3 +181,53 @@ aldeias PRÓPRIAS de fronteira, sobre a tropa da retaguarda; `maior ataque/exér
   é a RECOMENDAÇÃO: decisão do Lucas ("o prompt informa, não recomenda");
 - se `avaliacao` ou `semtotal` subirem (maioria dos casos, JSON válido sem cair), é
   **formato**, e entra sem quebrar a regra.
+
+## As partidas do Lucas (Sonnet 5, Luna, DeepSeek v4, Gemini) — 26/09, noite
+
+Em `partidas_lucas/`: P1 Sonnet × Luna (dossiê, 35 turnos, Sonnet 19×5), P2 Sonnet ×
+DeepSeek (dossiê, 23 turnos, DeepSeek 19×5), P3 Luna × Sonnet (replay inteiro, 64
+turnos), dois `.txt` antigos com Gemini (16/08 e 30/08, regras de então).
+
+**Onde está o exército depois das ordens** (`logistica_replay.js`; a régua do motor em
+`logistica_politicas.js`, 40 seeds, medida no mesmo momento do frame):
+
+| quem | interior | fronteira | em marcha |
+|---|---|---|---|
+| política REFORÇA (motor) | 4% | 2% | 94% |
+| jogador-base | 6% | 2% | 91% |
+| política com a retaguarda PARADA de propósito | 42% | 3% | 56% |
+| **Sonnet 5** (P3) | **51%** | 22% | 26% |
+| **Luna** (P3) | **59%** | 17% | 24% |
+| Super 120B (4 partidas) | 50–70% | 12–27% | 17–27% |
+| dots (4 partidas) | 23–53% | 4–20% | 36–57% |
+
+**Todos os LLMs, os mais fortes incluídos, deixam no interior mais do que a política
+feita para deixar a retaguarda parada.** Não é capacidade de um modelo fraco: é
+sistemático. A hipótese do Lucas ("é algo no nosso prompt") fica de pé.
+
+**Porquê — a banda** (`banda_replay.js`):
+
+| | produção no interior | aldeias do interior que enviam/turno | tropa do interior que sai/turno |
+|---|---|---|---|
+| Luna | 57% | 23% | 12% |
+| Sonnet | 59% | 19% | 12% |
+| Super | 31–56% | 15–24% | 9–16% |
+| dots | 52–69% | 21–65% | 14–71% |
+
+Construir no interior está certo (cada aldeia paga o seu). O que falha é a ordem de
+mover: o Sonnet só mexe 1 em cada 5 aldeias do interior por turno. Nos planos, o
+Sonnet fala em JUNTAR tropas em 50–55% dos turnos, mas em trazer o interior para a
+frente em 0–9%: junta na fronteira o que já está na fronteira.
+
+**Nos planos, o porquê de guardar**: Sonnet "Kept spearmen and knights home to defend
+Lisboa", "Keep cheap spearmen everywhere for defense" (defesa/guarnição em 17–41% dos
+planos); DeepSeek fala do que não vê em 50%.
+
+**Três verdades de segurança que o P4 cala** (conferidas no motor antes de escritas):
+
+1. `alcance` — o interior só é atacável depois de cair uma vizinha (burro, 200 seeds:
+   8 842 ataques, 49 a aldeias interiores, todos com a vizinha tomada no mesmo turno);
+2. `capital` — perder a PRÓPRIA capital não perde o jogo nem tem efeito especial (o P4
+   di-lo só da capital inimiga);
+3. `vigia` — toda coluna inimiga já em marcha para uma aldeia do Rei aparece no
+   prompt (2 041 de 2 041); só a ordenada no mesmo turno não.
