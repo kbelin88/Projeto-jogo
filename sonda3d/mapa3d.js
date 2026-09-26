@@ -55,6 +55,18 @@ export async function iniciar(hospedeiro, opcoes = {}) {
   const cfgSol = await (await fetch(BASE + "cena.json")).json();
   const MAPA = await (await fetch(BASE + FICH_JSON)).json();
   const [LX, LY] = MAPA.mapa_m;
+  // ── UMA ALDEIA FEITA A MAO (26/09) ──────────────────────────────────────
+  // `semAldeias: ["faro"]` tira do desenho as pecas do forno dessa aldeia (e o
+  // mastro), para uma aldeia feita a parte no Blender (`faro_aldeia.glb`,
+  // `ferramentas/cena/exportar_faro.py`) entrar no lugar dela. As pecas tiradas
+  // ficam em `MAPA.tiradas`: e pelos portoes delas que se sabe para onde a
+  // porta nova tem de olhar. So a bancada da costa usa isto, por agora.
+  MAPA.tiradas = {};
+  for (const cid of opcoes.semAldeias || []) {
+    MAPA.tiradas[cid] = MAPA.copias.filter((c) => c._cid === cid);
+    MAPA.copias = MAPA.copias.filter((c) => c._cid !== cid);
+    if (MAPA.mastros) delete MAPA.mastros[cid];
+  }
 
   const rend = new THREE.WebGLRenderer({ canvas: tela, antialias: true,
                                          logarithmicDepthBuffer: true });
