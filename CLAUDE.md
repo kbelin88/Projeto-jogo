@@ -387,7 +387,10 @@ Ainda a 26/09, pelas marcas do Lucas:
   fita no pé das falésias), com cristas partidas a andar para terra; a forma é a
   renda de uma foto do SDXL (`assets/texturas/gen_espuma/cor.jpg`), cosida pelo
   `agua_normais.py` (mistura que preserva a variância — a costura do SDXL deixou
-  riscas) e igualada: acende-se por limiar;
+  riscas) e igualada: acende-se por limiar. A **foz** (passo E): o `rios.py`
+  prolonga o rio pela praia até 25 m mar dentro, em leque; o nível desce com a
+  praia, a calha deixa o mar entrar, e o rio usa a mesma absorção do mar e
+  apaga-se nos últimos 30 cm acima dele;
 - **a luz é de hora dourada** (F6, `LUZ_DOURADA` no `mapa3d.js`): sol a 20° e
   quente, céu em degradé, névoa dourada, e um **grading fixo do canal** na curva
   de tons (`CustomToneMapping` = AgX + `gradingCanal`: sombras frias, luzes

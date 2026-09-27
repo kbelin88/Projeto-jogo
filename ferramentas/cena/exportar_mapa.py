@@ -786,9 +786,19 @@ if RIOS_TRACADOS:
         _zs = np.convolve(np.pad(_zc, 7, mode="edge"), _k, mode="valid")
         _zw = np.minimum.accumulate(_zs - 2.0)
         # a foz chega ao mar: os ultimos 60 m descem suaves ate +0,15 m
-        _nf = max(2, int(60 / 4))
-        _zw[-_nf:] = np.minimum(_zw[-_nf:], np.linspace(_zw[-_nf], 0.15, _nf))
+        _nfz = int(_rio.get("n_foz", len(_P)))
+        _nf = max(2, min(int(60 / 4), _nfz))
+        _zw[_nfz - _nf:_nfz] = np.minimum(_zw[_nfz - _nf:_nfz],
+                                          np.linspace(_zw[_nfz - _nf], 0.15, _nf))
         _zw = np.maximum(_zw, 0.15)
+        # ── E ENTRA NO MAR (plano da agua, E, 28/09) ─────────────────────────
+        # Da foz em diante (o `rios.py` prolonga o tracado pela praia ate 25 m
+        # mar dentro) a agua segue a praia a 10 cm por cima dela: cruza o nivel
+        # do mar onde a praia o cruza, e dai para a frente fica debaixo do mar
+        # (opaco), que a tapa. A calha, 1,6 m abaixo, escava a areia: o
+        # `mar_costa.py` ve-a como agua e o mar entra pela boca do rio.
+        if _nfz < len(_zw):
+            _zw[_nfz:] = np.minimum.accumulate(np.minimum(0.15, np.maximum(_zc[_nfz:] + 0.1, -0.6)))
         RIOS_AGUA.append((_P, _W, _zw))
         for (x, y), w, zw in zip(_P, _W, _zw):
             R = 75.0
@@ -1051,7 +1061,7 @@ if MATA2:
             _novas += 1
     _rib = 0
     for _rio in RIOS_TRACADOS:
-        _P = _rio["pts"]
+        _P = _rio["pts"][:_rio.get("n_foz", len(_rio["pts"]))]      # a boca e praia
         for k in range(len(_P) // 10, len(_P), 14):
             x0, y0 = _P[k]
             x1, y1 = _P[min(k + 1, len(_P) - 1)]

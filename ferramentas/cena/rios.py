@@ -107,8 +107,46 @@ def celula(x, y):
     return j, i
 
 
+# ── ATE AO MAR (plano da agua, passo E, 28/09) ──────────────────────────────
+# A foz e uma celula de terra a 1-2 m de altitude: o rio acabava ali, numa
+# bolha em cima da areia seca, a 20-40 m da agua (foto 92103). Daqui o tracado
+# continua a DESCER (contra o gradiente da distancia a agua) ate sair da
+# mascara, e mais 25 m mar dentro; o forno baixa-lhe o nivel com a praia, a
+# calha escava a areia e o mar entra por ela.
+_DMs = ndimage.gaussian_filter(DM, 1.5)
+_gDj, _gDi = np.gradient(_DMs)
+MAR_DENTRO = 25.0
+
+
+def ate_ao_mar(xs, ys):
+    xs, ys = list(xs), list(ys)
+    n = min(6, len(xs) - 1)
+    d = np.array([xs[-1] - xs[-1 - n], ys[-1] - ys[-1 - n]], dtype=np.float64)
+    d /= np.linalg.norm(d) + 1e-9
+    x, y = xs[-1], ys[-1]
+    fora = None
+    for _ in range(120):                        # ate ~480 m
+        j, i = celula(x, y)
+        if 0 <= j < th and 0 <= i < tw and terra[j, i]:
+            # DM cresce para terra: descer e ir contra ele (no mundo, y = -j)
+            g = np.array([_gDi[j, i] / px, -_gDj[j, i] / py])
+            if np.linalg.norm(g) > 1e-6:
+                d = 0.6 * d - 0.4 * g / np.linalg.norm(g)
+                d /= np.linalg.norm(d) + 1e-9
+        elif fora is None:
+            fora = len(xs)
+        if fora is not None and (len(xs) - fora) * 4.0 >= MAR_DENTRO:
+            break
+        x, y = x + d[0] * 4.0, y + d[1] * 4.0
+        xs.append(x)
+        ys.append(y)
+    return np.array(xs), np.array(ys)
+
+
 def alisar(xs, ys, k, foz, nascente):
     """reamostra a cada 4 m, alisa (~40 m) e da o meandro"""
+    s_foz = float(np.hypot(np.diff(xs), np.diff(ys)).sum())
+    xs, ys = ate_ao_mar(xs, ys)
     # ── ALISAR E SERPENTEAR ──────────────────────────────────────────────
     # reamostra a cada 4 m, alisa (~40 m), e da-lhe um meandro que cresce para
     # jusante (um rio novo e direito, um rio velho serpenteia)
@@ -126,12 +164,17 @@ def alisar(xs, ys, k, foz, nascente):
     fase = 2 * np.pi * S / (70.0 + 40.0 * u) + k * 1.7
     meandro = amp * np.sin(fase) * np.clip(u * 8, 0, 1) * np.clip((1 - u) * 12, 0, 1)
     X, Y = X + nx * meandro, Y + ny * meandro
-    # a meia-largura da agua: 1,5 m na nascente, 7 m na foz
+    # a meia-largura da agua: 1,5 m na nascente, 7 m na foz, e na boca abre
+    # em leque (2,3x) -- um rio que chega ao mar alarga, nao entra num tubo
     larg = 1.5 + 5.5 * u ** 0.8
+    t = np.clip((S - (s_foz - 15.0)) / max(S[-1] - s_foz + 15.0, 1.0), 0.0, 1.0)
+    larg = larg * (1.0 + 1.3 * t * t * (3 - 2 * t))
+    n_foz = int(np.searchsorted(S, s_foz))
     return {"pts": [[round(float(a), 2), round(float(b), 2)] for a, b in zip(X, Y)],
             "larg": [round(float(v), 2) for v in larg],
             "foz": [float(foz[0]), float(foz[1])],
             "nascente": [float(nascente[0]), float(nascente[1])],
+            "n_foz": n_foz,                 # daqui em diante e praia e mar
             "comprimento": round(float(S[-1]), 1)}
 
 

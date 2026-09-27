@@ -836,10 +836,26 @@ float rioN(vec2 p) {
   vec2 q_ = vMundoRio.xz;
   float n_ = rioN(q_ * 0.35 + vec2(tempo * 0.6, tempo * 0.4)) * 0.6
            + rioN(q_ * 1.1 - vec2(tempo * 0.9, 0.0)) * 0.4;
-  vec3 fundo_ = vec3(0.045, 0.20, 0.22);
-  vec3 raso_ = vec3(0.20, 0.44, 0.40);
-  diffuseColor.rgb = mix(fundo_, raso_, smoothstep(0.1, 0.95, a_)) * (0.86 + 0.28 * n_);
-  diffuseColor.a = opacity * (1.0 - smoothstep(0.72, 1.0, a_));`);
+  // ── A MESMA AGUA DO MAR (plano da agua, passo E, 28/09) ─────────────────
+  // O rio era outra tinta (verde-azulado chapado) e acabava numa bolha de
+  // outra cor ao chegar ao mar. Agora e a mesma conta do mar: o leito (areia
+  // de rio) apagado pela coluna de agua, com a MESMA absorcao -- a calha tem
+  // 1,6 m ao meio e nada na margem.
+  float p_ = 0.15 + 1.6 * (1.0 - a_ * a_);
+  vec3 T_ = exp(-vec3(0.40, 0.055, 0.028) * p_ * 2.2);
+  vec3 leito_ = vec3(0.30, 0.25, 0.15) * (0.86 + 0.28 * n_);
+  diffuseColor.rgb = leito_ * T_ + vec3(0.012, 0.105, 0.230) * (1.0 - T_);
+  diffuseColor.a = opacity * (1.0 - smoothstep(0.72, 1.0, a_));
+  // na boca, a agua do rio desce com a praia ate ao nivel do mar: nos ultimos
+  // 30 cm apaga-se, e o que se ve e o mar que entrou pela calha
+  diffuseColor.a *= smoothstep(0.0, 0.3, vMundoRio.y);`)
+      .replace("#include <opaque_fragment>", `{
+  // o ceu refletido, como no mar (a superficie do rio e lisa)
+  vec3 vd_ = normalize(vMundoRio - cameraPosition);
+  float fr_ = 0.02 + 0.98 * pow(1.0 - clamp(-vd_.y, 0.0, 1.0), 5.0);
+  outgoingLight = mix(outgoingLight, vec3(0.35, 0.52, 0.63), fr_);
+}
+#include <opaque_fragment>`);
   };
   for (const nome of ["chao", "estradas", "chao_aldeia", "areia", "rocha_topo",
                       "campos", "cercas", "pedras", "rios"])
