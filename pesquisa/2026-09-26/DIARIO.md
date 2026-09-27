@@ -231,3 +231,19 @@ planos); DeepSeek fala do que não vê em 50%.
    di-lo só da capital inimiga);
 3. `vigia` — toda coluna inimiga já em marcha para uma aldeia do Rei aparece no
    prompt (2 041 de 2 041); só a ordenada no mesmo turno não.
+
+## Resultado 4 — os braços de formato, no Super (27/09, 00:10)
+
+12 casos de retaguarda parada × 3 respostas × 4 braços, intercalados no mesmo run.
+
+| braço | ret→fronteira | retaguarda que sai | maior ataque/exército | V/D seguinte | sinais (ret→fronteira) |
+|---|---|---|---|---|---|
+| P4 | 7% | 11% | 7% | 26V 31D | — |
+| avaliacao | 13% | 14% | 6% | 22V 26D | 6 acima, 4 abaixo, p=0,75 |
+| semtotal | 7% | 10% | 6% | 19V 25D | 4/6, p=0,75; **maior ataque menor em 9 de 12, p=0,02** |
+| conselho (controle +) | **16%** | **17%** | 7% | 24V 29D | 7/3, p=0,34 |
+
+**No Super, nem dizer o que fazer move a retaguarda de forma clara.** O controle positivo
+dobra a tropa levada à fronteira (7→16%), mas longe dos ~100% que o conselho pede, e sem
+significância. Pelo gabarito da Pergunta 2: para o Super, o prompt não é a alavanca
+numa decisão de um turno. `semtotal` sai: não mexe na retaguarda e encolhe o maior ataque.
