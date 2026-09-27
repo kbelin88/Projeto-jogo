@@ -183,11 +183,27 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
   const sol = new THREE.DirectionalLight(new THREE.Color(...cfgSol.sol.cor), 3.2);
   const dSol = cfgSol.sol.direcao_yup;
   sol.castShadow = true;
-  // 2048 e nao 4096: a caixa da sombra acompanha a camara e aperta-se ao que
-  // se esta a ver, portanto os 2048 caem sobre uma area pequena e chegam. Os
-  // 4096 custavam quatro vezes mais memoria e quatro vezes mais escrita por
-  // quadro para a mesma nitidez.
-  sol.shadow.mapSize.set(2048, 2048);
+  // ── A SOMBRA JA NAO SEGUE A CAMARA (26/09) ──────────────────────────────
+  // A caixa da sombra andava atras do alvo da orbita e apertava-se com o
+  // zoom (2048 px sobre 120 a 1400 m). O Lucas via o mapa mudar de luz a cada
+  // gesto do rato e pediu para desligar. Agora e UMA caixa fixa, do mapa
+  // inteiro, calculada uma vez: 4096 px sobre ~3,5 km da ~0,85 m por pixel --
+  // chega para a sombra de uma arvore, e nada muda quando a camara anda.
+  sol.shadow.mapSize.set(4096, 4096);
+  // com a caixa do mapa inteiro, cada texel da sombra tem ~0,85 m: numa face
+  // plana larga (o tabuleiro das pontes) a face sombreava-se a si propria em
+  // riscas diagonais -- acne. O desvio pela normal empurra a leitura para fora.
+  sol.shadow.normalBias = 0.6;
+  sol.shadow.bias = -0.0004;
+  {
+    const R = Math.hypot(LX, LY) / 2 + 40;
+    sol.target.position.set(0, 0, 0);
+    sol.position.set(-dSol[0] * R * 2, -dSol[1] * R * 2, -dSol[2] * R * 2);
+    const sc = sol.shadow.camera;
+    sc.left = -R; sc.right = R; sc.top = R; sc.bottom = -R;
+    sc.near = 1; sc.far = R * 4;
+    sc.updateProjectionMatrix();
+  }
   cena.add(sol, sol.target);
   cena.add(new THREE.HemisphereLight(0xbcd8ef, 0x5c6340, 1.2));
 
@@ -547,10 +563,61 @@ float slRocha() {
   // muralha: e ele que tapa a ponta da estrada que entra pelo portao, e sem
   // este nome aqui ele viria no ficheiro e nunca chegaria a cena.
   // A `areia` (11/09) e a quarta: a fita das praias, 20 cm por cima da relva.
+  // ── A AGUA DOS RIOS (F4, 26/09) ─────────────────────────────────────────
+  // A fita do forno leva na cor de vertice a posicao de traves (R, 0,5 no
+  // eixo). Agua turquesa, mais funda ao meio, transparente a chegar a margem
+  // (a margem corta-a com suavidade), e uma ondulacao lenta a correr.
+  const matRio = new THREE.MeshStandardMaterial({
+    color: 0xffffff, roughness: 0.62, metalness: 0.0, transparent: true,
+    opacity: 0.9, vertexColors: true, depthWrite: false });
+  matRio.onBeforeCompile = (sh) => {
+    sh.uniforms.tempo = { value: 0 };
+    matRio.userData.sh = sh;
+    sh.vertexShader = "varying vec3 vMundoRio;" + String.fromCharCode(10) + sh.vertexShader.replace(
+      "#include <begin_vertex>", `#include <begin_vertex>
+  vMundoRio = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
+    sh.fragmentShader = `varying vec3 vMundoRio;
+uniform float tempo;
+float rioH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float rioN(vec2 p) {
+  vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(rioH(i), rioH(i + vec2(1, 0)), f.x), mix(rioH(i + vec2(0, 1)), rioH(i + vec2(1, 1)), f.x), f.y);
+}
+` + sh.fragmentShader.replace("#include <color_fragment>", `
+  float s_ = vColor.r * 2.0 - 1.0;
+  float a_ = abs(s_);
+  vec2 q_ = vMundoRio.xz;
+  float n_ = rioN(q_ * 0.35 + vec2(tempo * 0.6, tempo * 0.4)) * 0.6
+           + rioN(q_ * 1.1 - vec2(tempo * 0.9, 0.0)) * 0.4;
+  vec3 fundo_ = vec3(0.045, 0.20, 0.22);
+  vec3 raso_ = vec3(0.20, 0.44, 0.40);
+  diffuseColor.rgb = mix(fundo_, raso_, smoothstep(0.1, 0.95, a_)) * (0.86 + 0.28 * n_);
+  diffuseColor.a = opacity * (1.0 - smoothstep(0.72, 1.0, a_));`);
+  };
   for (const nome of ["chao", "estradas", "chao_aldeia", "areia", "rocha_topo",
-                      "campos", "cercas", "pedras"])
+                      "campos", "cercas", "pedras", "rios"])
     for (const ch of (banco[nome] || [])) {
       if (nome === "chao") malhaChao.push(ch);
+      if (nome === "rios") { ch.material = matRio; ch.renderOrder = 2; }
+      // ── A ROCHA DO LABIO VEM 15 CM PARA A CAMARA (26/09) ───────────────
+      // A fita sobe 10 cm na VERTICAL; numa face a pique isso fica DENTRO do
+      // plano, e a relva por baixo disputava o pixel (triangulos verdes na
+      // falesia, marcas do Lucas). `polygonOffset` nao serve: com o
+      // `logarithmicDepthBuffer` a profundidade sai do shader e ele e
+      // ignorado (medido). Empurra-se o vertice na direcao da camara, que
+      // vale para qualquer inclinacao. Material PROPRIO: o da parede e o
+      // mesmo e nao pode avancar.
+      if (nome === "rocha_topo") {
+        ch.material = ch.material.clone();
+        const antes = ch.material.onBeforeCompile;
+        ch.material.onBeforeCompile = (sh, r) => {
+          if (antes) antes(sh, r);
+          sh.vertexShader = sh.vertexShader.replace("#include <project_vertex>",
+            `#include <project_vertex>
+mvPosition.xyz -= normalize(mvPosition.xyz) * 0.15;
+gl_Position = projectionMatrix * mvPosition;`);
+        };
+      }
       ch.receiveShadow = true;
       ch.castShadow = false;
       // ── A OCLUSAO TAMBEM PINTA, E NAO SO ESCURECE O AMBIENTE ────────────
@@ -561,7 +628,9 @@ float slRocha() {
       // MARCA da sombra, tambem ao sol, por isso ela entra tambem na cor.
       if (ch.material.aoMap) {
         ch.material.aoMapIntensity = 1.0;
-        ch.material.onBeforeCompile = (sh) => {
+        const antesOc = ch.material.onBeforeCompile;     // o da rocha, acima
+        ch.material.onBeforeCompile = (sh, r) => {
+          if (antesOc) antesOc(sh, r);
           sh.uniforms.forcaOc = { value: 0.85 };
           sh.fragmentShader = `uniform float forcaOc;
 ` + sh.fragmentShader.replace(
@@ -601,6 +670,164 @@ float slRocha() {
       nTri += contaTri(ch);
     }
 
+  // ── O CHAO PINTADO (F1, 26/09) ──────────────────────────────────────────
+  // A cor do chao vem de uma IMAGEM do mapa inteiro (`chao_cor.jpg`, 1 m por
+  // pixel, do `pintar_chao.py`): biomas, relevo, campos, chao de mata. Por
+  // baixo dela, quatro fotografias de detalhe (relva, erva seca, terra, pedra)
+  // pesadas pelo `chao_tipo.png` e DIVIDIDAS pela sua media -- dao o grao e o
+  // claro-escuro, a cor e a da pintura. Sem os ficheiros, o chao fica como era.
+  let chaoPintado = null;
+  try {
+    const meta = await (await fetch(BASE + "chao.json")).json();
+    const tl = new THREE.TextureLoader();
+    const ler = async (f, srgb, repetir) => {
+      const t = await tl.loadAsync(BASE + f);
+      t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+      t.flipY = false;
+      if (repetir) { t.wrapS = t.wrapT = THREE.RepeatWrapping; }
+      t.anisotropy = rend.capabilities.getMaxAnisotropy();
+      return t;
+    };
+    const [cor, tipo, campo, ...det] = await Promise.all([
+      ler("chao_cor.jpg", true, false), ler("chao_tipo.png", false, false),
+      ler("chao_campo.png", false, false),
+      ...meta.detalhe.map((d) => ler("chao_det_" + d.nome + "_cor.jpg", true, true))]);
+    // o rumo de uma parcela nao se interpola com o da vizinha: sem media
+    campo.magFilter = campo.minFilter = THREE.NearestFilter;
+    campo.generateMipmaps = false;
+    chaoPintado = { meta, cor, tipo, campo, det };
+    if (MAPA.estrada2) {
+      [chaoPintado.estTerra, chaoPintado.estCalcada] = await Promise.all([
+        ler("estrada_terra.jpg", true, true), ler("estrada_calcada.jpg", true, true)]);
+    }
+  } catch (e) {
+    console.warn("chao sem pintura (correr o forno):", e);
+  }
+  // as unidades e a funcao GLSL do chao pintado: servem ao PRADO e as
+  // ESTRADAS (que leem o chao por baixo para se fundirem nele)
+  function uniformesChao(sh) {
+    const { meta, cor, tipo, campo, det } = chaoPintado;
+    sh.uniforms.chCor = { value: cor };
+    sh.uniforms.chTipo = { value: tipo };
+    sh.uniforms.chCampo = { value: campo };
+    sh.uniforms.chLado = { value: new THREE.Vector2(meta.LX, meta.LY) };
+    sh.uniforms.chForca = { value: 0.6 };
+    det.forEach((t, k) => {
+      sh.uniforms["chDet" + k] = { value: t };
+      sh.uniforms["chEsc" + k] = { value: 1.0 / meta.detalhe[k].metros };
+      sh.uniforms["chMed" + k] = { value: new THREE.Vector3(...meta.detalhe[k].media) };
+    });
+  }
+  const GLSL_CHAO = `uniform sampler2D chCor; uniform sampler2D chTipo; uniform sampler2D chCampo;
+uniform vec2 chLado; uniform float chForca;
+${[0, 1, 2, 3].map((k) => `uniform sampler2D chDet${k}; uniform float chEsc${k}; uniform vec3 chMed${k};`).join(" ")}
+vec3 chaoPintado() {
+  // o pixel (0,0) da pintura e o canto NOROESTE; no three o norte e -z
+  vec2 uvc = vec2((vMundoSL.x + chLado.x * 0.5) / chLado.x, (vMundoSL.z + chLado.y * 0.5) / chLado.y);
+  vec3 c = texture2D(chCor, uvc).rgb;
+  vec4 w = texture2D(chTipo, uvc);
+  w /= max(w.r + w.g + w.b + w.a, 1e-3);
+  vec2 p = vMundoSL.xz;
+  vec3 d = slLer(chDet0, p * chEsc0).rgb / chMed0 * w.r
+         + slLer(chDet1, p * chEsc1).rgb / chMed1 * w.g
+         + slLer(chDet2, p * chEsc2).rgb / chMed2 * w.b
+         + slLer(chDet3, p * chEsc3).rgb / chMed3 * w.a;
+  // ── OS SULCOS, desenhados aqui (nitidos a qualquer distancia) ─────────
+  // rumo, forca e passo da parcela vem do forno; a risca some quando fica mais
+  // fina do que um pixel (senao era moire a distancia)
+  vec3 cp = texture2D(chCampo, uvc).rgb;
+  float forca = cp.g * 0.25;
+  if (forca > 0.002) {
+    float a = cp.r * 3.14159265;
+    float passo = cp.b * 255.0 / 40.0;
+    float fase = (vMundoSL.x * cos(a) - vMundoSL.z * sin(a)) / passo;
+    float larg = fwidth(fase);
+    float risca = 0.5 + 0.5 * sin(fase * 6.2831853);
+    forca *= 1.0 - smoothstep(0.25, 0.6, larg);
+    c *= 1.0 - forca * risca;
+  }
+  return c * mix(vec3(1.0), d, chForca);
+}
+`;
+  function pintarChao(mat) {
+    const antes = mat.onBeforeCompile;
+    mat.onBeforeCompile = (sh, r) => {
+      if (antes) antes(sh, r);
+      // a pintura ja tem as manchas grandes: as do ladrilho so sujavam
+      if (sh.uniforms.slMacro) sh.uniforms.slMacro.value = 0.0;
+      uniformesChao(sh);
+      mat.userData.ch = sh.uniforms;
+      sh.fragmentShader = sh.fragmentShader
+        .replace("void main() {", GLSL_CHAO + "void main() {")
+        .replace("diffuseColor *= sampledDiffuseColor;", "diffuseColor.rgb *= chaoPintado();");
+    };
+    mat.needsUpdate = true;
+  }
+
+  // ── AS ESTRADAS (F3, 26/09) ─────────────────────────────────────────────
+  // Eram uma fita castanha lisa, igual da estrada real ao carreiro. Agora a
+  // cor de vertice traz DADOS do forno (R = posicao de traves, 0,5 no eixo;
+  // G = classe: 0 carreiro, 0,5 caminho, 1 real) e o shader desenha: terra
+  // batida com dois rodados, erva ao meio nos caminhos, calcada na estrada
+  // real, e uma beira irregular que se FUNDE no chao pintado por baixo -- a
+  // fita deixa de ter contorno.
+  function pintarEstrada(mat) {
+    const antes = mat.onBeforeCompile;
+    mat.onBeforeCompile = (sh, r) => {
+      if (antes) antes(sh, r);
+      if (sh.uniforms.slMacro) sh.uniforms.slMacro.value = 0.0;
+      uniformesChao(sh);
+      sh.uniforms.etTerra = { value: chaoPintado.estTerra };
+      sh.uniforms.etCalcada = { value: chaoPintado.estCalcada };
+      const me = chaoPintado.meta.estrada || { terra: [0.2, 0.2, 0.2], calcada: [0.2, 0.2, 0.2] };
+      sh.uniforms.etMedT = { value: new THREE.Vector3(...me.terra) };
+      sh.uniforms.etMedC = { value: new THREE.Vector3(...me.calcada) };
+      mat.userData.et = sh.uniforms;
+      sh.fragmentShader = sh.fragmentShader
+        .replace("void main() {", GLSL_CHAO + `uniform sampler2D etTerra; uniform sampler2D etCalcada;
+uniform vec3 etMedT; uniform vec3 etMedC;
+vec3 corEstrada() {
+  // (27/09) a cor e DADA aqui; a fotografia (Poly Haven) so da o grao, a
+  // dividir pela sua media. Assim a estrada le-se igual em todo o mapa: terra
+  // clara e quente, a contrastar com o verde do norte E com o dourado do sul
+  // (uma terra da cor do chao seco desaparecia nele -- era o "nao vi diferenca")
+  float s = vColor.r * 2.0 - 1.0;
+  float a = abs(s);
+  float classe = vColor.g;
+  float real = step(0.75, classe);
+  vec2 p = vMundoSL.xz;
+  vec3 chao = chaoPintado();
+  float nr = slRuido(p / 2.0);
+  vec3 grT = slLer(etTerra, p / 14.0).rgb / etMedT;
+  vec3 terra = vec3(0.30, 0.19, 0.10) * mix(vec3(1.0), clamp(grT, 0.55, 1.5), 0.45);
+  // os rodados: dois sulcos mais escuros
+  float rod = exp(-pow((a - 0.2) / 0.06, 2.0));
+  vec3 sup = terra * (1.0 - 0.22 * rod * (0.7 + 0.3 * nr));
+  // a erva ao meio, so nos carreiros
+  float meio = smoothstep(0.09, 0.01, a) * step(classe, 0.25) * smoothstep(0.3, 0.7, nr);
+  sup = mix(sup, chao, 0.55 * meio);
+  // a calcada da estrada real, de beira a beira, com guias mais escuras
+  vec3 grC = slLer(etCalcada, p / 3.2).rgb / etMedC;
+  vec3 calc = vec3(0.26, 0.225, 0.17) * mix(vec3(1.0), clamp(grC, 0.3, 1.8), 0.9);
+  calc *= 1.0 - 0.28 * smoothstep(0.40, 0.46, a);
+  sup = mix(sup, calc, real * smoothstep(0.52, 0.47, a + (nr - 0.5) * 0.03));
+  // a beira: definida (a estrada tem de se LER), com um recorte irregular
+  // curto e uma berma pisada estreita que funde no chao
+  float nb = slRuido(p / 3.0) * 0.6 + slRuido(p / 0.9) * 0.4;
+  float fim = mix(0.50, 0.55, real) - 0.07 * (1.0 - classe);
+  float t = smoothstep(fim - 0.04, fim + 0.10, a + (nb - 0.5) * 0.14);
+  vec3 berma = mix(chao, terra, 0.35) * 0.92;
+  vec3 c = mix(sup, berma, t);
+  return mix(c, chao, smoothstep(0.66, 0.95, a));
+}
+void main() {`)
+        .replace("diffuseColor *= sampledDiffuseColor;", "diffuseColor.rgb *= corEstrada();")
+        // a cor de vertice sao DADOS: nao multiplica
+        .replace("#include <color_fragment>", "");
+    };
+    mat.needsUpdate = true;
+  }
+
   // ── O CHAO TRATA-SE NO FIM ──────────────────────────────────────────────
   // Porque a relva precisa da fotografia da PEDRA (e a pedra da relva) e so
   // aqui se sabe que malhas do chao existem: o glTF parte-o por material.
@@ -632,7 +859,13 @@ float slRocha() {
         forcaRocha: 0.0,
         triplanarProprio: eRocha && !algarve,
       });
+      if (!eRocha && chaoPintado) pintarChao(ch.material);
     }
+    if (chaoPintado && chaoPintado.estTerra)
+      for (const est of (banco.estradas || [])) {
+        semLadrilho(est.material, { celula: 0.5, macro: 0.0 });
+        pintarEstrada(est.material);
+      }
   }
 
   // ── AS ALDEIAS NOVAS (26/09) ────────────────────────────────────────────
@@ -718,8 +951,13 @@ float slRocha() {
   const _cor = new THREE.Color();
   for (const m of MAPA.manchas) {
     const h = m.h === undefined ? 0.5 : m.h;
-    let k = 0;
+    let k = 0, n = -1;
     for (const t of MAPA.arranjos[m.b]) {
+      n++;
+      // `zs`: a altura de CADA arvore no seu chao; `null` e arvore que caiu
+      // (agua, areal, rocha, pique). Sem `zs`, o forno antigo: a do centro.
+      const z = m.zs ? m.zs[n] : (m.z || 0);
+      if (z === null) continue;
       const l = inst[t.peca]; if (!l) continue;
       // desvio deterministico: a mesma arvore tem sempre o mesmo tom, entre
       // partidas e entre o jogo e o video
@@ -728,7 +966,7 @@ float slRocha() {
       const d = 0.90 + 0.20 * (r - Math.floor(r));
       _cor.copy(MATA_SECA).lerp(MATA_HUMIDA, h).multiplyScalar(d);
       por(l, m.p[0] + t.p[0] * m.e, m.p[1] + t.p[1] * m.e,
-          (m.z || 0) + t.p[2] * m.e, t.rz, t.e * m.e, _cor); nInst++;
+          z + t.p[2] * m.e, t.rz, t.e * m.e, _cor); nInst++;
     }
   }
   for (const l of Object.values(inst))
@@ -1624,19 +1862,10 @@ transformed.y += onda * transformed.x * 0.05;`);
     }
     fumegar(relogio);
     if (matMar.userData.sh) matMar.userData.sh.uniforms.tempo.value = relogio * 0.001;
+    if (matRio.userData.sh) matRio.userData.sh.uniforms.tempo.value = relogio * 0.001;
     for (const rei of Object.keys(panos))
       if (panos[rei].mat.userData.sh)
         panos[rei].mat.userData.sh.uniforms.tempo.value = relogio * 0.001;
-    // a sombra segue a camara: um mapa unico a cobrir 2,8 km daria menos de um
-    // pixel por metro e as sombras sairiam em degraus
-    const RS = Math.min(Math.max(ctrl.getDistance() * 0.75, 60), 700);
-    sol.target.position.copy(ctrl.target);
-    sol.position.copy(ctrl.target).add(
-      new THREE.Vector3(-dSol[0], -dSol[1], -dSol[2]).multiplyScalar(RS * 2.2));
-    const sc = sol.shadow.camera;
-    sc.left = -RS; sc.right = RS; sc.top = RS; sc.bottom = -RS;
-    sc.near = 1; sc.far = RS * 5;
-    sc.updateProjectionMatrix();
     rend.render(cena, cam);
   }
   function laco() {

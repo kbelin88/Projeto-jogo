@@ -74,6 +74,14 @@ MATS = {
                          passos=[("MULTIPLY", 1.0, (0.62, 0.48, 0.32))], ajuste=(1.5, 1.4, 1.3)),
     "casca": dict(pasta="madeira", metros=1.6, rug=0.8,
                   passos=[("MULTIPLY", 1.0, (0.42, 0.22, 0.13))]),
+    # as pontes (F4, 26/09): arenito do Poly Haven (CC0), mais claro e dourado
+    # do que a pedra das muralhas, para a ponte se ler contra a estrada
+    "ponte": dict(pasta="ph_sandstone_blocks_05", metros=3.0, rug=0.9,
+                  passos=[("MULTIPLY", 1.0, (1.0, 0.93, 0.80))], ajuste=(1.45, 1.32, 1.08)),
+    "ponte_escura": dict(pasta="ph_sandstone_blocks_05", metros=3.0, rug=0.9,
+                         passos=[("MULTIPLY", 1.0, (0.70, 0.60, 0.50))]),
+    "ponte_lajedo": dict(pasta="ph_cobblestone_large_01", metros=3.2, rug=0.85,
+                         passos=[("MULTIPLY", 1.0, (0.95, 0.88, 0.76))]),
     "barra_azul": dict(cor=(0.10, 0.17, 0.32), rug=0.6),
     "barra_ocre": dict(cor=(0.45, 0.28, 0.10), rug=0.6),
     "escuro": dict(cor=(0.035, 0.028, 0.024), rug=0.9),

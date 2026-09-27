@@ -144,6 +144,13 @@ COSTA2 = os.environ.get("COSTA2", "1") != "0"
 # (`aldeia2.py`). Deixam de ser pecas instanciadas: cada aldeia e geometria
 # propria, junta por material (`aldeia2_<material>`). ALDEIA2=0 volta as antigas.
 ALDEIA2 = os.environ.get("ALDEIA2", "1") != "0"
+# F1 (26/09): a cor do chao vem de uma imagem pintada (`pintar_chao.py`) e a
+# cor de vertice do prado fica BRANCA. `CHAO2=0` volta ao prado tingido.
+CHAO2 = os.environ.get("CHAO2", "1") != "0"
+# F3 (26/09): estradas com classe (real / caminho / carreiro) e a cor de
+# vertice a levar DADOS (posicao de traves e classe) para o shader do jogo.
+# `ESTRADA2=0` volta a fita tingida.
+ESTRADA2 = os.environ.get("ESTRADA2", "1") != "0"
 # com BANCADA sai `montanhas.*`; no mapa inteiro sai `mapa_montanhas.*` -- o
 # `pecas.glb`/`mapa3d.json` do jogo nunca sao escritos com montanhas de teste
 NOME_SAIDA = ("montanhas" if os.environ.get("BANCADA") else "mapa_montanhas")     if MONTANHAS else "bancada"
@@ -501,12 +508,22 @@ for _k in range(1, ALCANCE + 1):
     _dm[_g & ~_f] = _k
     _f = _g
 _dm = np.where(terra, _dm, 0.0) * px                 # em metros
-_s = np.clip(_dm / AREAL, 0.0, 1.0)
+# ── A ENCOSTA SEM DEGRAUS (26/09) ───────────────────────────────────────────
+# `_dm` conta CELULAS inteiras (4,9 m), com uma metrica octogonal: a encosta
+# esculpida a partir dele saia em escada na diagonal -- as normais das faces
+# saltavam entre tres orientacoes fixas, e no jogo liam-se riscas paralelas
+# em todas as encostas de praia (medido na enseada, 26/09). O perfil le uma
+# distancia ALISADA (dois borroes de ~25 m); junto a agua fica a crua, para a
+# linha de costa nao mudar de sitio.
+_dm_borrao = _caixa(_caixa(_dm, 2), 2)
+_t_liso = np.clip((_dm - 10.0) / 25.0, 0.0, 1.0)
+_dmL = np.where(terra, _dm * (1 - _t_liso) + _dm_borrao * _t_liso, 0.0).astype(np.float32)
+_s = np.clip(_dmL / AREAL, 0.0, 1.0)
 _s = _s * _s * (3 - 2 * _s)
-_perfil = np.where(_dm <= AREAL, AREAL_FUNDO + (AREAL_TOPO - AREAL_FUNDO) * _s,
-                   AREAL_TOPO + (_dm - AREAL) * ENCOSTA)
+_perfil = np.where(_dmL <= AREAL, AREAL_FUNDO + (AREAL_TOPO - AREAL_FUNDO) * _s,
+                   AREAL_TOPO + (_dmL - AREAL) * ENCOSTA)
 # o fim do alcance nao pode ser um corte: o tecto sobe ate deixar de mandar
-_w = np.clip((_dm / px - (ALCANCE - SOLTA)) / SOLTA, 0.0, 1.0)
+_w = np.clip((_dmL / px - (ALCANCE - SOLTA)) / SOLTA, 0.0, 1.0)
 _w = _w * _w * (3 - 2 * _w)
 _perfil = _perfil * (1 - _w) + ALTURA_MAX * _w
 
@@ -517,6 +534,39 @@ _perfil = _perfil * (1 - _w) + ALTURA_MAX * _w
 # acima de 75 m e rocha, e a mancha `_fal` continua a variar o resto.
 _alto = _caixa(relevo, 12)
 _rocha = 1.0 - (1.0 - _fal) * np.clip((75.0 - _alto) / 25.0, 0.0, 1.0)
+
+# ── A ENSEADA (26/09) ───────────────────────────────────────────────────────
+# A praia a sul de Sevilha e a que mais aparece na moldura de gravacao, e era
+# a mais feia: ficava a meio caminho entre duas falesias (`_rocha` 0,3-0,6),
+# e esse meio-termo levantava a rampa de praia de 22 para 45-55 graus -- uma
+# parede de RELVA de 45 m, com uma quina seca em cima (o `minimum`) e os dois
+# troços de falesia a acabar em pilar (marca do Lucas). Aqui a costa e
+# declaradamente praia: a rocha apaga-se num raio, a encosta desce a 14 graus
+# e o encontro com o planalto e arredondado (minimo suave, mais abaixo). Nas
+# bordas o peso cai devagar, e as falesias dos lados BAIXAM ate a praia.
+# `porto`: "pontao" (pontao e barcos) ou "barcos" (so barcos, na areia e ao
+# largo). As duas da costa oeste vieram depois, pelas marcas do Lucas, mais
+# pequenas: uma praia com uma parede de relva por tras, e um entalhe na falesia.
+ENSEADAS = [
+    {"c": (-370.0, -545.0), "r0": 170.0, "r1": 330.0, "porto": "pontao"},
+    # `estrada`: (m do eixo sempre intactos, m de passagem). As da costa oeste
+    # tem uma estrada a ~60 m da agua: com a protecao normal (90 + 140 m) a
+    # enseada nao escavava nada (peso 0,5 a 1 na beira, medido)
+    {"c": (-832.7, 794.9), "r0": 90.0, "r1": 210.0, "porto": "barcos", "estrada": (20.0, 80.0),
+     "rio": False},
+    {"c": (-905.5, 320.1), "r0": 70.0, "r1": 170.0, "porto": "barcos", "estrada": (20.0, 80.0)},
+]
+ENSEADA = {"graus": 14.0, "joelho": 9.0}
+_we = np.zeros(terra.shape, dtype=np.float32)
+for _en in ENSEADAS:
+    _we = np.maximum(_we, np.clip((_en["r1"] - np.hypot(_gx - _en["c"][0], _gy - _en["c"][1]))
+                                  / (_en["r1"] - _en["r0"]), 0.0, 1.0).astype(np.float32))
+_we = _we * _we * (3 - 2 * _we)
+_perfil_e = np.where(_dmL <= AREAL, AREAL_FUNDO + (AREAL_TOPO - AREAL_FUNDO) * _s,
+                     AREAL_TOPO + (_dmL - AREAL) * math.tan(math.radians(ENSEADA["graus"])))
+_perfil_e = _perfil_e * (1 - _w) + ALTURA_MAX * _w
+_perfil = _perfil * (1 - _we) + _perfil_e * _we
+_rocha = _rocha * (1.0 - _we)
 _tecto_praia = _perfil + _rocha * (ALTURA_MAX - _perfil)
 
 # ── ONDE HA ESTRADA OU ALDEIA, A COSTA FICA COMO ERA ────────────────────────
@@ -546,7 +596,10 @@ _alc = PROTEGE_ESTRADA + PROTEGE_FADE
 
 def _proteger(x, y, raio):
     """baixa `_prot` para (distancia ao ponto - raio) na vizinhanca do ponto"""
-    r = raio + PROTEGE_FADE
+    # a janela tem de cobrir a transicao MAIS LARGA que le `_prot` (140 m na
+    # enseada): fora dela `_prot` fica infinito, e com 40 m de janela o peso
+    # saltava de 0,71 para 0 na borda do quadrado -- degraus em linha reta
+    r = raio + 150.0
     i0, i1 = max(0, int((x + LX / 2 - r) / px)), min(tw - 1, int((x + LX / 2 + r) / px) + 1)
     j0, j1 = max(0, int((LY / 2 - y - r) / py)), min(th - 1, int((LY / 2 - y + r) / py) + 1)
     if i1 < i0 or j1 < j0:
@@ -571,8 +624,169 @@ for _cid, _c in centros.items():
     # a RAMPA inteira do patamar (ver abaixo): ali o chao e da aldeia
     _proteger(_c[0], _c[1], (C.PERFIS[REDE["c"][_cid]["t"]]["raio"] + 20.0) * 3.6)
 _p = np.clip(1.0 - _prot / PROTEGE_FADE, 0.0, 1.0)
+# na enseada a passagem da zona protegida para a encosta leva 140 m e nao 40:
+# com 40 ficava um degrau a esquadro no alto da praia (o planalto da estrada
+# cortado a pique). A estrada continua no mesmo sitio (`_prot` <= 0 da 1).
+_p_e, _soma_w = np.zeros(terra.shape, dtype=np.float32), np.zeros(terra.shape, dtype=np.float32)
+for _en in ENSEADAS:
+    _raio_e, _fade_e = _en.get("estrada", (PROTEGE_ESTRADA, 140.0))
+    _w_i = np.clip((_en["r1"] - np.hypot(_gx - _en["c"][0], _gy - _en["c"][1]))
+                   / (_en["r1"] - _en["r0"]), 0.0, 1.0).astype(np.float32)
+    _p_e += _w_i * np.clip(1.0 - (_prot + PROTEGE_ESTRADA - _raio_e) / _fade_e, 0.0, 1.0)
+    _soma_w += _w_i
+_p_e = np.where(_soma_w > 0, _p_e / np.maximum(_soma_w, 1e-6), 0.0)
+_p = _p * (1 - _we) + _p_e * _we
 _p = _p * _p * (3 - 2 * _p)
-relevo = np.minimum(relevo, _tecto_velho * _p + _tecto_praia * (1 - _p))
+# o tecto velho conta celulas inteiras (`_dist`, 4 vizinhos): nas bordas da
+# enseada, onde ainda pesa, desenhava uma fiada de degraus na diagonal
+_tv_liso = _caixa(_caixa(_tecto_velho, 2), 2)
+_tecto_velho = _tecto_velho * (1 - _we) + np.minimum(_tecto_velho, _tv_liso) * _we
+_tecto_fim = _tecto_velho * _p + _tecto_praia * (1 - _p)
+# ── NA ENSEADA MISTURAM-SE CHAOS, E NAO TECTOS ──────────────────────────────
+# Fora dela, a zona protegida mistura TECTOS (o velho, que la dentro ja e
+# 150 m, com o da praia) e depois corta: um peso de 0,26 chega para o tecto
+# passar o planalto, e a subida faz-se em metros -- na enseada deu uma parede
+# de 33 m em 10 (medido a x = -400). Aqui misturam-se os CHAOS acabados: o da
+# enseada (encosta a 14 graus, com o encontro com o planalto num minimo
+# SUAVE) e o que ja la estava, pelo peso da estrada. 33 m em 140 m.
+_k_e = ENSEADA["joelho"]
+_chao_e = np.minimum(relevo, -_k_e * np.logaddexp(-relevo / _k_e, -_tecto_praia / _k_e))
+_chao_e = relevo * _p + _chao_e * (1 - _p)
+relevo = (np.minimum(relevo, _tecto_fim) * (1 - _we) + _chao_e * _we).astype(np.float32)
+
+# ── O ATERRO (26/09) ────────────────────────────────────────────────────────
+# Perto de Pamplona uma ravina estreita cortava a falesia (fundo a 34-44 m,
+# lados a 63-85 m): de rocha lia-se como uma laje inclinada por cima da
+# parede, de relva como uma goela de barbatanas. Enche-se ate ao nivel do
+# planalto a volta -- um "tapa-buracos": o chao so SOBE, pelo maior entre ele e
+# a media da vizinhanca, varias vezes -- e a falesia fica continua por baixo.
+# (centro, raio cheio, raio de passagem), em metros; longe de aldeias e estradas.
+ATERROS = [((255.0, 805.0), 55.0, 100.0)]
+for (_ax0, _ay0), _ra0, _ra1 in ATERROS:
+    _wa = np.clip((_ra1 - np.hypot(_gx - _ax0, _gy - _ay0)) / (_ra1 - _ra0), 0.0, 1.0).astype(np.float32)
+    _wa = _wa * _wa * (3 - 2 * _wa) * terra
+    _nivel = relevo.copy()
+    _ter = terra.astype(np.float32)
+    for _ in range(8):
+        _media = _caixa(_nivel * _ter, 4) / np.maximum(_caixa(_ter, 4), 1e-3)
+        _nivel = np.where(_wa > 0, np.maximum(_nivel, _media), _nivel)
+    relevo = (relevo * (1 - _wa) + _nivel * _wa).astype(np.float32)
+
+# ── OS RIOS (F4, 26/09) ─────────────────────────────────────────────────────
+# O tracado sai do `rios.py` (fora do Blender: precisa de scipy), pelo menor
+# custo no relevo ja esculpido, da nascente ate uma praia. Aqui so se lhe
+# entregam os dados; o vale, a agua e as pontes vem a seguir.
+RIOS = os.environ.get("RIOS", "1") != "0" and not RECT
+RIOS_TRACADOS = []
+RIOS_PROCURADOS = 1               # rios cuja nascente o `rios.py` procura (descem sempre)
+if RIOS:
+    _pts_est = []
+    for _a, _b in LIGACOES:
+        (_ax, _ay), (_bx, _by) = centros[_a], centros[_b]
+        _ctl = VIA_DE.get(tuple(sorted((_a, _b))))
+        _n = max(2, int(math.hypot(_bx - _ax, _by - _ay) / 8.0))
+        for _i in range(_n + 1):
+            _q = _i / _n
+            if _ctl:
+                _pts_est.append(((1 - _q) ** 2 * _ax + 2 * (1 - _q) * _q * _ctl[0] + _q * _q * _bx,
+                                 (1 - _q) ** 2 * _ay + 2 * (1 - _q) * _q * _ctl[1] + _q * _q * _by))
+            else:
+                _pts_est.append((_ax + (_bx - _ax) * _q, _ay + (_by - _ay) * _q))
+    np.savez_compressed(
+        os.path.join(os.getcwd(), "ferramentas/cena/_rios_dados.npz"),
+        relevo=relevo.astype(np.float32), terra=terra, lxly=np.array([LX, LY], dtype=np.float32),
+        dm=_dm.astype(np.float32),
+        # as fozes nas enseadas de costa baixa; a do noroeste e falesia alta
+        # (o rio teria de atravessar um planalto de 104 m): em vez dele, o
+        # `rios.py` PROCURA uma nascente cujo caminho ao mar desca sempre
+        fozes=np.array([e["c"] for e in ENSEADAS if e.get("rio", True)], dtype=np.float32),
+        n_procurados=np.array(RIOS_PROCURADOS),
+        aldeias=np.array([[c[0], c[1], C.PERFIS[REDE["c"][cid]["t"]]["raio"]] for cid, c in centros.items()],
+                         dtype=np.float32),
+        estradas=np.array(_pts_est, dtype=np.float32))
+    _rr = subprocess.run(["python", os.path.join("ferramentas", "cena", "rios.py")],
+                         capture_output=True, text=True)
+    print((_rr.stdout or "").strip() if _rr.returncode == 0
+          else "SONDA AVISO rios falhou: " + (_rr.stderr or "")[-600:], flush=True)
+    _fr = os.path.join(os.getcwd(), "ferramentas/cena/_rios.json")
+    if _rr.returncode == 0 and os.path.exists(_fr):
+        RIOS_TRACADOS = json.load(open(_fr, encoding="utf-8"))
+    if os.environ.get("SO_RIOS"):
+        raise SystemExit(0)         # para afinar o tracado sem cozer o resto
+
+# ── O VALE E O LEITO ────────────────────────────────────────────────────────
+# O nivel da agua desce SEMPRE da nascente para a foz (o minimo acumulado do
+# chao alisado, 2 m abaixo dele); o leito e uma calha de 1,6 m sob a agua; e as
+# margens sobem num vale suave (0,30 + 0,006 e: 14 m a 30 m da agua, 40 m a
+# 60 m). Perto de uma estrada o vale ESTREITA -- as margens a pique --, para a
+# ponte nao ter de vencer um vale inteiro. O chao so DESCE.
+#   _corte    quanto o rio baixou cada celula (as estradas somam-no de volta
+#             junto a ponte: ficam por cima, como tabuleiro)
+#   _d_rio    distancia ao eixo do rio mais proximo, _w_rio a meia-largura la
+_corte = np.zeros(terra.shape, dtype=np.float32)
+_alvo_rio = np.full(terra.shape, 1e9, dtype=np.float32)   # o chao que o rio quer
+_d_rio = np.full(terra.shape, 1e9, dtype=np.float32)
+_w_rio = np.zeros(terra.shape, dtype=np.float32)
+_zw_rio = np.zeros(terra.shape, dtype=np.float32)     # o nivel da agua ali
+RIOS_AGUA = []                # por rio: (pontos, meias-larguras, nivel da agua)
+if RIOS_TRACADOS:
+    _d_est_pts = np.array(_pts_est, dtype=np.float32)
+    _antes_rio = relevo.copy()
+    for _rio in RIOS_TRACADOS:
+        _P = np.array(_rio["pts"], dtype=np.float64)
+        _W = np.array(_rio["larg"], dtype=np.float64)
+
+        def _alt0(x, y):
+            fi = (x + LX / 2) / px
+            fj = (LY / 2 - y) / py
+            i0 = max(0, min(tw - 2, int(math.floor(fi))))
+            j0 = max(0, min(th - 2, int(math.floor(fj))))
+            u, v = min(max(fi - i0, 0.0), 1.0), min(max(fj - j0, 0.0), 1.0)
+            return float((_antes_rio[j0, i0] * (1 - u) + _antes_rio[j0, i0 + 1] * u) * (1 - v)
+                         + (_antes_rio[j0 + 1, i0] * (1 - u) + _antes_rio[j0 + 1, i0 + 1] * u) * v)
+
+        _zc = np.array([_alt0(x, y) for x, y in _P])
+        _k = np.ones(15) / 15.0
+        _zs = np.convolve(np.pad(_zc, 7, mode="edge"), _k, mode="valid")
+        _zw = np.minimum.accumulate(_zs - 2.0)
+        # a foz chega ao mar: os ultimos 60 m descem suaves ate +0,15 m
+        _nf = max(2, int(60 / 4))
+        _zw[-_nf:] = np.minimum(_zw[-_nf:], np.linspace(_zw[-_nf], 0.15, _nf))
+        _zw = np.maximum(_zw, 0.15)
+        RIOS_AGUA.append((_P, _W, _zw))
+        for (x, y), w, zw in zip(_P, _W, _zw):
+            R = 75.0
+            i0 = max(0, int((x + LX / 2 - R) / px)); i1 = min(tw - 1, int((x + LX / 2 + R) / px) + 1)
+            j0 = max(0, int((LY / 2 - y - R) / py)); j1 = min(th - 1, int((LY / 2 - y + R) / py) + 1)
+            if i1 < i0 or j1 < j0:
+                continue
+            gxw = _gx[j0:j1 + 1, i0:i1 + 1] if _gx.shape == terra.shape else (np.arange(i0, i1 + 1) * px - LX / 2)[None, :]
+            gyw = _gy[j0:j1 + 1, i0:i1 + 1] if _gy.shape == terra.shape else (LY / 2 - np.arange(j0, j1 + 1) * py)[:, None]
+            d = np.hypot(gxw - x, gyw - y)
+            sub = _d_rio[j0:j1 + 1, i0:i1 + 1]
+            mais_perto = d < sub
+            _d_rio[j0:j1 + 1, i0:i1 + 1] = np.where(mais_perto, d, sub)
+            _w_rio[j0:j1 + 1, i0:i1 + 1] = np.where(mais_perto, w, _w_rio[j0:j1 + 1, i0:i1 + 1])
+            _zw_rio[j0:j1 + 1, i0:i1 + 1] = np.where(mais_perto, zw, _zw_rio[j0:j1 + 1, i0:i1 + 1])
+            # ⚠ as margens NAO estreitam perto das estradas: com a margem a pique
+            # para a ponte ser curta saia uma GARGANTA de relva, com a estrada no
+            # alto (visto a 26/09). O vale e largo em todo o lado, e e a estrada
+            # que desce por ele ate a ponte (ver `altura_estrada`).
+            e = d - w
+            # o leito vai ALEM da largura da agua (ate w + 2,5 m): a grelha e de
+            # 4,9 m, e com a calha so ate w os vertices da margem ficavam
+            # ACIMA da agua e a interpolacao tapava-a (26% dos pontos, medido)
+            leito = zw - 1.6 * (1.0 - np.clip(d / max(w + 2.5, 0.5), 0, 1) ** 2)
+            e = e - 2.5
+            margem = zw + 0.25 + e * 0.30 + np.maximum(e, 0) ** 2 * 0.006
+            alvo = np.where(e < 0, leito, margem)
+            _alvo_rio[j0:j1 + 1, i0:i1 + 1] = np.minimum(_alvo_rio[j0:j1 + 1, i0:i1 + 1], alvo)
+            bloco_ = relevo[j0:j1 + 1, i0:i1 + 1]
+            relevo[j0:j1 + 1, i0:i1 + 1] = np.where(terra[j0:j1 + 1, i0:i1 + 1],
+                                                    np.minimum(bloco_, alvo), bloco_)
+    _corte = np.maximum(_antes_rio - relevo, 0.0).astype(np.float32)
+    print("SONDA rios: vale escavado, %.0f m3 de terra, corte max %.1f m"
+          % (float(_corte.sum()) * px * py, float(_corte.max())), flush=True)
 
 # ── AS MONTANHAS DE TESTE ───────────────────────────────────────────────────
 # Tres estilos, para o Lucas escolher olhando:
@@ -793,6 +1007,38 @@ def altura_em(mx, my):
 # disco a altura do centro, com uma RAMPA a volta para nao ficar um patamar
 # recortado -- e a mesma ideia do `patamar()` que o `relevo.py` ja fazia na
 # peca, agora feita no mapa.
+def altura_estrada(mx, my):
+    """a altura por onde passa a estrada: a do chao, MAS por cima do rio.
+
+    A estrada desce pelo vale do rio como o chao, e so junto a agua (ate 12 m
+    da margem) sobe para passar 3,2 m acima dela -- uma ponte baixa, que e o
+    que um vale largo pede. Entre 12 e 40 m passa de uma a outra. Longe dos rios
+    e igual a `altura_em`: o eixo das marchas so muda de altura, e so ali.
+    (A 1.a versao repunha o chao de ANTES do rio: a ponte ficava no alto de uma
+    garganta.)
+    """
+    h = altura_em(mx, my)
+    if not RIOS_TRACADOS:
+        return h
+    fi = (mx + LX / 2) / px
+    fj = (LY / 2 - my) / py
+    i0 = max(0, min(tw - 2, int(math.floor(fi))))
+    j0 = max(0, min(th - 2, int(math.floor(fj))))
+    u, v = min(max(fi - i0, 0.0), 1.0), min(max(fj - j0, 0.0), 1.0)
+    # bilinear, e nao a celula mais proxima: senao o tabuleiro saia aos degraus
+    tot = 0.0
+    for dj, di, pw in ((0, 0, (1 - u) * (1 - v)), (0, 1, u * (1 - v)),
+                       (1, 0, (1 - u) * v), (1, 1, u * v)):
+        jj, ii = j0 + dj, i0 + di
+        e = float(_d_rio[jj, ii] - _w_rio[jj, ii])
+        t = min(1.0, max(0.0, (46.0 - e) / 30.0))
+        t = t * t * (3 - 2 * t)
+        # 6 m sobre a agua: a ponte tem de ter ARCOS que se vejam (a 3,2 m
+        # a ponte era um estrado rente a agua)
+        tot += pw * max(0.0, float(_zw_rio[jj, ii]) + 6.0 - h) * t
+    return h + tot
+
+
 patamares = {}
 for cid, c in centros.items():
     # o chao da praia mergulha; uma aldeia nunca. O patamar tem chao seco por
@@ -820,6 +1066,47 @@ for cid, c in centros.items():
             k = 1.0 if d <= raio else (rampa - d) / (rampa - raio)
             k = k * k * (3 - 2 * k)                    # suaviza as pontas
             relevo[j, i] = relevo[j, i] * (1 - k) + h * k
+# ── O VALE DO RIO GANHA A RAMPA DA ALDEIA (26/09) ───────────────────────────
+# As rampas acima tem 200-300 m e puxam o chao para a altura da aldeia: tapavam
+# o vale (a agua ficava 4-6 m DEBAIXO do chao, medido). Reaplica-se o chao do
+# rio por cima, so a descer; o patamar da aldeia em si (d <= raio) esta a mais
+# de 90 m de qualquer rio (o `rios.py` nao passa perto de aldeias).
+if RIOS_TRACADOS:
+    relevo = np.where(terra, np.minimum(relevo, _alvo_rio), relevo).astype(np.float32)
+
+# ── O ATERRO DAS PONTES (27/09) ─────────────────────────────────────────────
+# Junto a um rio a estrada sobe para 6 m acima da agua (`altura_estrada`), e o
+# chao nao subia com ela: a fita ficava a flutuar, com as beiras no ar. Aqui o
+# chao sobe por baixo dela -- um aterro de terra com taludes de 1:1,5 --, fora
+# da agua e da margem (a ponte e que atravessa o rio). Depois disto a estrada
+# volta a ser medida e assenta no aterro.
+if RIOS_TRACADOS and _pts_est:
+    _PE = np.array(_pts_est, dtype=np.float64)
+    _alvo_at = np.full(terra.shape, -1e9, dtype=np.float32)
+    for x, y in _PE:
+        i_ = int(round((x + LX / 2) / px)); j_ = int(round((LY / 2 - y) / py))
+        if not (0 <= i_ < tw and 0 <= j_ < th):
+            continue
+        if _d_rio[j_, i_] - _w_rio[j_, i_] > 50.0:
+            continue
+        hz = altura_estrada(x, y) - 0.35
+        R = 40.0
+        i0 = max(0, int((x + LX / 2 - R) / px)); i1 = min(tw - 1, int((x + LX / 2 + R) / px) + 1)
+        j0 = max(0, int((LY / 2 - y - R) / py)); j1 = min(th - 1, int((LY / 2 - y + R) / py) + 1)
+        gxw = (np.arange(i0, i1 + 1) * px - LX / 2)[None, :]
+        gyw = (LY / 2 - np.arange(j0, j1 + 1) * py)[:, None]
+        d = np.hypot(gxw - x, gyw - y)
+        # plataforma de 7 m de meia-largura e talude a 1:3 (a 1:1,5 saia em
+        # cunhas facetadas: a grelha e de 5 m)
+        alvo = hz - np.maximum(d - 7.0, 0.0) / 3.0
+        _alvo_at[j0:j1 + 1, i0:i1 + 1] = np.maximum(_alvo_at[j0:j1 + 1, i0:i1 + 1], alvo)
+    fora_agua = (_d_rio - _w_rio) > 3.0
+    _antes_at = relevo.copy()
+    _mais = np.where(terra & fora_agua, np.maximum(_alvo_at - relevo, 0.0), 0.0)
+    # o acrescento alisa-se (1 celula): sem isto cada face da grelha era um plano
+    _mais = np.maximum(_caixa(_mais.astype(np.float32), 1) * 0.6 + _mais * 0.4, 0.0)
+    relevo = (relevo + np.where(fora_agua, _mais, 0.0)).astype(np.float32)
+    print("SONDA pontes: aterro de %.0f m3" % (float((relevo - _antes_at).sum()) * px * py), flush=True)
 # O RELEVO FINAL VAI PARA DISCO. Nao e para o jogo: e para se poder medir
 # contra ele. Ao investigar a estrada tapada eu reconstrui o campo de alturas
 # fora daqui e esqueci-me dos patamares das aldeias -- e a analise acusou 59 m
@@ -847,7 +1134,97 @@ for _i, (cid, perfil, portoes) in enumerate(A2_ALDEIAS):
     _m = A2.construir(A2_G, perfil, portoes, 11 + _i * 7, (cx, cy, patamares[cid] + 0.60))
     # o mastro no alto da menagem: e ali que o jogo hasteia a cor do dono
     mastros[cid] = [[round(cx + _m[0], 2), round(cy + _m[1], 2), round(0.60 + _m[2], 2), 1.0]]
-if A2_ALDEIAS:
+# ── OS PORTOS DAS ENSEADAS (26/09, `porto.py`) ─────────────────────────────
+# Um pontao e barcos na praia que mais aparece no video; so barcos nas outras.
+# O rumo do mar acha-se no relevo ja esculpido: de todas as direcoes a partir
+# do centro da enseada, a que chega mais depressa a agua. Tudo a escala 1,5
+# (o Lucas: "nao da para ver o que sao" a distancia de jogo).
+import porto as PORTO                                           # noqa: E402
+PORTO_FEITO = False
+# 26/09, a pedido do Lucas: os barcos ao DOBRO (3,0; ~22 m). O pontao fica.
+ESC_BARCO, ESC_PONTAO = 3.0, 1.35
+_SEP = ESC_BARCO / 1.5            # os afastamentos entre barcos crescem com eles
+if not RECT:
+    from mathutils import Matrix as _Mx                         # noqa: E402
+    # `construir` deixa a origem na ULTIMA aldeia; o porto e em metros do mapa
+    A2_G.origem = _Mx.Identity(4)
+
+    def _praia_seca(x_, y_):
+        """areia seca, rente a agua: onde se puxa um barco"""
+        z_ = altura_em(x_, y_)
+        return em_terra(x_, y_) and 0.15 < z_ < 1.6 and rho_areia_em(x_, y_) > 0.3
+
+    def _agua(x_, y_, fundo=-0.6):
+        return (not em_terra(x_, y_)) or altura_em(x_, y_) < fundo
+
+    for _en in ENSEADAS:
+        _c0 = _en["c"]
+        # ── A BEIRA DE AREIA MAIS PERTO DO CENTRO ─────────────────────────────
+        # O "rumo mais curto ate a agua" apanhava outros bracos de mar (um
+        # barco foi parar ao meio das arvores). Aqui procura-se o ponto de
+        # AREIA SECA mais perto do centro marcado, e o mar e para onde o chao
+        # desce a partir dele.
+        _best = None
+        for _gxi in range(-60, 61):
+            for _gyi in range(-60, 61):
+                x_, y_ = _c0[0] + _gxi * 4.0, _c0[1] + _gyi * 4.0
+                d_ = math.hypot(x_ - _c0[0], y_ - _c0[1])
+                if d_ > _en["r1"] or (_best and d_ >= _best[0]):
+                    continue
+                if _praia_seca(x_, y_):
+                    _best = (d_, x_, y_)
+        if not _best:
+            print("SONDA porto: enseada %s sem areia -- nada posto" % (_c0,), flush=True)
+            continue
+        _, _px, _py = _best
+        _gxz = altura_em(_px + 3.0, _py) - altura_em(_px - 3.0, _py)
+        _gyz = altura_em(_px, _py + 3.0) - altura_em(_px, _py - 3.0)
+        _rumo = math.atan2(-_gyz, -_gxz)            # para onde o chao DESCE
+        _ux, _uy = math.cos(_rumo), math.sin(_rumo)
+        _vx, _vy = -_uy, _ux
+        # a linha de agua ao longo do rumo
+        _k = 0.0
+        while _k < 80.0 and not _agua(_px + _ux * _k, _py + _uy * _k, fundo=0.0):
+            _k += 1.0
+        _wx, _wy = _px + _ux * _k, _py + _uy * _k
+
+        def _em(avanco, lado):
+            return (_wx + _ux * avanco + _vx * lado, _wy + _uy * avanco + _vy * lado)
+
+        _postos = 0
+        if _en["porto"] == "pontao":
+            # o pontao nasce 9 m antes da linha de agua e entra 34 m no mar
+            _sx, _sy = _em(-9.0, 0.0)
+            PORTO.pontao(A2_G, _sx, _sy, _rumo, 43.0, altura_em, esc=ESC_PONTAO)
+            # um barco atracado ao lado da ponta, a boiar (a agua esta a 0 m)
+            _bx, _by = _em(21.0, 4.0 + 2.6 * _SEP)
+            PORTO.barco(A2_G, _bx, _by, -0.5, _rumo + 0.06, mastro=True, esc=ESC_BARCO)
+            _postos += 2
+            _na_areia = [(-7.0 * _SEP, -14.0 * _SEP, 1.9, 0.18)]
+        else:
+            # sem pontao: barcos puxados para a areia, de proa para o mar, e
+            # um fundeado ao largo com o mastro
+            _na_areia = [(-6.0 * _SEP, -8.0 * _SEP, 0.15, 0.10), (-5.0 * _SEP, 5.0 * _SEP, -0.2, -0.14),
+                          (-9.0 * _SEP, 16.0 * _SEP, 0.35, 0.08)]
+            _bx, _by = _em(24.0 * _SEP, -5.0 * _SEP)
+            if _agua(_bx, _by):
+                PORTO.barco(A2_G, _bx, _by, -0.5, _rumo + 2.6, mastro=True, esc=ESC_BARCO)
+                _postos += 1
+        for _av, _lado, _vira, _ad in _na_areia:
+            _ax, _ay = _em(_av, _lado)
+            # so onde o chao e mesmo areia: numa praia estreita, recua ou salta
+            if not _praia_seca(_ax, _ay):
+                _ax, _ay = _em(_av + 3.0, _lado)
+                if not _praia_seca(_ax, _ay):
+                    continue
+            PORTO.barco(A2_G, _ax, _ay, altura_em(_ax, _ay) - 0.2, _rumo + _vira,
+                        L=6.4, B=2.05, adernar=_ad, esc=ESC_BARCO)
+            _postos += 1
+        PORTO_FEITO = PORTO_FEITO or _postos > 0
+        print("SONDA porto: %s em %s -> areia a %.0f m do centro, agua em (%.0f, %.0f), "
+              "rumo %.0f graus, %d barco(s)" % (_en["porto"], _c0, _best[0], _wx, _wy,
+                                              math.degrees(_rumo), _postos), flush=True)
+if A2_ALDEIAS or PORTO_FEITO:
     A2.objetos(A2_G, cena)
     print("SONDA aldeias novas: %d, %d triangulos" % (len(A2_ALDEIAS), A2_G.triangulos()), flush=True)
 for m in manchas:
@@ -898,10 +1275,31 @@ MIOLO = 0.52          # a fracao da fita que e terra nua
 BERMA = (0.62, 0.70, 0.44)   # a berma puxa ao verde sem apagar a terra
 trocos = 0
 eixos = []            # o CAMINHO de cada troco, para as tropas o seguirem
+# ── A CLASSE DE CADA TROCO (F3) ─────────────────────────────────────────────
+# Todas as estradas eram iguais: a real entre capitais e o carreiro entre duas
+# aldeolas. Pela importancia das pontas: estrada REAL (calcada, mais larga) se
+# liga a capital, ou duas grandes; CARREIRO (estreito, com erva ao meio) entre
+# duas pequenas; CAMINHO no resto. O traçado NAO muda (a marcha le a rede).
+_GRANDE = {"grande", "capital"}
+
+
+def classe_troco(a, b):
+    ta, tb = REDE["c"][a]["t"], REDE["c"][b]["t"]
+    if "capital" in (ta, tb) or (ta in _GRANDE and tb in _GRANDE):
+        return 1.0                        # real
+    if ta == "pequena" and tb == "pequena":
+        return 0.0                        # carreiro
+    return 0.5                            # caminho
+
+
+ESCALA_CLASSE = {1.0: 1.15, 0.5: 1.0, 0.0: 0.78}
+n_classe = {1.0: 0, 0.5: 0, 0.0: 0}
 for a, b in LIGACOES:
     ax, ay = centros[a]
     bx, by = centros[b]
     rumo = math.degrees(math.atan2(by - ay, bx - ax))
+    classe = classe_troco(a, b) if ESTRADA2 else 0.5
+    n_classe[classe] += 1
     # ── E QUEM NAO ACHA PORTAO PARA NA MURALHA ──────────────────────────
     # A alternativa antiga era o CENTRO da aldeia, e uma estrada que aponta ao
     # centro entra pela muralha e sai do outro lado. Parar na muralha e a
@@ -1009,7 +1407,7 @@ for a, b in LIGACOES:
         borda = min(math.hypot(cx - ax, cy - ay) - raio_a,
                     math.hypot(cx - bx, cy - by) - raio_b)
         adro = 1.0 + 0.85 * max(0.0, 1.0 - max(0.0, borda) / 30.0) ** 1.6
-        w = LARG_ESTRADA * adro * (0.5 + 0.09 * math.sin(t * 21 + comp)
+        w = LARG_ESTRADA * ESCALA_CLASSE[classe] * adro * (0.5 + 0.09 * math.sin(t * 21 + comp)
                                    + 0.06 * math.sin(t * 47)
                                    # ── E A BEIRA E IRREGULAR ────────────
                                    # Uma beira a direito nao existe em caminho
@@ -1036,9 +1434,15 @@ for a, b in LIGACOES:
         # de mistura no material nao chega ao outro lado.
         for lado, val in ((+1.0, 1.0), (+MIOLO, 1.0), (-MIOLO, 1.0), (-1.0, 1.0)):
             ex, ey = cx + nx * w * lado, cy + ny * w * lado
-            verts.append((ex, ey, altura_em(ex, ey) + 0.45))
+            verts.append((ex, ey, altura_estrada(ex, ey) + 0.45))
             fora = abs(lado) > MIOLO + 1e-6
-            cores.append(BERMA if fora else (1.0, 1.0, 1.0))
+            if ESTRADA2:
+                # ⚠ DADOS, nao cor: R = posicao de traves (0 uma beira, 0,5 o
+                # eixo, 1 a outra), G = classe. O shader do jogo le-os e nao os
+                # multiplica pela textura (ver `pintarEstrada` no mapa3d.js)
+                cores.append((0.5 + 0.5 * lado, classe, 1.0))
+            else:
+                cores.append(BERMA if fora else (1.0, 1.0, 1.0))
             uvs.append((andado, w * lado))
         # ── E CADA VERTICE LEVA O SEU UV ─────────────────────────────────
         # Sem UV nao ha textura possivel: uma fita so tem cor. O `u` anda com
@@ -1058,7 +1462,7 @@ for a, b in LIGACOES:
         # verdade.
         # o EIXO leva a altura do centro, que e por onde as tropas andam --
         # nao a de nenhuma das beiras
-        eixo.append([round(cx, 1), round(cy, 1), round(altura_em(cx, cy) + 0.5, 1)])
+        eixo.append([round(cx, 1), round(cy, 1), round(altura_estrada(cx, cy) + 0.5, 1)])
     for i in range(N):
         a0 = base + 4 * i
         b0 = base + 4 * (i + 1)
@@ -1215,6 +1619,8 @@ else:
 
 print("SONDA estradas: %d trocos, %d faces, %.1f m de largura, %d com curva autoral"
       % (trocos, len(faces), LARG_ESTRADA * 2, len(VIA_DE)))
+print("SONDA estradas por classe: %d reais, %d caminhos, %d carreiros"
+      % (n_classe[1.0], n_classe[0.5], n_classe[0.0]))
 
 # ── O CHAO, COM A FORMA DA ILHA ─────────────────────────────────────────────
 # Uma grelha sobre o retangulo do mapa, da qual se apagam as faces que caem na
@@ -1551,7 +1957,7 @@ _ij = {v: k for k, v in indice.items()}          # vertice da grelha -> (i, j)
 
 def _cor_prado(vi):
     ck = _ij.get(vi)
-    if ck is None:
+    if ck is None or CHAO2:
         return (1.0, 1.0, 1.0)
     i, j = min(ck[0], tw - 1), min(ck[1], th - 1)
     h = float(_prado[j, i])
@@ -1635,6 +2041,22 @@ for _p in chao.data.polygons:
             _uvc.data[_li].uv = (verts[_vi][0], verts[_vi][1])   # metros
             _cvc.data[_li].color = (*_cor_prado(_vi), 1.0)
 print("SONDA penhascos: %d faces de rocha em %d do chao" % (len(saia), len(faces)))
+# ── A MESMA DIAGONAL DA FITA (26/09) ────────────────────────────────────────
+# As fitas (rocha do labio, areia) partem cada quadrado da grelha pela
+# diagonal 0-2 (`_fita`). O chao ia em quadrados, e quem o partia era o
+# exportador do glTF, pela diagonal mais CURTA. No plano da igual; num
+# quadrado de falesia com 20 m de queda em 5 m, as duas superficies divergem
+# metros e a relva fura a rocha -- triangulos verdes na parede (marcas do
+# Lucas, 26/09). Parte-se aqui, pela mesma diagonal, so a grelha.
+import bmesh                                                    # noqa: E402
+_bm = bmesh.new()
+_bm.from_mesh(chao.data)
+_bm.faces.ensure_lookup_table()
+_quads = [_bm.faces[i] for i in range(N_GRELHA) if len(_bm.faces[i].verts) == 4]
+bmesh.ops.triangulate(_bm, faces=_quads, quad_method="FIXED")
+_bm.to_mesh(chao.data)
+_bm.free()
+print("SONDA chao: %d quadrados da grelha partidos pela diagonal da fita" % len(_quads))
 for col in list(chao.users_collection):
     col.objects.unlink(col.objects.get(chao.name) or chao)
 cena.objects.link(chao)
@@ -1661,12 +2083,13 @@ ROCHA_LEVANTA = 0.10
 _saia_set = set(saia)
 
 
-def _fita(valor, levanta, cor_de):
+def _fita(valor, levanta, cor_de, forcar=None):
     """recorta o chao pela curva `valor(v) = 0` e devolve uma fita propria.
 
     `valor` < 0 e DENTRO. Os vertices sao PARTILHADOS -- os da grelha pelo
     indice, os do corte pela aresta -- senao a fita sai facetada e com
-    costuras entre triangulos vizinhos.
+    costuras entre triangulos vizinhos. `forcar(f)` mete a face INTEIRA
+    dentro, seja qual for o valor dos cantos.
     """
     va, fa, cores, novo, lim = [], [], [], {}, {}
 
@@ -1683,13 +2106,16 @@ def _fita(valor, levanta, cor_de):
         for v in f:
             if v not in lim:
                 lim[v] = valor(v)
-        if min(lim[v] for v in f) >= 0:
+        val = lim
+        if forcar is not None and forcar(f):
+            val = {v: min(lim[v], -1e-3) for v in f}
+        if min(val[v] for v in f) >= 0:
             continue
         for tri in ((f[0], f[1], f[2]), (f[0], f[2], f[3])):
             poly = []
             for k in range(3):
                 a_, b_ = tri[k], tri[(k + 1) % 3]
-                fa0, fb0 = lim[a_], lim[b_]
+                fa0, fb0 = val[a_], val[b_]
                 if fa0 < 0:
                     poly.append(pv(("v", a_), verts[a_]))
                 if (fa0 < 0) != (fb0 < 0):
@@ -1777,28 +2203,86 @@ if COSTA2:
     # a ondulacao de 7 graus furava a fita de rocha em triangulos verdes, e a
     # 26 graus sobravam dentes de relva na encosta da falesia
     ROCHA_ONDA = 2.5
-    ROCHA_DECLIVE = 20.0
+    # ── 44 E NAO 20 (26/09) ─────────────────────────────────────────────
+    # A encosta atras da costa vai dos 16 aos 38 graus, e as paredes dos 44
+    # aos 80 (histograma dos vertices perto do mar). Com o limiar em 20, e
+    # depois em 28, ele caia A MEIO da encosta: cada vertice decidia ao
+    # acaso e a relva saia salpicada de ilhas de rocha (marcas do Lucas; a
+    # 20 graus, 18-20 na encosta; a 28, 25-29 noutra). Acima da encosta
+    # inteira nao ha salpicos. Os dentes verdes que tinham feito descer o
+    # limiar resolvem-se pela FACE a pique (`_face_a_pique`).
+    ROCHA_DECLIVE = 44.0
 LABIO = 9.0               # quantos metros de rocha transbordam a beira
+# ── A PLATAFORMA (26/09) ────────────────────────────────────────────────────
+# Numa costa de falesia, o chao que fica rente a agua -- uma prateleira a 10 m
+# no fundo de uma enseada -- e rocha lavada pelo mar, nao prado. Sem isto
+# sobrava um tapete de relva no meio das paredes (marca do Lucas).
+PLATAFORMA_Z = 16.0       # abaixo disto, e perto da agua, e rocha
+PLATAFORMA_DM = 30.0
+FACE_ROCHA = 40.0         # uma face da grelha mais a pique do que isto e parede
 _gz_y, _gz_x = np.gradient(relevo.astype(np.float32), py, px)
 _declive = np.degrees(np.arctan(np.hypot(_gz_x, _gz_y))).astype(np.float32)
 _perto_mar = np.clip((55.0 - _dm) / 25.0, 0.0, 1.0).astype(np.float32)
 
 
-def _valor_rocha(vi):
-    ci, cj = _ij[vi]
-    x, y, _z = verts[vi]
-    j, i = min(cj, th - 1), min(ci, tw - 1)
+# ── ONDE O LUCAS QUER RELVA (26/09) ─────────────────────────────────────────
+# Perto de Pamplona, uma encosta de 50-55 graus a 25 m do mar e rocha pelas
+# regras, mas lia-se como uma LAJE inclinada por cima da parede ("trocar por
+# grama"). Dentro destes circulos a fita de rocha nao entra; a parede da costa
+# (a saia) continua de rocha. So a laje: a ravina ao lado foi cheia (`ATERROS`),
+# e com a relva forcada tambem la a parede dela ficava com picos verdes.
+RELVA_FORCADA = [((125.0, 790.0), 65.0)]          # (centro, raio), em metros
+
+
+def _relva_forcada(x, y):
+    return any(math.hypot(x - c[0], y - c[1]) < r for c, r in RELVA_FORCADA)
+
+
+def _valor_rocha_pt(x, y, z, j, i, labio_extra=0.0):
+    if _relva_forcada(x, y):
+        return 1.0
     onda = ROCHA_ONDA * (0.55 * math.sin(x * 0.061 - y * 0.043)
                          + 0.45 * math.sin(x * 0.017 + y * 0.093))
     w = float(_perto_mar[j, i])
-    # ── DUAS RAZOES PARA HAVER ROCHA EM CIMA ────────────────────────────
-    # O chao ser INGREME, ou ser a BEIRA de uma falesia. So o declive nao
-    # chegava: nas falesias do planalto (Lisboa) o chao em cima e plano e a
-    # parede e a saia -- o labio continuava uma quina a 90 graus.
+    dm_ = float(_dm[j, i])
+    so_falesia = 60.0 * (1.0 - float(_rocha[j, i]))
+    # ── TRES RAZOES PARA HAVER ROCHA EM CIMA ────────────────────────────
+    # O chao ser INGREME, ser a BEIRA de uma falesia, ou ser a PLATAFORMA
+    # rente a agua. So o declive nao chegava: nas falesias do planalto
+    # (Lisboa) o chao em cima e plano e a parede e a saia -- o labio
+    # continuava uma quina a 90 graus.
     por_declive = (ROCHA_DECLIVE + onda) - float(_declive[j, i]) + 90.0 * (1.0 - w)
-    beira = (float(_dm[j, i]) - (LABIO + 0.45 * onda)
-             + 60.0 * (1.0 - float(_rocha[j, i])))
-    return min(por_declive, beira)
+    beira = dm_ - (LABIO + labio_extra + 0.45 * onda) + so_falesia
+    plataforma = ((z - PLATAFORMA_Z) + so_falesia
+                  + 2.0 * max(0.0, dm_ - PLATAFORMA_DM))
+    return min(por_declive, beira, plataforma)
+
+
+def _valor_rocha(vi):
+    ci, cj = _ij[vi]
+    x, y, z = verts[vi]
+    return _valor_rocha_pt(x, y, z, min(cj, th - 1), min(ci, tw - 1))
+
+
+def _face_a_pique(f):
+    """a face da grelha e parede: mais de FACE_ROCHA graus, perto do mar.
+
+    O declive por vertice (gradiente central) media a parede com o plano do
+    lado, e ficava abaixo do limiar precisamente na aresta de cima -- dai os
+    picos de relva na parede. Ao pe de uma praia larga ainda era pior: a
+    parede fica a 35-50 m da agua e o peso "perto do mar" apagava-a.
+    """
+    p0, p1, p2, p3 = (verts[v] for v in f)
+    if _relva_forcada(p0[0], p0[1]):
+        return False
+    ax, ay, az = p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]
+    bx, by, bz = p3[0] - p1[0], p3[1] - p1[1], p3[2] - p1[2]
+    nx, ny, nz = ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx
+    n = math.sqrt(nx * nx + ny * ny + nz * nz) or 1.0
+    if math.degrees(math.acos(min(1.0, abs(nz) / n))) <= FACE_ROCHA:
+        return False
+    ci, cj = _ij[f[0]]
+    return float(_perto_mar[min(cj, th - 1), min(ci, tw - 1)]) > 0.0
 
 
 def _cor_rocha_topo(p):
@@ -1808,7 +2292,7 @@ def _cor_rocha_topo(p):
     return (k, k * 0.99, k * 0.97)
 
 
-_vr, _fr, _cr = _fita(_valor_rocha, ROCHA_LEVANTA, _cor_rocha_topo)
+_vr, _fr, _cr = _fita(_valor_rocha, ROCHA_LEVANTA, _cor_rocha_topo, forcar=_face_a_pique)
 _area_r = _pousar("rocha_topo", _vr, _fr, _cr, "falesia_algarve" if COSTA2 else "falesia", 0.96,
                   uv_altura=COSTA2)
 print("SONDA labio de rocha: %d triangulos, %.0f m2 (%.1f ha)"
@@ -2043,12 +2527,19 @@ def livre_para_pedra(mx, my):
             and _longe_da_mata(mx, my, 1.0))
 
 
-_campos, _cercas, _n_parcelas = PV.campos_e_cercas(
-    centros, raio_de, altura_em, declive_em, livre_para_campo)
-_a_campos = _pousar("campos", _campos[0], _campos[1], _campos[2], "lavrado", 0.96)
-_pousar("cercas", _cercas[0], _cercas[1], _cercas[2], "madeira", 0.85)
-print("SONDA campos: %d parcelas, %.1f ha lavrados, %d faces de cerca"
-      % (_n_parcelas, _a_campos / 1e4, len(_cercas[1])), flush=True)
+# ── OS CAMPOS SAIRAM DO JOGO (26/09) ────────────────────────────────────────
+# As parcelas lavradas com cerca eram um teste e nao ficaram boas (o Lucas:
+# "fazendinhas" pelo mapa todo). Ficam GUARDADAS atras de `CAMPOS=1`, como a
+# costa e as aldeias antigas; o `mapa3d.js` ja lida com a malha que nao vem.
+if os.environ.get("CAMPOS") == "1":
+    _campos, _cercas, _n_parcelas = PV.campos_e_cercas(
+        centros, raio_de, altura_em, declive_em, livre_para_campo)
+    _a_campos = _pousar("campos", _campos[0], _campos[1], _campos[2], "lavrado", 0.96)
+    _pousar("cercas", _cercas[0], _cercas[1], _cercas[2], "madeira", 0.85)
+    print("SONDA campos: %d parcelas, %.1f ha lavrados, %d faces de cerca"
+          % (_n_parcelas, _a_campos / 1e4, len(_cercas[1])), flush=True)
+else:
+    print("SONDA campos: desligados (CAMPOS=1 para os ter)", flush=True)
 
 _lim = RECT or (-LX / 2, -LY / 2, LX / 2, LY / 2)
 _quantas_pedras = max(30, int((_lim[2] - _lim[0]) * (_lim[3] - _lim[1]) / 9000.0))
@@ -2061,7 +2552,105 @@ def _ponto_ao_acaso(rnd):
 _pedras, _n_pedras = PV.pedras(_quantas_pedras, _ponto_ao_acaso, altura_em,
                                declive_em, livre_para_pedra)
 _pousar("pedras", _pedras[0], _pedras[1], _pedras[2], "pedra", 0.94)
+
+# ── A AGUA DOS RIOS E AS PONTES (F4, 26/09) ─────────────────────────────────
+# A agua e uma fita ao nivel `zw`, um pouco mais larga que o leito (as margens
+# cortam-na). A cor de vertice leva DADOS: R = posicao de traves (0,5 no
+# eixo). O `mapa3d.js` da-lhe um material de agua proprio (`rios`).
+if RIOS_AGUA:
+    _va, _fa, _ca = [], [], []
+    for _P, _W, _zw in RIOS_AGUA:
+        _tx, _ty = np.gradient(_P[:, 0]), np.gradient(_P[:, 1])
+        _tn = np.hypot(_tx, _ty) + 1e-9
+        _nx, _ny = -_ty / _tn, _tx / _tn
+        _b0 = len(_va)
+        for (x, y), w, zw, nx_, ny_ in zip(_P, _W, _zw, _nx, _ny):
+            for lado in (-1.0, 0.0, 1.0):
+                ww = w + 1.8
+                _va.append((x + nx_ * ww * lado, y + ny_ * ww * lado, zw))
+                _ca.append((0.5 + 0.5 * lado, 0.5, 1.0))
+        for i in range(len(_P) - 1):
+            a0, b0 = _b0 + 3 * i, _b0 + 3 * (i + 1)
+            for k in range(2):
+                _fa.append((a0 + k, b0 + k, b0 + k + 1, a0 + k + 1))
+    _pousar("rios", _va, _fa, _ca, "caminho", 0.2)
+
+    # as pontes: onde o eixo de um rio passa a menos de 4 m do de uma estrada
+    from mathutils import Matrix as _Mx2                           # noqa: E402
+    PONTES_G = A2.Malhas()
+    PONTES_G.origem = _Mx2.Identity(4)
+    _n_pontes = 0
+    for _P, _W, _zw in RIOS_AGUA:
+        for _e in eixos:
+            _E = np.array(_e["pts"], dtype=np.float64)
+            if len(_E) < 3:
+                continue
+            _dd = np.hypot(_P[:, 0][:, None] - _E[:, 0][None, :], _P[:, 1][:, None] - _E[:, 1][None, :])
+            if _dd.min() > 4.0:
+                continue
+            _ir, _ie = np.unravel_index(int(np.argmin(_dd)), _dd.shape)
+            _ie = min(max(_ie, 1), len(_E) - 2)
+            _rumo = math.atan2(_E[_ie + 1, 1] - _E[_ie - 1, 1], _E[_ie + 1, 0] - _E[_ie - 1, 0])
+            _vao = 2.0 * (float(_W[_ir]) + 10.0)
+            PORTO.ponte(PONTES_G, float(_E[_ie, 0]), float(_E[_ie, 1]), _rumo, _vao,
+                        # a superficie da fita: o eixo das marchas esta 5 cm acima
+                        float(_E[_ie, 2]) - 0.05, float(_zw[_ir]))
+            _n_pontes += 1
+    if _n_pontes:
+        A2.objetos(PONTES_G, cena)
+    print("SONDA rios: %d fitas de agua, %d pontes" % (len(RIOS_AGUA), _n_pontes), flush=True)
 print("SONDA pedras: %d penedos" % _n_pedras, flush=True)
+
+# ── CADA ARVORE NO SEU CHAO (26/09) ─────────────────────────────────────────
+# A mancha tinha UMA altura, a do centro, e as suas 8 a 40 arvores iam todas
+# para ela. Num raio de 28 m de encosta isso da metros: medido por raio no
+# jogo, 3 372 das 8 758 arvores estavam a mais de 2 m do chao (1 492 no ar,
+# 1 880 enterradas) e 67 em cima do mar. Na costa via-se: copas penduradas na
+# parede da falesia, com a sombra no mar (marca do Lucas ao pe de Tarragona).
+# Agora cada arvore leva a sua altura (`zs`), e cai (`null`) a que pisa agua,
+# areal, rocha do labio ou chao a pique. So se testa o sitio do TRONCO.
+MATA_DECLIVE = 30.0       # acima disto e parede, nao encosta
+MATA_BEIRA = 6.0          # a copa nao pode passar a beira da falesia
+
+
+def _arvore_cabe(mx, my, z):
+    if not em_terra(mx, my):
+        return False
+    if RIOS_TRACADOS:
+        # nem no leito nem na margem molhada de um rio
+        _i = min(max(int(round((mx + LX / 2) / px)), 0), tw - 1)
+        _j = min(max(int(round((LY / 2 - my) / py)), 0), th - 1)
+        if _d_rio[_j, _i] < _w_rio[_j, _i] + 7.0:
+            return False
+    if z <= 1.2 + (AREIA_TOPO + AREIA_ONDA + 1.0) * rho_areia_em(mx, my):
+        return False
+    i = min(max(int(round((mx + LX / 2) / px)), 0), tw - 1)
+    j = min(max(int(round((LY / 2 - my) / py)), 0), th - 1)
+    if float(_declive[j, i]) > MATA_DECLIVE:
+        return False
+    # a mesma conta da fita de rocha, no ponto: onde ha rocha por cima da
+    # relva, nao ha arvore
+    return _valor_rocha_pt(mx, my, z, j, i, labio_extra=MATA_BEIRA) > 0.0
+
+
+_n_arv, _n_caidas = 0, 0
+for m in manchas:
+    zs = []
+    for t in bosques[m["b"]]:
+        x_ = m["p"][0] + t["p"][0] * m["e"]
+        y_ = m["p"][1] + t["p"][1] * m["e"]
+        z_ = altura_em(x_, y_)
+        _n_arv += 1
+        if _arvore_cabe(x_, y_, z_):
+            zs.append(round(z_, 2))
+        else:
+            zs.append(None)
+            _n_caidas += 1
+    m["zs"] = zs
+_antes_m = len(manchas)
+manchas = [m for m in manchas if any(z is not None for z in m["zs"])]
+print("SONDA mata no chao: %d arvores, %d caidas (agua, areal, rocha, pique), "
+      "%d manchas vazias removidas" % (_n_arv, _n_caidas, _antes_m - len(manchas)), flush=True)
 
 
 tris = 0
@@ -2203,10 +2792,36 @@ with open(os.path.join(SAIDA, NOME_SAIDA + ".json" if (BANCADA or MONTANHAS) els
                "montanhas": MONTES,
                # a agua turquesa do Algarve vai com a costa nova: o jogo le-a
                # daqui, e nao de uma opcao que alguem tem de lembrar de passar
-               "agua": "algarve" if COSTA2 else None}, f, separators=(",", ":"))
+               "agua": "algarve" if COSTA2 else None,
+               # F3: a cor de vertice das estradas leva dados, nao cor
+               "estrada2": ESTRADA2}, f, separators=(",", ":"))
 _saiu = NOME_SAIDA + ".json" if (BANCADA or MONTANHAS) else "mapa3d.json"
 print("SONDA -> sonda3d/%s  (%.0f KB)  em %.1f s"
       % (_saiu, os.path.getsize(os.path.join(SAIDA, _saiu)) / 1024, time.time() - t0))
+
+# ── O CHAO PINTADO (F1, 26/09) ──────────────────────────────────────────────
+# A cor do chao deixa de ser a cor de vertice (um BYTE: so escurece a
+# fotografia, nunca a doura nem a aclara -- por isso o mapa era um tapete de um
+# tom so). Sai de uma IMAGEM do mapa inteiro, a 1 m por pixel, pintada pelo
+# `pintar_chao.py` (fora do Blender: precisa de scipy). Daqui vai tudo o que ele
+# precisa de saber do mundo, ja na forma final.
+if not (BANCADA or MONTANHAS) and CHAO2:
+    np.savez_compressed(
+        os.path.join(os.getcwd(), "ferramentas/cena/_chao_dados.npz"),
+        relevo=relevo.astype(np.float32), terra=terra, dm=_dm.astype(np.float32),
+        areia=_rho_areia.astype(np.float32), prado=_prado.astype(np.float32),
+        rocha=_rocha.astype(np.float32),
+        mata=np.array([[m["p"][0], m["p"][1], _raio_arr.get(m["b"], 10.0) * m.get("e", 1.0)]
+                       for m in manchas], dtype=np.float32).reshape(-1, 3),
+        aldeias=np.array([[c[0], c[1], raio_de(cid)] for cid, c in centros.items()],
+                         dtype=np.float32).reshape(-1, 3),
+        estradas=np.array([[k, p_[0], p_[1]] for k, e_ in enumerate(eixos) for p_ in e_["pts"]],
+                          dtype=np.float32).reshape(-1, 3),
+        lxly=np.array([LX, LY], dtype=np.float32))
+    _pc = subprocess.run(["python", os.path.join("ferramentas", "cena", "pintar_chao.py")],
+                         capture_output=True, text=True)
+    print((_pc.stdout or "").strip() if _pc.returncode == 0
+          else "SONDA AVISO pintar_chao falhou: " + (_pc.stderr or "")[-600:])
 
 # ── O MAR PRECISA DE SABER ONDE E RASO ──────────────────────────────────────
 # A distancia a costa sai de um script a parte porque o Python do Blender nao

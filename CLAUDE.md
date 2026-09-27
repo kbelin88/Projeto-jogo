@@ -306,6 +306,46 @@ capitais com castelo e Sé). As aldeias novas não são peças instanciadas: sae
 juntas numa malha por material (`aldeia2_*`). `COSTA2=0` / `ALDEIA2=0` voltam ao
 antigo.
 
+Ainda a 26/09, pelas marcas do Lucas:
+- **cada árvore assenta no seu chão** (`zs` por mancha no `mapa3d.json`); cai a
+  que pisa água, areia, rocha ou chão com mais de 30°;
+- **a rocha da costa decide-se pela face**: uma face com mais de 40° perto do mar
+  é parede inteira (`_face_a_pique`). O limiar por vértice subiu para 44°, acima
+  da encosta, que vai de 16 a 38° (com 20° a relva saía salpicada de ilhas);
+- o chão parte-se pela **mesma diagonal das fitas**, e a fita de rocha vem 15 cm
+  para a câmara no shader: com `logarithmicDepthBuffer` o `polygonOffset` é
+  ignorado;
+- a **encosta de praia lê uma distância alisada** (`_dmL`): a crua conta células
+  e saía em escada;
+- há **três enseadas** (`ENSEADAS`: rocha apagada, encosta a 14°, chãos
+  misturados pelo peso da estrada). A de Sevilha tem um **pontão**, e todas têm
+  **barcos** à escala 3,0 (~22 m), pousados na areia seca mais perto do centro
+  (`porto.py`, nas malhas `aldeia2_*`). As duas da costa oeste protegem só 20 m
+  à volta da estrada; com a proteção normal não escavavam;
+- **a sombra do sol é uma caixa fixa** do mapa inteiro (4096 px). Já não segue a
+  câmara;
+- **os campos lavrados com cerca saíram** do jogo (`CAMPOS=1` trá-los de volta);
+- **o chão é pintado** (F1, `CHAO2`): o `pintar_chao.py` coze
+  `sonda3d/chao_cor.jpg` (1 m/px: biomas, relevo, chão de mata, duna) e
+  `chao_tipo.png` (pesos de quatro fotografias de detalhe). A cor de vértice do
+  prado fica branca, porque um byte só escurece. O mosaico de parcelas ficou
+  guardado atrás de `PARCELAS=1`: o Lucas não o quer;
+- **as estradas têm classe** (F3, `ESTRADA2`): real (liga a uma capital ou duas
+  grandes: calçada e mais larga), caminho (terra com dois rodados) e carreiro
+  (entre duas pequenas, com erva ao meio). A cor de vértice das `estradas` leva
+  **dados**, não cor (R = posição de través, G = classe); o shader
+  `pintarEstrada` desenha-as e funde a beira no chão pintado. O traçado não muda;
+- **há rios** (F4, `RIOS`): o `rios.py` traça-os pelo menor custo, sempre a
+  descer (a 1.ª versão cavou uma garganta de 49 m), para longe das aldeias.
+  Dois desaguam nas enseadas e um terceiro é procurado (a nascente cujo caminho
+  ao mar suba menos de 5 m). O forno escava vales largos, e a estrada desce por
+  eles até uma **ponte de pedra** baixa (`altura_estrada`, `porto.ponte`). O
+  eixo das marchas só muda de altura, e só junto aos rios. O vale reaplica-se
+  **depois** das rampas das aldeias, que o tapavam;
+- perto de Pamplona, uma ravina na falésia foi cheia (`ATERROS`) e a laje ao
+  lado é relva por decisão (`RELVA_FORCADA`). As duas listas são o sítio para
+  pedidos parecidos.
+
 ### 7.3 As armadilhas do glTF (todas custaram horas)
 
 - **O glTF NÃO leva grafos de nós.** Do material só sobrevivem uma imagem e o
