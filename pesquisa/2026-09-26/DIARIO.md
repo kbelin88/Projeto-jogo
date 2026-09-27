@@ -317,3 +317,14 @@ Braços `semteto` e `movprimeiro` lançados no Super (a sonda `apr_super`).
 pode ser acaso).
 
 O dots usa o `"all"` em 28–45% dos envios (sonda a acabar).
+
+## Resultado 8 — o atalho no dots (27/09, ~04:50)
+
+| braço | ret→fronteira | JSON ok | sinais |
+|---|---|---|---|
+| P4 | 20% | 94% | — |
+| atalho | 28% | 92% | 6/6 (usa o "all" em 45% dos envios) |
+| atalho+avaliacao | 20% | 89% | 7/5 |
+
+O atalho não entra. A avaliação, somada em todas as sondas: 33 casos acima, 20 abaixo
+(p≈0,10). Relatório final: `pesquisa/2026-09-27/RELATORIO_PROMPT.md`.

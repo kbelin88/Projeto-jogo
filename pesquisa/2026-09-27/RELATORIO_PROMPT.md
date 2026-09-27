@@ -35,6 +35,12 @@
    uma. O Sonnet fala em juntar tropas em metade dos planos, mas em trazer o interior para
    a frente em 0–9%: junta na fronteira o que já está na fronteira.
 
+3b. **Um formato mexeu um pouco, sem dizer nada ao Rei: pedir-lhe para escrever, antes
+   das ordens, onde estão as tropas e o que cada aldeia faz** (`assessment`). Empurrou a
+   tropa para a fronteira em 4 de 5 sondas (33 casos acima do P4, 20 abaixo, p≈0,10; no
+   Super, 8%→18% com 10 de 12 casos acima). Sugestivo, não provado. É o candidato nº 1
+   para as próximas partidas (§7).
+
 4. **As correções de verdade não fazem mal e ficam.** Nas 8 partidas A/B (o mesmo modelo
    dos dois lados, um Rei com o P4 e o outro com as verdades), o lado com as verdades
    ficou à frente em 4, atrás em 2, empatou 2. Não chega para dizer que ajudam; chega
@@ -190,9 +196,11 @@ tropa da retaguarda. Sinais = em quantos dos 12 casos o braço ficou acima/abaix
 | `conselho` | **controle positivo**: diz o que fazer | **16%** (7/3, p=0,34) | **29%** (7/4, p=0,55) |
 | `alcance+capital+vigia` | as três verdades de segurança | 9% (5/6) | — |
 | + `avaliacao` | | 7% (3/5) | — |
-| `semteto` | sem o "/ 300" em cada aldeia | _pendente_ | — |
-| `movprimeiro` | `movements` antes de `build` no esquema | _pendente_ | — |
-| `atalho` | `"troops": "all"` = tudo o que a aldeia tem disponível | _pendente_ | _pendente_ |
+| `semteto` | sem o "/ 300" em cada aldeia | 5%→9% (6/3) — **já perdiam 1/7, p=0,07**; V/D 23V 17D vs 22V 29D | — |
+| `movprimeiro` | `movements` antes de `build` no esquema | 5%→8% (5/3); já perdiam 1/6, p=0,13 | — |
+| `semteto+movprimeiro` | os dois | 5%→5% | — |
+| `atalho` | `"troops": "all"` = tudo o que a aldeia tem disponível | 8%→10% (6/3) — **usou o "all" 0 vezes em 232 envios** | 20%→28% (6/6) — usa o "all" em 45% dos envios |
+| `atalho+avaliacao` | | **8%→18% (10/2, p=0,04)** | 20%→20% (7/5); JSON válido 94→89% |
 
 **Pelo gabarito escrito antes**: se nem o `conselho` mexe, o texto não é a alavanca da
 logística. Não mexe, nos dois modelos. O Super LÊ o conselho (fala de interior/fronteira
@@ -230,14 +238,44 @@ empate em 2. JSON válido igual ou maior em todas as sondas.
 - `conselho` — é recomendação; e nem assim funcionou.
 - estoque inimigo e composição da coluna avistada — mexem no fog (decisão do Lucas).
 
-**Por decidir quando as sondas pendentes saírem**: `semteto`, `movprimeiro`, `atalho`,
-`avaliacao`. Ver §7.
+**Candidatos para a próxima rodada** (sinal na sonda, falta a partida): `avaliacao` e
+`semteto`. Ver §7. **Não entram**: `movprimeiro` (sinal fraco, e nada somado ao
+`semteto`), `atalho` (o Super não o usa; o dots perde JSON).
 
 ---
 
-## 7. Resultados pendentes à hora de escrever
+## 7. Apresentação, interface e a avaliação
 
-_(preenchido quando saírem)_
+**O atalho `"troops": "all"`** não serve de prova para o Super: não o usou uma única vez.
+O dots usou-o em 28–45% dos envios, sem mudar a logística de forma consistente (6 casos
+acima, 6 abaixo). Não entra: é mais uma forma de escrever, e o dots perde um pouco de
+JSON válido com ele.
+
+**A avaliação (`assessment`) é o único braço que empurrou na mesma direção em quase
+todas as sondas**:
+
+| sonda | ret→fronteira P4 → com avaliação | casos acima / abaixo |
+|---|---|---|
+| Super, formato | 7% → 13% | 6 / 4 |
+| Super, atalho + avaliação (o "all" nunca usado) | 8% → 18% | **10 / 2** |
+| Super, segurança + avaliação | 9% → 7% | 3 / 5 |
+| dots, formato | 27% → 31% | 7 / 4 |
+| dots, atalho + avaliação | 20% → 20% | 7 / 5 |
+| **somado** | | **33 / 20, p≈0,10** |
+
+Sugestivo, não provado. E testaram-se ~13 braços: um p=0,04 isolado pode ser acaso. Mas
+é o único item com uma **explicação**: o Rei que tem de escrever "o que cada aldeia faz
+neste turno" passa pelas aldeias do interior uma a uma, e é aí que a banda falha (§4.2).
+A avaliação não diz o que fazer; só pede para olhar o tabuleiro inteiro antes de ordenar.
+Não mexe em JSON válido no Super (100% vs 97%).
+
+**Sem o "/ 300"** (`semteto`) dá o outro sinal a seguir: menos ataques que já perdiam
+(1 caso acima, 7 abaixo, p=0,07) e o melhor saldo do turno seguinte da noite (23V 17D
+contra 22V 29D do P4 no mesmo run). É só apresentação: o teto continua nas regras.
+
+**Proposta**: `avaliacao` e `semteto` são os dois candidatos para a próxima rodada, e a
+rodada certa é em **partidas A/B** (o mesmo modelo dos dois lados), porque a avaliação
+serve a banda, e a banda só se vê turno após turno. Com o Sonnet, se houver crédito.
 
 ---
 
