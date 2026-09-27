@@ -297,3 +297,23 @@ Braços `semteto` e `movprimeiro` lançados no Super (a sonda `apr_super`).
 - **O Super contra ele próprio não acaba partidas**: as 4 bateram no teto de 30 turnos.
 - Leitura honesta: as verdades não fazem mal (o lado V não perdeu mais), mas **não são a
   alavanca da logística**, nem numa decisão (Resultados 4–5) nem numa partida inteira.
+
+## Resultado 7 — apresentação e interface, no Super (27/09, 04:30)
+
+| braço | ret→fronteira | já perdiam | V/D seguinte | sinais |
+|---|---|---|---|---|
+| P4 (apr) | 5% | — | 22V 29D | — |
+| semteto | 9% | ↓ | **23V 17D** | ret→front 6/3 p=0,51; **já perdiam 1/7 p=0,07** |
+| movprimeiro | 8% | ↓ | 18V 23D | ret→front 5/3; já perdiam 1/6 p=0,13 |
+| semteto+movprimeiro | 5% | = | 18V 26D | nada |
+| P4 (atalho) | 8% | — | 18V 23D | — |
+| atalho | 10% | = | 24V 31D | 6/3 p=0,51 |
+| **atalho+avaliacao** | **18%** | = | 25V 29D | **10/2, p=0,04** |
+
+**O Super nunca usou o `"all"`** (0 de 232 envios). O efeito do último braço vem da
+**avaliação**, não do atalho. A avaliação empurrou na mesma direção em 3 de 4 sondas
+(Super 6/4 e 10/2, dots 7/4; com as verdades de segurança, 3/5). Somado: 26 casos acima,
+15 abaixo, p≈0,12. **Sugestivo, não provado**, e testaram-se ~12 braços (um p=0,04 isolado
+pode ser acaso).
+
+O dots usa o `"all"` em 28–45% dos envios (sonda a acabar).
