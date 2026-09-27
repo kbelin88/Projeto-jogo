@@ -455,3 +455,38 @@ def marco(G, x, y, z, rz, esc=1.0):
         fa = [(0, 1, 2, 3, 4), (9, 8, 7, 6, 5), (0, 5, 6, 1), (1, 6, 7, 2), (2, 7, 8, 3), (3, 8, 9, 4), (4, 9, 5, 0)]
         G.por("madeira", [(sgn * a, b, c) for a, b, c in va], fa if sgn > 0 else [tuple(reversed(q)) for q in fa],
               Mp @ A2._TR(0, 0, zz, ang))
+
+
+
+def moinho(G, x, y, z, rz, esc=1.0):
+    """o moinho de vento da Mancha: torre branca redonda, telhado conico de
+    madeira escura. As PAS nao estao aqui -- rodam no jogo (`MAPA.moinhos`); o
+    eixo delas fica a 7,6 m, virado para `rz`."""
+    M = A2._TR(x, y, z, rz) @ Matrix.Scale(esc, 4)
+    n = 16
+    v, f = [], []
+    for zz, r in ((0.0, 3.1), (7.2, 2.6)):
+        for k in range(n):
+            a = 2 * math.pi * k / n
+            v.append((r * math.cos(a), r * math.sin(a), zz))
+    f = [(k, (k + 1) % n, n + (k + 1) % n, n + k) for k in range(n)]
+    G.por("cal", v, f, M, liso=True)
+    # a barra escura na base e o telhado conico
+    v2 = [(3.15 * math.cos(2 * math.pi * k / n), 3.15 * math.sin(2 * math.pi * k / n), zz)
+          for zz in (0.0, 0.6) for k in range(n)]
+    G.por("barra_ocre", v2, [(k, (k + 1) % n, n + (k + 1) % n, n + k) for k in range(n)], M)
+    vt = [(2.85 * math.cos(2 * math.pi * k / n), 2.85 * math.sin(2 * math.pi * k / n), 7.1) for k in range(n)]
+    vt.append((0.0, 0.0, 10.4))
+    G.por("casca", vt, [(k, (k + 1) % n, n) for k in range(n)] + [tuple(reversed(range(n)))], M)
+    # a porta e duas janelas
+    for (zz, h) in ((0.0, 2.0),):
+        G.por("escuro", [(3.12, -0.55, zz), (3.12, 0.55, zz), (3.0, 0.55, zz + h), (3.0, -0.55, zz + h)],
+              [(0, 1, 2, 3), (3, 2, 1, 0)], M)
+    for ang in (1.2, -1.4):
+        cx, cy = 2.75 * math.cos(ang), 2.75 * math.sin(ang)
+        nx, ny = math.cos(ang), math.sin(ang)
+        tx, ty = -ny * 0.3, nx * 0.3
+        zz = 4.6
+        G.por("escuro", [(cx - tx + nx * 0.04, cy - ty + ny * 0.04, zz), (cx + tx + nx * 0.04, cy + ty + ny * 0.04, zz),
+                         (cx + tx + nx * 0.04, cy + ty + ny * 0.04, zz + 0.7), (cx - tx + nx * 0.04, cy - ty + ny * 0.04, zz + 0.7)],
+              [(0, 1, 2, 3), (3, 2, 1, 0)], M)

@@ -2841,6 +2841,90 @@ if BEIRA and ESTRADA2:
         PORTO.carroca(BEIRA_G, x, y, z - 0.05, r + _rb2.uniform(-0.3, 0.3), esc=1.6, semente=_i)
     for x, y, z, r in BEIRA_PONTOS["marco"]:
         PORTO.marco(BEIRA_G, x, y, z - 0.1, r, esc=1.5)
+    # ── OS MOINHOS DE VENTO (F5, 27/09) ─────────────────────────────────
+    # Na Meseta, em cumeadas (o ponto mais alto de uma volta de 150-400 m),
+    # longe das estradas e das matas, em grupos de 2 a 4 como em Consuegra.
+    # O corpo vai aqui; as pas rodam no jogo (`MOINHOS` no mapa3d.json).
+    MOINHOS = []
+    # (27/09) maiores: a gravacao e de longe e a 1x nao se liam
+    ESC_MOINHO = 1.8
+    for _cid in ("toledo", "teruel", "cordoba"):
+        if _cid not in centros:
+            continue
+        cx0, cy0 = centros[_cid]
+        melhor = None
+        for _ in range(260):
+            a_ = _rb2.uniform(0, 2 * math.pi)
+            d_ = _rb2.uniform(150.0, 380.0)
+            x, y = cx0 + math.cos(a_) * d_, cy0 + math.sin(a_) * d_
+            if not _livre_beira(x, y) or dist_estrada_em(x, y) < 30.0 or _dist_aldeia(x, y) < 80.0:
+                continue
+            h_ = altura_em(x, y)
+            if melhor is None or h_ > melhor[0]:
+                melhor = (h_, x, y)
+        if not melhor:
+            continue
+        _, x0, y0 = melhor
+        rumo = _rb2.uniform(0, 2 * math.pi)             # a cumeada corre para aqui
+        for k in range(_rb2.choice((2, 3, 3, 4))):
+            x = x0 + math.cos(rumo) * k * 24.0 * ESC_MOINHO
+            y = y0 + math.sin(rumo) * k * 24.0 * ESC_MOINHO
+            if not _livre_beira(x, y) or dist_estrada_em(x, y) < 20.0:
+                continue
+            z = altura_em(x, y) - 0.3
+            # as pas viradas ao longo da cumeada (o disco atravessa-a): assim
+            # nunca chegam a torre do lado, a 24 m
+            vira = rumo + _rb2.uniform(-0.25, 0.25)
+            PORTO.moinho(BEIRA_G, x, y, z, vira, esc=ESC_MOINHO)
+            MOINHOS.append([round(x, 2), round(y, 2), round(z, 2), round(vira, 3),
+                            round(_rb2.uniform(0.6, 1.0), 3), ESC_MOINHO])
+    BEIRA_PONTOS["moinhos"] = MOINHOS
+    # ── AS ROTAS DOS BARCOS (F5) ─────────────────────────────────────────
+    # Voltas ao largo, a sair de cada enseada: uma elipse de ~100-160 m cujo
+    # centro fica 170 m mar adentro. Guardam-se so os pontos em agua com 60 m
+    # de folga a costa (`_dm` fora de terra conta 0 -- mede-se a terra perto).
+    ROTAS = []
+
+    def _agua_folgada(x, y):
+        for dx, dy in ((0, 0), (40, 0), (-40, 0), (0, 40), (0, -40), (28, 28), (-28, -28), (28, -28), (-28, 28)):
+            if em_terra(x + dx, y + dy):
+                return False
+        return True
+    # candidatos: uma grelha de 90 m no mar a 150-420 m da terra (perto o
+    # bastante para se ver da camara de jogo); fica o que aguenta uma elipse
+    # inteira em agua, e cada rota nova a mais de 700 m das outras
+    _cand = []
+    for gx_ in np.arange(-LX / 2 + 60, LX / 2 - 60, 90.0):
+        for gy_ in np.arange(-LY / 2 + 60, LY / 2 - 60, 90.0):
+            x, y = float(gx_), float(gy_)
+            if not _agua_folgada(x, y):
+                continue
+            perto = any(em_terra(x + math.cos(a_) * d_, y + math.sin(a_) * d_)
+                        for d_ in (150.0, 260.0, 380.0) for a_ in np.arange(0, 6.28, 0.5))
+            if perto:
+                _cand.append((x, y))
+    _rb2.shuffle(_cand)
+    for x0, y0 in _cand:
+        if len(ROTAS) >= 7:
+            break
+        if any(math.hypot(x0 - r_[0][0], y0 - r_[0][1]) < 700.0 for r_ in ROTAS):
+            continue
+        r0 = _rb2.uniform(0, math.pi)
+        rx, ry = _rb2.uniform(110, 160), _rb2.uniform(55, 85)
+        pts = []
+        for k in range(48):
+            t_ = 2 * math.pi * k / 48
+            x = x0 + math.cos(r0) * math.cos(t_) * rx - math.sin(r0) * math.sin(t_) * ry
+            y = y0 + math.sin(r0) * math.cos(t_) * rx + math.cos(r0) * math.sin(t_) * ry
+            if not _agua_folgada(x, y):
+                pts = []
+                break
+            pts.append([round(x, 1), round(y, 1)])
+        if pts:
+            ROTAS.append(pts)
+    BEIRA_PONTOS["rotas"] = ROTAS
+    print("SONDA barcos: %d rotas ao largo" % len(ROTAS), flush=True)
+    print("SONDA moinhos: %d" % len(MOINHOS), flush=True)
     if BEIRA_G.g:
         A2.objetos(BEIRA_G, cena)
     print("SONDA beira: %d trocos de muro, %d de cerca, %d marcos, %d carrocas, %d triangulos"

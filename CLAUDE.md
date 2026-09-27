@@ -352,6 +352,12 @@ Ainda a 26/09, pelas marcas do Lucas:
   marcos à porta das aldeias e carroças paradas. As peças são feitas por código
   a partir de imagens do SDXL: com 4 GB de VRAM o TRELLIS devolveu malhas
   desfeitas e ficou 40 minutos sem acabar;
+- **a vida do mapa** (F5, `animarVida` no `mapa3d.js`, sempre pelo relógio do
+  jogo): **sombras de nuvens** metidas no cálculo da luz do sol de todos os
+  materiais (`nuvemSombra` em `shadowmap_pars_fragment`; o tempo vai no
+  `shadowRadius`, que o PCFSoft não usa), **moinhos de vento** com pás a rodar
+  (três grupos na Meseta, `MAPA.beira.moinhos`), **barcos à vela** em voltas ao
+  largo (`MAPA.beira.rotas`) e **bandos de aves** em V;
 - **há rios** (F4, `RIOS`): o `rios.py` traça-os pelo menor custo, sempre a
   descer (a 1.ª versão cavou uma garganta de 49 m), para longe das aldeias.
   Dois desaguam nas enseadas e um terceiro é procurado (a nascente cujo caminho
