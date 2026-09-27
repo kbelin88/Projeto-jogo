@@ -142,8 +142,54 @@ function intencaoMarcha(m, visao) {
 //                Nao automatiza: o Rei continua a escolher de onde, para onde e
 //                quando; so deixa de contar tipo a tipo. O parser do jogo nao o
 //                conhece: a sonda expande-o antes (expandirAtalho).
-const ITENS_P5 = ["regras", "combate", "intencao", "interior", "placebo", "avaliacao", "semtotal", "conselho", "alcance", "capital", "vigia", "semteto", "movprimeiro", "atalho"];
-const FORA_DO_PADRAO = new Set(["placebo", "avaliacao", "semtotal", "conselho", "alcance", "capital", "vigia", "semteto", "movprimeiro", "atalho"]);
+//
+// A PARTIDA, NAO O TURNO (27/09, a pergunta do Lucas). O Claude jogou o turno 11
+// do Super (caso 7 da sonda de logistica) com o MESMO P4 e levou 26 de 26 tropas do
+// interior a fronteira (2V 0D); o Super levou 0-15. A informacao esta la; o que
+// muda e o processo: aldeia a aldeia, "para que serve esta tropa?".
+//   frente    um MAPA DA FRENTE em texto: cada aldeia de fronteira com o que
+//             enfrenta, cada aldeia do interior com o caminho ate a frente. So
+//             junta o que o P4 ja diz espalhado (nada de novo, nada de fog).
+//   campanha  o "plan" deixa de ser "nota ao proximo turno" e passa a ser a
+//             campanha dos proximos turnos. Pergunta de partida, nao de turno;
+//             nao diz qual campanha.
+const ITENS_P5 = ["regras", "combate", "intencao", "interior", "placebo", "avaliacao", "semtotal", "conselho", "alcance", "capital", "vigia", "semteto", "movprimeiro", "atalho", "frente", "campanha"];
+const FORA_DO_PADRAO = new Set(["placebo", "avaliacao", "semtotal", "conselho", "alcance", "capital", "vigia", "semteto", "movprimeiro", "atalho", "frente", "campanha"]);
+
+// o mapa da frente: so reorganiza o que a visao ja da ao Rei (vizinhas visiveis,
+// tempos de marcha do proprio P4), por aldeia propria
+function mapaDaFrente(E, estado, dono, visao, txt) {
+  // a defesa que o PROPRIO prompt mostra na linha do alvo (a mesma conta, o mesmo numero)
+  const defNoTexto = (id) => { const m = txt.match(new RegExp("^\\[" + id + "\\][^\\n]*effective defense \\(location bonus included\\): (\\d+)", "m")); return m ? m[1] : null; };
+  const adj = visao.estradas || {};
+  const alvo = (id) => visao.alvos.find((a) => a.id === id);
+  const minha = new Set(visao.minhas.map((a) => a.id));
+  const nome = (id) => nomeDe(visao, id);
+  const L = ["=== FRONT MAP (the same facts as above, arranged by front) ==="];
+  const borda = visao.minhas.filter((a) => (adj[a.id] || []).some((v) => !minha.has(v)));
+  const interior = visao.minhas.filter((a) => !borda.includes(a));
+  L.push("FRONT LINE - your villages that touch a village not yours:");
+  for (const a of borda) {
+    const viz = (adj[a.id] || []).filter((v) => !minha.has(v)).map((v) => {
+      const t = alvo(v) || {};
+      const quem = t.dono === null ? "neutral" : (t.dono && t.dono !== dono ? "ENEMY" : "unknown");
+      const d = t.visivel ? defNoTexto(v) : null;
+      const def = d != null ? `, effective defense ${d}` : "";
+      return `${nome(v)} (${quem}${def})`;
+    });
+    L.push(`- ${nome(a.id)} with ${nT(a.tropas)} troops at home faces: ${viz.join(", ")}`);
+  }
+  L.push("REAR - your villages with no neighbour that is not yours:");
+  if (!interior.length) L.push("- none");
+  for (const a of interior) {
+    const shim = { config: visao.config, estradas: { adj: visao.estradas, custo: visao.estradasCusto || null }, aldeias: visao.minhas.concat(visao.alvos) };
+    let best = null, bd = Infinity;
+    for (const b of borda) { const c = E.caminhoEntre(shim, a.id, b.id); if (!c) continue; const d = E.pesoRota(shim, c); if (d < bd) { bd = d; best = b; } }
+    const ate = best ? ` - nearest front village ${nome(best.id)}` : "";
+    L.push(`- ${nome(a.id)} with ${nT(a.tropas)} troops at home${ate}`);
+  }
+  return L.join("\n") + "\n";
+}
 
 // troca que FALHA alto se a ancora sumir (um braco que nao muda nada e um
 // braco que mente)
@@ -232,6 +278,14 @@ function montarP5(E, estado, dono, itens) {
       '"troops": {"spearman": <n>, "archer": <n>, "knight": <n>} or "all"}');
     txt = troca(txt, "Use only ids that appear in the report above.",
       '"troops": "all" sends every troop AVAILABLE TO SEND NOW in that village. Use only ids that appear in the report above.');
+  }
+  if (liga.has("frente")) txt = troca(txt, "=== VILLAGES YOU CAN SEE", mapaDaFrente(E, estado, dono, visao, txt) + "\n=== VILLAGES YOU CAN SEE");
+  if (liga.has("campanha")) {
+    txt = troca(txt, '- "plan": your NOTE TO YOUR NEXT TURN, 2 to 4 lines (anything past 600 characters is cut off). You will read it next turn. Write what you are trying to do, what you must not forget, and what you decided NOT to do.',
+      '- "plan": your CAMPAIGN - the war you are running over the NEXT SEVERAL TURNS, not just this one: which front you push, where your troops gather, what you take next and after that. 2 to 6 lines (anything past 600 characters is cut off). It comes back to you every turn; keep it, update it or replace it.');
+    txt = troca(txt, '  "plan": "<your note to your next turn>",', '  "plan": "<your campaign over the next turns>",');
+    // so existe quando o Rei deixou nota no turno anterior
+    txt = txt.replace("=== YOUR NOTE FROM LAST TURN (written by you) ===", "=== YOUR CAMPAIGN (written by you last turn) ===");
   }
   if (liga.has("placebo")) txt = txt.replace(/^TOTAL: .*$/m, (l) => `${l}\n  (the list of your villages follows below)`);
   return { p4, p5: txt };

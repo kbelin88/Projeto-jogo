@@ -328,3 +328,37 @@ O dots usa o `"all"` em 28–45% dos envios (sonda a acabar).
 
 O atalho não entra. A avaliação, somada em todas as sondas: 33 casos acima, 20 abaixo
 (p≈0,10). Relatório final: `pesquisa/2026-09-27/RELATORIO_PROMPT.md`.
+
+## Pergunta 3 — "se tu jogasses com este prompt, movias as tropas?" (27/09, manhã)
+
+O Claude jogou o caso 7 da sonda de logística (turno 11 do Super, Rei B) com o MESMO P4,
+à mão, e passou a ordem pelo mesmo avaliador. **Viés declarado**: sabia a pergunta.
+
+| mesma situação, mesmo P4 | tropa do interior (26) levada à fronteira | turno seguinte |
+|---|---|---|
+| Claude | **26 de 26** | **2V 0D** |
+| Super, 9 respostas (3 sondas) | 0–15 (média ~6) | 0–1V 0–1D |
+| Super na partida real | 0 | 1V 1D |
+
+**A informação está no P4.** A diferença é o processo: aldeia a aldeia, "para que serve
+esta tropa?". Tarragona tem 9 lanceiros a 1 turno de Zaragoza, que fica vazia porque os
+arqueiros dela vão a Madrid; logo vão. O Super responde a "o que ataco agora?", e o
+interior não tem nada para atacar.
+
+**Hipótese do Lucas: o prompt faz pensar no turno, não na partida.** Levar tropa à
+fronteira é um investimento que só rende dois turnos depois; o P4 enquadra tudo no turno
+("These numbers are from TURN 11") e a única memória é "nota ao próximo turno". Dois
+braços novos, nenhum diz o que fazer:
+
+- `frente` — um MAPA DA FRENTE em texto (cada aldeia de fronteira com o que enfrenta e a
+  defesa que o próprio prompt mostra; cada aldeia do interior com a aldeia de frente mais
+  próxima). Só reorganiza o que o P4 já diz espalhado. É a "referência visual" possível
+  em texto; a imagem de verdade fica para os modelos com visão (pagos).
+- `campanha` — o `plan` passa a ser a CAMPANHA dos próximos turnos (qual frente, onde
+  junta tropas, o que toma depois), e volta como "YOUR CAMPAIGN".
+
+Agendado para 28/09 00:05 UTC (cota renovada): `lancar_sonda_partida.sh` (P4 | frente |
+campanha | frente+campanha, dots e Super, 288 chamadas) junto das partidas A/B do prompt
+candidato (`lancar_ab2.sh`, ~480). **Gabarito**: um braço conta se levar mais retaguarda à
+fronteira do que o P4 na maioria dos 12 casos nos dois modelos, sem cair o JSON válido.
+A `campanha` só se julga de verdade em partidas (a memória rende turno após turno).
