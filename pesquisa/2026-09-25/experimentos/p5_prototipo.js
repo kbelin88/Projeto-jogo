@@ -136,8 +136,14 @@ function intencaoMarcha(m, visao) {
 //   semteto      "troops at home: 9 / 300" em cada aldeia le-se como barra de
 //                progresso; o teto fica nas regras, sai da linha de cada aldeia
 //   movprimeiro  o esquema pede "build" antes de "movements"; inverte a ordem
-const ITENS_P5 = ["regras", "combate", "intencao", "interior", "placebo", "avaliacao", "semtotal", "conselho", "alcance", "capital", "vigia", "semteto", "movprimeiro"];
-const FORA_DO_PADRAO = new Set(["placebo", "avaliacao", "semtotal", "conselho", "alcance", "capital", "vigia", "semteto", "movprimeiro"]);
+//
+// INTERFACE (27/09):
+//   atalho       "troops": "all" = todas as tropas disponiveis naquela aldeia.
+//                Nao automatiza: o Rei continua a escolher de onde, para onde e
+//                quando; so deixa de contar tipo a tipo. O parser do jogo nao o
+//                conhece: a sonda expande-o antes (expandirAtalho).
+const ITENS_P5 = ["regras", "combate", "intencao", "interior", "placebo", "avaliacao", "semtotal", "conselho", "alcance", "capital", "vigia", "semteto", "movprimeiro", "atalho"];
+const FORA_DO_PADRAO = new Set(["placebo", "avaliacao", "semtotal", "conselho", "alcance", "capital", "vigia", "semteto", "movprimeiro", "atalho"]);
 
 // troca que FALHA alto se a ancora sumir (um braco que nao muda nada e um
 // braco que mente)
@@ -221,11 +227,35 @@ function montarP5(E, estado, dono, itens) {
     const linhaB = mB[0];
     txt = txt.slice(0, mB.index) + linhaM + txt.slice(mB.index + mB[0].length, mM.index) + linhaB + txt.slice(mM.index + mM[0].length);
   }
+  if (liga.has("atalho")) {
+    txt = troca(txt, '"troops": {"spearman": <n>, "archer": <n>, "knight": <n>}}',
+      '"troops": {"spearman": <n>, "archer": <n>, "knight": <n>} or "all"}');
+    txt = troca(txt, "Use only ids that appear in the report above.",
+      '"troops": "all" sends every troop AVAILABLE TO SEND NOW in that village. Use only ids that appear in the report above.');
+  }
   if (liga.has("placebo")) txt = txt.replace(/^TOTAL: .*$/m, (l) => `${l}\n  (the list of your villages follows below)`);
   return { p4, p5: txt };
 }
 
-module.exports = { carregarMotorP5, montarP5, regrasP5, ITENS_P5 };
+// o atalho "troops": "all" -> as tropas da aldeia de origem (as que estao em
+// casa; o motor ja so deixa enviar o que esta disponivel)
+function expandirAtalho(cru, estado) {
+  const m = String(cru || "").match(/\{[\s\S]*\}/);
+  if (!m) return cru;
+  let d; try { d = JSON.parse(m[0]); } catch (e) { return cru; }
+  const EN = { lanceiro: "spearman", arqueiro: "archer", cavaleiro: "knight" };
+  let mexeu = false;
+  for (const mv of (d.movements || [])) {
+    if (typeof mv.troops === "string" && /^all$/i.test(mv.troops.trim())) {
+      const a = estado.aldeias.find((x) => x.id === Number(mv.fromId));
+      mv.troops = {}; for (const k in EN) mv.troops[EN[k]] = a ? (a.tropas[k] || 0) : 0;
+      mexeu = true;
+    }
+  }
+  return mexeu ? JSON.stringify(d) : cru;
+}
+
+module.exports = { carregarMotorP5, montarP5, regrasP5, ITENS_P5, expandirAtalho };
 
 // ---- 3. CLI: reexecuta a partida e fotografa o turno pedido ------------------
 if (require.main === module) {

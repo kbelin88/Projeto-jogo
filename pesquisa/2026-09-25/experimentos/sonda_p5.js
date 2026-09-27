@@ -26,7 +26,7 @@
 "use strict";
 const fs = require("fs");
 const path = require("path");
-const { carregarMotorP5, montarP5, ITENS_P5 } = require("./p5_prototipo.js");
+const { carregarMotorP5, montarP5, ITENS_P5, expandirAtalho } = require("./p5_prototipo.js");
 const { carregar, estadoNoTurno, avaliar, somar, RAIZ } = require("./sonda_comum.js");
 
 const args = process.argv.slice(2);
@@ -137,7 +137,8 @@ async function main() {
           else if (paralelo > 1 && saida) erroRede = "falhou na pre-busca";
           else ({ cru, erroRede } = await pedir(prompt, arq));
           if (erroRede) { res.push({ caso: i, categoria: c.categoria, modelo: c.modelo, prompt: nome, erroRede }); continue; }
-          const p = E.parsearOrdem(cru);
+          const b = bracos.find((x) => x.rotulo === nome);
+          const p = E.parsearOrdem(b && b.itens && b.itens.includes("atalho") ? expandirAtalho(cru, g) : cru);
           valido = !!p.ok; ordem = p.ordem;
         }
         const aval = avaliar(E, P, c.turno, c.lado, ordem);
