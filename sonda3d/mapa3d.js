@@ -210,6 +210,9 @@ vec3 CustomToneMapping( vec3 color ) { return gradingCanal( AgXToneMapping( colo
     };
     const [a, b] = await Promise.all([ler("agua_normal_a.png"), ler("agua_normal_b.png")]);
     ondas = { a, b, meta };
+    // a espuma (passo D): um PADRAO igualado, nao uma cor -- ver agua_normais.py
+    try { ondas.espuma = await ler("agua_espuma.png"); }
+    catch (e) { console.warn("mar sem agua_espuma.png -- espuma lisa:", e); }
   } catch (e) {
     console.warn("mar sem agua_normal_* -- superficie lisa (correr o forno):", e);
   }
@@ -240,6 +243,10 @@ vec3 CustomToneMapping( vec3 color ) { return gradingCanal( AgXToneMapping( colo
       sh.uniforms.ondaA = { value: ondas.a };
       sh.uniforms.ondaB = { value: ondas.b };
       sh.uniforms.ondaL = { value: new THREE.Vector2(ondas.meta.a.ladrilho_m, ondas.meta.b.ladrilho_m) };
+      if (ondas.espuma) {
+        sh.defines.TEM_ESPUMA = "";
+        sh.uniforms.espumaT = { value: ondas.espuma };
+      }
     }
     matMar.userData.sh = sh;
     sh.vertexShader = `varying vec3 vMar;
@@ -252,6 +259,9 @@ float marSomb(float s) { return mix(1.0, s, kSombraMar); }
 vec3 nMarW = vec3(0.0, 1.0, 0.0);      // a normal da agua, no mundo
 #ifdef TEM_ONDAS
 uniform sampler2D ondaA; uniform sampler2D ondaB; uniform vec2 ondaL;
+#endif
+#ifdef TEM_ESPUMA
+uniform sampler2D espumaT;
 #endif
 float marH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float marN(vec2 p) {
@@ -308,11 +318,45 @@ diffuseColor.rgb = fundoMar * T + FUNDA * (1.0 - T);
 // onde se ve o FUNDO. No raso fica quase inteira, no azul-fundo quase some
 // (no mar escuro liam-se manchas pretas com a forma das copas, sol a 20 graus).
 kSombraMar = mix(0.22, 0.9, T.g);
-// a espuma: uma fita de ~4 m que respira, com a beira a ondular
-float ondaE = sin(vMar.x * 0.31 + tempo * 1.2) * 0.5 + sin(vMar.z * 0.27 - tempo * 0.9) * 0.5;
-float faixa = 1.0 - smoothstep(0.0, 4.0 + ondaE * 1.5, dCosta);
-float espuma = clamp(faixa * (0.6 + 0.4 * sin(dCosta * 1.4 - tempo * 1.7)), 0.0, 1.0);
-diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.85, 0.88, 0.88), espuma * 0.8);
+// ── A ESPUMA (plano da agua, passo D, 28/09) ─────────────────────────────
+// A onda rebenta onde o fundo chega a ~1,5 m: numa praia rasa isso e uma faixa
+// larga, no pe de uma falesia (funda logo) e uma fita que bate na rocha. A
+// COBERTURA (quanto da agua e espuma) vem da profundidade e das ondas que
+// chegam; a FORMA vem da renda fotografada (o padrao igualado: acende-se por
+// limiar, e cobertura 0,3 e literalmente 30% da renda acesa).
+float espuma = 0.0;
+if (dCosta < 60.0) {
+  float mancha = marN(vMar.xz / 23.0 + vec2(0.0, tempo * 0.05));
+  // a rebentacao: o fundo a menos de ~1,5 m, com a beira a ondular
+  float cob = 1.0 - smoothstep(0.25, 1.7 + 0.6 * mancha, pMar);
+  // as ondas que chegam: faixas paralelas a costa, a andar para terra (~9 m
+  // entre cristas), que so rebentam no raso; a crista parte-se pela mancha
+  float fase = dCosta / 9.0 + tempo * 0.16 + mancha * 1.6;
+  float crista = smoothstep(0.55, 0.95, sin(fase * 6.2831853) * 0.5 + 0.5);
+  // uma crista nao corre inteira ao longo da praia como uma curva de nivel
+  // (a 1.a versao parecia isso): parte-se em lancos de ~10-30 m
+  crista *= smoothstep(0.3, 0.6, marN(vMar.xz / 13.0 - vec2(tempo * 0.03, 0.0)));
+  cob = max(cob * (0.55 + 0.45 * crista), crista * (1.0 - smoothstep(0.8, 3.2, pMar)) * 0.75);
+  // na linha de agua ha sempre alguma, e a rocha da falesia leva-a em pulsos
+  cob = max(cob, (1.0 - smoothstep(0.0, 1.6, dCosta)) * (0.75 + 0.25 * sin(tempo * 0.9 + mancha * 5.0)));
+#ifdef TEM_ESPUMA
+  vec2 uE1 = mat2(0.8, -0.6, 0.6, 0.8) * vMar.xz / 31.0 + vec2(tempo * 0.004, 0.0);
+  vec2 uE2 = mat2(-0.28, -0.96, 0.96, -0.28) * vMar.xz / 19.0 - vec2(0.0, tempo * 0.006);
+  float renda = texture2D(espumaT, uE1).r * 0.62 + texture2D(espumaT, uE2).r * 0.38;
+  // ao longe a renda faz media (mipmap) e o limiar deixava de funcionar: la
+  // a espuma passa a ser a propria cobertura, suave. Um buraco da renda tem
+  // ~60 texeis: ve-se enquanto couber em 3 pixeis ou mais
+  float longe = smoothstep(8.0, 24.0, length(fwidth(uE1)) * 1024.0);
+  float corte = 1.0 - cob;
+  float aberta = max(0.06, fwidth(renda) * 1.5);
+  espuma = mix(smoothstep(corte, corte + aberta, renda), cob * 0.45, longe) * step(0.001, cob);
+  // entre as rendas a agua batida e leitosa, nao limpa
+  espuma = max(espuma, cob * 0.22);
+#else
+  espuma = cob * 0.45;
+#endif
+}
+diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.89, 0.88), espuma * 0.85);
 float fundo = smoothstep(1.0, 12.0, pMar);`)
       .replace("#include <lights_fragment_begin>", THREE.ShaderChunk.lights_fragment_begin
         .replace("? getShadow( directionalShadowMap", "? marSomb(getShadow( directionalShadowMap")

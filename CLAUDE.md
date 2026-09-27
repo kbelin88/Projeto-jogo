@@ -382,7 +382,12 @@ Ainda a 26/09, pelas marcas do Lucas:
   (`agua_normais.py`, FFT de Phillips: sem costura por construção), lidos em três
   escalas rodadas para a grelha nunca se ler; a onda entra no **reflexo do céu**
   (Fresnel, cores do céu dourado) e quase nada na luz difusa — senão o mar
-  saía granulado. Mais leve do que o mar transparente de antes (4,7 contra 6,4 ms);
+  saía granulado. Mais leve do que o mar transparente de antes (4,7 contra 6,4 ms).
+  A **espuma** (passo D) nasce onde o fundo chega a ~1,5 m (larga nas praias,
+  fita no pé das falésias), com cristas partidas a andar para terra; a forma é a
+  renda de uma foto do SDXL (`assets/texturas/gen_espuma/cor.jpg`), cosida pelo
+  `agua_normais.py` (mistura que preserva a variância — a costura do SDXL deixou
+  riscas) e igualada: acende-se por limiar;
 - **a luz é de hora dourada** (F6, `LUZ_DOURADA` no `mapa3d.js`): sol a 20° e
   quente, céu em degradé, névoa dourada, e um **grading fixo do canal** na curva
   de tons (`CustomToneMapping` = AgX + `gradingCanal`: sombras frias, luzes
