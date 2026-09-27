@@ -371,6 +371,13 @@ Ainda a 26/09, pelas marcas do Lucas:
   `shadowRadius`, que o PCFSoft não usa), **moinhos de vento** com pás a rodar
   (três grupos na Meseta, `MAPA.beira.moinhos`), **barcos à vela** em voltas ao
   largo (`MAPA.beira.rotas`) e **bandos de aves** em V;
+- **a água tem fundo** (28/09, plano da água A+B): o `mar_costa.py` inventa a
+  profundidade que a malha não tem (praia: plataforma larga e rasa; falésia:
+  faixa turquesa estreita e depois fundo; manchas de rocha e algas) e grava-a
+  com a distância à linha de água numa imagem RGB, mais uma **de longe** (6 m/px)
+  para o plano do mar inteiro — sem borda onde a cor salte. O mar é **opaco**: a
+  cor é o chão pintado por baixo, apagado pela coluna de água (Beer-Lambert,
+  `SIGMA`/`FUNDA` no `mapa3d.js`), e a sombra na água só se vê onde se vê o fundo;
 - **a luz é de hora dourada** (F6, `LUZ_DOURADA` no `mapa3d.js`): sol a 20° e
   quente, céu em degradé, névoa dourada, e um **grading fixo do canal** na curva
   de tons (`CustomToneMapping` = AgX + `gradingCanal`: sombras frias, luzes

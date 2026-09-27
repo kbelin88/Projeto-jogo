@@ -34,7 +34,7 @@ origem), `mapa3d.json` (onde fica cada cópia), `bancada.glb`/`.json` e
 | `pecas.glb` | 45 MB | o jogo |
 | `mapa3d.json` | — | o jogo, o `marcas.js`, quatro ferramentas do forno |
 | `lanceiro_novo.glb`, `arqueiro_novo.glb`, `cavaleiro_novo.glb` | 1 MB ao todo | o jogo (as tropas) |
-| `cena.json`, `mar_costa.json`, `mar_costa.png` | — | o jogo (o mar sabe onde é raso por aqui) |
+| `cena.json`, `mar_costa.json`, `mar_costa.png`, `mar_costa_longe.png` | — | o jogo (o mar sabe onde é a costa e quão fundo é) |
 | `bancada.glb`, `bancada.json` | 28 MB | só a `bancada.html` |
 | `montanhas.glb`, `montanhas.json` | 28 MB | só a `montanhas.html` (`MONTANHAS=1` no forno) |
 

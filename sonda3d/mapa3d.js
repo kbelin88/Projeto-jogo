@@ -162,80 +162,124 @@ vec3 CustomToneMapping( vec3 color ) { return gradingCanal( AgXToneMapping( colo
   // nenhuma peca e nenhuma arvore do mapa fica abaixo de 2 m, portanto subir a
   // agua nao afoga nada.
   //
-  // ── RASO JUNTO A COSTA, FUNDO AO LARGO ─────────────────────────────────────
-  // Uma cor so, igual na beira e em alto mar, nao diz onde a terra acaba. O
-  // `mar_costa.png` (do forno) da a distancia de cada ponto a terra; com ela o
-  // mar fica turquesa e transparente junto a costa, escuro ao largo, e ganha
-  // uma fita de espuma na linha de agua. Sem os ficheiros, fica como era.
+  // ── A COR VEM DA PROFUNDIDADE (plano da agua, passo B, 28/09) ─────────────
+  // O `mar_costa.png` (do forno, versao 2) da, em cada ponto: a distancia a
+  // linha de agua (a espuma), a PROFUNDIDADE do fundo, e manchas escuras de
+  // rocha e algas. O `mar_costa_longe.png` diz o mesmo, mais grosso, no plano
+  // do mar inteiro -- nao ha borda onde a cor salte (a linha reta da 92101).
+  //
+  // A agua e OPACA. Ate 27/09 era transparente no raso para deixar ver o fundo,
+  // e o fundo que se via era a grelha do chao, as fitas e a parede da falesia
+  // submersa (os triangulos da 92103). Agora a agua PINTA o fundo: a cor do chao
+  // pintado por baixo (na linha de agua e a propria praia, sem costura), apagada
+  // pela coluna de agua por absorcao (Beer-Lambert): o vermelho some primeiro,
+  // depois o verde -- areia -> turquesa -> verde-agua -> azul-fundo.
   let costa = null;
   try {
     const meta = await (await fetch(BASE + "mar_costa.json")).json();
-    const tex = await new THREE.TextureLoader().loadAsync(BASE + "mar_costa.png");
-    tex.flipY = false;                      // a linha 0 da imagem e o norte (z0)
-    tex.colorSpace = THREE.NoColorSpace;    // sao metros, nao sao cor
-    costa = { tex, meta };
+    if (meta.versao !== 2) throw new Error("mar_costa.json antigo (versao " + meta.versao + ")");
+    const tl = new THREE.TextureLoader();
+    const ler = async (f) => {
+      const t = await tl.loadAsync(BASE + f);
+      t.flipY = false;                      // a linha 0 da imagem e o norte (z0)
+      t.colorSpace = THREE.NoColorSpace;    // sao metros, nao sao cor
+      t.generateMipmaps = false;            // um mip misturava agua com terra
+      t.minFilter = THREE.LinearFilter;
+      return t;
+    };
+    const [perto, longe] = await Promise.all([ler("mar_costa.png"), ler("mar_costa_longe.png")]);
+    costa = { perto, longe, meta };
   } catch (e) {
-    console.warn("mar sem mar_costa.* -- cor chapada (correr o forno):", e);
+    console.warn("mar sem mar_costa.* v2 -- cor chapada (correr o forno):", e);
   }
   const matMar = new THREE.MeshStandardMaterial({
-    color: 0x1d4657, roughness: 0.40, metalness: 0.06, transparent: true });
+    color: 0x1d4657, roughness: 0.40, metalness: 0.06 });
   matMar.onBeforeCompile = (sh) => {
     sh.uniforms.tempo = { value: 0 };
     if (costa) {
-      const m = costa.meta;
+      const { meta: m, perto, longe } = costa;
       sh.defines = Object.assign(sh.defines || {}, { TEM_COSTA: "" });
-      sh.uniforms.costa = { value: costa.tex };
-      sh.uniforms.costaT = { value: new THREE.Vector4(m.x0, m.z0, m.dx, m.dz) };
-      sh.uniforms.costaN = { value: new THREE.Vector2(m.W, m.H) };
+      sh.uniforms.mcP = { value: perto };
+      sh.uniforms.mcL = { value: longe };
+      sh.uniforms.mcPT = { value: new THREE.Vector4(m.perto.x0, m.perto.z0, m.perto.dx, m.perto.dz) };
+      sh.uniforms.mcPN = { value: new THREE.Vector2(m.perto.W, m.perto.H) };
+      sh.uniforms.mcLT = { value: new THREE.Vector4(m.longe.x0, m.longe.z0, m.longe.dx, m.longe.dz) };
+      sh.uniforms.mcLN = { value: new THREE.Vector2(m.longe.W, m.longe.H) };
+      sh.uniforms.mcPMax = { value: m.p_max };
+      sh.uniforms.mcDPasso = { value: m.d_passo };
+      // o fundo: a pintura do chao (F1), que ja e areia e rocha junto a costa
+      if (chaoPintado) {
+        sh.defines.TEM_FUNDO = "";
+        sh.uniforms.chCor = { value: chaoPintado.cor };
+        sh.uniforms.chLado = { value: new THREE.Vector2(chaoPintado.meta.LX, chaoPintado.meta.LY) };
+      }
     }
     matMar.userData.sh = sh;
-    // ── A AGUA DO ALGARVE (25/09) ─────────────────────────────────────────
-    // `{ agua: "algarve" }`: turquesa claro junto a areia, verde-agua a meio,
-    // azul fundo ao largo, e manchas escuras de rocha e algas no raso. So a
-    // bancada da costa a liga, ate o Lucas a aprovar.
-    if (AGUA === "algarve")
-      sh.defines = Object.assign(sh.defines || {}, { ALGARVE: "" });
     sh.vertexShader = `varying vec3 vMar;
 ` + sh.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
 vMar = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
     sh.fragmentShader = `uniform float tempo;
 varying vec3 vMar;
+float kSombraMar = 1.0;
+float marSomb(float s) { return mix(1.0, s, kSombraMar); }
 #ifdef TEM_COSTA
-uniform sampler2D costa;
-uniform vec4 costaT;
-uniform vec2 costaN;
+uniform sampler2D mcP; uniform sampler2D mcL;
+uniform vec4 mcPT; uniform vec2 mcPN; uniform vec4 mcLT; uniform vec2 mcLN;
+uniform float mcPMax; uniform float mcDPasso;
 #endif
+#ifdef TEM_FUNDO
+uniform sampler2D chCor; uniform vec2 chLado;
+#endif
+// R distancia (em passos), G raiz da profundidade, B fundo escuro
+vec3 marLer(sampler2D t, vec4 T, vec2 N) {
+  vec2 uv = vec2(((vMar.x - T.x) / T.z + 0.5) / N.x, ((vMar.z - T.y) / T.w + 0.5) / N.y);
+  return texture2D(t, uv).rgb;
+}
 ` + sh.fragmentShader.replace("#include <color_fragment>", `#include <color_fragment>
-// metros ate a terra; fora do retangulo do mapa e sempre alto mar
-float dCosta = 255.0;
+float dCosta = 1000.0, pMar = 60.0, escMar = 0.0;
 #ifdef TEM_COSTA
-vec2 cuv = vec2(((vMar.x - costaT.x) / costaT.z + 0.5) / costaN.x,
-                ((vMar.z - costaT.y) / costaT.w + 0.5) / costaN.y);
-if (all(greaterThan(cuv, vec2(0.0))) && all(lessThan(cuv, vec2(1.0))))
-  dCosta = texture2D(costa, cuv).r * 255.0;
+{
+  // dentro do retangulo, a imagem fina; nos ultimos 60 m, a passar a de longe
+  vec2 fimP = mcPT.xy + (mcPN - 1.0) * mcPT.zw;
+  vec2 bP = min(vMar.xz - mcPT.xy, fimP - vMar.xz);
+  float wP = smoothstep(0.0, 60.0, min(bP.x, bP.y));
+  vec3 s = vec3(1.0);
+  if (wP > 0.0) s = marLer(mcP, mcPT, mcPN);
+  if (wP < 1.0) s = mix(marLer(mcL, mcLT, mcLN), s, wP);
+  dCosta = s.r >= 0.999 ? 1000.0 : s.r * 255.0 * mcDPasso;
+  pMar = mcPMax * s.g * s.g;
+  escMar = s.b;
+}
 #endif
-float fundo = smoothstep(3.0, 150.0, dCosta);
-#ifdef ALGARVE
-vec3 aRaso = vec3(0.26, 0.78, 0.74), aMeio = vec3(0.04, 0.50, 0.62), aAlto = vec3(0.020, 0.20, 0.40);
-diffuseColor.rgb = mix(mix(aRaso, aMeio, smoothstep(2.0, 50.0, dCosta)), aAlto, smoothstep(40.0, 300.0, dCosta));
-// manchas de rocha e de algas no fundo raso: o que da ao turquesa o ar de agua limpa
-float mRo = sin(vMar.x * 0.043 + sin(vMar.z * 0.021) * 2.0) * sin(vMar.z * 0.037 + sin(vMar.x * 0.017) * 2.0);
-float noRaso = (1.0 - smoothstep(20.0, 90.0, dCosta)) * smoothstep(6.0, 16.0, dCosta);
-diffuseColor.rgb *= 1.0 - 0.35 * smoothstep(0.35, 0.85, mRo) * noRaso;
-// menos transparente no raso: o fundo que se via era cinzento (a parede e o
-// relevo submersos, sem areia), e lia-se como uma faixa suja na beira
-#define ALFA_RASO 0.74
-#else
-#define ALFA_RASO 0.45
-diffuseColor.rgb = mix(vec3(0.040, 0.235, 0.245), diffuseColor.rgb, fundo);
+// ── O FUNDO, VISTO ATRAVES DA AGUA ─────────────────────────────────────────
+vec3 fundoMar = vec3(0.50, 0.42, 0.27);                // areia (linear)
+#ifdef TEM_FUNDO
+fundoMar = texture2D(chCor, vec2((vMar.x + chLado.x * 0.5) / chLado.x,
+                                 (vMar.z + chLado.y * 0.5) / chLado.y)).rgb;
 #endif
+// rocha e algas: um castanho-esverdeado escuro, por manchas
+fundoMar = mix(fundoMar, vec3(0.035, 0.050, 0.030), escMar * 0.75);
+// absorcao por metro (linear): o vermelho vai-se em 2-3 m, o azul aguenta
+const vec3 SIGMA = vec3(0.40, 0.055, 0.028);
+// a cor da propria agua funda (a luz espalhada de volta)
+const vec3 FUNDA = vec3(0.012, 0.105, 0.230);
+// a luz desce e volta a subir: ~2,2x a profundidade
+vec3 T = exp(-SIGMA * pMar * 2.2);
+diffuseColor.rgb = fundoMar * T + FUNDA * (1.0 - T);
+// ── A SOMBRA NA AGUA (28/09) ──────────────────────────────────────────────
+// A agua nao e um chao: a sombra de uma arvore ou de uma falesia so se ve
+// onde se ve o FUNDO. No raso fica quase inteira, no azul-fundo quase some
+// (no mar escuro liam-se manchas pretas com a forma das copas, sol a 20 graus).
+kSombraMar = mix(0.22, 0.9, T.g);
 // a espuma: uma fita de ~4 m que respira, com a beira a ondular
 float ondaE = sin(vMar.x * 0.31 + tempo * 1.2) * 0.5 + sin(vMar.z * 0.27 - tempo * 0.9) * 0.5;
 float faixa = 1.0 - smoothstep(0.0, 4.0 + ondaE * 1.5, dCosta);
 float espuma = clamp(faixa * (0.6 + 0.4 * sin(dCosta * 1.4 - tempo * 1.7)), 0.0, 1.0);
 diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.85, 0.88, 0.88), espuma * 0.8);
-// transparente no raso: e o que deixa ver o fundo junto a costa
-diffuseColor.a = max(mix(ALFA_RASO, 1.0, smoothstep(0.0, 35.0, dCosta)), espuma);`)
+float fundo = smoothstep(1.0, 12.0, pMar);`)
+      .replace("#include <lights_fragment_begin>", THREE.ShaderChunk.lights_fragment_begin
+        .replace("? getShadow( directionalShadowMap", "? marSomb(getShadow( directionalShadowMap")
+        .replace("vDirectionalShadowCoord[ i ] ) : 1.0;", "vDirectionalShadowCoord[ i ] )) : 1.0;"))
       .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>
 roughnessFactor = mix(roughnessFactor, 0.95, espuma);`)
       .replace("#include <normal_fragment_begin>", `#include <normal_fragment_begin>
