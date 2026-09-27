@@ -25,6 +25,7 @@
 import json
 import math
 import os
+import random
 import re
 import subprocess
 import sys
@@ -263,10 +264,20 @@ print("SONDA escala: 1 unidade de viewBox = %.3f m  ->  o mapa mede %.0f x %.0f 
 import cozer_mata as CM                                        # noqa: E402
 CM.ALGARVE = COSTA2
 
+# F2 (27/09): os arranjos sao por BIOMA (`CM.BIOMAS`); `MATA2=0` volta aos
+# seis antigos. `BIOMA_DE[bioma]` = os indices dos arranjos desse bioma.
+MATA2 = os.environ.get("MATA2", "1") != "0"
+_lista_bosques = ([(n, b_, q, r) for n, b_, q, r, _s in CM.BIOMAS] if MATA2
+                  else [(n, None, q, (r, f)) for n, q, r, f in CM.BOSQUES])
+BIOMA_DE = {}
 bosques = []
-for i, (nome, quantas, raio, folhosas) in enumerate(CM.BOSQUES):
+for i, (nome, bioma_, quantas, raio) in enumerate(_lista_bosques):
     P.registar(True)
-    CM.construir(nome, quantas, raio, folhosas, 40 + i * 7)
+    if MATA2:
+        CM.construir_bioma(nome, bioma_, quantas, raio, CM.BIOMAS[i][4])
+        BIOMA_DE.setdefault(bioma_, []).append(i)
+    else:
+        CM.construir(nome, quantas, raio[0], raio[1], 40 + i * 7)
     reg = P.REGISTO
     P.registar(False)
     for ob in list(P.LIXO.objects if P.LIXO else []):
@@ -325,6 +336,31 @@ for nome in usadas:
     feitas.append(nome)
 if faltam:
     print("SONDA AVISO: sem receita para %s" % faltam)
+
+# ── A ARVORE DE LONGE (F2, 27/09) ──────────────────────────────────────────
+# As especies novas tem ~2 000 triangulos; com 12 mil arvores o mapa passou de
+# 4 para 15,7 milhoes e o quadro de 16 para 79 ms (medido). Cada uma leva uma
+# versao de LONGE (a mesma receita com lod=True: um quarto dos tufos, icosferas
+# de 20 faces) e o jogo escolhe por distancia a camara.
+LODS = {}
+_COM_LOD = {"proto_sobreiro", "proto_carvalho", "proto_pinheiro_bravo", "proto_choupo"}
+for nome in list(feitas):
+    receita = protos.get(nome)
+    if not receita:
+        continue
+    fn, args, kw = json.loads(receita)
+    if fn not in _COM_LOD:
+        continue
+    kw = dict(kw, lod=True)
+    ob = getattr(P, fn)(*args, **kw)
+    for col in list(ob.users_collection):
+        col.objects.unlink(ob)
+    nl = re.sub(r"\.\d{3}$", "", ob.name)
+    ob.name = ob.data.name = nl
+    cena.objects.link(ob)
+    feitas.append(nl)
+    LODS[nome] = nl
+print("SONDA arvores de longe: %d" % len(LODS), flush=True)
 
 terra = np.load(os.path.join(os.getcwd(), "ferramentas/cena/_terra.npy"))
 FUNDO = 18.0          # quanto a margem desce abaixo do nivel da terra
@@ -968,6 +1004,70 @@ def prado_em(mx, my):
     return float(_prado[j, i])
 
 
+# ── F2: CADA MANCHA NO SEU BIOMA, E AS QUE FALTAVAM ─────────────────────────
+# A humidade (a mesma do chao pintado, esticada) e a distancia a costa decidem:
+#   costa baixa e nao muito humida -> pinhal costeiro (manso + oliveira)
+#   humido -> floresta atlantica (carvalho + pinheiro-bravo), cerrada
+#   meio -> MONTADO (sobreiros soltos sobre pasto)
+#   seco -> mato (oliveira, cipreste, moitas)
+# E ha manchas NOVAS: montado espalhado pelos pastos secos vazios (o postal do
+# Alentejo e arvore solta a perder de vista), e choupos a acompanhar os rios.
+DENS_BIOMA = {"atlantico": 1.0, "ribeira": 0.7, "costeiro": 0.55, "mato": 0.35, "montado": 0.12}
+
+
+def bioma_em(mx, my):
+    h = (prado_em(mx, my) - 0.5) * 2.2 + 0.5 + 0.12 * math.sin(mx * 0.0071 + my * 0.0053)
+    i = min(max(int(round((mx + LX / 2) / px)), 0), tw - 1)
+    j = min(max(int(round((LY / 2 - my) / py)), 0), th - 1)
+    # ⚠ `h` esticado vai de -0,6 a 1,5 na terra (percentis 5-95, medido): os
+    # cortes sao pelos percentis -- atlantico o quarto mais humido, mato o seco
+    # e o leste, montado o grande meio a oeste
+    if float(_dm[j, i]) < 150.0 and h < 0.8:
+        return "costeiro"
+    if h > 0.8:
+        return "atlantico"
+    if h > -0.3 and mx < LX * 0.22:
+        return "montado"
+    return "mato"
+
+
+if MATA2:
+    _rb = random.Random(2709)
+    for m in manchas:
+        m["bio"] = bioma_em(*m["p"])
+        m["b"] = _rb.choice(BIOMA_DE[m["bio"]])
+    _novas = 0
+    _PASSO_M = 105.0
+    for _gxm in np.arange(-LX / 2 + 50, LX / 2 - 50, _PASSO_M):
+        for _gym in np.arange(-LY / 2 + 50, LY / 2 - 50, _PASSO_M):
+            x_ = float(_gxm + _rb.uniform(-40, 40))
+            y_ = float(_gym + _rb.uniform(-40, 40))
+            if not em_terra(x_, y_) or bioma_em(x_, y_) != "montado" or _rb.random() > 0.55:
+                continue
+            if any(math.hypot(m["p"][0] - x_, m["p"][1] - y_) < 70.0 for m in manchas):
+                continue
+            manchas.append({"b": _rb.choice(BIOMA_DE["montado"]), "p": [round(x_, 1), round(y_, 1)],
+                            "e": round(_rb.uniform(0.9, 1.2), 3), "bio": "montado"})
+            _novas += 1
+    _rib = 0
+    for _rio in RIOS_TRACADOS:
+        _P = _rio["pts"]
+        for k in range(len(_P) // 10, len(_P), 14):
+            x0, y0 = _P[k]
+            x1, y1 = _P[min(k + 1, len(_P) - 1)]
+            L_ = math.hypot(x1 - x0, y1 - y0) or 1.0
+            nx_, ny_ = -(y1 - y0) / L_, (x1 - x0) / L_
+            lado = 1 if (k // 14) % 2 else -1
+            off = _rio["larg"][k] + 16.0
+            manchas.append({"b": _rb.choice(BIOMA_DE["ribeira"]),
+                            "p": [round(x0 + nx_ * off * lado, 1), round(y0 + ny_ * off * lado, 1)],
+                            "e": 1.0, "bio": "ribeira"})
+            _rib += 1
+    from collections import Counter as _Cn
+    print("SONDA biomas: %s; +%d manchas de montado, +%d de ribeira"
+          % (dict(_Cn(m["bio"] for m in manchas)), _novas, _rib), flush=True)
+
+
 def rho_areia_em(mx, my):
     i = min(max(int(round((mx + LX / 2) / px)), 0), tw - 1)
     j = min(max(int(round((LY / 2 - my) / py)), 0), th - 1)
@@ -1036,6 +1136,11 @@ def altura_estrada(mx, my):
         # 6 m sobre a agua: a ponte tem de ter ARCOS que se vejam (a 3,2 m
         # a ponte era um estrado rente a agua)
         tot += pw * max(0.0, float(_zw_rio[jj, ii]) + 6.0 - h) * t
+        # -- A CORCUNDA (27/09): a ponte de pedra da referencia SOBE a meio,
+        # +2,4 m sobre a agua, suave. O eixo das marchas sobe com ela (usa esta
+        # mesma funcao): as tropas passam POR CIMA do tabuleiro.
+        k_ = min(1.0, max(0.0, (20.0 - e) / 20.0))
+        tot += pw * 2.4 * k_ * k_ * (3 - 2 * k_)
     return h + tot
 
 
@@ -1292,7 +1397,11 @@ def classe_troco(a, b):
     return 0.5                            # caminho
 
 
-ESCALA_CLASSE = {1.0: 1.15, 0.5: 1.0, 0.0: 0.78}
+# (27/09) mais LARGAS: a terra visivel era so metade da fita (~4,5 m) e
+# desaparecia no mapa. Agora ~12 / 10 / 7 m de terra, mais a berma.
+# (27/09, 3.a) a fita tem 14 / 11 / 7 m; a TERRA dentro dela vem da faixa
+# pintada (`faixas_estrada.py`), que ja traz a beira irregular
+ESCALA_CLASSE = {1.0: 2.0, 0.5: 1.65, 0.0: 1.05}
 n_classe = {1.0: 0, 0.5: 0, 0.0: 0}
 for a, b in LIGACOES:
     ax, ay = centros[a]
@@ -1406,8 +1515,8 @@ for a, b in LIGACOES:
         # ninguem o ve porque o chao da aldeia esta por cima.
         borda = min(math.hypot(cx - ax, cy - ay) - raio_a,
                     math.hypot(cx - bx, cy - by) - raio_b)
-        adro = 1.0 + 0.85 * max(0.0, 1.0 - max(0.0, borda) / 30.0) ** 1.6
-        w = LARG_ESTRADA * ESCALA_CLASSE[classe] * adro * (0.5 + 0.09 * math.sin(t * 21 + comp)
+        adro = 1.0 + 0.45 * max(0.0, 1.0 - max(0.0, borda) / 30.0) ** 1.6
+        w = LARG_ESTRADA * ESCALA_CLASSE[classe] * adro * (0.5 + (0.09 * math.sin(t * 21 + comp)
                                    + 0.06 * math.sin(t * 47)
                                    # ── E A BEIRA E IRREGULAR ────────────
                                    # Uma beira a direito nao existe em caminho
@@ -1416,7 +1525,7 @@ for a, b in LIGACOES:
                                    # avancar e recuar meio metro de dois em
                                    # dois passos.
                                    + 0.055 * math.sin(t * comp * 0.31 + 2.1)
-                                   + 0.035 * math.sin(t * comp * 0.73))
+                                   + 0.035 * math.sin(t * comp * 0.73)) * (0.4 if ESTRADA2 else 1.0))
         # ── CADA BEIRA COM A SUA ALTURA ─────────────────────────────────
         # A estrada acompanha o terreno, mas a altura do EIXO nao serve para as
         # duas beiras: numa encosta de traves uma delas voa e a outra
@@ -1468,7 +1577,7 @@ for a, b in LIGACOES:
         b0 = base + 4 * (i + 1)
         for k in range(3):
             faces.append((a0 + k, a0 + k + 1, b0 + k + 1, b0 + k))
-    eixos.append({"de": a, "para": b, "pts": eixo})
+    eixos.append({"de": a, "para": b, "pts": eixo, "classe": classe})
     trocos += 1
 # ── A MATA ABRE CAMINHO ─────────────────────────────────────────────────────
 # Nao havia regra nenhuma: a mata so era filtrada por cair na agua. Medido nesta
@@ -1494,7 +1603,7 @@ for _i, _arr in enumerate(bosques):
 COPA = 5.0                      # a copa passa do tronco; sem isto roca a fita
 empurradas, afogadas = 0, 0
 for m in manchas:
-    R = _raio_arr.get(m["b"], 0.0) * m.get("e", 1.0) + LARG_ESTRADA + COPA
+    R = _raio_arr.get(m["b"], 0.0) * m.get("e", 1.0) + LARG_ESTRADA * 1.4 + COPA
     for _ in range(4):
         pior, vetor = 1e9, None
         for eixo_ in eixos:
@@ -2591,10 +2700,22 @@ if RIOS_AGUA:
             _ir, _ie = np.unravel_index(int(np.argmin(_dd)), _dd.shape)
             _ie = min(max(_ie, 1), len(_E) - 2)
             _rumo = math.atan2(_E[_ie + 1, 1] - _E[_ie - 1, 1], _E[_ie + 1, 0] - _E[_ie - 1, 0])
-            _vao = 2.0 * (float(_W[_ir]) + 10.0)
-            PORTO.ponte(PONTES_G, float(_E[_ie, 0]), float(_E[_ie, 1]), _rumo, _vao,
-                        # a superficie da fita: o eixo das marchas esta 5 cm acima
-                        float(_E[_ie, 2]) - 0.05, float(_zw[_ir]))
+            _vao = 2.0 * (float(_W[_ir]) + 13.0)
+            # a ponte e 3 m mais larga do que a TERRA da estrada que a atravessa
+            # a ponte e da largura da TERRA da estrada (0,72 da meia-fita) mais
+            # os parapeitos -- e nao uma laje larga (marca do Lucas, 27/09)
+            _larg_p = LARG_ESTRADA * ESCALA_CLASSE[_e.get("classe", 0.5)] * 0.5 * 0.72 * 2 + 1.6
+            # o perfil do tabuleiro: a altura do eixo da estrada ao longo da
+            # ponte (com a corcunda), lida no proprio eixo
+            _s = np.concatenate([[0.0], np.cumsum(np.hypot(np.diff(_E[:, 0]), np.diff(_E[:, 1])))])
+            _s0 = _s[_ie]
+
+            def _perfil(t, _E=_E, _s=_s, _s0=_s0):
+                return float(np.interp(_s0 + t, _s, _E[:, 2])) - 0.05
+
+            def _ponto(t, _E=_E, _s=_s, _s0=_s0):
+                return (float(np.interp(_s0 + t, _s, _E[:, 0])), float(np.interp(_s0 + t, _s, _E[:, 1])))
+            PORTO.ponte(PONTES_G, _ponto, _perfil, _vao, float(_zw[_ir]), largura=_larg_p)
             _n_pontes += 1
     if _n_pontes:
         A2.objetos(PONTES_G, cena)
@@ -2794,7 +2915,9 @@ with open(os.path.join(SAIDA, NOME_SAIDA + ".json" if (BANCADA or MONTANHAS) els
                # daqui, e nao de uma opcao que alguem tem de lembrar de passar
                "agua": "algarve" if COSTA2 else None,
                # F3: a cor de vertice das estradas leva dados, nao cor
-               "estrada2": ESTRADA2}, f, separators=(",", ":"))
+               "estrada2": ESTRADA2,
+               # F2: a versao de longe de cada arvore (peca -> peca_lod)
+               "lod": LODS}, f, separators=(",", ":"))
 _saiu = NOME_SAIDA + ".json" if (BANCADA or MONTANHAS) else "mapa3d.json"
 print("SONDA -> sonda3d/%s  (%.0f KB)  em %.1f s"
       % (_saiu, os.path.getsize(os.path.join(SAIDA, _saiu)) / 1024, time.time() - t0))
@@ -2811,8 +2934,9 @@ if not (BANCADA or MONTANHAS) and CHAO2:
         relevo=relevo.astype(np.float32), terra=terra, dm=_dm.astype(np.float32),
         areia=_rho_areia.astype(np.float32), prado=_prado.astype(np.float32),
         rocha=_rocha.astype(np.float32),
-        mata=np.array([[m["p"][0], m["p"][1], _raio_arr.get(m["b"], 10.0) * m.get("e", 1.0)]
-                       for m in manchas], dtype=np.float32).reshape(-1, 3),
+        mata=np.array([[m["p"][0], m["p"][1], _raio_arr.get(m["b"], 10.0) * m.get("e", 1.0),
+                        DENS_BIOMA.get(m.get("bio"), 1.0)]
+                       for m in manchas], dtype=np.float32).reshape(-1, 4),
         aldeias=np.array([[c[0], c[1], raio_de(cid)] for cid, c in centros.items()],
                          dtype=np.float32).reshape(-1, 3),
         estradas=np.array([[k, p_[0], p_[1]] for k, e_ in enumerate(eixos) for p_ in e_["pts"]],

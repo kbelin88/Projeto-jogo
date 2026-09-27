@@ -114,6 +114,78 @@ def construir(nome, quantas, raio, folhosas, semente):
     return (raio + 5) * 2.3
 
 
+# ── F2: OS BIOMAS (27/09) ───────────────────────────────────────────────────
+# Seis arranjos iguais, com as mesmas tres especies, espalhados por 329 manchas:
+# "carimbos". A Iberia tem paisagens de arvore que se reconhecem de cima, e e
+# isso que da identidade ao mapa. Cada bioma tem as suas especies, a sua
+# DENSIDADE (o montado e arvore solta sobre pasto; o atlantico e mata cerrada)
+# e o seu sub-bosque. (nome, bioma, arvores, raio da mancha, semente)
+BIOMAS = [
+    ("atl_1", "atlantico", 40, 22.0, 101), ("atl_2", "atlantico", 28, 17.0, 102),
+    ("atl_3", "atlantico", 52, 27.0, 103),
+    ("mont_1", "montado", 9, 36.0, 201), ("mont_2", "montado", 6, 28.0, 202),
+    ("mont_3", "montado", 12, 42.0, 203),
+    ("cost_1", "costeiro", 14, 20.0, 301), ("cost_2", "costeiro", 9, 15.0, 302),
+    ("mato_1", "mato", 7, 22.0, 401), ("mato_2", "mato", 5, 16.0, 402),
+    ("rib_1", "ribeira", 7, 11.0, 501), ("rib_2", "ribeira", 5, 9.0, 502),
+]
+# a que distancia minima ficam dois troncos, e o sub-bosque (moitas por arvore)
+ESPACO = {"atlantico": 4.2, "montado": 12.0, "costeiro": 7.0, "mato": 6.0, "ribeira": 4.0}
+MOITAS = {"atlantico": 0.5, "montado": 0.25, "costeiro": 0.6, "mato": 3.0, "ribeira": 0.4}
+
+
+def construir_bioma(nome, bioma, quantas, raio, semente):
+    rnd = random.Random(semente)
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    P._mats.clear()
+    P.LIXO = None
+    P.MASTROS_CENA.clear()
+    # duas variantes de cada especie (sementes fixas: a MESMA peca em todo o mapa)
+    if bioma == "atlantico":
+        esp = [(0.55, [P.proto_carvalho(15.0, "folha_carvalho", 11), P.proto_carvalho(12.5, "folha_carvalho", 12)]),
+               (0.35, [P.proto_pinheiro_bravo(20.0, "folha_bravo", 13), P.proto_pinheiro_bravo(17.0, "folha_bravo", 14)]),
+               (0.10, [P.proto_choupo(16.0, "folha_choupo", 15)])]
+    elif bioma == "montado":
+        esp = [(0.85, [P.proto_sobreiro(11.0, "folha_sobro", 21), P.proto_sobreiro(9.0, "folha_sobro", 22),
+                       P.proto_sobreiro(12.5, "folha_sobro", 23)]),
+               (0.15, [P.proto_oliveira(6.5, "folha_oliva", 3)])]
+    elif bioma == "costeiro":
+        esp = [(0.6, [P.proto_pinheiro_manso(15.0, "folha_pinho", 1), P.proto_pinheiro_manso(11.5, "folha_pinho", 2)]),
+               (0.4, [P.proto_oliveira(6.5, "folha_oliva", 3), P.proto_oliveira(5.0, "folha_oliva", 4)])]
+    elif bioma == "mato":
+        esp = [(0.45, [P.proto_oliveira(5.5, "folha_oliva", 4)]),
+               (0.35, [P.proto_cipreste(13.0, "folha_cipreste", 31), P.proto_cipreste(10.5, "folha_cipreste", 32)]),
+               (0.20, [P.proto_sobreiro(7.5, "folha_sobro", 22)])]
+    else:  # ribeira
+        esp = [(0.75, [P.proto_choupo(18.0, "folha_choupo", 6), P.proto_choupo(15.0, "folha_choupo", 16)]),
+               (0.25, [P.proto_carvalho(12.5, "folha_carvalho", 12)])]
+    moitas = [P.proto_moita(1.8, "folha_mato", 41), P.proto_moita(1.3, "folha_mato", 42)]
+    esp_min = ESPACO[bioma] ** 2
+    postas = []
+    for i in range(quantas):
+        for _ in range(60):
+            a = rnd.random() * 2 * math.pi
+            d = raio * 0.9 * math.sqrt(rnd.random())
+            x, y = d * math.cos(a), d * math.sin(a)
+            if all((x - ox) ** 2 + (y - oy) ** 2 > esp_min for ox, oy in postas):
+                postas.append((x, y))
+                break
+        else:
+            continue
+        r_ = rnd.random()
+        for peso, lista in esp:
+            if r_ < peso:
+                break
+            r_ -= peso
+        P.onde(lista[rnd.randrange(len(lista))], x, y, -0.3, rnd.random() * 6.3, 0.85 + rnd.random() * 0.3)
+    for i in range(int(round(quantas * MOITAS[bioma]))):
+        a = rnd.random() * 2 * math.pi
+        d = raio * math.sqrt(rnd.random())
+        P.onde(moitas[i % 2], d * math.cos(a), d * math.sin(a), -0.2, rnd.random() * 6.3,
+               0.7 + rnd.random() * 0.6)
+    return (raio + 5) * 2.3
+
+
 def cena_pronta(quadro):
     cena = bpy.context.scene
     giro = math.radians(45)

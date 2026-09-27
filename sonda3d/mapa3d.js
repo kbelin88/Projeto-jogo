@@ -699,6 +699,16 @@ gl_Position = projectionMatrix * mvPosition;`);
     if (MAPA.estrada2) {
       [chaoPintado.estTerra, chaoPintado.estCalcada] = await Promise.all([
         ler("estrada_terra.jpg", true, true), ler("estrada_calcada.jpg", true, true)]);
+      // (27/09, 3.a) as faixas pintadas de cada tipo: X de beira a beira,
+      // Y ao longo (repete-se), alfa = cobertura
+      try {
+        chaoPintado.faixasMeta = await (await fetch(BASE + "estrada_faixas.json")).json();
+        const tx = await tl.loadAsync(BASE + "estrada_faixas.png");
+        tx.colorSpace = THREE.SRGBColorSpace; tx.flipY = false;
+        tx.wrapS = THREE.ClampToEdgeWrapping; tx.wrapT = THREE.RepeatWrapping;
+        tx.anisotropy = rend.capabilities.getMaxAnisotropy();
+        chaoPintado.faixas = tx;
+      } catch (e) { console.warn("estradas sem faixas:", e); }
     }
   } catch (e) {
     console.warn("chao sem pintura (correr o forno):", e);
@@ -771,6 +781,23 @@ vec3 chaoPintado() {
   // batida com dois rodados, erva ao meio nos caminhos, calcada na estrada
   // real, e uma beira irregular que se FUNDE no chao pintado por baixo -- a
   // fita deixa de ter contorno.
+  // o chao que a ESTRADA ve por baixo da beira: so a pintura e duas das quatro
+  // fotografias (relva e seco) -- a leitura completa, mais as da estrada,
+  // passava das 16 unidades de textura
+  const GLSL_CHAO_LEVE = `uniform sampler2D chCor; uniform sampler2D chTipo;
+uniform vec2 chLado; uniform float chForca;
+uniform sampler2D chDet0; uniform float chEsc0; uniform vec3 chMed0;
+uniform sampler2D chDet1; uniform float chEsc1; uniform vec3 chMed1;
+vec3 chaoLeve() {
+  vec2 uvc = vec2((vMundoSL.x + chLado.x * 0.5) / chLado.x, (vMundoSL.z + chLado.y * 0.5) / chLado.y);
+  vec3 c = texture2D(chCor, uvc).rgb;
+  vec4 w = texture2D(chTipo, uvc);
+  float wr = w.r / max(w.r + w.g, 1e-3);
+  vec2 p = vMundoSL.xz;
+  vec3 d = slLer(chDet0, p * chEsc0).rgb / chMed0 * wr + slLer(chDet1, p * chEsc1).rgb / chMed1 * (1.0 - wr);
+  return c * mix(vec3(1.0), d, chForca);
+}
+`;
   function pintarEstrada(mat) {
     const antes = mat.onBeforeCompile;
     mat.onBeforeCompile = (sh, r) => {
@@ -783,45 +810,86 @@ vec3 chaoPintado() {
       sh.uniforms.etMedT = { value: new THREE.Vector3(...me.terra) };
       sh.uniforms.etMedC = { value: new THREE.Vector3(...me.calcada) };
       mat.userData.et = sh.uniforms;
+      const fm = chaoPintado.faixasMeta || {};
+      sh.uniforms.fxAtlas = { value: chaoPintado.faixas || null };
+      sh.uniforms.fxComp = { value: new THREE.Vector3(
+        (fm.real || {}).comprido || 17.6, (fm.caminho || {}).comprido || 17.6, (fm.carreiro || {}).comprido || 13.2) };
+      sh.uniforms.fxLiga = { value: chaoPintado.faixas ? 1.0 : 0.0 };
       sh.fragmentShader = sh.fragmentShader
-        .replace("void main() {", GLSL_CHAO + `uniform sampler2D etTerra; uniform sampler2D etCalcada;
+        .replace("void main() {", GLSL_CHAO_LEVE + `uniform sampler2D etTerra; uniform sampler2D etCalcada;
 uniform vec3 etMedT; uniform vec3 etMedC;
+uniform sampler2D fxAtlas;
+uniform vec3 fxComp; uniform float fxLiga;
+vec3 corFaixa() {
+  // X = de beira a beira (o lado do forno, 0..1), na coluna do tipo dentro do
+  // atlas; Y = metros ao longo / repeticao. vMapUv.x vem com o repeat do map
+  // (1/2,4): desfaz-se.
+  float classe = vColor.g;
+  float x = clamp(vColor.r, 0.004, 0.996);
+  float col = classe > 0.75 ? 0.0 : (classe > 0.25 ? 1.0 : 2.0);
+  float comp = classe > 0.75 ? fxComp.x : (classe > 0.25 ? fxComp.y : fxComp.z);
+  float ao_longo = vMapUv.x * 2.4;
+  vec4 f = texture2D(fxAtlas, vec2((col + x) / 3.0, ao_longo / comp));
+  vec3 chao = chaoLeve();
+  // a erva que a estrada pisa: um pouco mais escura e mais seca junto a terra
+  vec3 orla = chao * vec3(0.88, 0.86, 0.80);
+  float perto = smoothstep(0.0, 0.35, f.a);
+  vec3 base = mix(chao, orla, perto * (1.0 - f.a));
+  vec3 c = mix(base, f.rgb, f.a);
+  // ── AO LONGE A ESTRADA TEM DE SE LER ───────────────────────────────────
+  // a 500 m+ a beira irregular faz media com o chao e a terra aproxima-se do
+  // dourado seco: a estrada desmaiava. Quanto mais longe (a faixa ocupa menos
+  // pixeis -- fwidth do lado), mais cheia e mais saturada, com um contorno
+  // escuro. De perto fica a faixa pintada tal e qual.
+  float longe = smoothstep(0.012, 0.05, fwidth(vColor.r));
+  float a = abs(vColor.r * 2.0 - 1.0);
+  float nucleo = smoothstep(0.66, 0.56, a);
+  vec3 ocre = classe > 0.75 ? vec3(0.34, 0.30, 0.24) : vec3(0.50, 0.27, 0.10);
+  c = mix(c, mix(c, ocre, 0.55), longe * nucleo);
+  float contorno = smoothstep(0.60, 0.68, a) * smoothstep(0.86, 0.72, a);
+  c = mix(c, chao * 0.55, longe * contorno * 0.8);
+  return c;
+}
 vec3 corEstrada() {
-  // (27/09) a cor e DADA aqui; a fotografia (Poly Haven) so da o grao, a
-  // dividir pela sua media. Assim a estrada le-se igual em todo o mapa: terra
-  // clara e quente, a contrastar com o verde do norte E com o dourado do sul
-  // (uma terra da cor do chao seco desaparecia nele -- era o "nao vi diferenca")
+  // (27/09, 2.a) as estradas "escondiam-se no mapa" (o Lucas): agora a terra e
+  // CREME claro -- mais clara do que o dourado do sul e do que o verde do
+  // norte, que e o que a faz ler-se a 1 km -- com um CONTORNO escuro fino (o
+  // rebordo de erva pisada), como nos mapas de campanha. A fotografia (Poly
+  // Haven) so da o grao, a dividir pela sua media.
   float s = vColor.r * 2.0 - 1.0;
   float a = abs(s);
   float classe = vColor.g;
   float real = step(0.75, classe);
   vec2 p = vMundoSL.xz;
-  vec3 chao = chaoPintado();
+  vec3 chao = chaoLeve();
   float nr = slRuido(p / 2.0);
   vec3 grT = slLer(etTerra, p / 14.0).rgb / etMedT;
-  vec3 terra = vec3(0.30, 0.19, 0.10) * mix(vec3(1.0), clamp(grT, 0.55, 1.5), 0.45);
+  vec3 terra = vec3(0.54, 0.33, 0.13) * mix(vec3(1.0), clamp(grT, 0.6, 1.4), 0.4);
   // os rodados: dois sulcos mais escuros
-  float rod = exp(-pow((a - 0.2) / 0.06, 2.0));
-  vec3 sup = terra * (1.0 - 0.22 * rod * (0.7 + 0.3 * nr));
+  float rod = exp(-pow((a - 0.22) / 0.06, 2.0));
+  vec3 sup = terra * (1.0 - 0.18 * rod * (0.7 + 0.3 * nr));
   // a erva ao meio, so nos carreiros
-  float meio = smoothstep(0.09, 0.01, a) * step(classe, 0.25) * smoothstep(0.3, 0.7, nr);
-  sup = mix(sup, chao, 0.55 * meio);
-  // a calcada da estrada real, de beira a beira, com guias mais escuras
+  float meio = smoothstep(0.08, 0.01, a) * step(classe, 0.25) * smoothstep(0.35, 0.7, nr);
+  sup = mix(sup, chao, 0.45 * meio);
+  // a estrada real: calcada clara de beira a beira
   vec3 grC = slLer(etCalcada, p / 3.2).rgb / etMedC;
-  vec3 calc = vec3(0.26, 0.225, 0.17) * mix(vec3(1.0), clamp(grC, 0.3, 1.8), 0.9);
-  calc *= 1.0 - 0.28 * smoothstep(0.40, 0.46, a);
-  sup = mix(sup, calc, real * smoothstep(0.52, 0.47, a + (nr - 0.5) * 0.03));
-  // a beira: definida (a estrada tem de se LER), com um recorte irregular
-  // curto e uma berma pisada estreita que funde no chao
+  vec3 calc = vec3(0.50, 0.36, 0.20) * mix(vec3(1.0), clamp(grC, 0.35, 1.7), 0.8);
+  sup = mix(sup, calc, real * smoothstep(0.60, 0.55, a + (nr - 0.5) * 0.03));
+  // a beira: a terra acaba em 0,62, com um recorte curto; logo fora dela um
+  // CONTORNO escuro de 0,08 e depois a berma a fundir no chao
   float nb = slRuido(p / 3.0) * 0.6 + slRuido(p / 0.9) * 0.4;
-  float fim = mix(0.50, 0.55, real) - 0.07 * (1.0 - classe);
-  float t = smoothstep(fim - 0.04, fim + 0.10, a + (nb - 0.5) * 0.14);
-  vec3 berma = mix(chao, terra, 0.35) * 0.92;
-  vec3 c = mix(sup, berma, t);
-  return mix(c, chao, smoothstep(0.66, 0.95, a));
+  float aa = a + (nb - 0.5) * 0.08;
+  float fim = 0.62;
+  float fora = smoothstep(fim - 0.015, fim + 0.015, aa);
+  float contorno = fora * (1.0 - smoothstep(fim + 0.06, fim + 0.12, aa));
+  vec3 berma = mix(chao, vec3(0.30, 0.22, 0.12), 0.25);
+  vec3 c = mix(sup, berma, fora);
+  c = mix(c, chao * 0.55, 0.75 * contorno);
+  return mix(c, chao, smoothstep(0.80, 0.98, a));
 }
 void main() {`)
-        .replace("diffuseColor *= sampledDiffuseColor;", "diffuseColor.rgb *= corEstrada();")
+        .replace("diffuseColor *= sampledDiffuseColor;",
+                 "diffuseColor.rgb *= (fxLiga > 0.5 ? corFaixa() : corEstrada());")
         // a cor de vertice sao DADOS: nao multiplica
         .replace("#include <color_fragment>", "");
     };
@@ -895,6 +963,12 @@ void main() {`)
   for (const c of MAPA.copias) soma(c.peca);
   for (const m of MAPA.manchas) for (const t of MAPA.arranjos[m.b]) soma(t.peca);
 
+  // ── F2: A ARVORE DE LONGE ───────────────────────────────────────────────
+  // `MAPA.lod[peca]` e a versao de poucos tufos. Cada arvore com LOD vai para
+  // UMA das duas listas conforme a distancia a camara (ver `redistribuirLOD`);
+  // as duas nascem com lugar para todas.
+  const LOD = MAPA.lod || {};
+  for (const [nome, nl] of Object.entries(LOD)) if (quantas[nome]) quantas[nl] = quantas[nome];
   const inst = {};
   for (const [nome, n] of Object.entries(quantas)) {
     const partes = banco[nome];
@@ -946,6 +1020,7 @@ void main() {`)
   // `m.h` e a humidade do sitio (a mesma que pinta o prado): 1 = noroeste
   // humido, 0 = sul seco. Por cima, cada arvore leva um desvio proprio -- sem
   // ele, 380 manchas de 6 arranjos leem-se como carimbos.
+  const arvLod = {};         // peca -> [{ m, c, x, z }] das arvores com versao de longe
   const MATA_SECA = new THREE.Color(1.14, 1.02, 0.72);
   const MATA_HUMIDA = new THREE.Color(0.78, 1.00, 0.84);
   const _cor = new THREE.Color();
@@ -959,12 +1034,23 @@ void main() {`)
       const z = m.zs ? m.zs[n] : (m.z || 0);
       if (z === null) continue;
       const l = inst[t.peca]; if (!l) continue;
+      const temLod = LOD[t.peca] && inst[LOD[t.peca]];
       // desvio deterministico: a mesma arvore tem sempre o mesmo tom, entre
       // partidas e entre o jogo e o video
       const r = Math.sin((m.p[0] + t.p[0]) * 12.9898 + (m.p[1] + t.p[1]) * 78.233
                          + k++ * 3.17) * 43758.5453;
       const d = 0.90 + 0.20 * (r - Math.floor(r));
       _cor.copy(MATA_SECA).lerp(MATA_HUMIDA, h).multiplyScalar(d);
+      if (temLod) {
+        // guarda-se; quem a poe numa das listas e o `redistribuirLOD`
+        V.set(m.p[0] + t.p[0] * m.e, z + t.p[2] * m.e, -(m.p[1] + t.p[1] * m.e));
+        R.set(0, t.rz, 0); Q.setFromEuler(R);
+        const e = t.e * m.e; E.set(e, e, e);
+        M.compose(V, Q, E);
+        (arvLod[t.peca] = arvLod[t.peca] || []).push({ m: M.clone(), c: _cor.clone(), x: V.x, z: V.z });
+        nInst++;
+        continue;
+      }
       por(l, m.p[0] + t.p[0] * m.e, m.p[1] + t.p[1] * m.e,
           z + t.p[2] * m.e, t.rz, t.e * m.e, _cor); nInst++;
     }
@@ -974,6 +1060,33 @@ void main() {`)
       im.instanceMatrix.needsUpdate = true;
       if (im.instanceColor) im.instanceColor.needsUpdate = true;
     }
+
+  // perto (< LOD_M da camara, no plano) a arvore inteira; longe, a de poucos
+  // tufos. So se refaz quando a camara anda mais de 25 m: e uma passagem pelas
+  // 12 mil arvores, barata, mas nao e para cada quadro.
+  const LOD_M = 420;
+  const _ultLod = new THREE.Vector3(1e9, 0, 0);
+  function redistribuirLOD(forcar) {
+    const cp = cam.position;
+    if (!forcar && Math.hypot(cp.x - _ultLod.x, cp.z - _ultLod.z) < 25 && Math.abs(cp.y - _ultLod.y) < 25) return;
+    _ultLod.copy(cp);
+    const lim2 = LOD_M * LOD_M;
+    for (const [peca, lista] of Object.entries(arvLod)) {
+      const perto = inst[peca], longe = inst[LOD[peca]];
+      for (const im of perto) im.count = 0;
+      for (const im of longe) im.count = 0;
+      for (const a of lista) {
+        const dx = a.x - cp.x, dz = a.z - cp.z, dy = cp.y;
+        const alvo = (dx * dx + dz * dz + dy * dy * 0.3) < lim2 ? perto : longe;
+        for (const im of alvo) { im.setMatrixAt(im.count, a.m); im.setColorAt(im.count, a.c); im.count++; }
+      }
+      for (const im of perto.concat(longe)) {
+        im.instanceMatrix.needsUpdate = true;
+        if (im.instanceColor) im.instanceColor.needsUpdate = true;
+      }
+    }
+  }
+  redistribuirLOD(true);
 
   // ── as bandeiras, uma por mastro, com a cor do dono ──────────────────────
   // Um pano por REI, porque a cor vive no material. Uma aldeia que troca de
@@ -1863,6 +1976,7 @@ transformed.y += onda * transformed.x * 0.05;`);
     fumegar(relogio);
     if (matMar.userData.sh) matMar.userData.sh.uniforms.tempo.value = relogio * 0.001;
     if (matRio.userData.sh) matRio.userData.sh.uniforms.tempo.value = relogio * 0.001;
+    redistribuirLOD(false);
     for (const rei of Object.keys(panos))
       if (panos[rei].mat.userData.sh)
         panos[rei].mat.userData.sh.uniforms.tempo.value = relogio * 0.001;

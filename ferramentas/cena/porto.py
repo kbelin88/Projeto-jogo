@@ -163,92 +163,116 @@ def barco(G, x, y, z, rz, L=7.2, B=2.3, H=1.05, mastro=False, adernar=0.0, esc=1
 # rio -- e o tabuleiro; aqui poe-se o que a SEGURA: a laje de pedra por baixo,
 # os arcos, os pilares ate ao leito e os parapeitos. Pedra das aldeias, para a
 # ponte ser da mesma terra que as muralhas.
-def ponte(G, x, y, rumo, vao, z_via, z_agua, largura=11.0):
-    """ponte de arcos em arenito, a cavalo da estrada.
+def ponte(G, ponto, perfil, vao, z_agua, largura=9.0):
+    """ponte de pedra rustica, a seguir a estrada (27/09, 3.a versao).
 
-    (x, y) o meio; `rumo` o da ESTRADA; `vao` o comprimento entre pegoes;
-    `z_via` a superficie da estrada ali (o forno pos-a a passar por cima da
-    agua); `z_agua` o nivel do rio. O tabuleiro e CALCADO e fica 12 cm acima da
-    fita da estrada, e mais largo do que ela: de cima le-se a ponte, e nao a
-    estrada a atravessar o rio.
+    A referencia do Lucas (estilo AoE4): estreita -- a largura da estrada --,
+    CORCUNDA, em pedras irregulares, com parapeitos baixos de pedra e um ou dois
+    arcos redondos. `ponto(t)` e `perfil(t)` dao o eixo da estrada e a sua
+    altura a `t` metros do meio da ponte (o forno ja la pos a corcunda); a ponte
+    segue-os, e por isso nunca fica ao lado da estrada nem abaixo dela.
     """
-    ux, uy = math.cos(rumo), math.sin(rumo)
-    vx, vy = -uy, ux
     hl = largura / 2
-    topo = z_via + 0.12                          # a face de cima do lajedo
-    ESP = 1.5                                    # corpo de pedra por baixo
-    base = z_agua - 1.8                          # os pilares assentam no leito
-    L_tot = vao + 4.0
-    M = A2._TR(x, y, 0.0, rumo)
-    # o lajedo e o corpo
-    A2.caixa(G, "ponte_lajedo", x, y, topo - 0.25, L_tot, largura - 1.2, 0.25, rz=rumo)
-    A2.caixa(G, "ponte", x, y, topo - ESP, L_tot, largura, ESP - 0.25, rz=rumo)
-    # a cornija: uma faixa escura a toda a volta, por baixo dos parapeitos
+    L2 = vao / 2 + 2.5                         # meio comprimento, com os encontros
+    N = max(12, int(vao / 1.2))
+    ts = [(-L2 + 2 * L2 * k / N) for k in range(N + 1)]
+
+    def base_em(t):
+        x, y = ponto(t)
+        x1, y1 = ponto(t + 0.8)
+        x0, y0 = ponto(t - 0.8)
+        return x, y, math.atan2(y1 - y0, x1 - x0), perfil(t)
+
+    anel = [base_em(t) for t in ts]
+    I = A2._TR(0, 0, 0)
+
+    def faixa(mat, a_, b_, za, zb):
+        v, f = [], []
+        for (x, y, r, z) in anel:
+            nx, ny = -math.sin(r), math.cos(r)
+            v.append((x + nx * a_, y + ny * a_, z + za))
+            v.append((x + nx * b_, y + ny * b_, z + zb))
+        for k in range(len(anel) - 1):
+            q = (2 * k, 2 * k + 2, 2 * k + 3, 2 * k + 1)
+            f += [q, tuple(reversed(q))]
+        G.por(mat, v, f, I)
+
+    # o tabuleiro, calcado
+    # 0,5 m acima do eixo: a fita da estrada (com desvio de poligono) furava
+    faixa("ponte_calcada", -hl + 0.5, hl - 0.5, 0.5, 0.5)
+    z_min = min(a[3] for a in anel)
+    fundo_corpo = z_min - 1.4
     for s_ in (-1, 1):
-        A2.caixa(G, "ponte_escura", x + vx * s_ * (hl + 0.15), y + vy * s_ * (hl + 0.15), topo - 0.55,
-                 L_tot + 0.4, 0.5, 0.45, rz=rumo)
-        # parapeitos com capeamento
-        A2.caixa(G, "ponte", x + vx * s_ * (hl - 0.35), y + vy * s_ * (hl - 0.35), topo - 0.25,
-                 L_tot, 0.6, 1.25, rz=rumo)
-        A2.caixa(G, "ponte_escura", x + vx * s_ * (hl - 0.35), y + vy * s_ * (hl - 0.35), topo + 1.0,
-                 L_tot + 0.1, 0.8, 0.22, rz=rumo)
-        # os pegoes das pontas: blocos que abrem para a estrada
-        for q in (-1, 1):
-            A2.caixa(G, "ponte_escura", x + ux * q * (L_tot / 2 - 0.6) + vx * s_ * (hl - 0.2),
-                     y + uy * q * (L_tot / 2 - 0.6) + vy * s_ * (hl - 0.2), topo - 0.25,
-                     1.4, 1.2, 1.85, rz=rumo)
-    # os arcos
-    n = max(1, int(round(vao / 10.0)))
-    L = vao / n
-    fundo = topo - ESP
-    flecha = min(L * 0.48, max(1.2, fundo - z_agua - 0.4))
-    for k in range(1, n):
-        t = -vao / 2 + k * L
-        cx, cy = x + ux * t, y + uy * t
-        A2.caixa(G, "ponte", cx, cy, base, 2.0, largura - 0.4, fundo - base, rz=rumo)
-        # os talha-mares: prismas em bico dos dois lados do pilar, ate meio
-        for s_ in (-1, 1):
-            h_tm = max(0.8, (z_agua + 1.4) - base)
-            v, f = [], []
-            for zz in (base, base + h_tm):
-                v += [(t - 1.0, s_ * (hl - 0.2), zz), (t + 1.0, s_ * (hl - 0.2), zz),
-                      (t, s_ * (hl + 1.6), zz)]
-            f = [(0, 1, 2), (3, 5, 4), (0, 3, 4, 1), (1, 4, 5, 2), (2, 5, 3, 0)]
-            f += [tuple(reversed(ff)) for ff in f]
-            G.por("ponte_escura", v, f, M)
-    NS = 12
+        # a face do corpo, do tabuleiro ao fundo
+        v, f = [], []
+        for (x, y, r, z) in anel:
+            nx, ny = -math.sin(r), math.cos(r)
+            v.append((x + nx * hl * s_, y + ny * hl * s_, z + 0.5))
+            v.append((x + nx * hl * s_, y + ny * hl * s_, fundo_corpo))
+        for k in range(len(anel) - 1):
+            q = (2 * k, 2 * k + 2, 2 * k + 3, 2 * k + 1)
+            f += [q, tuple(reversed(q))]
+        G.por("ponte_rustica", v, f, I)
+        # o parapeito: muro baixo de pedra, com capeamento escuro, a abrir nas pontas
+        for k in range(len(anel) - 1):
+            x0, y0, r0, z0 = anel[k]
+            x1, y1, r1, z1 = anel[k + 1]
+            ab = 1.0 + 0.5 * max(0.0, (abs(ts[k]) - (L2 - 3.0)) / 3.0)
+            nx, ny = -math.sin(r0), math.cos(r0)
+            cx = (x0 + x1) / 2 + nx * (hl - 0.3) * s_ * ab
+            cy = (y0 + y1) / 2 + ny * (hl - 0.3) * s_ * ab
+            comp = math.hypot(x1 - x0, y1 - y0) + 0.05
+            rz = math.atan2(y1 - y0, x1 - x0)
+            A2.caixa(G, "ponte_rustica", cx, cy, min(z0, z1) + 0.45, comp, 0.6, 0.95 + abs(z1 - z0), rz=rz)
+            A2.caixa(G, "ponte_rustica_esc", cx, cy, max(z0, z1) + 1.35, comp, 0.72, 0.18, rz=rz)
+        for q in (0, -1):
+            x, y, r, z = anel[q]
+            nx, ny = -math.sin(r), math.cos(r)
+            A2.caixa(G, "ponte_rustica_esc", x + nx * (hl + 0.3) * s_, y + ny * (hl + 0.3) * s_, z - 0.2,
+                     0.95, 0.95, 1.5, rz=r)
+    # -- OS ARCOS: um ou dois, redondos; o timpano a volta do vao aberto, o
+    # intradorso, e as aduelas em leque
+    n = 1 if vao < 26 else 2
+    Lv = vao / n
+    x_m, y_m, r_m, _ = base_em(0.0)
+    ux, uy = math.cos(r_m), math.sin(r_m)
+    topo_arco = min(z_min - 1.0, z_agua + Lv * 0.42)
+    base_a = z_agua - 1.2
+    nasc = base_a + 1.0
+    NS = 14
+    M = A2._TR(x_m, y_m, 0.0, r_m)
     for k in range(n):
-        t0 = -vao / 2 + k * L
-        # o timpano (a pedra entre o arco e o corpo) e o intradorso
+        t0 = -vao / 2 + k * Lv
         v, f = [], []
         for s_ in (-hl + 0.05, hl - 0.05):
             for i in range(NS + 1):
                 a = i / NS
-                v.append((t0 + a * L, s_, fundo - flecha * math.sin(math.pi * a)))
-            v.append((t0 + L, s_, fundo))
-            v.append((t0, s_, fundo))
-        m = NS + 3
-        frente = tuple(range(m))
-        tras = tuple(m + i for i in range(m))
-        f += [frente, tuple(reversed(frente)), tras, tuple(reversed(tras))]
+                v.append((t0 + a * Lv, s_, nasc + (topo_arco - nasc) * math.sin(math.pi * a)))
+            v.append((t0 + Lv, s_, fundo_corpo))
+            v.append((t0, s_, fundo_corpo))
+        m_ = NS + 3
+        fr = tuple(range(m_))
+        tr = tuple(m_ + i for i in range(m_))
+        f += [fr, tuple(reversed(fr)), tr, tuple(reversed(tr))]
         for i in range(NS):
-            f.append((i, i + 1, m + i + 1, m + i))
-            f.append((m + i, m + i + 1, i + 1, i))
-        G.por("ponte", v, f, M)
-        # as aduelas: um anel escuro a contornar o arco, saliente 12 cm
+            f.append((i, i + 1, m_ + i + 1, m_ + i))
+            f.append((m_ + i, m_ + i + 1, i + 1, i))
+        G.por("ponte_rustica", v, f, M)
         for s_ in (-1, 1):
-            v, f = [], []
-            y0 = s_ * (hl + 0.07)
-            for i in range(NS + 1):
-                a = i / NS
-                tt = t0 + a * L
-                zi = fundo - flecha * math.sin(math.pi * a)
-                # a normal ao arco, no plano da face
-                dz = -flecha * math.pi * math.cos(math.pi * a) / L
-                nn = math.hypot(1.0, dz)
-                ox, oz = -dz / nn, 1.0 / nn
-                v += [(tt, y0, zi), (tt + ox * 0.75, y0, zi + oz * 0.75)]
             for i in range(NS):
-                q = (2 * i, 2 * i + 2, 2 * i + 3, 2 * i + 1)
-                f += [q, tuple(reversed(q))]
-            G.por("ponte_escura", v, f, M)
+                a = (i + 0.5) / NS
+                tt = t0 + a * Lv
+                zz = nasc + (topo_arco - nasc) * math.sin(math.pi * a)
+                ang = math.atan2((topo_arco - nasc) * math.pi * math.cos(math.pi * a) / Lv, 1.0)
+                vv = [(-0.3, -0.12, -0.05), (0.3, -0.12, -0.05), (0.3, 0.12, -0.05), (-0.3, 0.12, -0.05),
+                      (-0.3, -0.12, 0.85), (0.3, -0.12, 0.85), (0.3, 0.12, 0.85), (-0.3, 0.12, 0.85)]
+                ff = [(0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]
+                G.por("ponte_rustica_esc", vv, ff, M @ A2._TR(tt, s_ * (hl + 0.06), zz, 0.0, 0.0, -ang))
+    for k in range(1, n):
+        t = -vao / 2 + k * Lv
+        A2.caixa(G, "ponte_rustica", x_m + ux * t, y_m + uy * t, base_a, 2.2, largura - 0.2,
+                 fundo_corpo - base_a + 0.5, rz=r_m)
+    for q in (-1, 1):
+        t = q * (vao / 2 + 0.6)
+        A2.caixa(G, "ponte_rustica_esc", x_m + ux * t, y_m + uy * t, base_a, 1.8, largura + 0.6,
+                 fundo_corpo - base_a + 0.4, rz=r_m)

@@ -334,7 +334,19 @@ Ainda a 26/09, pelas marcas do Lucas:
   grandes: calçada e mais larga), caminho (terra com dois rodados) e carreiro
   (entre duas pequenas, com erva ao meio). A cor de vértice das `estradas` leva
   **dados**, não cor (R = posição de través, G = classe); o shader
-  `pintarEstrada` desenha-as e funde a beira no chão pintado. O traçado não muda;
+  `pintarEstrada` desenha-as e funde a beira no chão pintado. O traçado não muda.
+  Desde 27/09 são **largas** (`ESCALA_CLASSE` 2,6/2,2/1,6: ~12/10/7 m de terra),
+  em **ocre claro com um contorno escuro**, para se lerem no mapa inteiro. As
+  **pontes são de granito cinzento** (passo `CINZA` do `aldeia2._imagem`, que
+  tira a cor e mantém a textura), e a largura acompanha a da estrada.
+  Desde 27/09 à noite a superfície de cada tipo vem de uma **faixa pintada**
+  (`faixas_estrada.py`, um atlas com os três tipos) e as pontes são **corcundas,
+  de pedra rústica, a seguir a estrada**. As texturas `assets/texturas/gen_*`
+  (calçada, terra, pedra da ponte, relva, erva seca) são **geradas no ComfyUI**
+  com SDXL Juggernaut Lightning (`ferramentas/comfy/fluxos/textura_sdxl.json`) e
+  cosidas sem costura pelo próprio SDXL (`rolar.py` + `costura_sdxl.json`).
+  ⚠ O shader da estrada está perto das 16 unidades de textura do WebGL: cada
+  textura nova tem de sair de outra;
 - **há rios** (F4, `RIOS`): o `rios.py` traça-os pelo menor custo, sempre a
   descer (a 1.ª versão cavou uma garganta de 49 m), para longe das aldeias.
   Dois desaguam nas enseadas e um terceiro é procurado (a nascente cujo caminho
@@ -342,6 +354,13 @@ Ainda a 26/09, pelas marcas do Lucas:
   eles até uma **ponte de pedra** baixa (`altura_estrada`, `porto.ponte`). O
   eixo das marchas só muda de altura, e só junto aos rios. O vale reaplica-se
   **depois** das rampas das aldeias, que o tapavam;
+- **árvores por bioma** (F2, `MATA2`): sobreiro, carvalho, pinheiro-bravo,
+  choupo, cipreste e moita (`pecas.py`, copas em tufos com `_copa`), em
+  arranjos por bioma (`cozer_mata.BIOMAS`): atlântico cerrado, montado solto,
+  pinhal costeiro, mato e ribeira ao longo dos rios. O bioma sai da humidade e
+  da costa (`bioma_em`). Cada espécie nova tem uma **versão de longe**
+  (`lod=True`, `MAPA.lod`), e o jogo troca-as a 420 m da câmara
+  (`redistribuirLOD`): sem isso eram 13,5 M triângulos por quadro;
 - perto de Pamplona, uma ravina na falésia foi cheia (`ATERROS`) e a laje ao
   lado é relva por decisão (`RELVA_FORCADA`). As duas listas são o sítio para
   pedidos parecidos.

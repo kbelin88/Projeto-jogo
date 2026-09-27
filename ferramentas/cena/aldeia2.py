@@ -76,12 +76,21 @@ MATS = {
                   passos=[("MULTIPLY", 1.0, (0.42, 0.22, 0.13))]),
     # as pontes (F4, 26/09): arenito do Poly Haven (CC0), mais claro e dourado
     # do que a pedra das muralhas, para a ponte se ler contra a estrada
+    # (27/09) GRANITO cinzento-claro, e nao arenito: a estrada passou a creme
+    # e a ponte tem de se ler DIFERENTE dela (pedido do Lucas)
+    # (27/09, 3.a) pedra RUSTICA de muro (stone_wall, Poly Haven): cinzento
+    # quente, pedras irregulares -- a ponte da referencia
+    # (27/09, 2.a) pedra PINTADA (SDXL no ComfyUI): gen_pedra_ponte, gen_calcada
+    "ponte_rustica": dict(pasta="gen_pedra_ponte", metros=3.0, rug=0.95, passos=[]),
+    "ponte_rustica_esc": dict(pasta="gen_pedra_ponte", metros=3.0, rug=0.95,
+                              passos=[("MULTIPLY", 1.0, (0.62, 0.60, 0.58))]),
+    "ponte_calcada": dict(pasta="gen_calcada", metros=3.5, rug=0.9, passos=[]),
     "ponte": dict(pasta="ph_sandstone_blocks_05", metros=3.0, rug=0.9,
-                  passos=[("MULTIPLY", 1.0, (1.0, 0.93, 0.80))], ajuste=(1.45, 1.32, 1.08)),
+                  passos=[("CINZA", 1.0, (0.40, 0.42, 0.45))]),
     "ponte_escura": dict(pasta="ph_sandstone_blocks_05", metros=3.0, rug=0.9,
-                         passos=[("MULTIPLY", 1.0, (0.70, 0.60, 0.50))]),
+                         passos=[("CINZA", 1.0, (0.20, 0.215, 0.24))]),
     "ponte_lajedo": dict(pasta="ph_cobblestone_large_01", metros=3.2, rug=0.85,
-                         passos=[("MULTIPLY", 1.0, (0.95, 0.88, 0.76))]),
+                         passos=[("CINZA", 1.0, (0.24, 0.245, 0.26))]),
     "barra_azul": dict(cor=(0.10, 0.17, 0.32), rug=0.6),
     "barra_ocre": dict(cor=(0.45, 0.28, 0.10), rug=0.6),
     "escuro": dict(cor=(0.035, 0.028, 0.024), rug=0.9),
@@ -644,6 +653,14 @@ def _imagem(nome, cfg):
     c = _srgb_lin(px[:, :3])
     for tipo, f, cor in cfg.get("passos", []):
         cor = np.array(cor, dtype=np.float32)
+        if tipo == "CINZA":
+            # tira a COR e guarda o claro-escuro: a luminancia (a dividir pela
+            # media) vezes a tinta. O MIX com uma constante achatava a pedra em
+            # betao (as pontes, 27/09).
+            lum = c @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+            lum = lum / max(float(lum.mean()), 1e-6)
+            c = c * (1 - f) + (lum[:, None] * cor) * f
+            continue
         c = c * (1 - f) + (c * cor if tipo == "MULTIPLY" else cor) * f
     if cfg.get("ajuste"):
         c = c * np.array(cfg["ajuste"], dtype=np.float32)

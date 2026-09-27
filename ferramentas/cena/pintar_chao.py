@@ -163,10 +163,14 @@ mata = np.zeros((H, W), dtype=np.float32)
 if len(D["mata"]):
     im = Image.new("L", (W, H), 0)
     dr = ImageDraw.Draw(im)
-    for x, y, r in D["mata"]:
+    for linha in D["mata"]:
+        x, y, r = linha[:3]
+        # a densidade do bioma (F2): o montado e pasto com arvores soltas -- o
+        # chao por baixo nao escurece como numa mata cerrada
+        dens = float(linha[3]) if len(linha) > 3 else 1.0
         u, v = (x + LX / 2) / RES, (LY / 2 - y) / RES
         rr = (r * 1.05 + 4.0) / RES
-        dr.ellipse([u - rr, v - rr, u + rr, v + rr], fill=255)
+        dr.ellipse([u - rr, v - rr, u + rr, v + rr], fill=int(255 * dens))
     mata = ndimage.gaussian_filter(np.asarray(im, dtype=np.float32) / 255.0, 7.0 / RES)
     mata = mata * (0.75 + 0.5 * ruido(25, 31))
 base = misturar(base, MATA_CHAO, 0.78 * np.clip(mata, 0, 1))
@@ -299,7 +303,7 @@ for k in np.unique(est[:, 0]):
     pts = est[est[:, 0] == k][:, 1:3]
     uv = [((x + LX / 2) / RES, (LY / 2 - y) / RES) for x, y in pts]
     if len(uv) > 1:
-        dr.line(uv, fill=255, width=int(16 / RES))
+        dr.line(uv, fill=255, width=int(20 / RES))
 berma = ndimage.gaussian_filter(np.asarray(im, dtype=np.float32) / 255.0, 4.0 / RES)
 berma = berma * (0.6 + 0.4 * ruido(15, 61))
 base = misturar(base, cor(168, 146, 98), 0.45 * berma)
@@ -345,7 +349,8 @@ Image.fromarray((TIPO * 255).round().astype(np.uint8), "RGBA").save(
 # (27/09) as tres primeiras sao do Poly Haven (CC0, 2K): leafy_grass,
 # dry_ground_rocks e rocky_trail_02 -- mais grao e mais relevo do que as antigas
 # ⚠ a 3-4 m por ladrilho via-se uma quadricula fina na relva de perto: 6-8 m
-DETALHE = [("relva", "ph_leafy_grass", 6.0), ("seco", "ph_dry_ground_rocks", 8.0),
+# (27/09, 2.a) relva e erva seca PINTADAS (SDXL no ComfyUI): gen_relva, gen_seco
+DETALHE = [("relva", "gen_relva", 11.0), ("seco", "gen_seco", 15.0),
            ("terra", "ph_rocky_trail_02", 6.0), ("pedra", "penedo", 8.0)]
 medias = {}
 for nome, pasta, _m in DETALHE:
@@ -358,6 +363,12 @@ for nome, pasta, _m in DETALHE:
     lin = np.where(a_ <= 0.04045, a_ / 12.92, ((a_ + 0.055) / 1.055) ** 2.4)
     medias[nome] = [round(float(v), 5) for v in lin.reshape(-1, 3).mean(0)]
 # as fotografias das estradas (F3): a terra batida e a calcada da estrada real
+# (27/09, 3.a) as faixas de superficie de cada tipo de estrada
+import subprocess as _sp                                        # noqa: E402
+_fx = _sp.run(["python", os.path.join("ferramentas", "cena", "faixas_estrada.py")],
+              capture_output=True, text=True)
+print((_fx.stdout or "").strip() if _fx.returncode == 0
+      else "SONDA AVISO faixas_estrada falhou: " + (_fx.stderr or "")[-400:])
 # (27/09) Poly Haven: dirt_aerial_02 (terra com rodados, vista do ar) e
 # cobblestone_large_01 (a calcada)
 for nome, pasta in (("terra", "ph_dirt_aerial_02"), ("calcada", "ph_cobblestone_large_01")):

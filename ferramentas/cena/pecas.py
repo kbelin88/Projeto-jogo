@@ -60,6 +60,17 @@ COR = {
     # e verde-acinzentada, quase prata ao sol
     "folha_pinho": (0.020, 0.036, 0.009, 1),
     "folha_oliva": (0.055, 0.066, 0.038, 1),
+    # F2 (27/09): as especies por bioma. Tons que se distinguem a 1 km: o
+    # carvalho verde-vivo do norte, o sobreiro azeitona-escuro do montado, o
+    # pinheiro-bravo verde-azulado, o choupo verde-amarelo da ribeira, o
+    # cipreste quase negro.
+    "folha_carvalho": (0.045, 0.100, 0.022, 1),
+    "folha_sobro":   (0.040, 0.052, 0.020, 1),
+    "folha_bravo":   (0.018, 0.042, 0.022, 1),
+    "folha_choupo":  (0.085, 0.140, 0.030, 1),
+    "folha_cipreste": (0.012, 0.026, 0.012, 1),
+    "folha_mato":    (0.050, 0.062, 0.026, 1),
+    "casca_sobro":   (0.120, 0.060, 0.030, 1),
     "reboco":     (0.400, 0.340, 0.252, 1),   # taipa caiada
     "reboco2":    (0.330, 0.268, 0.190, 1),
     "viga":       (0.052, 0.030, 0.016, 1),   # o prumo escuro do enxaimel
@@ -108,6 +119,9 @@ FAMILIA = {
     "relva": "erva", "relva_seca": "erva", "horta": "erva", "folha": "erva",
     "folha2": "erva", "folha3": "erva", "la": "erva",
     "folha_pinho": "erva", "folha_oliva": "erva",
+    "folha_carvalho": "erva", "folha_sobro": "erva", "folha_bravo": "erva",
+    "folha_choupo": "erva", "folha_cipreste": "erva", "folha_mato": "erva",
+    "casca_sobro": "lenho",
     "terra": "solo", "caminho": "solo", "lavrado": "solo", "areia": "solo",
     "prado": "erva",
 }
@@ -1180,6 +1194,163 @@ def proto_oliveira(alt=6.0, folha="folha_oliva", semente=0):
         _aplicar_escala()
         bpy.ops.object.shade_smooth()
         partes.append(_novo(o, folha, 0))
+    return _guardar(_juntar(partes))
+
+
+# ── F2: AS ARVORES DA IBERIA (27/09) ────────────────────────────────────────
+# As copas eram esferas lisas: de cima, 329 manchas de bolas iguais liam-se como
+# carimbos. Aqui cada copa e um molho de LOBOS, e cada lobo e uma icosfera com
+# a superficie ondulada (a folhagem em tufos), e os troncos abrem em galhos --
+# a silhueta e o que identifica a especie a distancia de mapa.
+def _lobo(x, y, z, r, sz, folha, rnd, rugo=0.24, sub=2):
+    """um tufo de copa: icosfera achatada `sz`, com a superficie em tufos"""
+    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=sub, radius=r, location=(x, y, z))
+    o = bpy.context.object
+    fa = [rnd.uniform(2.2, 3.4) for _ in range(3)]
+    fb = [rnd.uniform(0, 6.3) for _ in range(3)]
+    for v in o.data.vertices:
+        n = v.co.normalized()
+        k = (math.sin(n.x * fa[0] * 2 + fb[0]) + math.sin(n.y * fa[1] * 2 + fb[1])
+             + math.sin(n.z * fa[2] * 2 + fb[2])) / 3.0
+        v.co = v.co * (1.0 + rugo * k)
+        v.co.z *= sz
+    bpy.ops.object.shade_smooth()
+    return _novo(o, folha, 0)
+
+
+def _galho(x0, y0, z0, x1, y1, z1, r0, cor="madeira"):
+    """um cilindro de (x0,y0,z0) a (x1,y1,z1), mais fino na ponta"""
+    dx, dy, dz = x1 - x0, y1 - y0, z1 - z0
+    L = math.sqrt(dx * dx + dy * dy + dz * dz) or 1.0
+    bpy.ops.mesh.primitive_cone_add(vertices=6, radius1=r0, radius2=r0 * 0.55, depth=L,
+                                    location=((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2))
+    o = bpy.context.object
+    o.rotation_euler = (0.0, math.acos(max(-1.0, min(1.0, dz / L))), math.atan2(dy, dx))
+    return _novo(o, cor, 0)
+
+
+LOD = False     # (F2) ligado enquanto se constroi a versao "de longe" de uma arvore
+
+
+def _copa(cx, cy, cz, rx, rz, n, rl, folha, rnd, sz=0.85, cima=0.35, partes=None):
+    """uma copa em COUVE-FLOR: um nucleo e `n` tufos pequenos espalhados pela
+    superficie de um elipsoide (rx de largura, rz de altura), mais em cima do
+    que em baixo (`cima`). E o que faz a arvore dos mapas de campanha: a
+    silhueta recortada em tufos e a luz a bater em cada um."""
+    partes = [] if partes is None else partes
+    if LOD:
+        # a versao de longe: o nucleo e um quarto dos tufos, maiores e em
+        # icosferas de 20 faces -- a 400 m a silhueta e a mesma
+        partes.append(_lobo(cx, cy, cz, rx * 0.92, (rz / rx) * 0.95, folha, rnd, rugo=0.18, sub=1))
+        for _ in range(max(3, n // 4)):
+            u = rnd.uniform(-1.0 + cima, 1.0)
+            a = rnd.uniform(0, 2 * math.pi)
+            rr = math.sqrt(max(0.0, 1 - u * u))
+            partes.append(_lobo(cx + math.cos(a) * rr * rx, cy + math.sin(a) * rr * rx, cz + u * rz,
+                                rl * 1.5, sz, folha, rnd, rugo=0.2, sub=1))
+        return partes
+    # o nucleo tem a FORMA da copa (no choupo e uma coluna), e tapa os buracos
+    partes.append(_lobo(cx, cy, cz, rx * 0.88, (rz / rx) * 0.92, folha, rnd, rugo=0.18, sub=2))
+    for _ in range(n):
+        u = rnd.uniform(-1.0 + cima, 1.0)            # cos do angulo polar
+        a = rnd.uniform(0, 2 * math.pi)
+        rr = math.sqrt(max(0.0, 1 - u * u))
+        x, y, z = cx + math.cos(a) * rr * rx, cy + math.sin(a) * rr * rx, cz + u * rz
+        partes.append(_lobo(x, y, z, rl * rnd.uniform(0.8, 1.25), sz, folha, rnd, rugo=0.22, sub=2))
+    return partes
+
+
+def proto_sobreiro(alt=9.0, folha="folha_sobro", semente=0, lod=False):
+    """o sobreiro/azinheira do montado: tronco curto e grosso que abre em tres
+    pernadas, e uma copa em GUARDA-CHUVA larga e baixa -- mais larga do que alta.
+    E a arvore-postal do Alentejo e da Estremadura."""
+    import random as _r
+    rnd = _r.Random(semente)
+    global LOD
+    LOD = bool(lod)
+    zt = alt * 0.34
+    partes = [_galho(0, 0, 0, 0, 0, zt, alt * 0.075, "casca_sobro")]
+    for i in range(3):
+        a = i * 2.1 + rnd.random() * 0.6
+        partes.append(_galho(0, 0, zt * 0.9, math.cos(a) * alt * 0.28, math.sin(a) * alt * 0.28,
+                             alt * 0.64, alt * 0.045, "casca_sobro"))
+    _copa(0, 0, alt * 0.72, alt * 0.50, alt * 0.17, 22, alt * 0.16, folha, rnd, sz=0.7, cima=0.55,
+          partes=partes)
+    LOD = False
+    return _guardar(_juntar(partes))
+
+
+def proto_carvalho(alt=15.0, folha="folha_carvalho", semente=0, lod=False):
+    """o carvalho do norte atlantico: copa alta, cheia e redonda, em muitos tufos"""
+    import random as _r
+    rnd = _r.Random(semente)
+    global LOD
+    LOD = bool(lod)
+    zt = alt * 0.42
+    partes = [_galho(0, 0, 0, 0, 0, zt, alt * 0.05)]
+    for i in range(3):
+        a = i * 2.1 + rnd.random()
+        partes.append(_galho(0, 0, zt * 0.85, math.cos(a) * alt * 0.16, math.sin(a) * alt * 0.16,
+                             alt * 0.68, alt * 0.03))
+    _copa(0, 0, alt * 0.68, alt * 0.33, alt * 0.27, 24, alt * 0.13, folha, rnd, sz=0.9, cima=0.2,
+          partes=partes)
+    LOD = False
+    return _guardar(_juntar(partes))
+
+
+def proto_pinheiro_bravo(alt=20.0, folha="folha_bravo", semente=0, lod=False):
+    """o pinheiro-bravo: fuste alto e direito, com a copa so no terco de cima,
+    alta e irregular, e um ou dois ramos baixos com o seu tufo a parte"""
+    import random as _r
+    rnd = _r.Random(semente)
+    global LOD
+    LOD = bool(lod)
+    partes = [_galho(0, 0, 0, 0, 0, alt * 0.95, alt * 0.028)]
+    _copa(0, 0, alt * 0.80, alt * 0.15, alt * 0.17, 16, alt * 0.085, folha, rnd, sz=0.75, cima=0.1,
+          partes=partes)
+    for k in range(2):
+        a = rnd.random() * 6.3
+        z = alt * (0.52 + 0.1 * k)
+        L = alt * 0.16
+        partes.append(_galho(0, 0, z, math.cos(a) * L, math.sin(a) * L, z + alt * 0.06, alt * 0.012))
+        _copa(math.cos(a) * L, math.sin(a) * L, z + alt * 0.07, alt * 0.07, alt * 0.05, 5,
+              alt * 0.05, folha, rnd, sz=0.6, partes=partes)
+    LOD = False
+    return _guardar(_juntar(partes))
+
+
+def proto_choupo(alt=18.0, folha="folha_choupo", semente=0, lod=False):
+    """o choupo (alamo) da ribeira: uma COLUNA alta e estreita de verde-claro"""
+    import random as _r
+    rnd = _r.Random(semente)
+    global LOD
+    LOD = bool(lod)
+    partes = [_galho(0, 0, 0, 0, 0, alt * 0.4, alt * 0.028)]
+    _copa(0, 0, alt * 0.62, alt * 0.11, alt * 0.33, 18, alt * 0.075, folha, rnd, sz=1.2, cima=0.0,
+          partes=partes)
+    LOD = False
+    return _guardar(_juntar(partes))
+
+
+def proto_cipreste(alt=13.0, folha="folha_cipreste", semente=0):
+    """o cipreste: um fuso escuro e fino, a vertical que marca a paisagem"""
+    import random as _r
+    rnd = _r.Random(semente)
+    partes = [_galho(0, 0, 0, 0, 0, alt * 0.12, alt * 0.03)]
+    partes.append(_lobo(0, 0, alt * 0.42, alt * 0.12, 2.6, folha, rnd, rugo=0.12))
+    partes.append(_lobo(0, 0, alt * 0.75, alt * 0.08, 2.4, folha, rnd, rugo=0.12))
+    return _guardar(_juntar(partes))
+
+
+def proto_moita(raio=1.6, folha="folha_mato", semente=0):
+    """moita de mato (esteva, lentisco): dois ou tres tufos baixos"""
+    import random as _r
+    rnd = _r.Random(semente)
+    partes = [_lobo(0, 0, raio * 0.45, raio, 0.6, folha, rnd, rugo=0.3, sub=1)]
+    for i in range(2):
+        a = rnd.random() * 6.3
+        partes.append(_lobo(math.cos(a) * raio * 0.8, math.sin(a) * raio * 0.8, raio * 0.35,
+                            raio * 0.7, 0.6, folha, rnd, rugo=0.3, sub=1))
     return _guardar(_juntar(partes))
 
 
