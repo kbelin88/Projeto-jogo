@@ -362,3 +362,13 @@ campanha | frente+campanha, dots e Super, 288 chamadas) junto das partidas A/B d
 candidato (`lancar_ab2.sh`, ~480). **Gabarito**: um braço conta se levar mais retaguarda à
 fronteira do que o P4 na maioria dos 12 casos nos dois modelos, sem cair o JSON válido.
 A `campanha` só se julga de verdade em partidas (a memória rende turno após turno).
+
+**Reordenado (27/09, a pedido do Lucas: "testa a campanha em partidas inteiras")**, para
+caber em 1000 chamadas/dia:
+- 28/09 00:05 UTC — `lancar_ab_campanha.sh` (8 partidas A/B: P4 × P4+campanha, a campanha
+  ISOLADA) + `lancar_sonda_partida.sh` (frente e campanha na sonda);
+- 29/09 00:05 UTC — `lancar_ab2.sh` (o prompt candidato), com a campanha dentro se ela
+  mexer.
+**Gabarito da campanha em partidas**: o lado com a campanha tem menos exército no
+interior (`logistica_replay.js`) e mais tropa do interior a sair por turno
+(`banda_replay.js`) na maioria das 8 partidas, sem cair o JSON válido.
