@@ -129,8 +129,15 @@ function intencaoMarcha(m, visao) {
 //   capital  perder a PROPRIA capital nao perde o jogo nem tem efeito especial
 //   vigia    toda coluna inimiga ja em marcha para uma aldeia tua aparece
 //            (2041 de 2041); so a ordenada neste turno nao
-const ITENS_P5 = ["regras", "combate", "intencao", "interior", "placebo", "avaliacao", "semtotal", "conselho", "alcance", "capital", "vigia"];
-const FORA_DO_PADRAO = new Set(["placebo", "avaliacao", "semtotal", "conselho", "alcance", "capital", "vigia"]);
+//
+// APRESENTACAO (27/09): o Super escreve "Tarragona: 9S home, +2S build" e "other
+// villages will focus on building spearmen to reinforce" -- reforcar = construir
+// no sitio. Dois detalhes do P4 que podem empurrar para isso, nenhum e regra:
+//   semteto      "troops at home: 9 / 300" em cada aldeia le-se como barra de
+//                progresso; o teto fica nas regras, sai da linha de cada aldeia
+//   movprimeiro  o esquema pede "build" antes de "movements"; inverte a ordem
+const ITENS_P5 = ["regras", "combate", "intencao", "interior", "placebo", "avaliacao", "semtotal", "conselho", "alcance", "capital", "vigia", "semteto", "movprimeiro"];
+const FORA_DO_PADRAO = new Set(["placebo", "avaliacao", "semtotal", "conselho", "alcance", "capital", "vigia", "semteto", "movprimeiro"]);
 
 // troca que FALHA alto se a ancora sumir (um braco que nao muda nada e um
 // braco que mente)
@@ -206,6 +213,14 @@ function montarP5(E, estado, dono, itens) {
   if (liga.has("vigia")) txt = troca(txt, "The enemy is under the same rule: they see you only where their villages and armies reach.",
     "The enemy is under the same rule: they see you only where their villages and armies reach. " +
     "Every enemy army already on the march toward one of YOUR villages is always shown to you under ARMIES ON THE MARCH, whatever the fog; only an army ordered this same turn is not.");
+  if (liga.has("semteto")) txt = troca(txt, /troops at home: (\d+) \/ 300/g, "troops at home: $1");
+  if (liga.has("movprimeiro")) {
+    const mB = txt.match(/^  "build": \[.*\],\n/m), mM = txt.match(/^  "movements": \[.*\],?\n/m);
+    if (!mB || !mM || mB.index > mM.index) throw new Error("ancora do braco movprimeiro nao encontrada");
+    const linhaM = mM[0].endsWith(",\n") ? mM[0] : mM[0].replace(/\n$/, ",\n");
+    const linhaB = mB[0];
+    txt = txt.slice(0, mB.index) + linhaM + txt.slice(mB.index + mB[0].length, mM.index) + linhaB + txt.slice(mM.index + mM[0].length);
+  }
   if (liga.has("placebo")) txt = txt.replace(/^TOTAL: .*$/m, (l) => `${l}\n  (the list of your villages follows below)`);
   return { p4, p5: txt };
 }
