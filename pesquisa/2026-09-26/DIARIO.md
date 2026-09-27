@@ -273,3 +273,27 @@ Dois detalhes de apresentação do P4 que podem empurrar para isto, nenhum é re
 - o esquema pede `build` ANTES de `movements`.
 
 Braços `semteto` e `movprimeiro` lançados no Super (a sonda `apr_super`).
+
+## Resultado 6 — partidas A/B: o mesmo modelo dos dois lados, P4 × VERDADES (27/09, ~02:00)
+
+`pesquisa/2026-09-27/ab/`. V = regras + combate + intenção + alcance + capital + vigia
+(só informação). Teto de 30 turnos. Os dois braços correm no mesmo momento por construção.
+
+| partida | resultado (aldeias) | quem ficou à frente | interior P4 / V | tropa do interior que sai/turno P4 / V |
+|---|---|---|---|---|
+| dots, seed 3, A=P4 B=V | limite 13×11 | P4 | 36% / 23% | 27% / 40% |
+| dots, seed 5, A=P4 B=V | **V vence** 3×21 | **V** | 25% / 32% | 42% / 34% |
+| dots, seed 3, A=V B=P4 | **P4 vence** 6×18 | **P4** | 46% / 13% | 25% / 63% |
+| dots, seed 5, A=V B=P4 | limite 17×7 | V | 32% / 48% | 35% / 23% |
+| Super, seed 3, A=P4 B=V | limite 12×12 | empate | 71% / 66% | 5% / 7% |
+| Super, seed 5, A=P4 B=V | limite 7×17 | V | 52% / 57% | 20% / 23% |
+| Super, seed 3, A=V B=P4 | limite 16×8 | V | 53% / 70% | 12% / 6% |
+| Super, seed 5, A=V B=P4 | limite 12×12 | empate | 52% / 56% | 17% / 10% |
+
+- **Placar: V à frente em 4, P4 em 2, 2 empates** (sinais p=0,69). Nada se conclui sobre
+  vitória com 8 partidas.
+- **A logística não muda com as verdades**: o interior do lado V é menor em 3 de 8 e
+  maior em 5. O Super fica em 52–71% no interior dos dois lados; o dots em 13–48%.
+- **O Super contra ele próprio não acaba partidas**: as 4 bateram no teto de 30 turnos.
+- Leitura honesta: as verdades não fazem mal (o lado V não perdeu mais), mas **não são a
+  alavanca da logística**, nem numa decisão (Resultados 4–5) nem numa partida inteira.
