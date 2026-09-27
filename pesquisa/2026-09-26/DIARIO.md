@@ -247,3 +247,29 @@ planos); DeepSeek fala do que não vê em 50%.
 dobra a tropa levada à fronteira (7→16%), mas longe dos ~100% que o conselho pede, e sem
 significância. Pelo gabarito da Pergunta 2: para o Super, o prompt não é a alavanca
 numa decisão de um turno. `semtotal` sai: não mexe na retaguarda e encolhe o maior ataque.
+
+## Resultado 5 — os braços de formato, no dots (27/09, 01:45)
+
+| braço | ret→fronteira | retaguarda que sai | V/D seguinte | sinais (ret→fronteira) |
+|---|---|---|---|---|
+| P4 | 27% | 33% | 35V 17D | — |
+| avaliacao | 31% | 36% | 30V 23D | 7/4, p=0,55 |
+| semtotal | 18% | 22% | 33V 17D | 4/8, p=0,39 |
+| conselho (controle +) | 29% | 34% | 32V 15D | 7/4, p=0,55 |
+
+**Nos dois modelos, nem o conselho explícito move a retaguarda numa decisão.** O
+Super LÊ o conselho (fala de interior/fronteira em 18 de 35 respostas, contra 8 no P4)
+e mesmo assim move pouco.
+
+**Onde a intenção e a ação se separam** (Super, braço `avaliacao`, caso 7): a avaliação
+escreve, aldeia a aldeia, *"Tarragona (21): 9S home, +2S build. Girona (23): 9S home,
++2S build"*; no caso 9, *"other villages will focus on building spearmen to reinforce"*.
+Para o Super, **reforçar uma aldeia é construir nela**. Dá ordem de construção a todas
+as aldeias e de movimento a uma. E a nota do turno anterior, dele próprio, diz *"Build
+spearmen for defense and reinforce border villages"*: o plano realimenta o hábito.
+
+Dois detalhes de apresentação do P4 que podem empurrar para isto, nenhum é regra:
+- `troops at home: 9 / 300` em CADA aldeia lê-se como barra de progresso (encher até 300);
+- o esquema pede `build` ANTES de `movements`.
+
+Braços `semteto` e `movprimeiro` lançados no Super (a sonda `apr_super`).
