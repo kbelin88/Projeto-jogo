@@ -358,7 +358,23 @@ for nome, pasta, _m in DETALHE:
         o = os.path.join(TEX, pasta, tipo_f)
         if os.path.exists(o):
             shutil.copyfile(o, os.path.join(SAIDA, "chao_det_%s_%s" % (nome, tipo_f)))
-    a_ = np.asarray(Image.open(os.path.join(TEX, pasta, "cor.jpg")).convert("RGB"),
+    # ── SO O GRAO, SEM AS MANCHAS (27/09) ──────────────────────────────────
+    # As texturas pintadas (gen_*) tem tufos e manchas de 1/4 do ladrilho; ao
+    # repetir, formam uma GRELHA que se ve ao longe ("quadrados colados", marca
+    # do Lucas no sul arido). Passa-alto: divide-se pela versao borrada (1/20
+    # do lado) -- ficam as folhas e o grao; a variacao grande e da pintura do
+    # mapa, que nao se repete.
+    if pasta.startswith("gen_"):
+        a_ = np.asarray(Image.open(os.path.join(TEX, pasta, "cor.jpg")).convert("RGB"), dtype=np.float32) / 255.0
+        lin = np.where(a_ <= 0.04045, a_ / 12.92, ((a_ + 0.055) / 1.055) ** 2.4)
+        sig = lin.shape[0] / 20.0
+        borr = np.stack([ndimage.gaussian_filter(lin[..., k], sig, mode="wrap") for k in range(3)], -1)
+        hp = lin / np.maximum(borr, 1e-4) * lin.reshape(-1, 3).mean(0)
+        hp = np.clip(hp, 0, 1)
+        srgb = np.where(hp <= 0.0031308, hp * 12.92, 1.055 * np.power(hp, 1 / 2.4) - 0.055)
+        Image.fromarray((srgb * 255).round().astype(np.uint8)).save(
+            os.path.join(SAIDA, "chao_det_%s_cor.jpg" % nome), quality=92)
+    a_ = np.asarray(Image.open(os.path.join(SAIDA, "chao_det_%s_cor.jpg" % nome)).convert("RGB"),
                     dtype=np.float32) / 255.0
     lin = np.where(a_ <= 0.04045, a_ / 12.92, ((a_ + 0.055) / 1.055) ** 2.4)
     medias[nome] = [round(float(v), 5) for v in lin.reshape(-1, 3).mean(0)]

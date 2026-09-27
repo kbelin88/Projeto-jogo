@@ -276,3 +276,182 @@ def ponte(G, ponto, perfil, vao, z_agua, largura=9.0):
         t = q * (vao / 2 + 0.6)
         A2.caixa(G, "ponte_rustica_esc", x_m + ux * t, y_m + uy * t, base_a, 1.8, largura + 0.6,
                  fundo_corpo - base_a + 0.4, rz=r_m)
+
+
+# -- A BEIRA DA ESTRADA (27/09) ------------------------------------------------
+# A referencia do Lucas: o que faz uma estrada VIVER sao as coisas ao lado dela
+# -- muros de pedra seca, cercas de madeira, marcos e carrocas. Muros e cercas
+# aparecem as dezenas, por isso sao peças leves feitas aqui (nao TRELLIS).
+def muro_seco(G, pts, alt_em, semente=0):
+    """muro de pedra seca ao longo de `pts` [(x, y)]: blocos irregulares em
+    duas fiadas, com a altura a variar e o topo recortado"""
+    import random as _r
+    rnd = _r.Random(semente)
+    for (x0, y0), (x1, y1) in zip(pts[:-1], pts[1:]):
+        L = math.hypot(x1 - x0, y1 - y0)
+        if L < 0.5:
+            continue
+        rz = math.atan2(y1 - y0, x1 - x0)
+        t = 0.0
+        while t < L:
+            c = rnd.uniform(0.9, 1.6)
+            u = min(t + c / 2, L)
+            x, y = x0 + (x1 - x0) * u / L, y0 + (y1 - y0) * u / L
+            z = alt_em(x, y) - 0.15
+            h1 = rnd.uniform(0.45, 0.6)
+            A2.caixa(G, "muro_seco", x, y, z, c, rnd.uniform(0.7, 0.85), h1, rz=rz + rnd.uniform(-0.06, 0.06))
+            if rnd.random() < 0.85:
+                A2.caixa(G, "muro_seco", x + rnd.uniform(-0.2, 0.2), y + rnd.uniform(-0.1, 0.1), z + h1,
+                         c * rnd.uniform(0.6, 0.95), rnd.uniform(0.55, 0.7), rnd.uniform(0.35, 0.5),
+                         rz=rz + rnd.uniform(-0.1, 0.1))
+            t += c
+
+
+def cerca(G, pts, alt_em, semente=0, passo=2.6):
+    """cerca de madeira: postes de 2,6 em 2,6 m e duas travessas"""
+    import random as _r
+    rnd = _r.Random(semente)
+    for (x0, y0), (x1, y1) in zip(pts[:-1], pts[1:]):
+        L = math.hypot(x1 - x0, y1 - y0)
+        n = max(1, int(round(L / passo)))
+        rz = math.atan2(y1 - y0, x1 - x0)
+        for k in range(n + 1):
+            x, y = x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n
+            A2.cilindro(G, "cerca_madeira", x, y, alt_em(x, y) - 0.2, 0.09, 1.45 + rnd.uniform(-0.1, 0.1), n=6)
+        for hz in (0.55, 1.05):
+            xm, ym = (x0 + x1) / 2, (y0 + y1) / 2
+            A2.caixa(G, "cerca_madeira", xm, ym, alt_em(xm, ym) + hz, L + 0.2, 0.08, 0.11,
+                     rz=rz, rx=rnd.uniform(-0.03, 0.03))
+
+
+
+def _anel(G, mat, M, cx, cz, r_ext, r_int, larg, n=18):
+    """um aro (roda) no plano XZ local, centrado em (cx, cz), espessura `larg` em Y"""
+    v, f = [], []
+    for y in (-larg / 2, larg / 2):
+        for k in range(n):
+            a = 2 * math.pi * k / n
+            v.append((cx + r_ext * math.cos(a), y, cz + r_ext * math.sin(a)))
+            v.append((cx + r_int * math.cos(a), y, cz + r_int * math.sin(a)))
+    for k in range(n):
+        k2 = (k + 1) % n
+        a0, b0, a1, b1 = 2 * k, 2 * k + 1, 2 * k2, 2 * k2 + 1
+        o = 2 * n
+        f += [(a0, a1, b1, b0), (o + a0, o + b0, o + b1, o + a1),          # faces
+              (a0, o + a0, o + a1, a1), (b0, b1, o + b1, o + b0)]          # aro fora e dentro
+    G.por(mat, v, f, M)
+
+
+def carroca(G, x, y, z, rz, esc=1.0, semente=0):
+    """a carroca da referencia (gerada no SDXL e copiada aqui): caixa de tabuas,
+    duas rodas grandes de raios, varais pousados no chao e carga de barris e
+    sacos. ~4 m de comprido."""
+    import random as _r
+    rnd = _r.Random(semente)
+    M = A2._TR(x, y, z, rz) @ Matrix.Scale(esc, 4)
+    R = 0.62                                   # raio da roda
+    # a caixa: fundo e quatro bordas de tabuas, 2,4 x 1,4
+    def cx_(mat, px, py, pz, sx, sy, sz, rx=0.0):
+        hx, hy, hz = sx / 2, sy / 2, sz / 2
+        vv = [(-hx, -hy, 0), (hx, -hy, 0), (hx, hy, 0), (-hx, hy, 0),
+              (-hx, -hy, sz), (hx, -hy, sz), (hx, hy, sz), (-hx, hy, sz)]
+        ff = [(0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]
+        G.por(mat, vv, ff, M @ A2._TR(px, py, pz, 0.0, rx))
+    zb = R + 0.05
+    cx_("madeira", 0, 0, zb, 2.4, 1.4, 0.1)
+    for sy in (-1, 1):
+        for k in range(3):                     # tres tabuas por lado, com fresta
+            cx_("madeira", 0, sy * 0.68, zb + 0.1 + k * 0.17, 2.4, 0.06, 0.13)
+        for sx in (-1, 0, 1):                  # os fueiros
+            cx_("casca", sx * 1.1, sy * 0.72, zb - 0.05, 0.08, 0.08, 0.72)
+    for sx in (-1, 1):
+        for k in range(3):
+            cx_("madeira", sx * 1.18, 0, zb + 0.1 + k * 0.17, 0.06, 1.4, 0.13)
+    # o eixo e as rodas (aro, cubo, 10 raios)
+    cx_("casca", 0.2, 0, R - 0.06, 0.12, 1.75, 0.12)
+    for sy in (-1, 1):
+        Mr = M @ A2._TR(0.2, sy * 0.86, 0.0)
+        _anel(G, "casca", Mr, 0.0, R, R, R - 0.09, 0.1)
+        v, f = [], []
+        for k in range(10):
+            a = 2 * math.pi * k / 10
+            ca, sa = math.cos(a), math.sin(a)
+            b = len(v)
+            for rr in (0.1, R - 0.08):
+                v += [(rr * ca - 0.025 * sa, -0.03, R + rr * sa + 0.025 * ca),
+                      (rr * ca + 0.025 * sa, -0.03, R + rr * sa - 0.025 * ca),
+                      (rr * ca + 0.025 * sa, 0.03, R + rr * sa - 0.025 * ca),
+                      (rr * ca - 0.025 * sa, 0.03, R + rr * sa + 0.025 * ca)]
+            f += [(b, b + 1, b + 5, b + 4), (b + 1, b + 2, b + 6, b + 5),
+                  (b + 2, b + 3, b + 7, b + 6), (b + 3, b, b + 4, b + 7)]
+        G.por("madeira", v, f, Mr)
+        _anel(G, "casca", Mr, 0.0, R, 0.12, 0.0, 0.2, n=8)          # o cubo
+    # os varais, a descer ate ao chao a frente
+    for sy in (-0.4, 0.4):
+        vv, ff = [], []
+        x0, z0, x1, z1 = 1.1, zb + 0.05, 2.9, 0.05
+        for (xx, zz) in ((x0, z0), (x1, z1)):
+            vv += [(xx, sy - 0.04, zz - 0.04), (xx, sy + 0.04, zz - 0.04),
+                   (xx, sy + 0.04, zz + 0.04), (xx, sy - 0.04, zz + 0.04)]
+        ff = [(0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]
+        G.por("casca", vv, ff, M)
+    # a carga: barris de pe e deitados, e sacos
+    for (bx, by) in ((-0.6, -0.3), (-0.6, 0.32), (0.25, 0.0)):
+        # o barril: dois troncos de cone costas com costas, tampa e aros de ferro
+        h = 0.72 + rnd.uniform(-0.05, 0.05)
+        Mb = M @ A2._TR(bx, by, zb + 0.1)
+        for zz, r0, r1 in ((0.0, 0.26, 0.31), (h * 0.5, 0.31, 0.26)):
+            v, f = [], []
+            for k in range(12):
+                a = 2 * math.pi * k / 12
+                v.append((r0 * math.cos(a), r0 * math.sin(a), zz))
+            for k in range(12):
+                a = 2 * math.pi * k / 12
+                v.append((r1 * math.cos(a), r1 * math.sin(a), zz + h * 0.5))
+            for k in range(12):
+                f.append((k, (k + 1) % 12, 12 + (k + 1) % 12, 12 + k))
+            G.por("madeira", v, f, Mb)
+        v = [(0.26 * math.cos(2 * math.pi * k / 12), 0.26 * math.sin(2 * math.pi * k / 12), h) for k in range(12)]
+        G.por("casca", v, [tuple(range(12))], Mb)
+        for zz in (h * 0.18, h * 0.82):
+            _anel(G, "ferro", Mb @ A2._TR(0, 0, zz) @ Matrix.Rotation(math.pi / 2, 4, "X"),
+                  0.0, 0.0, 0.305, 0.28, 0.05, n=12)
+    for (sx, sy) in ((0.55, 0.35), (0.95, 0.3)):
+        vv, ff = [], []
+        Ms = M @ A2._TR(sx, sy, zb + 0.1)
+        n = 8
+        for zz, r in ((0.0, 0.18), (0.16, 0.24), (0.34, 0.16), (0.42, 0.05)):
+            for k in range(n):
+                a = 2 * math.pi * k / n
+                vv.append((r * math.cos(a) * 1.3, r * math.sin(a), zz))
+        for j in range(3):
+            for k in range(n):
+                ff.append((j * n + k, j * n + (k + 1) % n, (j + 1) * n + (k + 1) % n, (j + 1) * n + k))
+        G.por("saco", vv, ff, Ms)
+
+
+def marco(G, x, y, z, rz, esc=1.0):
+    """o marco da referencia: pilar de pedra afunilado com remate em piramide, e
+    um poste com duas tabuas-seta"""
+    M = A2._TR(x, y, z, rz) @ Matrix.Scale(esc, 4)
+    v, f = [], []
+    for zz, h in ((0.0, 0.42), (1.7, 0.32)):
+        v += [(-h, -h, zz), (h, -h, zz), (h, h, zz), (-h, h, zz)]
+    f = [(0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]
+    G.por("muro_seco", v, f, M)
+    vp = [(-0.38, -0.38, 1.7), (0.38, -0.38, 1.7), (0.38, 0.38, 1.7), (-0.38, 0.38, 1.7), (0, 0, 2.35)]
+    G.por("ponte_rustica_esc", vp, [(0, 1, 4), (1, 2, 4), (2, 3, 4), (3, 0, 4), (0, 3, 2, 1)], M)
+    # o poste e as setas, a frente do pilar
+    Mp = M @ A2._TR(0.55, 0, 0)
+    vv = []
+    for zz, r in ((0.0, 0.06), (2.1, 0.05)):
+        for k in range(6):
+            a = 2 * math.pi * k / 6
+            vv.append((r * math.cos(a), r * math.sin(a), zz))
+    G.por("casca", vv, [(k, (k + 1) % 6, 6 + (k + 1) % 6, 6 + k) for k in range(6)], Mp)
+    for zz, ang, sgn in ((1.85, 0.5, 1), (1.55, -0.6, -1)):
+        va = [(0.0, -0.05, -0.1), (0.7, -0.05, -0.1), (0.85, -0.05, 0.0), (0.7, -0.05, 0.1), (0.0, -0.05, 0.1),
+              (0.0, 0.05, -0.1), (0.7, 0.05, -0.1), (0.85, 0.05, 0.0), (0.7, 0.05, 0.1), (0.0, 0.05, 0.1)]
+        fa = [(0, 1, 2, 3, 4), (9, 8, 7, 6, 5), (0, 5, 6, 1), (1, 6, 7, 2), (2, 7, 8, 3), (3, 8, 9, 4), (4, 9, 5, 0)]
+        G.por("madeira", [(sgn * a, b, c) for a, b, c in va], fa if sgn > 0 else [tuple(reversed(q)) for q in fa],
+              Mp @ A2._TR(0, 0, zz, ang))

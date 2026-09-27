@@ -738,8 +738,12 @@ vec3 chaoPintado() {
   vec4 w = texture2D(chTipo, uvc);
   w /= max(w.r + w.g + w.b + w.a, 1e-3);
   vec2 p = vMundoSL.xz;
-  vec3 d = slLer(chDet0, p * chEsc0).rgb / chMed0 * w.r
-         + slLer(chDet1, p * chEsc1).rgb / chMed1 * w.g
+  // relva e erva seca lidas DUAS vezes (outra escala, rodada 37 graus) e
+  // misturadas: um ladrilho so, por mais pintado, desenha uma grelha ao
+  // longe (marca do Lucas no sul arido, 27/09)
+  vec2 q = mat2(0.7986, -0.6018, 0.6018, 0.7986) * p * 0.43;
+  vec3 d = (slLer(chDet0, p * chEsc0).rgb * 0.55 + slLer(chDet0, q * chEsc0).rgb * 0.45) / chMed0 * w.r
+         + (slLer(chDet1, p * chEsc1).rgb * 0.55 + slLer(chDet1, q * chEsc1).rgb * 0.45) / chMed1 * w.g
          + slLer(chDet2, p * chEsc2).rgb / chMed2 * w.b
          + slLer(chDet3, p * chEsc3).rgb / chMed3 * w.a;
   // ── OS SULCOS, desenhados aqui (nitidos a qualquer distancia) ─────────

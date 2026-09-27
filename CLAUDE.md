@@ -347,6 +347,11 @@ Ainda a 26/09, pelas marcas do Lucas:
   cosidas sem costura pelo próprio SDXL (`rolar.py` + `costura_sdxl.json`).
   ⚠ O shader da estrada está perto das 16 unidades de textura do WebGL: cada
   textura nova tem de sair de outra;
+- **a beira da estrada** (`BEIRA`, `porto.muro_seco/cerca/carroca/marco`): muros
+  de pedra seca (sul) e cercas (norte) à saída das aldeias e em troços soltos,
+  marcos à porta das aldeias e carroças paradas. As peças são feitas por código
+  a partir de imagens do SDXL: com 4 GB de VRAM o TRELLIS devolveu malhas
+  desfeitas e ficou 40 minutos sem acabar;
 - **há rios** (F4, `RIOS`): o `rios.py` traça-os pelo menor custo, sempre a
   descer (a 1.ª versão cavou uma garganta de 49 m), para longe das aldeias.
   Dois desaguam nas enseadas e um terceiro é procurado (a nascente cujo caminho

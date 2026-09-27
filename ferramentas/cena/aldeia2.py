@@ -85,6 +85,11 @@ MATS = {
     "ponte_rustica_esc": dict(pasta="gen_pedra_ponte", metros=3.0, rug=0.95,
                               passos=[("MULTIPLY", 1.0, (0.62, 0.60, 0.58))]),
     "ponte_calcada": dict(pasta="gen_calcada", metros=3.5, rug=0.9, passos=[]),
+    # (27/09) as coisas da beira da estrada: muro de pedra seca e cerca
+    "muro_seco": dict(pasta="gen_pedra_ponte", metros=2.4, rug=0.95,
+                      passos=[("MULTIPLY", 1.0, (0.95, 0.92, 0.86))]),
+    "cerca_madeira": dict(pasta="madeira", metros=1.2, rug=0.85,
+                          passos=[("MULTIPLY", 1.0, (0.62, 0.52, 0.42))]),
     "ponte": dict(pasta="ph_sandstone_blocks_05", metros=3.0, rug=0.9,
                   passos=[("CINZA", 1.0, (0.40, 0.42, 0.45))]),
     "ponte_escura": dict(pasta="ph_sandstone_blocks_05", metros=3.0, rug=0.9,

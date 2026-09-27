@@ -2720,6 +2720,132 @@ if RIOS_AGUA:
     if _n_pontes:
         A2.objetos(PONTES_G, cena)
     print("SONDA rios: %d fitas de agua, %d pontes" % (len(RIOS_AGUA), _n_pontes), flush=True)
+
+# -- A BEIRA DA ESTRADA (27/09) ------------------------------------------------
+# Muros de pedra seca e cercas ao longo das estradas, a saida das aldeias e em
+# trocos soltos em campo aberto; marcos nos cruzamentos a porta das aldeias; e
+# carrocas paradas a beira (as duas ultimas sao modelos do TRELLIS, pontos
+# gravados em `MAPA.beira` para o jogo as instanciar). Nunca na estrada, nem
+# num rio, nem numa mata.
+BEIRA = os.environ.get("BEIRA", "1") != "0" and not RECT
+BEIRA_PONTOS = {"carroca": [], "marco": []}
+if BEIRA and ESTRADA2:
+    from mathutils import Matrix as _Mx3                           # noqa: E402
+    BEIRA_G = A2.Malhas()
+    BEIRA_G.origem = _Mx3.Identity(4)
+    _rb2 = random.Random(2727)
+    _centros_arr = [(c[0], c[1], raio_de(cid)) for cid, c in centros.items()]
+
+    def _livre_beira(x, y):
+        if not em_terra(x, y) or rho_areia_em(x, y) > 0.1:
+            return False
+        if RIOS_TRACADOS:
+            i_ = min(max(int(round((x + LX / 2) / px)), 0), tw - 1)
+            j_ = min(max(int(round((LY / 2 - y) / py)), 0), th - 1)
+            if _d_rio[j_, i_] - _w_rio[j_, i_] < 14.0:
+                return False
+        for m in manchas:
+            if math.hypot(m["p"][0] - x, m["p"][1] - y) < _raio_arr.get(m["b"], 10.0) * m.get("e", 1.0) * 0.8:
+                return False
+        return declive_em(x, y) < 16.0
+
+    def _dist_aldeia(x, y):
+        return min(math.hypot(x - cx, y - cy) - r for cx, cy, r in _centros_arr)
+
+    _n_muro, _n_cerca = 0, 0
+    _com_marco = set()
+    for _k, _e in enumerate(eixos):
+        E = [(p_[0], p_[1]) for p_ in _e["pts"]]
+        if len(E) < 6:
+            continue
+        cl = _e.get("classe", 0.5)
+        off = LARG_ESTRADA * ESCALA_CLASSE[cl] * 0.5 * 0.98 + 1.2
+        s_ = [0.0]
+        for (xa, ya), (xb, yb) in zip(E[:-1], E[1:]):
+            s_.append(s_[-1] + math.hypot(xb - xa, yb - ya))
+        Ltot = s_[-1]
+
+        def _lado(i, lado):
+            i = min(max(i, 1), len(E) - 2)
+            (xa, ya), (xb, yb) = E[i - 1], E[i + 1]
+            Ln = math.hypot(xb - xa, yb - ya) or 1.0
+            return E[i][0] - (yb - ya) / Ln * off * lado, E[i][1] + (xb - xa) / Ln * off * lado
+
+        def _troco(i0, i1, lado, tipo):
+            global _n_muro, _n_cerca
+            pts, bloco = [], []
+            for i in range(i0, i1):
+                x, y = _lado(i, lado)
+                if _livre_beira(x, y):
+                    bloco.append((x, y))
+                else:
+                    if len(bloco) > 3:
+                        pts.append(bloco)
+                    bloco = []
+            if len(bloco) > 3:
+                pts.append(bloco)
+            for b_ in pts:
+                if tipo == "muro":
+                    PORTO.muro_seco(BEIRA_G, b_, altura_em, semente=_rb2.randrange(9999))
+                    _n_muro += 1
+                else:
+                    PORTO.cerca(BEIRA_G, b_, altura_em, semente=_rb2.randrange(9999))
+                    _n_cerca += 1
+
+        # a saida das aldeias: das duas pontas, 25 a ~90 m para fora da muralha
+        for ponta in (0, 1):
+            idx_ = [i for i in range(len(E)) if 20.0 < _dist_aldeia(*E[i]) < 95.0]
+            idx_ = [i for i in idx_ if (i < len(E) / 2) == (ponta == 0)]
+            if len(idx_) < 4:
+                continue
+            i0, i1 = min(idx_), max(idx_)
+            bio = bioma_em(*E[(i0 + i1) // 2])
+            tipo = "cerca" if bio in ("atlantico", "ribeira") else "muro"
+            for lado in ((-1, 1) if _rb2.random() < 0.55 else (_rb2.choice((-1, 1)),)):
+                _troco(i0, i1, lado, tipo)
+            # o marco: UM por aldeia (eram 58 -- quase todas as portas), a porta
+            # de uma das estradas, do lado de fora
+            _ald_p = min(centros, key=lambda c_: math.hypot(centros[c_][0] - E[i0 if ponta == 0 else i1][0],
+                                                              centros[c_][1] - E[i0 if ponta == 0 else i1][1]))
+            if _ald_p not in _com_marco and _rb2.random() < 0.8:
+                _com_marco.add(_ald_p)
+                x, y = _lado(i0 if ponta == 0 else i1, _rb2.choice((-1, 1)))
+                if _livre_beira(x, y):
+                    BEIRA_PONTOS["marco"].append([round(x, 2), round(y, 2), round(altura_em(x, y), 2),
+                                                  round(_rb2.uniform(0, 6.28), 3)])
+        # trocos soltos em campo aberto, longe das aldeias: 1 a 2 por estrada
+        for _ in range(_rb2.choice((0, 1, 1, 2))):
+            if Ltot < 260:
+                break
+            sa = _rb2.uniform(0.25, 0.65) * Ltot
+            sb = sa + _rb2.uniform(40.0, 85.0)
+            i0 = next(i for i, v in enumerate(s_) if v >= sa)
+            i1 = next((i for i, v in enumerate(s_) if v >= sb), len(E) - 1)
+            if min(_dist_aldeia(*E[i0]), _dist_aldeia(*E[i1])) < 120.0:
+                continue
+            bio = bioma_em(*E[i0])
+            _troco(i0, i1, _rb2.choice((-1, 1)), "cerca" if bio == "atlantico" else "muro")
+        # uma carroca parada a beira, em algumas estradas
+        if Ltot > 220 and _rb2.random() < 0.45:
+            i = next(i for i, v in enumerate(s_) if v >= Ltot * _rb2.uniform(0.3, 0.7))
+            lado = _rb2.choice((-1, 1))
+            x, y = _lado(i, lado)
+            x, y = (x + E[i][0]) / 2 + (x - E[i][0]) * 0.35, (y + E[i][1]) / 2 + (y - E[i][1]) * 0.35
+            if _livre_beira(x, y):
+                (xa, ya), (xb, yb) = E[max(i - 1, 0)], E[min(i + 1, len(E) - 1)]
+                BEIRA_PONTOS["carroca"].append([round(x, 2), round(y, 2), round(altura_em(x, y), 2),
+                                                round(math.atan2(yb - ya, xb - xa), 3)])
+    # as carrocas e os marcos, construidos aqui (o TRELLIS, com 4 GB de VRAM,
+    # devolvia malhas desfeitas -- 27/09)
+    for _i, (x, y, z, r) in enumerate(BEIRA_PONTOS["carroca"]):
+        PORTO.carroca(BEIRA_G, x, y, z - 0.05, r + _rb2.uniform(-0.3, 0.3), esc=1.6, semente=_i)
+    for x, y, z, r in BEIRA_PONTOS["marco"]:
+        PORTO.marco(BEIRA_G, x, y, z - 0.1, r, esc=1.5)
+    if BEIRA_G.g:
+        A2.objetos(BEIRA_G, cena)
+    print("SONDA beira: %d trocos de muro, %d de cerca, %d marcos, %d carrocas, %d triangulos"
+          % (_n_muro, _n_cerca, len(BEIRA_PONTOS["marco"]), len(BEIRA_PONTOS["carroca"]),
+             BEIRA_G.triangulos()), flush=True)
 print("SONDA pedras: %d penedos" % _n_pedras, flush=True)
 
 # ── CADA ARVORE NO SEU CHAO (26/09) ─────────────────────────────────────────
@@ -2917,7 +3043,9 @@ with open(os.path.join(SAIDA, NOME_SAIDA + ".json" if (BANCADA or MONTANHAS) els
                # F3: a cor de vertice das estradas leva dados, nao cor
                "estrada2": ESTRADA2,
                # F2: a versao de longe de cada arvore (peca -> peca_lod)
-               "lod": LODS}, f, separators=(",", ":"))
+               "lod": LODS,
+               # (27/09) onde pousar as carrocas e os marcos (modelos TRELLIS)
+               "beira": BEIRA_PONTOS if (BEIRA and ESTRADA2) else {}}, f, separators=(",", ":"))
 _saiu = NOME_SAIDA + ".json" if (BANCADA or MONTANHAS) else "mapa3d.json"
 print("SONDA -> sonda3d/%s  (%.0f KB)  em %.1f s"
       % (_saiu, os.path.getsize(os.path.join(SAIDA, _saiu)) / 1024, time.time() - t0))
