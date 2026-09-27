@@ -235,6 +235,19 @@ listas "desligadas" desses dois testes**. A história de cada lote está em
 
 ## 6. Convenções e INVARIANTES (não quebrar)
 
+- **Com calma e sem atalhos (regra do Lucas, 27/09).** Cada peça que entra no
+  jogo tem a qualidade do resto do mapa, ou não entra. Nada de "por agora fica
+  assim": o atalho volta sempre, e voltar custa mais do que fazer bem à primeira.
+  > O caso que deu a regra: as pás dos moinhos, os barcos e as aves (F5) foram
+  > escritos à mão no `mapa3d.js`, triângulo a triângulo e de cor lisa, porque se
+  > mexem — enquanto a torre do moinho, feita no forno com textura pintada, ficou
+  > bonita. O movimento não obriga a geometria pobre: **o que se mexe também se
+  > modela no Blender** (peça no `pecas.glb`, com material) e o jogo só lhe dá a
+  > transformação.
+
+  Na prática: modelar e texturizar no Blender, não em código de jogo; ver o
+  resultado de perto **e** à distância de gravação antes de dizer que está
+  feito; e dizer ao Lucas o que ficou abaixo do resto, em vez de o esconder.
 - **Commits SEM rodapé de sessão.** Nada de `Co-Authored-By: Claude` nem link de
   conversa — o repo é público e o link expõe a conversa.
 - **UM RULESET SÓ, sem opt-in em tempo de execução.** O `CONFIG` **é** o jogo. O
@@ -358,6 +371,11 @@ Ainda a 26/09, pelas marcas do Lucas:
   `shadowRadius`, que o PCFSoft não usa), **moinhos de vento** com pás a rodar
   (três grupos na Meseta, `MAPA.beira.moinhos`), **barcos à vela** em voltas ao
   largo (`MAPA.beira.rotas`) e **bandos de aves** em V;
+- **a luz é de hora dourada** (F6, `LUZ_DOURADA` no `mapa3d.js`): sol a 20° e
+  quente, céu em degradé, névoa dourada, e um **grading fixo do canal** na curva
+  de tons (`CustomToneMapping` = AgX + `gradingCanal`: sombras frias, luzes
+  quentes, saturação nos meios-tons, curva em S). `luzDourada: false` nas opções
+  do `iniciar` volta atrás;
 - **há rios** (F4, `RIOS`): o `rios.py` traça-os pelo menor custo, sempre a
   descer (a 1.ª versão cavou uma garganta de 49 m), para longe das aldeias.
   Dois desaguam nas enseadas e um terceiro é procurado (a nascente cujo caminho

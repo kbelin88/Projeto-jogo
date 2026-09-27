@@ -83,7 +83,7 @@ float nuvemSombra(vec2 uv, float t) {
   vec2 q = uv * 7.0 + vec2(t * 0.035, t * 0.012);
   float n = nvRuido(q) * 0.55 + nvRuido(q * 2.1 + 7.3) * 0.30 + nvRuido(q * 4.7 - 3.1) * 0.15;
   float c = smoothstep(0.50, 0.66, n);
-  return 1.0 - 0.62 * c;
+  return 1.0 - 0.48 * c;
 }
 `;
     THREE.ShaderChunk.lights_fragment_begin = THREE.ShaderChunk.lights_fragment_begin.replace(
@@ -95,12 +95,63 @@ float nuvemSombra(vec2 uv, float t) {
   rend.setPixelRatio(Math.min(devicePixelRatio, 1.5));
   rend.shadowMap.enabled = true;
   rend.shadowMap.type = THREE.PCFSoftShadowMap;
+  // ── F6: A LUZ DE HORA DOURADA E O GRADING DO CANAL (27/09) ─────────────
+  // O acabamento de cor e UM so, e fica na curva de tons: todos os materiais
+  // passam por ela no fim do seu shader, portanto o jogo, a bancada e cada
+  // gravacao saem com a mesma "assinatura". Sobre a AgX de sempre:
+  //   * as sombras puxam ao azul-petroleo e as luzes ao ambar (split-toning,
+  //     o olhar de filme de fim de tarde);
+  //   * um pouco mais de saturacao nos meios-tons;
+  //   * uma curva em S suave (mais contraste sem queimar).
+  // `LUZ_DOURADA = false` volta a luz e a curva de antes.
+  const LUZ_DOURADA = opcoes.luzDourada !== false;
   rend.toneMapping = THREE.AgXToneMapping;      // a mesma curva do forno
   rend.toneMappingExposure = 1.05;
+  if (LUZ_DOURADA) {
+    const tm = THREE.ShaderChunk.tonemapping_pars_fragment;
+    if (!tm.includes("gradingCanal")) {
+      THREE.ShaderChunk.tonemapping_pars_fragment = tm.replace(
+        "vec3 CustomToneMapping( vec3 color ) { return color; }",
+        `vec3 gradingCanal( vec3 c ) {
+  float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
+  // split-toning: sombras frias, luzes quentes
+  vec3 frio = vec3( 0.92, 0.99, 1.06 ), quente = vec3( 1.07, 1.0, 0.88 );
+  c *= mix( frio, quente, smoothstep( 0.08, 0.65, l ) );
+  // saturacao nos meios-tons
+  float l2 = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
+  float m = 1.0 - abs( l2 * 2.0 - 1.0 );
+  c = mix( vec3( l2 ), c, 1.0 + 0.16 * m );
+  // curva em S suave
+  c = clamp( c, 0.0, 1.0 );
+  c = mix( c, c * c * ( 3.0 - 2.0 * c ), 0.22 );
+  return c;
+}
+vec3 CustomToneMapping( vec3 color ) { return gradingCanal( AgXToneMapping( color ) ); }`);
+    }
+    rend.toneMapping = THREE.CustomToneMapping;
+    rend.toneMappingExposure = 1.22;
+  }
 
   const cena = new THREE.Scene();
   cena.background = new THREE.Color(0x7ea3b8);
   cena.fog = new THREE.Fog(0x8fb0c2, LX * 0.95, LX * 2.6);
+  if (LUZ_DOURADA) {
+    // o ceu: azul la em cima, pessego no horizonte (so se ve na camara baixa)
+    const cv = document.createElement("canvas");
+    cv.width = 4; cv.height = 256;
+    const g2 = cv.getContext("2d");
+    const gr = g2.createLinearGradient(0, 0, 0, 256);
+    gr.addColorStop(0.0, "#5f8fb4");
+    gr.addColorStop(0.55, "#9fbfd0");
+    gr.addColorStop(0.85, "#e8c9a0");
+    gr.addColorStop(1.0, "#f0cf9c");
+    g2.fillStyle = gr; g2.fillRect(0, 0, 4, 256);
+    const ceu = new THREE.CanvasTexture(cv);
+    ceu.colorSpace = THREE.SRGBColorSpace;
+    cena.background = ceu;
+    // a nevoa de distancia, dourada: da escala ao mapa inteiro
+    cena.fog = new THREE.Fog(0xd9c09a, LX * 0.75, LX * 2.4);
+  }
 
   // ── o mar ───────────────────────────────────────────────────────────────
   // ── A AGUA A 0 m, ONDE O FORNO A ESPERA ───────────────────────────────────
@@ -210,7 +261,16 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
 
   // ── a luz ───────────────────────────────────────────────────────────────
   const sol = new THREE.DirectionalLight(new THREE.Color(...cfgSol.sol.cor), 3.2);
-  const dSol = cfgSol.sol.direcao_yup;
+  let dSol = cfgSol.sol.direcao_yup;
+  if (LUZ_DOURADA) {
+    // o mesmo azimute, o sol mais baixo (20 graus em vez de 30): sombras mais
+    // compridas, que desenham o relevo; e mais quente
+    const h = Math.hypot(dSol[0], dSol[2]) || 1;
+    const el = 20 * Math.PI / 180;
+    dSol = [dSol[0] / h * Math.cos(el), -Math.sin(el), dSol[2] / h * Math.cos(el)];
+    sol.color.setRGB(1.0, 0.80, 0.58);
+    sol.intensity = 3.6;
+  }
   sol.castShadow = true;
   // ── A SOMBRA JA NAO SEGUE A CAMARA (26/09) ──────────────────────────────
   // A caixa da sombra andava atras do alvo da orbita e apertava-se com o
@@ -234,7 +294,9 @@ normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 
     sc.updateProjectionMatrix();
   }
   cena.add(sol, sol.target);
-  cena.add(new THREE.HemisphereLight(0xbcd8ef, 0x5c6340, 1.2));
+  // o ceu enche as sombras de azul; o chao devolve luz quente
+  cena.add(LUZ_DOURADA ? new THREE.HemisphereLight(0xa9c4e0, 0x6b5a3a, 1.45)
+                       : new THREE.HemisphereLight(0xbcd8ef, 0x5c6340, 1.2));
 
   const cam = new THREE.PerspectiveCamera(42, 1, 2, LX * 2.2);
   cam.position.set(0, LY * 0.62, LY * 0.78);
