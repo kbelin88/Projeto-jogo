@@ -377,7 +377,12 @@ Ainda a 26/09, pelas marcas do Lucas:
   com a distância à linha de água numa imagem RGB, mais uma **de longe** (6 m/px)
   para o plano do mar inteiro — sem borda onde a cor salte. O mar é **opaco**: a
   cor é o chão pintado por baixo, apagado pela coluna de água (Beer-Lambert,
-  `SIGMA`/`FUNDA` no `mapa3d.js`), e a sombra na água só se vê onde se vê o fundo;
+  `SIGMA`/`FUNDA` no `mapa3d.js`), e a sombra na água só se vê onde se vê o fundo.
+  As **ondas** (passo C) são dois mapas de normais de um espectro de oceano
+  (`agua_normais.py`, FFT de Phillips: sem costura por construção), lidos em três
+  escalas rodadas para a grelha nunca se ler; a onda entra no **reflexo do céu**
+  (Fresnel, cores do céu dourado) e quase nada na luz difusa — senão o mar
+  saía granulado. Mais leve do que o mar transparente de antes (4,7 contra 6,4 ms);
 - **a luz é de hora dourada** (F6, `LUZ_DOURADA` no `mapa3d.js`): sol a 20° e
   quente, céu em degradé, névoa dourada, e um **grading fixo do canal** na curva
   de tons (`CustomToneMapping` = AgX + `gradingCanal`: sombras frias, luzes

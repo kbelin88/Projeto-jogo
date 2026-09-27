@@ -3168,3 +3168,9 @@ _mc = subprocess.run(["python", os.path.join("ferramentas", "cena", "mar_costa.p
 if _mc is not None:
     print((_mc.stdout or "").strip() if _mc.returncode == 0
           else "SONDA AVISO mar_costa falhou: " + (_mc.stderr or "")[-400:])
+# as ondas (28/09): nao dependem do mapa, mas quem clona so tem o que o forno faz
+_an = subprocess.run(["python", os.path.join("ferramentas", "cena", "agua_normais.py")],
+                     capture_output=True, text=True) if not (BANCADA or MONTANHAS) else None
+if _an is not None:
+    print((_an.stdout or "").strip() if _an.returncode == 0
+          else "SONDA AVISO agua_normais falhou: " + (_an.stderr or "")[-400:])

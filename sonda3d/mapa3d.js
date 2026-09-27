@@ -192,6 +192,27 @@ vec3 CustomToneMapping( vec3 color ) { return gradingCanal( AgXToneMapping( colo
   } catch (e) {
     console.warn("mar sem mar_costa.* v2 -- cor chapada (correr o forno):", e);
   }
+  // ── AS ONDAS (plano da agua, passo C, 28/09) ─────────────────────────────
+  // Dois mapas de normais de um espectro de oceano (`agua_normais.py`), sem
+  // costura. Os tres senos de antes faziam um xadrez ao longe (92102). Com
+  // mipmaps, as ondas que ficam mais finas do que um pixel fazem media e
+  // alisam-se, em vez de tremer.
+  let ondas = null;
+  try {
+    const meta = await (await fetch(BASE + "agua_normais.json")).json();
+    const tl = new THREE.TextureLoader();
+    const ler = async (f) => {
+      const t = await tl.loadAsync(BASE + f);
+      t.colorSpace = THREE.NoColorSpace;
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.anisotropy = rend.capabilities.getMaxAnisotropy();
+      return t;
+    };
+    const [a, b] = await Promise.all([ler("agua_normal_a.png"), ler("agua_normal_b.png")]);
+    ondas = { a, b, meta };
+  } catch (e) {
+    console.warn("mar sem agua_normal_* -- superficie lisa (correr o forno):", e);
+  }
   const matMar = new THREE.MeshStandardMaterial({
     color: 0x1d4657, roughness: 0.40, metalness: 0.06 });
   matMar.onBeforeCompile = (sh) => {
@@ -214,6 +235,12 @@ vec3 CustomToneMapping( vec3 color ) { return gradingCanal( AgXToneMapping( colo
         sh.uniforms.chLado = { value: new THREE.Vector2(chaoPintado.meta.LX, chaoPintado.meta.LY) };
       }
     }
+    if (ondas) {
+      sh.defines = Object.assign(sh.defines || {}, { TEM_ONDAS: "" });
+      sh.uniforms.ondaA = { value: ondas.a };
+      sh.uniforms.ondaB = { value: ondas.b };
+      sh.uniforms.ondaL = { value: new THREE.Vector2(ondas.meta.a.ladrilho_m, ondas.meta.b.ladrilho_m) };
+    }
     matMar.userData.sh = sh;
     sh.vertexShader = `varying vec3 vMar;
 ` + sh.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
@@ -222,6 +249,15 @@ vMar = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
 varying vec3 vMar;
 float kSombraMar = 1.0;
 float marSomb(float s) { return mix(1.0, s, kSombraMar); }
+vec3 nMarW = vec3(0.0, 1.0, 0.0);      // a normal da agua, no mundo
+#ifdef TEM_ONDAS
+uniform sampler2D ondaA; uniform sampler2D ondaB; uniform vec2 ondaL;
+#endif
+float marH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float marN(vec2 p) {
+  vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(marH(i), marH(i + vec2(1, 0)), f.x), mix(marH(i + vec2(0, 1)), marH(i + vec2(1, 1)), f.x), f.y);
+}
 #ifdef TEM_COSTA
 uniform sampler2D mcP; uniform sampler2D mcL;
 uniform vec4 mcPT; uniform vec2 mcPN; uniform vec4 mcLT; uniform vec2 mcLN;
@@ -230,6 +266,7 @@ uniform float mcPMax; uniform float mcDPasso;
 #ifdef TEM_FUNDO
 uniform sampler2D chCor; uniform vec2 chLado;
 #endif
+#define CEU_MAR 1.0
 // R distancia (em passos), G raiz da profundidade, B fundo escuro
 vec3 marLer(sampler2D t, vec4 T, vec2 N) {
   vec2 uv = vec2(((vMar.x - T.x) / T.z + 0.5) / N.x, ((vMar.z - T.y) / T.w + 0.5) / N.y);
@@ -282,14 +319,45 @@ float fundo = smoothstep(1.0, 12.0, pMar);`)
         .replace("vDirectionalShadowCoord[ i ] ) : 1.0;", "vDirectionalShadowCoord[ i ] )) : 1.0;"))
       .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>
 roughnessFactor = mix(roughnessFactor, 0.95, espuma);`)
+      // ── O CEU NA AGUA (Fresnel) ──────────────────────────────────────────
+      // Olhando a pique a agua mostra o que tem dentro; rasante, espelha o
+      // ceu. As mesmas cores do ceu dourado (F6), lidas pelo raio refletido.
+      .replace("#include <opaque_fragment>", `{
+  vec3 vd = normalize(vMar - cameraPosition);
+  vec3 rd = reflect(vd, nMarW);
+  float fr = 0.02 + 0.98 * pow(1.0 - clamp(dot(-vd, nMarW), 0.0, 1.0), 5.0);
+  float h = clamp(rd.y, 0.0, 1.0);
+  vec3 ceuM = mix(vec3(0.81, 0.58, 0.35), vec3(0.35, 0.52, 0.63), smoothstep(0.0, 0.35, h));
+  ceuM = mix(ceuM, vec3(0.11, 0.27, 0.46), smoothstep(0.35, 1.0, h));
+  outgoingLight = mix(outgoingLight, ceuM * CEU_MAR, fr * (1.0 - espuma));
+}
+#include <opaque_fragment>`)
       .replace("#include <normal_fragment_begin>", `#include <normal_fragment_begin>
-vec2 mp = vMar.xz;
-float o1 = sin(mp.x * 0.055 + mp.y * 0.021 + tempo * 1.10);
-float o2 = sin(mp.x * -0.017 + mp.y * 0.049 + tempo * 0.83);
-float o3 = sin(mp.x * 0.031 + mp.y * -0.037 + tempo * 1.47);
-// mais mansa junto a costa
-float calma = 0.3 + 0.7 * fundo;
-normal = normalize(normal + vec3(o1 * 0.055 + o3 * 0.03, 0.0, o2 * 0.055 + o3 * 0.024) * calma);`);
+{
+  vec2 mp = vMar.xz;
+  vec2 dec = vec2(0.0);
+#ifdef TEM_ONDAS
+  // A (larga) corre a favor do vento, B (o picado) atravessa-a; C e a A outra
+  // vez, 2,71x maior e rodada 57 graus: os tres ladrilhos nunca se alinham e a
+  // grelha nao se le ao longe
+  vec2 uA = mp / ondaL.x + vec2(0.82, 0.57) * tempo * 0.012;
+  vec2 uB = mat2(0.906, -0.423, 0.423, 0.906) * mp / ondaL.y + vec2(-0.34, 0.94) * tempo * 0.035;
+  vec2 uC = mat2(0.545, -0.839, 0.839, 0.545) * mp / (ondaL.x * 2.71) - vec2(0.57, 0.82) * tempo * 0.004;
+  dec = (texture2D(ondaA, uA).rg * 2.0 - 1.0) * 0.16
+      + (texture2D(ondaB, uB).rg * 2.0 - 1.0) * 0.10
+      + (texture2D(ondaA, uC).rg * 2.0 - 1.0) * 0.12;
+#endif
+  // manchas de vento (~500 m): o mar nao e igual em todo o lado
+  float vento = 0.55 + 0.9 * marN(mp / 520.0 + vec2(tempo * 0.004, 0.0));
+  // mais manso no raso, e parado na linha de agua
+  dec *= vento * mix(0.25, 1.0, smoothstep(0.5, 8.0, pMar));
+  nMarW = normalize(vec3(-dec.x, 1.0, -dec.y));
+  // A onda muda o BRILHO (o ceu e o sol refletidos), nao a cor de dentro: com
+  // a normal inteira na luz difusa e o sol a 20 graus, cada declive acendia ou
+  // apagava a agua e o mar lia-se granulado, aos carocos (medido 28/09). A luz
+  // da agua ve uma normal quase lisa; o reflexo (abaixo) ve a onda inteira.
+  normal = normalize((viewMatrix * vec4(normalize(vec3(-dec.x * 0.3, 1.0, -dec.y * 0.3)), 0.0)).xyz);
+}`)
   };
   if (AGUA === "algarve") {
     // a este angulo de camara o reflexo do ceu dominava e o mar saia quase
