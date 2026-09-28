@@ -435,6 +435,8 @@ async function main() {
         const c = P5.guardarCampanha(estado, dono, registro.cru);
         out(c ? "campanha (NOVA, guardada, volta todo turno): " + c : "campanha: mantida");
       }
+      // janela (28/09, experimental): a resposta inteira deste turno volta no proximo
+      if (itensLado[dono] && itensLado[dono].includes("janela")) P5.guardarResposta(estado, dono, registro.cru);
       coletarDiagRunner(dono, registro, cliente[dono]); // replay: o pensamento deste lado
       somarCusto(etiquetaDe[dono], cliente[dono] && cliente[dono].ultimosTokens);
       gravar(); // checkpoint por LADO

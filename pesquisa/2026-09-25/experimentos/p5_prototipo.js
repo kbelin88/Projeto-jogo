@@ -159,8 +159,12 @@ function intencaoMarcha(m, visao) {
 //             (estado.campanhas) e volta igual todo turno ate o Rei a mudar;
 //             vazia = mantem a anterior. Na `campanha` (um campo so) a guerra
 //             era reescrita todo turno e dividia os 600 caracteres com a nota.
-const ITENS_P5 = ["regras", "combate", "intencao", "interior", "placebo", "avaliacao", "semtotal", "conselho", "alcance", "capital", "vigia", "semteto", "movprimeiro", "atalho", "frente", "campanha", "campanha2"];
-const FORA_DO_PADRAO = new Set(["placebo", "avaliacao", "semtotal", "conselho", "alcance", "capital", "vigia", "semteto", "movprimeiro", "atalho", "frente", "campanha", "campanha2"]);
+//   janela    (28/09, a ideia do Lucas de "jogar dois turnos"): cada prompt continua
+//             novo, mas traz a RESPOSTA INTEIRA do proprio Rei no turno anterior
+//             (ordens, construcoes, campanha, plano), guardada pelo runner. A
+//             campanha guarda o porque; a janela, o que foi mandado fazer.
+const ITENS_P5 = ["regras", "combate", "intencao", "interior", "placebo", "avaliacao", "semtotal", "conselho", "alcance", "capital", "vigia", "semteto", "movprimeiro", "atalho", "frente", "campanha", "campanha2", "janela"];
+const FORA_DO_PADRAO = new Set(["placebo", "avaliacao", "semtotal", "conselho", "alcance", "capital", "vigia", "semteto", "movprimeiro", "atalho", "frente", "campanha", "campanha2", "janela"]);
 
 // o mapa da frente: so reorganiza o que a visao ja da ao Rei (vizinhas visiveis,
 // tempos de marcha do proprio P4), por aldeia propria
@@ -307,6 +311,16 @@ function montarP5(E, estado, dono, itens) {
       txt = i >= 0 ? txt.slice(0, i) + bloco + "\n" + txt.slice(i) : txt + "\n\n" + bloco;
     }
   }
+  if (liga.has("janela")) {
+    const r = estado.respostasAnteriores && estado.respostasAnteriores[dono];
+    if (r) {
+      const bloco = `=== YOUR REPLY LAST TURN (turn ${r.turno}, as you sent it, without the statement) ===\n${r.json}\n` +
+        "What these orders did is in the report above (armies on the march, what happened, refused orders).\n";
+      const i = txt.indexOf("=== YOUR CAMPAIGN");
+      const j = i >= 0 ? i : txt.indexOf("=== YOUR NOTE FROM LAST TURN");
+      txt = j >= 0 ? txt.slice(0, j) + bloco + "\n" + txt.slice(j) : txt + "\n\n" + bloco;
+    }
+  }
   if (liga.has("placebo")) txt = txt.replace(/^TOTAL: .*$/m, (l) => `${l}\n  (the list of your villages follows below)`);
   return { p4, p5: txt };
 }
@@ -342,7 +356,17 @@ function guardarCampanha(estado, dono, cru) {
   return estado.campanhas[dono].texto;
 }
 
-module.exports = { carregarMotorP5, montarP5, regrasP5, ITENS_P5, expandirAtalho, guardarCampanha };
+// janela: guarda a resposta do Rei (sem o "statement", que e so para o publico)
+function guardarResposta(estado, dono, cru) {
+  if (!estado.respostasAnteriores) estado.respostasAnteriores = { A: null, B: null };
+  const m = String(cru || "").match(/\{[\s\S]*\}/);
+  let d = null; if (m) { try { d = JSON.parse(m[0]); } catch (e) { d = null; } }
+  if (!d) { estado.respostasAnteriores[dono] = { turno: estado.turno, json: "(your reply was not valid JSON: no orders were executed)" }; return; }
+  const k = {}; for (const c of ["campaign", "build", "movements", "plan"]) if (d[c] !== undefined) k[c] = d[c];
+  estado.respostasAnteriores[dono] = { turno: estado.turno, json: JSON.stringify(k).slice(0, 2500) };
+}
+
+module.exports = { carregarMotorP5, montarP5, regrasP5, ITENS_P5, expandirAtalho, guardarCampanha, guardarResposta };
 
 // ---- 3. CLI: reexecuta a partida e fotografa o turno pedido ------------------
 if (require.main === module) {
