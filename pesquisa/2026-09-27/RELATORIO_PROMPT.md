@@ -41,6 +41,12 @@
    Super, 8%→18% com 10 de 12 casos acima). Sugestivo, não provado. É o candidato nº 1
    para as próximas partidas (§7).
 
+3c. **A maior diferença de placar veio de pedir ao Rei a CAMPANHA** (o `plan` passa a ser
+   "a guerra dos próximos turnos", sem dizer qual): o lado com ela ficou à frente em 6 de
+   8 partidas A/B, e venceu as 4 do dots. E um **mapa da frente** em texto (o que o prompt
+   já diz, arrumado por frente) é a primeira informação que mexe na logística do dots
+   (p=0,01 com a campanha). Ver §7b.
+
 4. **As correções de verdade não fazem mal e ficam.** Nas 8 partidas A/B (o mesmo modelo
    dos dois lados, um Rei com o P4 e o outro com as verdades), o lado com as verdades
    ficou à frente em 4, atrás em 2, empatou 2. Não chega para dizer que ajudam; chega
@@ -276,6 +282,42 @@ contra 22V 29D do P4 no mesmo run). É só apresentação: o teto continua nas r
 **Proposta**: `avaliacao` e `semteto` são os dois candidatos para a próxima rodada, e a
 rodada certa é em **partidas A/B** (o mesmo modelo dos dois lados), porque a avaliação
 serve a banda, e a banda só se vê turno após turno. Com o Sonnet, se houver crédito.
+
+---
+
+## 7b. Pensar a partida, não o turno (27–28/09)
+
+O Claude jogou à mão, com o MESMO P4, o turno 11 do Super (caso 7 da sonda de
+logística) e levou 26 de 26 tropas do interior à fronteira (2V 0D); o Super, em 9
+respostas, levou 0–15. A informação está no P4; o que muda é o processo (aldeia a aldeia,
+"para que serve esta tropa?"). A hipótese do Lucas: **o prompt faz pensar no turno, não
+na partida.** Dois braços, nenhum diz o que fazer:
+
+- **`campanha`** — o `plan` deixa de ser "nota ao próximo turno" e passa a ser "a
+  campanha dos próximos turnos: que frente, onde juntas tropas, o que tomas a seguir".
+- **`frente`** — um mapa da frente em texto: cada aldeia de fronteira com o que enfrenta
+  (e a defesa que o próprio prompt já mostra), cada aldeia do interior com a aldeia de
+  frente mais próxima. Só reorganiza o que o P4 já diz espalhado.
+
+**A campanha em partidas inteiras** (o mesmo modelo dos dois lados, P4 × P4+campanha):
+
+| | campanha à frente | P4 à frente |
+|---|---|---|
+| dots (4) | **4, todas vitórias** (22×2, 18×6, 18×6, 18×6) | 0 |
+| Super (4, todas no teto de 30) | 2 | 2 |
+
+**6 de 8** (p≈0,29; dots 4 de 4, p=0,125). Não é pela logística: o lado com a
+campanha ataca mais por turno em 6 de 8 e abre mais frentes. Os planos falam em
+"two fronts", "strike forces", "major offensive next turn"; os do P4 em "next turn, we
+will assess the battle and decide". **A campanha dá agência**, e é a maior diferença de
+placar de tudo o que se testou. Réplica no dots (seeds 7 e 9) a correr.
+
+**O mapa da frente na sonda** (12 turnos de retaguarda parada): no dots, a retaguarda
+levada à fronteira sobe de 22% para 34% (8 casos acima, 3 abaixo); com a campanha junta,
+**a retaguarda que sai sobe em 10 de 12 casos (p=0,01)**. É a primeira mudança só de
+informação que mexe na logística. No Super não mexe nada.
+
+**Candidato para as próximas partidas A/B**: as seis verdades + campanha + frente.
 
 ---
 
