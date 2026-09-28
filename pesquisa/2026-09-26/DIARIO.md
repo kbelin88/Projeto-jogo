@@ -394,3 +394,10 @@ interior (`logistica_replay.js`) e mais tropa do interior a sair por turno
 em 4 das 5 (41/24, 24/19, 36/18, 67/45; menos em 32/45). Quem vence tem mais aldeias, e
 logo mais interior: a medida confunde-se com o placar. A campanha ganha por outro
 caminho, que falta medir (ataques que já perdiam, tamanho dos ataques, frentes abertas).
+
+**Por onde ganha** (`retaguarda.js`, por lado): o lado com a campanha **ataca mais por
+turno nas 5 partidas** (1,9/1,6; 1,8/1,6; 1,6/1,1; 1,6/1,5; Super 1,8/1,0) e ataca mais
+alvos distintos em 4 (1,8/1,5; 1,5/1,3; 1,4/1,1; 1,6/1,1; Super 1,3/1,0). A campanha não
+resolve a logística: dá AGÊNCIA — mais frentes abertas ao mesmo tempo, que é o que o
+`MODELOS_ARENA.md` já dizia separar os modelos. (O `falhas.js` soma por nome de modelo;
+com o mesmo modelo dos dois lados não separa, fica por fazer por lado.)
