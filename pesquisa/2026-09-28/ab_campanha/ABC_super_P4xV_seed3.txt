@@ -1,0 +1,480 @@
+=== PARTIDA Rei A (openrouter:nvidia/nemotron-3-super-120b-a12b:free) vs Rei B (openrouter:nvidia/nemotron-3-super-120b-a12b:free) | seed 3 | maxTurnos 30 | 9/28/2026, 12:06:39 AM ===
+condicoes: ambiente=iberia | temp=0 | prompt=P4 EN (esquema declarado, sem exemplo, sem minimos, vitoria real, reforco, quantidade) + FOG OF WAR + P5 EXPERIMENTAL (A: P4 | B: campanha) + combate v3 (atq/def, counter 1.5) + clamp | regras=v4 (counter 1.5, cav def2/1t, madeira 30, dist x0.2, vitoria 75%/2t) | mesa: ordem espelhada + chegada sorteada | thinking=on (sem limite) | max_tokens_resposta=128000 (default alto, auto-ajustavel por modelo)
+
+########## TURNO 1 — Rei A (openrouter:nvidia/nemotron-3-super-120b-a12b:free) ##########
+tokens.contexto: prompt 2448 | resposta 3198 | raciocinio 3021 | finish stop | ms 32844
+resposta crua: "{\n  \"build\": [{\"villageId\": 0, \"type\": \"spearman\", \"quantity\": 1}],\n  \"movements\": [\n    {\"fromId\": 0, \"toId\": 1, \"troops\": {\"spearman\": 5, \"archer\": 0, \"knight\": 0}},\n    {\"fromId\": 0, \"toId\": 2, \"troops\": {\"spearman\": 0, \"archer\": 0, \"knight\": 3}}\n  ],\n  \"plan\": \"Turn 2: expect to control Santarem and Evora after battles. Build more spearmen in Lisboa to reinforce and prepare for deeper pushes. Keep archers as reserve. Avoid overextending without reinforcements.\",\n  \"statement\": \"This turn I trained a spearman in Lisboa and dispatched all spearmen to Santarem and all knights to Evora. My forces march to claim the two neutral villages, aiming to expand my holdings to three towns by next turn.\"\n}"
+raciocinio: We need to decide orders for turn 1. We have one village: Lisboa (id 0) with 5 spearman, 4 archer, 3 knight. Resources: wood 30, iron 20 (starting? It says wood 30 (+30/turn) iron 20 (+20/turn). Likely current stock is 30 wood, 20 iron. We can build troops now, paying from that stock. Each village can build up to 300 troops at home; currently 12.
+
+We need to capture villages to increase holdings. We see two neutral villages: Santarem (id1) with 1 knight garrison, Evora (id2) with 1 archer garrison. Both are 1 turn away (any speed). We can attack them this turn; they will fight upon arrival (since they are first non-owned village on path). Since we have troops, we can send an army to each.
+
+We need to consider combat calculations. We need to decide troop composition to win.
+
+We have to consider that enemy may also move, but we see none.
+
+We need to hold at least 18 villages for 2 consecutive turns, but we start with 1. Likely need to expand.
+
+We can send troops to capture both neutrals this turn, then next turn we will have 3 villages (if we win). Then we can build more.
+
+We need to consider resource constraints: building now reduces troops available for sending? Actually we can send troops that are currently at home; building adds new troops that will be ready next turn (since builds take 1 turn). So we should not build now if we need troops for attack; we can keep existing troops.
+
+We have 5 spear, 4 archer, 3 knight. Let's consider sending a balanced force to each.
+
+We need to compute effective attack vs defense.
+
+Defender's effective defense already includes location bonus (village). For neutral villages, defense is 3 (as shown). That's the defender's effective defense value (including location bonus). So we just compare our effective attack (our troops' attack, possibly with counter bonus) vs defender's effective defense (3). If we win, we capture the village (presumably after battle, we take over). The winner also takes losses (attrition against loser's effective force). So we will lose some troops equal to loser's effective force? Actually "The winner also takes losses (attrition against the loser's effective force)." Means winner loses troops equal to loser's effective force? Probably yes.
+
+Thus if we attack with force F_att (effective attack) vs defender defense D_def (effective defense). If F_att > D_def, we win, and we lose troops equal to D_def (the defender's effective force). The defender loses all troops? Probably destroyed.
+
+We need to compute our effective attack: sum of each troop type's attack * quantity, then apply counter bonus if our most numerous type counters defender's most numerous type.
+
+Defender garrison: Santarem: 1 knight. So defender's most numerous type is knight (1). Our army composition: we need to decide.
+
+Counter triangle: spearman counters knight; archer counters spearman; knight counters archer.
+
+If our most numerous type is spearman, we counter knight (defender's type) => we get 1.5x multiplier on our force.
+
+If our most numerous type is archer, we do NOT counter knight (archer vs knight? No, archer counters spearman, not knight). So no bonus.
+
+If our most numerous type is knight, we do NOT counter knight (knight vs knight? No, knight counters archer). So no bonus.
+
+Thus to get bonus, we need spearman to be most numerous in our attacking army.
+
+We have 5 spearman total; we could send all 5 spearman plus some others, but spearman must be most numerous. So we need spearman count > archer count and > knight count in the sent army.
+
+We could send e.g., 5 spearman, 0 archer, 0 knight => spearman 5 >0,0. That's most numerous spearman, gets bonus vs knight.
+
+Compute attack: spearman attack 1 each => 5*1 =5. Apply bonus 1.5 => 7.5 effective attack.
+
+Defender defense: 3 (effective). So we win (7.5 >3). Attrition: we lose troops equal to defender's effective force =3. How does that translate to troop losses? Probably we lose 3 attack worth? But we need to convert to troop counts? The description: "The winner also takes losses (attrition against the loser's effective force)." Likely we lose troops whose effective attack equals loser's effective force? Or we lose that many troops (in terms of count) regardless of type? Usually in such games, you lose troops equal to the enemy's effective force (defense). Since defender's effective force is 3, we lose 3 "points" of our troops. We need to decide which troops die; could be any. For simplicity, we can assume we lose proportionally or we lose from the weakest? Not specified. We'll just note we lose some troops.
+
+If we send only spearman, we lose 3 effective force; each spearman has attack 1, defense 2. But attrition is against loser's effective force (defense). Not sure.
+
+Nevertheless, we will win.
+
+Similarly for Evora: garrison 1 archer. Defender's most numerous type is archer. To get bonus, our most numerous type should be spearman? Wait spearman counters knight, not archer. Archer counters spearman. Knight counters archer. So to counter archer, we need knight as most numerous type.
+
+Thus we need our army's most numerous type to be knight to get 1.5x bonus vs archer.
+
+We have 3 knights total. We could send all 3 knights, maybe plus some others but knights must be most numerous.
+
+If we send 3 knights, 0 others => knights most numerous (3). Attack: knight attack 4 each => 3*4=12. Apply bonus 1.5 => 18 effective attack.
+
+Defender defense: 3 (effective). Win big. Attrition lose 3.
+
+Thus we can send 3 knights to Evora.
+
+Now we need to ensure we have enough troops: we have 5 spear, 4 archer, 3 knight. Sending 5 spear to Santarem and 3 knights to Evora uses all spear and knights, leaving 4 archers unused at home.
+
+We could also send some archers as reinforcements to our own village later, but not needed.
+
+We must ensure we don't exceed village capacity when sending? Sending reduces home garrison; after sending, home troops left: 0 spear, 4 archer, 0 knight = 4 archers. That's fine.
+
+Now we need to consider movement time: both are 1 turn away (any speed). So they will arrive next turn? Actually movement takes turns; if we order now, they will arrive after the indicated number of turns. Since it's 1 turn, they will arrive at the start of next turn? The orders are simultaneous; the enemy writes orders at same time over same snapshot. Movement takes turns, and during those turns the enemy keeps building and moving. So if we send now with travel time 1 turn, they will arrive after 1 turn, i.e., at the start of turn 2? Usually you order movement, they spend that many turns on the road, then arrive and fight at that time. Since it's 1 turn, they will arrive next turn and fight then (during turn 2's resolution). However, the description: "An army STOPS at the first village on its path that is not yours and fights there, even if you ordered a more distant destination." So they fight upon arrival. So if travel time is 1 turn, they will arrive and fight at the end of this turn? Actually turn resolution: you give orders, then simultaneously enemy gives orders, then movements happen? Usually you give orders, then they execute over the turn, and at the end of the turn you resolve arrivals and combat. Since travel time is measured in turns, a 1-turn movement means they arrive at the end of the current turn (i.e., after this turn's production?). But the report shows "march from [0] Lisboa: 1 slow / 1 medium / 1 fast turns". So if we send now, they will arrive after 1 turn, i.e., at the start of next turn? Let's assume they arrive next turn and fight then. That means we won't capture the villages this turn; we will capture them next turn after battle. However, we need to consider that during this turn, the neutral villages still produce resources? They are neutral, they produce resources? The rule: "Each village you hold produces resources every turn." Neutral villages do not produce for us. They may produce for themselves? Not relevant.
+
+We also need to consider that neutral villages harden every 5 turns gaining +1 troop of its own type. Not relevant now.
+
+Thus if we send now, we will have battles next turn. Meanwhile, we could also build troops this turn in Lisboa to increase our forces for future.
+
+We have resources: wood 30, iron 20. We can build troops now (costs per troop). Building takes 1 turn, so they will be ready next turn.
+
+We could build some spearmen (cost 15 wood each) or archers (20 wood +10 iron) or knights (30 wood+30 iron). We have limited iron (20). So we can build at most 2 archers (each needs 10 iron) -> 20 iron used, wood 2*20=40 wood >30, not enough wood. So we cannot build 2 archers due to wood shortage. Could build 1 archer (20 wood,10 iron) leaving wood 10, iron 10. Could build 1 spearman (15 wood) but we lack wood. Could build 1 knight (30 wood,30 iron) not enough iron.
+
+Thus we can build either 1 archer (cost 20 wood,10 iron) leaving wood 10, iron 10. Or we could build 1 spearman (15 wood) leaving wood 15, iron 20. Or we could build 0.
+
+We might want to build spearman to increase our spear count for future counter vs knights. But we already used all spear for attack; after sending them, we have 0 spear left. Building a spearman now would give us 1 spear ready next turn.
+
+Alternatively, building an archer gives us ranged.
+
+We also need to consider that after we capture Santarem and Evora next turn, we will have those villages producing resources, increasing our income.
+
+Thus we might want to build a spearman now to have some spear for next turn's defense or attack.
+
+Let's compute: If we build 1 spearman, we spend 15 wood, leaving wood 15, iron 20. No iron used. Next turn we will have +30 wood, +20 iron production from Lisboa (still ours) plus any from captured villages (if we capture them). But we won't have them until after battle next turn; production likely occurs after turn resolution? Usually production occurs at start of turn before orders? The report shows wood 30 (+30/turn) meaning current stock and per turn income. Likely at the start of each turn you get income, then you can order builds. So if we capture a village during turn 2 resolution, its production would start turn 3. So for turn 2 we only have Lisboa's production.
+
+Thus we need to plan for turn 2.
+
+Now, we need to write orders: build list, movements list.
+
+We'll decide to build 1 spearman in Lisboa.
+
+Movements: send 5 spearman from Lisboa to Santarem (id1). Send 3 knights from Lisboa to Evora (id2). Possibly also send some archers to reinforce Lisboa? Not needed.
+
+We need to ensure we don't send more than we have: we have 5 spear, 3 knight, 4 archer. Sending 5 spear and 3 knight leaves 4 archer at home.
+
+Now we need to write plan and statement.
+
+Plan: note to next turn: we expect to capture Santarem and Evora after battles; we will have 3 villages; we will need to build more troops, maybe focus on spearmen to counter enemy knights; we should also consider scouting further.
+
+Statement: what we did this turn: we built a spearman in Lisboa, sent our spearmen to Santarem and knights to Evora to seize the two neutral villages.
+
+Now we need to output JSON.
+
+Check IDs: Lisboa is 0, Santarem 1, Evora 2.
+
+Build: [{"villageId":0, "type":"spearman", "quantity":1}]
+
+Movements: [{"fromId":0, "toId":1, "troops":{"spearman":5, "archer":0, "knight":0}}, {"fromId":0, "toId":2, "troops":{"spearman":0, "archer":0, "knight":3}}]
+
+Make sure numbers are ints.
+
+Now plan and statement strings.
+
+Plan: 2-4 lines. Let's write:
+
+"Turn 2: expect to control Santarem and Evora after battles. Build more spearmen in Lisboa to reinforce and prepare for deeper pushes. Keep archers as reserve. Avoid overextending without reinforcements."
+
+Statement: 2-4 lines:
+
+"This turn I trained a spearman in Lisboa and dispatched all spearmen to Santarem and all knights to Evora. My forces march to claim the two neutral villages, aiming to expand my holdings to three towns by next turn."
+
+Now ensure JSON is valid.
+
+Let's craft.
+
+
+ordem.construir: [{"aldeiaId":0,"tipo":"lanceiro"}]
+ordem.envios   : [{"origemId":0,"destinoId":1,"tropas":{"lanceiro":5,"arqueiro":0,"cavaleiro":0}},{"origemId":0,"destinoId":2,"tropas":{"lanceiro":0,"arqueiro":0,"cavaleiro":3}}]
+ACEITO construir lanceiro em [0]
+ACEITO envio [0]->[1]: 5S (alvo neutra cavaleiro)
+ACEITO envio [0]->[2]: 3K (alvo neutra arqueiro)
+plano (volta no proximo prompt): Turn 2: expect to control Santarem and Evora after battles. Build more spearmen in Lisboa to reinforce and prepare for deeper pushes. Keep archers as reserve. Avoid overextending without reinforcements.
+depoimento (so tela/narracao): This turn I trained a spearman in Lisboa and dispatched all spearmen to Santarem and all knights to Evora. My forces march to claim the two neutral villages, aiming to expand my holdings to three towns by next turn.
+########## TURNO 1 — Rei B (openrouter:nvidia/nemotron-3-super-120b-a12b:free) ##########
+tokens.contexto: prompt 2473 | resposta 3331 | raciocinio 3138 | finish stop | ms 30659
+resposta crua: "{\n  \"build\": [{\"villageId\": 22, \"type\": \"spearman\", \"quantity\": 2}],\n  \"movements\": [\n    {\"fromId\": 22, \"toId\": 21, \"troops\": {\"spearman\": 4, \"archer\": 0, \"knight\": 0}},\n    {\"fromId\": 22, \"toId\": 23, \"troops\": {\"spearman\": 0, \"archer\": 0, \"knight\": 1}}\n  ],\n  \"plan\": \"Capture Tarragona and Girona next turn to expand to 3 villages. Then reinforce and push toward Zaragoza via Tarragona, building spearmen for numbers. Aim to control eastern flank and eventually threaten enemy capital.\",\n  \"statement\": \"Built two spearmen in Barcelona.\\nDispatched four spearmen to Tarragona and one knight to Girona to take the neutral villages next turn.\"\n}"
+raciocinio: We need to produce JSON with build, movements, plan, statement.
+
+We have only one village: Barcelona (id 22). It has troops: 5 spearman, 4 archer, 3 knight. Resources: wood 30 (+30/turn) and iron 20 (+20/turn). Actually it says wood 30 (+30/turn) meaning current stock? Probably wood 30 currently, and each turn adds 30. Similarly iron 20 currently, +20 per turn. We can build troops now using current resources. Costs: spearman 15 wood +0 iron; archer 20 wood +10 iron; knight 30 wood +30 iron.
+
+We have wood 30, iron 20. Options: Build 2 spearman (cost 30 wood) leaving wood 0, iron unchanged. Or 1 archer (20 wood,10 iron) leaving wood10, iron10. Or 1 knight (30 wood,30 iron) not enough iron (need 30 iron, we have 20). Could also build 1 spearman + something else? Let's see combos.
+
+We could build 1 spearman (15 wood) leaving wood15, iron20. Then could build 1 archer (20 wood,10 iron) not enough wood. Could build another spearman (15 wood) leaving wood0, iron20 -> total 2 spearman as earlier. Could build 1 spearman and then maybe 0 archer? Not enough iron for knight.
+
+We could also build 0 and keep resources for later.
+
+We need to consider movement: we can send troops to neutral villages Tarragona (21) and Girona (23). Both are 1 turn away (any speed). We have troops at home. We could send some to capture them. Since they are neutral with garrison: Tarragona has 1 knight; Girona has 1 archer. Effective defense: 3 (includes location bonus? It says effective defense (location bonus included): 3 for both). That's low.
+
+We need to compute battle outcome if we attack.
+
+We need to decide troop composition to send. Since we can send multiple armies from same village but they fight separately (they don't combine). So we could send separate attacks each turn? Actually we can send multiple movements in same turn; each will fight separately, one at a time, order? The rule: Troops sent from DIFFERENT villages never add up, even when they arrive at the same target on the same turn: each send fights alone, one at a time. Since we have only one village, but we could send multiple armies from same village? It says "Troops sent from DIFFERENT villages never add up". It doesn't forbid sending multiple armies from same village; they'd still be separate sends, each fights alone. So we could split our forces into multiple attacks.
+
+We need to consider that after attacking, if we win, we take the village and its garrison joins us? Actually when you capture a village, you presumably gain control and its troops? The rules: "You may also send troops to a village YOU already own: they march the same way and, on arrival, join that village's garrison as reinforcements." For enemy/neutral villages, if you win, you capture it and presumably its garrison is destroyed? Usually you take over the village and its troops? Not specified. Likely you capture the village and its garrison becomes yours? But we need to assume that winning battle gives you control of the village; the defender's troops are lost (attrition). We'll assume we capture and can then build there next turn.
+
+Goal: hold at least 18 of 24 villages for 2 consecutive turns. We have 1 now. Need to expand quickly.
+
+We have two neutral villages adjacent: Tarragona and Girona. Capturing both would give us 3 villages. Then we can push further.
+
+We need to consider enemy capital Lisboa (id 0) unknown garrison. Likely strong.
+
+We need to plan: first capture Tarragona and Girona, then push towards Zaragoza etc.
+
+Now compute battle if we send e.g., 2 spearman vs 1 knight defender.
+
+Attacker: 2 spearman: each attack 1 => total attack =2. Defender: 1 knight defense 2 => defense =2. Location bonus: defender in village gets defense x1.25? Actually effective defense already includes location bonus. They gave effective defense 3 for neutral village. So we should use that directly: defender effective defense =3. Attacker effective attack? No location bonus for attacker (open field? Actually attacking a village: defender gets location bonus; attacker does not). So attacker uses attack values only.
+
+Thus attacker effective force = attack sum =2. Defender effective force =3. Defender wins (tie goes to defender). So we lose.
+
+We need to overcome defender's effective defense 3. Need attacker attack >3. Since each spearman attack 1, need at least 4 spearman to get attack 4 >3. Or mix.
+
+Archer attack 2 each. Knight attack 4 each.
+
+We could send 2 archers: attack 4 >3 -> win. But need to consider counter triangle: defender type is knight (Tarragona). Attacker type composition: most numerous type determines counter. If we send 2 archers, most numerous = archer. Archer counters spearman, not knight. Knight counters archer. So defender knight counters archer, giving defender a 1.5 multiplier? Actually "Having the counter multiplies your force by 1.5." So if defender has counter vs attacker's most numerous type, defender gets multiplier? The rule: "Counter triangle (a BONUS, not an automatic win): spearman counters knight; archer counters spearman; knight counters archer. Having the counter multiplies your force by 1.5." So whichever side has the counter gets multiplier. So if defender is knight and attacker most numerous is archer, then knight counters archer, so defender gets 1.5x multiplier. That would increase defender effective force.
+
+Thus we need to consider counter.
+
+If we send spearmen vs knight: spearman counters knight, so attacker gets 1.5x.
+
+Thus better to send spearmen.
+
+Let's compute: send 4 spearmen. Attacker attack =4. Most numerous type = spearman. Spearman counters knight => attacker gets 1.5x multiplier => effective attack =4 *1.5 =6. Defender: knight defense 2, effective defense given as 3 (includes location bonus). Defender most numerous type = knight. Does knight counter spearman? Yes, knight counters archer, not spearman. So defender does NOT get counter. So defender effective force =3 (no multiplier). Attacker 6 >3 => win.
+
+Now need to consider attrition: winner takes losses against loser's effective force. Loser's effective force = defender's effective force =3. So attacker loses 3 effective force worth of troops? How losses computed? Probably subtract from attacker's troops proportionally? Not fully defined. We'll approximate that we lose some troops but still win.
+
+We have 5 spearmen total. Sending 4 leaves 1 at home.
+
+After battle, we might lose some of the 4 spearmen. Let's approximate we lose enough to equal defender's effective force 3 in terms of attack? Not sure. But we likely still have some survivors.
+
+Alternatively, we could send 5 spearmen: attack 5*1.5=7.5 >3, maybe lose less proportionally.
+
+We also need to consider Girona defender: 1 archer. Effective defense 3. Defender type archer. To counter archer, we need knight (knight counters archer). So sending knights would give us counter. Or we could send spearmen? Spearman does not counter archer; archer counters spearman. So if we send spearmen, defender gets counter (archer counters spearman) => defender gets 1.5x. So better to send knights.
+
+Let's compute sending knights vs archer.
+
+Defender: 1 archer, effective defense 3 (includes location bonus). Attacker: knights attack 4 each. Most numerous type = knight. Knight counters archer => attacker gets 1.5x.
+
+If we send 1 knight: attack 4 *1.5 =6. Defender effective force =3. Win.
+
+If we send 2 knights: attack 8*1.5=12 >3.
+
+We have 3 knights total.
+
+Thus we can send 1 knight to Girona, 4 spearmen to Tarragona.
+
+We need to check resources for building? Not needed for movement.
+
+We need to ensure we have enough troops: we have 5 spearmen, 4 archer, 3 knight. Sending 4 spearmen leaves 1 spearman at home. Sending 1 knight leaves 2 knights at home. Archers untouched.
+
+Now we need to consider that after movement, troops march 1 turn (since distance 1). They will arrive next turn? Actually movement takes turns; if distance is 1 turn, they arrive next turn? The report shows "march from [22] Barcelona: 1 slow / 1 medium / 1 fast turns". That likely means it takes 1 turn to reach. So they will arrive at end of this turn? Usually you order movement, they start moving, and after the travel time they arrive. Since it's 1 turn, they will arrive at the start of next turn? The simultaneous orders: enemy writes orders at same time over same snapshot. Nothing you order this turn is visible to them before it happens. So if we order movement, they will move during this turn and arrive next turn? The defense you see in report is TODAY's defense, not defense on arrival. So if we order movement to a village 1 turn away, they will arrive next turn, and we will fight then using the defense at that time (which may have changed). So we cannot capture this turn; we need to wait.
+
+Thus we need to plan for next turn.
+
+We could also send troops to reinforce our own village (no need). So maybe we just hold and build.
+
+But we need to start expanding. Perhaps we should send troops now to capture next turn.
+
+We also could send a mixed army to ensure speed? Speed of mixed army is slowest. If we send spearmen (slow) and knights (fast), the army speed is slow (since spearman slow). So travel time still 1 turn (since all speeds have 1 turn for distance 1). So fine.
+
+Now we need to decide builds: we might want to build more spearmen for future.
+
+We have wood 30, iron 20. Could build 2 spearmen (cost 30 wood). Then we would have 7 spearmen total (5 existing +2 built). But building takes 1 turn to be ready. They will be ready next turn? Actually "ready in 1 turn." Means if you order build now, they will be available next turn? Probably they finish building at end of this turn and can be used next turn. We'll assume they are available next turn.
+
+Thus we could build 2 spearmen now, then next turn we have 7 spearmen (original 5 +2 new) plus any survivors from attacks.
+
+Alternatively, we could build archers etc.
+
+We need to consider that we have limited iron; building archers consumes iron.
+
+We might want to keep iron for knights later.
+
+Thus building spearmen is good.
+
+Now we need to write plan and statement.
+
+Plan: Over next several turns, capture Tarragona and Girona, then push towards Zaragoza via Tarragona route, build up forces, aim to control eastern flank.
+
+Statement: This turn we built 2 spearmen in Barcelona and ordered 4 spearmen to Tarragona and 1 knight to Girona to seize the neutral villages next turn.
+
+Now produce JSON.
+
+Check IDs: villageId 22 for build. movements: fromId 22 toId 21 (Tarragona) with troops spearman:4. fromId 22 toId 23 (Girona) with troops knight:1.
+
+We need to ensure we don't exceed available troops: we have 5 spearman, 4 archer, 3 knight. Sending 4 spearman and 1 knight leaves 1 spearman, 4 archer, 2 knight at home. That's fine.
+
+Build: 2 spearman.
+
+Now compute resources after building: wood 30 - 2*15 =0, iron 20 - 0 =20. So wood 0, iron20 left.
+
+Now we need to ensure we don't exceed village capacity: currently 12 troops at home. After building 2 spearman (they will be ready next turn, not counted yet?), but building adds to home after completion. For now, we are ordering build; they will be ready next turn, but we still have 12 at home now. After building, next turn we will have +2 =14 at home (assuming none lost). Plus we will have sent troops away, reducing home count. So fine.
+
+Now produce JSON.
+
+We need to ensure valid JSON, no extra text.
+
+Let's craft:
+
+{
+  "build": [{"villageId": 22, "type": "spearman", "quantity": 2}],
+  "movements": [
+    {"fromId": 22, "toId": 21, "troops": {"spearman": 4, "archer": 0, "knight": 0}},
+    {"fromId": 22, "toId": 23, "troops": {"spearman": 0, "archer": 0, "knight": 1}}
+  ],
+  "plan": "Capture Tarragona and Girona next turn to expand to 3 villages. Then reinforce and push toward Zaragoza via Tarragona, building spearmen for numbers. Aim to control eastern flank and eventually threaten enemy capital.",
+  "statement": "Built two spearmen in Barcelona and dispatched four spearmen to Tarragona and one knight to Girona to take the neutral villages on the following turn."
+}
+
+Check lengths: plan lines? It's one line but okay. Statement 2-4 lines? It's one line; maybe need 2-4 lines. We can split into two lines.
+
+Let's make statement two lines:
+
+"Built two spearmen in Barcelona.\nDispatched four spearmen to Tarragona and one knight to Girona to take the neutral villages next turn."
+
+That's two lines.
+
+Now produce JSON.
+
+
+ordem.construir: [{"aldeiaId":22,"tipo":"lanceiro"},{"aldeiaId":22,"tipo":"lanceiro"}]
+ordem.envios   : [{"origemId":22,"destinoId":21,"tropas":{"lanceiro":4,"arqueiro":0,"cavaleiro":0}},{"origemId":22,"destinoId":23,"tropas":{"lanceiro":0,"arqueiro":0,"cavaleiro":1}}]
+ACEITO construir lanceiro em [22]
+ACEITO construir lanceiro em [22]
+ACEITO envio [22]->[21]: 4S (alvo neutra cavaleiro)
+ACEITO envio [22]->[23]: 1K (alvo neutra arqueiro)
+plano (volta no proximo prompt): Capture Tarragona and Girona next turn to expand to 3 villages. Then reinforce and push toward Zaragoza via Tarragona, building spearmen for numbers. Aim to control eastern flank and eventually threaten enemy capital.
+depoimento (so tela/narracao): Built two spearmen in Barcelona.
+Dispatched four spearmen to Tarragona and one knight to Girona to take the neutral villages next turn.
+placar: A 1 ald/tropas 4 | B 1 ald/tropas 7 | neutras 22 | transito 4 (A 2 | B 2)
+
+########## TURNO 2 — Rei A (openrouter:nvidia/nemotron-3-super-120b-a12b:free) ##########
+tokens.contexto: prompt 2787 | resposta 4509 | raciocinio 4139 | finish stop | ms 43088
+resposta crua: "{\n  \"build\": [\n    {\n      \"villageId\": 0,\n      \"type\": \"spearman\",\n      \"quantity\": 3\n    }\n  ],\n  \"movements\": [\n    {\n      \"fromId\": 0,\n      \"toId\": 1,\n      \"troops\": {\n        \"spearman\": 1,\n        \"archer\": 4,\n        \"knight\": 0\n      }\n    },\n    {\n      \"fromId\": 1,\n      \"toId\": 3,\n      \"troops\": {\n        \"spearman\": 3,\n        \"archer\": 0,\n        \"knight\": 0\n      }\n    },\n    {\n      \"fromId\": 2,\n      \"toId\": 5,\n      \"troops\": {\n        \"spearman\": 0,\n        \"archer\": 0,\n        \"knight\": 3\n      }\n    }\n  ],\n  \"plan\": \"Next turn expect Coimbra and Faro captured, Santarem reinforced with Lisboa archers. Use arriving archers to push from Santarem to Badajoz. Keep building spearmen in Lisboa for numbers. Avoid deep moves without scouting enemy forces.\",\n  \"statement\": \"I sent spearmen to take Coimbra, knights to seize Faro, and marched archers and a spear from Lisboa to strengthen Santarem. I also trained three new spearmen in Lisboa. Our forces advance to expand the kingdom.\"\n}"
+raciocinio: We need to produce JSON with build, movements, plan, statement.
+
+We have 3 villages: Lisboa (id 0), Santarem (1), Evora (2). We have resources: Lisboa wood 45, iron 40; Santarem wood 0, iron 0; Evora wood 0, iron 0.
+
+We can build only from each village's own resources. Build costs: spearman 15 wood, 0 iron; archer 20 wood +10 iron; knight 30 wood +30 iron.
+
+We have troops at home: Lisboa 5 spear,4 archer,3 knight; Santarem 4 spear; Evora 3 knight.
+
+We can send troops now: available to send now listed: Lisboa: 1 spear,4 archer,0 knight; Santarem: 4 spear,0 archer,0 knight; Evora: 0 spear,0 archer,3 knight.
+
+We need to decide actions. Goal: hold at least 18 of 24 villages for 2 consecutive turns. Currently we hold 3 (Lisboa, Santarem, Evora). We need to capture more. We can attack neutral villages: Coimbra (3), Badajoz (4), Faro (5). They are adjacent to our villages.
+
+We have to consider simultaneous orders: enemy unknown but we see none marching. We can attack neutrals.
+
+We need to consider building to increase forces.
+
+We have limited resources: Lisboa wood 45, iron 40. Santarem and Evora have zero resources currently (they produce each turn but we can't spend now? Actually they have wood 0, iron 0 now, but they will produce next turn after we issue orders? The resources belong to each village; we can only order build the village can pay for NOW. So Santarem and Evora cannot build now because they have zero wood/iron. They will get resources after this turn's production? The turn order: we give orders, then simultaneous resolution, then resources produced? Usually production occurs at start of turn? The report shows wood (+30/turn) etc. Likely resources are current stock before production this turn. So we cannot build in Santarem/Evora this turn.
+
+Lisboa can build: we have 45 wood, 40 iron.
+
+We could build spearmen (cost 15 wood) up to 3 (45/15=3). Or archers cost 20 wood+10 iron: we could build up to min(45/20=2, 40/10=4) => 2 archers (cost 40 wood,20 iron). Knights cost 30 wood+30 iron: we could build 1 knight (30 wood,30 iron) leaving 15 wood,10 iron.
+
+We might want to build spearmen for cheap numbers to send to capture neutrals.
+
+We have available to send now: Lisboa: 1 spear,4 archer; Santarem: 4 spear; Evora: 3 knight.
+
+We could send forces to capture Coimbra (neutral, garrison 1 knight). Coimbra is reachable from Santarem in 1 turn (any speed). So if we send from Santarem now, they will arrive next turn? Actually movement takes turns; the report shows march from [1] Santarem: 1 slow / 1 medium / 1 fast turns. So if we send now, they will arrive after 1 turn (i.e., at start of next turn?). The battle occurs when they arrive at the village (first non-owned village on path). Since Coimbra is neutral, they'd fight there upon arrival. So we need to order movement now; they will travel and fight next turn? Actually orders are simultaneous; the enemy writes orders at same time over same snapshot. So if we order movement now, the troops will start moving this turn and will arrive after the travel time. During that turn, enemy may also move. Since Coimbra is neutral, no enemy army there (garrison 1 knight). So we will attack next turn.
+
+But we could also attack from Lisboa? Lisboa to Coimbra path: Lisboa -> Santarem -> Coimbra (2 steps). That would be 2 turns.
+
+Thus best is to send from Santarem.
+
+Similarly Badajoz (neutral, garrison 2 archers) reachable from Santarem in 1 turn as well (Santarem -> Badajoz). Faro reachable from Evora in 1 turn.
+
+We could send Santarem's 4 spear to Badajoz, and Evora's 3 knight to Faro, and Lisboa's some troops to Coimbra? But Lisboa cannot reach Coimbra in 1 turn; need 2 turns via Santarem. However we could send from Lisboa to Santarem (reinforce) then next turn from Santarem to Coimbra. But we might want to capture all three neutrals this turn? Not possible due to travel time.
+
+But we could also send from Santarem to Coimbra (1 turn) and from Evora to Faro (1 turn). Badajoz maybe we could send from Lisboa? Lisboa to Badajoz: Lisboa -> Santarem -> Badajoz (2 turns). Or we could send from Santarem to Badajoz (1 turn). Santarem currently has 4 spear available; we could split: send some to Coimbra, some to Badajoz. But Santarem's available to send now is 4 spear,0 archer,0 knight. So we could send e.g., 2 spear to Coimbra, 2 spear to Badajoz.
+
+Evora has 3 knight available; could send all to Faro.
+
+Lisboa could send some troops to Santarem to reinforce for next turn, or hold.
+
+We also need to consider building: we could build spearmen in Lisboa to increase forces for future.
+
+Let's compute needed to capture neutrals.
+
+Combat rules: Attacker uses attack values; defender uses defense values (including location bonus already in effective defense). For neutral villages, effective defense given: Coimbra 3, Badajoz 5, Faro 5.
+
+We need to compute effective force of our attacking troops: sum of attack * quantity, then apply counter multiplier if our most numerous type counters defender's most numerous type.
+
+Defender's garrison composition: Coimbra: 1 knight. So defender's most numerous type = knight (count 1). Our attacking force: we need to decide type composition.
+
+Counter triangle: spearman counters knight; archer counters spearman; knight counters archer. So if we send spearmen, we counter knight (defender's most numerous type is knight) => we get 1.5 multiplier on our force.
+
+If we send archers, they do not counter knight (archer counters spearman). So no multiplier.
+
+If we send knights, they are countered by? Knight counters archer, not knight. So no multiplier.
+
+Thus best to send spearmen against Coimbra.
+
+Effective attack of spearman: attack 1 each. With multiplier 1.5 => effective attack per spearman = 1.5.
+
+Defender's effective defense: given as 3 (includes location bonus). Defender's force = defense * quantity? Actually defender counts defense of theirs. So total defense = defense per troop * number? The effective defense value likely already includes the troop's defense? Wait: effective defense (location bonus included): 3 for Coimbra. The garrison is 1 knight. Knight defense = 2. Location bonus for village: defense counts x1.25 in a village. So 2 *1.25 = 2.5. But effective defense is 3, slightly higher maybe due to rounding? Not important.
+
+We just compare effective force: attacker effective force vs defender effective defense (which is already total defense?). The description: "The effective defense values in the report ALREADY include the location bonus. Use them directly; do not apply the bonus again." So effective defense is the total defense of the garrison (including location bonus). So we just compare our effective attack total to that number.
+
+Thus for Coimbra: defender effective defense = 3.
+
+If we send X spearmen, our effective attack = X * 1 * 1.5 = 1.5X.
+
+We need 1.5X > 3 to win (tie favors defender). So X > 2. So need at least 3 spearmen to guarantee victory (1.5*3=4.5 >3). With 2 spearmen: 3.0 equals defender defense => tie -> defender wins (we lose). So need at least 3 spearmen.
+
+We have only 1 spear available in Lisboa, and Santarem has 4 spear. So we can send 3 spear from Santarem to Coimbra.
+
+Now Badajoz: garrison 2 archers. Effective defense =5. Archer defense =2 each, location bonus x1.25 => 2*1.25=2.5 each, total 5. So matches.
+
+Our attacker: we need to counter archer? Knight counters archer. So sending knights gives 1.5 multiplier. Spearman does not counter archer (spearman counters knight). Archer does not counter archer (archer counters spearman). So best to send knights.
+
+Knight attack =4 each. With multiplier 1.5 => effective attack per knight =6.
+
+We need total effective attack >5. So 1 knight gives 6 >5 => victory. Even 0? No.
+
+We have Evora: 3 knights available. So we can send 1 knight to Badajoz (or more). But Badajoz is reachable from Santarem in 1 turn, not from Evora. Wait Badajoz is adjacent to Santarem (id 4). So we need to send from Santarem. Santarem has only spearmen available (4 spear). No knights. So we cannot send knights from Santarem unless we move knights there first (from Lisboa or Evora). Lisboa has 3 knights at home, but available to send now: 0 knight (they said AVAILABLE TO SEND NOW: 0 knight). Actually Lisboa has 3 knights at home, but available to send now is 0? Wait the line: "AVAILABLE TO SEND NOW: 1 spearman, 4 archer, 0 knight". That suggests they consider only troops that are not needed for defense? Maybe they consider that you cannot send all troops because you need to leave some to defend? The rule: "Troops sent from DIFFERENT villages never add up, even when they arrive at the same target on the same turn: each send fights alone, one at a time." There's no restriction on sending all troops; but the "AVAILABLE TO SEND NOW" maybe indicates troops that are not needed to keep the village above 0? Actually they might have subtracted the troops needed to defend the village (maybe you need to keep at least 1 troop to hold? Not sure). But they gave available numbers: Lisboa: 1 spear,4 archer,0 knight. So they consider you cannot send any knights from Lisboa now (maybe because you need to keep knights to defend? But you have 3 knights at home; maybe you need to keep them to defend against possible enemy? But we have no enemy near. However maybe they consider that you cannot send more than half? Not clear.
+
+Nevertheless, we must obey the available to send now numbers. So we can only send those amounts.
+
+Thus from Lisboa we can send 1 spear, 4 archer, 0 knight.
+
+From Santarem: 4 spear,0 archer,0 knight.
+
+From Evora: 0 spear,0 archer,3 knight.
+
+Thus we cannot send knights from Santarem or Lisboa now. So to attack Badajoz (which needs knights), we cannot send knights directly. Could we send archers? Archers do not counter archer, so no multiplier. Attack per archer =2. Need total >5. So need at least 3 archers (3*2=6 >5). We have 4 archers available from Lisboa. So we could send 3 archers from Lisboa to Badajoz (2 turns travel? Lisboa -> Santarem -> Badajoz = 2 turns). But we could also send from Santarem? Santarem has 0 archers available. So we need to send from Lisboa.
+
+Alternatively, we could send spearmen to Badajoz: spearman attack 1, no counter vs archer. Need >5 => need at least 6 spearmen (6*1=6). We have 4 spear from Santarem +1 from Lisboa =5 total spear available now. Not enough.
+
+Thus best is to send archers from Lisboa to Badajoz (2 turns). But we might also consider sending knights from Evora to Badajoz via route: Evora -> Faro -> Badajoz? Let's check network: Evora (2) connects to Faro (5) and Lisboa (0). Faro connects to Badajoz (4). So Evora -> Faro -> Badajoz is 2 turns as well (Evora to Faro 1 turn, Faro to Badajoz 1 turn). Evora has 3 knights available; we could send knights from Evora to Faro (1 turn) then next turn from Faro to Badajoz (another turn). But we need to order movement now; the troops will start moving and will arrive after travel time. If we send from Evora to Faro (1 turn), they will arrive at Faro next turn and fight there (if Faro is neutral). But we want to eventually go to Badajoz; we cannot order multi-step movement in one order; they'd stop at first non-owned village (Faro) and fight there. So we cannot bypass Faro.
+
+Thus to attack Badajoz we need to go via Santarem (since it's adjacent). So we need to get knights or archers to Santarem first, then next turn to Badajoz.
+
+We could send knights from Lisboa to Santarem (1 turn) then next turn from Santarem to Badajoz (another turn). Lisboa has 0 knights available to send now per the report, but maybe we can send knights if we want? The available to send now says 0 knight, meaning we cannot send any knights now (maybe because we need to keep them for defense). But we could send spears or archers.
+
+Alternatively, we could send archers from Lisboa to Santarem (1 turn) then next turn from Santarem to Badajoz (another turn). Lisboa has 4 archers available.
+
+Thus plan: Use Lisboa's archers to move to Santarem (reinforce) then next turn to Badajoz. Meanwhile, use Santarem's spears to attack Coimbra (3 spears) and maybe hold 1 spear for defense. Use Evora's knights to attack Faro (3 knights) to capture Faro.
+
+Let's compute outcomes.
+
+First, Coimbra: send 3 spears from Santarem. Effective attack = 3 *1 *1.5 =4.5 > defense 3 => victory. Losses: winner takes losses (attrition against loser's effective force). Loser's effective force = defender's effective defense =3? Actually loser's effective force is defender's effective force? The winner also takes losses (attrition against the loser's effective force). So our losses = defender's effective force? Probably yes: losses = defender's effective force (maybe scaled?). In example: they attacked Santarem and lost 1 troop. Let's verify: Santarem had garrison? Initially Santarem was ours? Actually they attacked Santarem (they owned it?) Wait they attacked [1] Santarem: VICTORY, conquered (your losses: 1 troop). At turn 1 they had Lisboa only? They attacked Santarem (neutral?) Actually at turn 1 they had only Lisboa, they attacked Santarem (neutral) and won with loss 1 troop. Santarem garrison? Not given earlier. But we can approximate that losses roughly equal defender's effective force divided by something? Not needed.
+
+We'll just accept some losses.
+
+Now Faro: Evora sends 3 knights. Faro garrison: 2 spearmen. Effective defense =5. Defender's most numerous type = spearman (count 2). Knight counters archer, not spearman. So no counter multiplier. Knight attack =4 each. Effective attack = 3*4 =12 >5 => victory. Losses: defender's effective force =5? So we lose some troops.
+
+Now Lisboa: we could send 4 archers to Santarem (reinforce). They will arrive next turn (1 turn). They will join Santarem's garrison as reinforcements.
+
+We also have 1 spear available in Lisboa; we could send that spear to Santarem as well? Actually Lisboa available: 1 spear,4 archer,0 knight. So we could send both spear and archers to Santarem.
+
+But we need to consider that sending troops reduces home garrison; we must ensure we don't drop below 0? The available numbers presumably are the max we can send while leaving enough to defend? Not sure. We'll follow available.
+
+Thus we will send from Lisboa: 1 spear, 4 archer to Santarem (toId 1). From Santarem: 3 spear to Coimbra (toId 3). From Evora: 3 knight to Faro (toId 5).
+
+We also might want to build spearmen in Lisboa to increase future forces. Lisboa has wood 45, iron 40. We could build e.g., 3 spearmen (cost 45 wood). That would use all wood, leaving iron 40 unchanged. Or we could build 2 archers (cost 40 wood,20 iron) leaving 5 wood,20 iron. Or 1 knight (30 wood,30 iron) leaving 15 wood,10 iron. Building spearmen seems good for numbers.
+
+We need to consider cap per village: when number of troops at home reaches 300, stops building. Currently Lisboa home troops: 5 spear,4 archer,3 knight =12. So far from cap.
+
+Thus we can build.
+
+Let's decide to build 3 spearmen in Lisboa (cost 45 wood). That will increase home troops by 3 spear.
+
+Now we need to compute if we can afford: wood 45 - 45 =0, iron unchanged 40.
+
+Now we need to output JSON.
+
+Movements: list of objects.
+
+From Lisboa to Santarem: troops: spearman 1, archer 4, knight 0.
+
+From Santarem to Coimbra: spearman 3, archer 0, knight 0.
+
+From Evora to Faro: spearman 0, archer 0, knight 3.
+
+Check that we are not sending more than available: Lisboa available spear 1, archer 4 -> ok. Santarem available spear 4 -> we send 3 -> ok. Evora available knight 3 -> send 3 -> ok.
+
+Now build: Lisboa build spearman quantity 3.
+
+Now plan: note to next turn. We'll write something like: "Next turn, expect to have captured Coimbra and Faro, and reinforced Santarem with archers. Prepare to push from Santarem to Badajoz using archers from Lisboa arriving. Continue building spearmen in Lisboa for numbers. Avoid sending troops into unknown enemy territory without scouting."
+
+Statement: 2-4 lines for audience describing what we did this turn. Something like: "I ordered my spearmen to take Coimbra, my knights to seize Faro, and sent archers and a spear from Lisboa to reinforce Santarem. I also trained three new spearmen in Lisboa to strengthen our forces. Our troops march now to expand the kingdom."
+
+Now produce JSON.
+
+Check fields: build list, movements list, plan string, statement string.
+
+Make sure JSON is valid.
+
+Let's craft.
+
+
+ordem.construir: [{"aldeiaId":0,"tipo":"lanceiro"},{"aldeiaId":0,"tipo":"lanceiro"},{"aldeiaId":0,"tipo":"lanceiro"}]
+ordem.envios   : [{"origemId":0,"destinoId":1,"tropas":{"lanceiro":1,"arqueiro":4,"cavaleiro":0}},{"origemId":1,"destinoId":3,"tropas":{"lanceiro":3,"arqueiro":0,"cavaleiro":0}},{"origemId":2,"destinoId":5,"tropas":{"lanceiro":0,"arqueiro":0,"cavaleiro":3}}]
+ACEITO construir lanceiro em [0]
+ACEITO construir lanceiro em [0]
+ACEITO construir lanceiro em [0]
+ACEITO envio [0]->[1]: 1S+4A
+ACEITO envio [1]->[3]: 3S (alvo neutra cavaleiro)
+ACEITO envio [2]->[5]: 3K (alvo neutra lanceiro)
+plano (volta no proximo prompt): Next turn expect Coimbra and Faro captured, Santarem reinforced with Lisboa archers. Use arriving archers to push from Santarem to Badajoz. Keep building spearmen in Lisboa for numbers. Avoid deep moves without scouting enemy forces.
+depoimento (so tela/narracao): I sent spearmen to take Coimbra, knights to seize Faro, and marched archers and a spear from Lisboa to strengthen Santarem. I also trained three new spearmen in Lisboa. Our forces advance to expand the kingdom.
+########## TURNO 2 — Rei B (openrouter:nvidia/nemotron-3-super-120b-a12b:free) ##########
+resposta crua: ""
+raciocinio: (nao capturado)
+ordem.construir: []
+ordem.envios   : []
+ACEITO: (nada — passou o turno)
+COMBATE [21] Tarragona: atacante B Fatk=4 (ef 6) Fdef=2 (ef 3) vant=1 -> vence atacante (CONQUISTA) | baixas~1
+COMBATE [23] Girona: atacante B Fatk=4 (ef 6) Fdef=2 (ef 3) vant=1 -> vence atacante (CONQUISTA) | baixas~1
+COMBATE [1] Santarem: atacante A Fatk=5 (ef 8) Fdef=2 (ef 3) vant=1 -> vence atacante (CONQUISTA) | baixas~1
+COMBATE [2] Evora: atacante A Fatk=12 (ef 18) Fdef=2 (ef 3) vant=1 -> vence atacante (CONQUISTA) | baixas~1
+placar: A 3 ald/tropas 1 | B 3 ald/tropas 13 | neutras 18 | transito 3 (A 3 | B 0)
