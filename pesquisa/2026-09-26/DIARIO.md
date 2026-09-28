@@ -480,3 +480,22 @@ mantém a mesma campanha por vários turnos (conta-se no `.txt`: "campanha: mant
 | 29/09 00:05 | `lancar_ab2.sh`: P4 × candidato (verdades + campanha + frente), 8 partidas |
 | 30/09 00:05 | `lancar_ab_campanha2.sh`: P4 × P4+campanha2, 8 partidas |
 | 01/10 | modelos pagos: a sonda de logística e as melhores versões no Sonnet |
+
+## Resultado 12 — campanha2 + janela, 2 partidas exploratórias (28/09, tarde)
+
+A janela (ideia do Lucas, "jogar dois turnos"): cada prompt traz a resposta inteira do Rei
+no turno anterior (sem o statement), além da campanha guardada e da nota. Dots × dots,
+seed 3, assentos trocados, teto 25 (cabia nas 147 requisições que sobravam).
+
+| partida | resultado | ataques/turno novo / P4 | tropa do interior que sai/turno novo / P4 | campanha nova / mantida |
+|---|---|---|---|---|
+| novo = B | **P4 vence 19×5** (T21) | 0,7 / 1,3 | 23% / 20% | 11 / 10 |
+| novo = A | P4 à frente 16×8 (limite T25) | 1,3 / 1,6 | **39% / 18%** | 18 / 7 |
+
+- **O P4 ganhou as duas.** O lado novo tirou MAIS tropa do interior (39% contra 18% numa)
+  mas **atacou menos nas duas**: o oposto da campanha num campo só (que atacava mais).
+- Hipótese: ver a própria resposta anterior faz o Rei **continuar o que estava a fazer**
+  (reforçar, mover, preparar) e reagir menos ao mapa novo. Numa das partidas manteve a
+  campanha metade dos turnos; na outra reescreveu-a quase sempre, como relato do turno.
+- 2 partidas na mesma seed: **indício, não prova**. O lote de 30/09 separa as duas
+  coisas: a campanha em dois campos SOZINHA, sem a janela.
