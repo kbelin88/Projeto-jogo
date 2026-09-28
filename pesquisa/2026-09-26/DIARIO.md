@@ -441,3 +441,19 @@ pede para pensar a guerra dos próximos turnos.
 **Candidato para 29/09** (`lancar_ab2.sh`): as seis verdades + `campanha` + `frente`. Saem
 `avaliacao` e `semteto` (sinais fracos, p≈0,10 e 0,07 numa sonda só). Entram os dois que
 mexeram: a campanha nas partidas, o mapa da frente na logística do dots.
+
+## Resultado 9b — a réplica da campanha no dots NÃO confirma o 4-0 (28/09, ~05:00)
+
+| partida | resultado | campanha | ataques/turno camp./P4 |
+|---|---|---|---|
+| dots s7 (camp.=B) | limite 12×12 | empate | 1,7 / 1,7 |
+| dots s7 (camp.=A) | limite 11×13 | atrás | 1,6 / 1,8 |
+| dots s9 (camp.=B) | A vence 18×6 | **perde** | 1,5 / 1,3 |
+| dots s9 (camp.=A) | A vence 18×6 | **vence** | 1,2 / 0,9 |
+
+- Na seed 9 o assento A ganhou as duas, com e sem campanha: o mapa pesou mais do que o prompt.
+- **Somado: dots 5 à frente, 2 atrás, 1 empate; as 12 partidas: 7 / 4 / 1 (sinais p≈0,55).**
+  Mais ataques por turno com a campanha em 8 de 12, igual em 2, menos em 2.
+- **Leitura honesta**: o 4-0 inicial era em boa parte sorte de amostra pequena. A campanha
+  continua a inclinar para o lado certo (placar e agência), mas o efeito é pequeno e não
+  está provado. Fica no candidato de 29/09 para medir outra vez junto com o resto.

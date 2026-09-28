@@ -41,9 +41,9 @@
    Super, 8%→18% com 10 de 12 casos acima). Sugestivo, não provado. É o candidato nº 1
    para as próximas partidas (§7).
 
-3c. **A maior diferença de placar veio de pedir ao Rei a CAMPANHA** (o `plan` passa a ser
-   "a guerra dos próximos turnos", sem dizer qual): o lado com ela ficou à frente em 6 de
-   8 partidas A/B, e venceu as 4 do dots. E um **mapa da frente** em texto (o que o prompt
+3c. **Pedir ao Rei a CAMPANHA** (o `plan` passa a ser "a guerra dos próximos turnos", sem
+   dizer qual) deu 6 de 8 partidas A/B e as 4 do dots, mas a réplica não confirmou: em 12
+   partidas, 7 à frente, 4 atrás, 1 empate (p≈0,55). Inclina para mais agência; não provado. E um **mapa da frente** em texto (o que o prompt
    já diz, arrumado por frente) é a primeira informação que mexe na logística do dots
    (p=0,01 com a campanha). Ver §7b.
 
@@ -306,11 +306,14 @@ na partida.** Dois braços, nenhum diz o que fazer:
 | dots (4) | **4, todas vitórias** (22×2, 18×6, 18×6, 18×6) | 0 |
 | Super (4, todas no teto de 30) | 2 | 2 |
 
-**6 de 8** (p≈0,29; dots 4 de 4, p=0,125). Não é pela logística: o lado com a
+**6 de 8** (p≈0,29; dots 4 de 4, p=0,125). **Mas a réplica no dots (seeds 7 e 9) não
+confirmou**: 1 à frente, 2 atrás, 1 empate; na seed 9 o assento A ganhou as duas partidas,
+com e sem campanha. **Somado, 12 partidas: campanha à frente em 7, atrás em 4, empate em 1
+(p≈0,55).** O 4-0 inicial era em boa parte sorte de amostra pequena. Não é pela logística: o lado com a
 campanha ataca mais por turno em 6 de 8 e abre mais frentes. Os planos falam em
 "two fronts", "strike forces", "major offensive next turn"; os do P4 em "next turn, we
-will assess the battle and decide". **A campanha dá agência**, e é a maior diferença de
-placar de tudo o que se testou. Réplica no dots (seeds 7 e 9) a correr.
+will assess the battle and decide". A campanha inclina para mais agência (mais ataques por turno em 8 de 12 partidas), mas o
+efeito no placar é pequeno e não está provado.
 
 **O mapa da frente na sonda** (12 turnos de retaguarda parada): no dots, a retaguarda
 levada à fronteira sobe de 22% para 34% (8 casos acima, 3 abaixo); com a campanha junta,
