@@ -459,9 +459,13 @@ def construir(colecao):
     # UMA face por lado: as folhas finas (lona, vela, costado) ja tem as duas
     # modeladas. Com o material de dois lados (o das aldeias) as duas faces
     # coincidentes disputavam o pixel -- no Blender via-se um xadrez na lona.
+    # (so a lona e a vela: o casco do `porto.barco` tem as duas voltas nos
+    # MESMOS vertices, o Blender apaga a face repetida, e com uma face so o
+    # fundo por dentro sumia visto de cima -- via-se o mar no barco, marca do
+    # Lucas 28/09. O resto fica de duas faces, como nas aldeias.)
     for o in feitos:
         for m in o.data.materials:
-            m.use_backface_culling = True
+            m.use_backface_culling = m.name in ("aldeia2_lona", "aldeia2_vela_latina")
     ob = pano()                      # (este e de duas faces: fica de fora)
     colecao.objects.link(ob)
     feitos.append(ob)

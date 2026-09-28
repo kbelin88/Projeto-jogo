@@ -2340,13 +2340,16 @@ diffuseColor.a *= vAlfa;`);
           const x = rota[i0][0] + (rota[i1][0] - rota[i0][0]) * f;
           const y = rota[i0][1] + (rota[i1][1] - rota[i0][1]) * f;
           const rumo = Math.atan2(rota[i1][1] - rota[i0][1], rota[i1][0] - rota[i0][0]);
-          // o casco tem 1,3 m de pontal (x2,4 = 3,1 m): a linha de agua a ~30%
-          // dele, a meio do branco -- a -1,4 m a risca azul ficava debaixo de
-          // agua e o barco lia-se como uma tabua escura (visto 28/09)
-          _V.set(x, -0.9 + 0.2 * Math.sin(t * 1.3 + k), -y);
+          // O casco tem 1,3 m de pontal (x2,4 = 3,1 m) e o FUNDO POR DENTRO a
+          // 0,44 m da quilha (x2,4 = 1,06 m). O mar e um plano a 0 m: se o fundo
+          // interior desce abaixo dele, ve-se agua dentro do barco (visto pelo
+          // Lucas, 28/09 -- a -0,9 m com balanco de 0,2 o fundo mergulhava metade
+          // do tempo). A -0,55 m, balanco 0,12 e adernar ate 0,075 rad (1,7 m de
+          // meia-boca interior), o fundo fica sempre >= 0,26 m acima do mar.
+          _V.set(x, -0.55 + 0.12 * Math.sin(t * 1.3 + k), -y);
           _Q.setFromAxisAngle(_EY, rumo);
           // aderna para o lado da barriga da vela (-z local), a balancar
-          _Qr.setFromAxisAngle(_EX, -(0.07 + 0.03 * Math.sin(t * 0.9 + k * 2.0)));
+          _Qr.setFromAxisAngle(_EX, -(0.05 + 0.025 * Math.sin(t * 0.9 + k * 2.0)));
           _Q.multiply(_Qr);
           _M.compose(_V, _Q, _SB);
           for (const im of ims) im.setMatrixAt(k, _M);
