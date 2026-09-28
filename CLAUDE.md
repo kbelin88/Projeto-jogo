@@ -329,7 +329,11 @@ Ainda a 26/09, pelas marcas do Lucas:
   para a câmara no shader: com `logarithmicDepthBuffer` o `polygonOffset` é
   ignorado;
 - a **encosta de praia lê uma distância alisada** (`_dmL`): a crua conta células
-  e saía em escada;
+  e saía em escada. Desde 28/09 as duas distâncias à água do forno (`_dist`,
+  `_dm`) vêm do `distancia_costa.py`: euclidiana, ao contorno do alfa, a 1/4 da
+  célula. E a **fita de areia tem sombreado suave**: plana, cada triângulo
+  levava a sua normal e a praia saía em **dentes de serra**. Os **penedos**
+  (`povoar._penedo`) são blocos com duas fraturas e textura, e já não pirâmides;
 - há **três enseadas** (`ENSEADAS`: rocha apagada, encosta a 14°, chãos
   misturados pelo peso da estrada). A de Sevilha tem um **pontão**, e todas têm
   **barcos** à escala 3,0 (~22 m), pousados na areia seca mais perto do centro

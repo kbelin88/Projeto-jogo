@@ -169,25 +169,79 @@ def campos_e_cercas(centros, raio_de, altura, declive, livre, semente=7):
     return (va_c, fa_c, cor_c), (va_f, fa_f, cor_f), parcelas
 
 
+def _icosfera():
+    """icosaedro subdividido uma vez: 42 vertices, 80 faces, raio 1"""
+    t = (1.0 + 5 ** 0.5) / 2.0
+    v = [(-1, t, 0), (1, t, 0), (-1, -t, 0), (1, -t, 0), (0, -1, t), (0, 1, t), (0, -1, -t),
+         (0, 1, -t), (t, 0, -1), (t, 0, 1), (-t, 0, -1), (-t, 0, 1)]
+    v = [tuple(c / math.sqrt(sum(q * q for q in p)) for c in p) for p in v]
+    f = [(0, 11, 5), (0, 5, 1), (0, 1, 7), (0, 7, 10), (0, 10, 11), (1, 5, 9), (5, 11, 4),
+         (11, 10, 2), (10, 7, 6), (7, 1, 8), (3, 9, 4), (3, 4, 2), (3, 2, 6), (3, 6, 8),
+         (3, 8, 9), (4, 9, 5), (2, 4, 11), (6, 2, 10), (8, 6, 7), (9, 8, 1)]
+    meio = {}
+
+    def m(a, b):
+        k = (min(a, b), max(a, b))
+        if k not in meio:
+            p = [(v[a][q] + v[b][q]) / 2 for q in range(3)]
+            n = math.sqrt(sum(c * c for c in p))
+            v.append(tuple(c / n for c in p))
+            meio[k] = len(v) - 1
+        return meio[k]
+    f2 = []
+    for a, b, c in f:
+        ab, bc, ca = m(a, b), m(b, c), m(c, a)
+        f2 += [(a, ab, ca), (b, bc, ab), (c, ca, bc), (ab, bc, ca)]
+    return v, f2
+
+
+_ICO = None
+
+
 def _penedo(va, fa, cor, x, y, z, r, rnd):
-    """um blocao de oito lados, achatado e torto -- nunca uma bola"""
-    n = 8
+    """um penedo: um bloco arredondado e torto, achatado, com a base enterrada.
+
+    (28/09) Era uma bipiramide de oito lados (16 triangulos): no chao liam-se
+    como piramides cinzentas, "▲" soltos pelo mapa. Agora e uma icosfera
+    deformada por tres ondas de baixa frequencia (o bloco nunca e redondo),
+    achatada, rodada ao acaso, com o topo mais claro que os lados (a pedra que
+    apanha sol e liquen) e a base cortada ao nivel do chao.
+    """
+    global _ICO
+    if _ICO is None:
+        _ICO = _icosfera()
+    v0, f0 = _ICO
+    sx, sy, sz = 1.0, rnd.uniform(0.7, 0.95), rnd.uniform(0.75, 1.05)
+    # duas FRATURAS: planos que cortam o bloco -- faces lisas e arestas vivas,
+    # que e o que faz um penedo ler-se como pedra e nao como seixo (visto no
+    # Blender, 28/09: so com a onda sairam montinhos redondos)
+    cortes = []
+    for _ in range(2):
+        a_, e_ = rnd.uniform(0, 2 * math.pi), rnd.uniform(-0.2, 0.9)
+        cortes.append(((math.cos(a_) * math.cos(e_), math.sin(a_) * math.cos(e_), math.sin(e_)),
+                       rnd.uniform(0.55, 0.75)))
+    rot = rnd.uniform(0, 2 * math.pi)
+    ca, sa = math.cos(rot), math.sin(rot)
+    fa_ = [rnd.uniform(1.6, 2.6) for _ in range(3)]
+    fb_ = [rnd.uniform(0, 6.3) for _ in range(3)]
+    tom = 0.60 + rnd.uniform(-0.07, 0.07)
+    quente = rnd.uniform(0.96, 1.04)
     base = len(va)
-    tom = [0.62 + rnd.uniform(-0.07, 0.07)] * 3
-    va.append((x, y, z + r * rnd.uniform(0.75, 1.15)))       # o cume
-    cor.append([min(1.0, v * 1.15) for v in tom])
-    for i in range(n):
-        a = 2 * math.pi * i / n + rnd.uniform(-0.12, 0.12)
-        rr = r * rnd.uniform(0.72, 1.1)
-        va.append((x + math.cos(a) * rr, y + math.sin(a) * rr,
-                   z + r * rnd.uniform(0.12, 0.34)))
-        cor.append(tom)
-    va.append((x, y, z - r * 0.4))                            # o fundo
-    cor.append([v * 0.8 for v in tom])
-    for i in range(n):
-        j = (i + 1) % n
-        fa.append((base, base + 1 + i, base + 1 + j))
-        fa.append((base + 1 + j, base + 1 + i, base + 1 + n))
+    for (px_, py_, pz_) in v0:
+        k = (math.sin(px_ * fa_[0] + fb_[0]) + math.sin(py_ * fa_[1] + fb_[1])
+             + math.sin(pz_ * fa_[2] + fb_[2])) / 3.0
+        rr = 1.0 + 0.28 * k
+        qx, qy, qz = px_ * rr, py_ * rr, pz_ * rr
+        for (nx_, ny_, nz_), d_ in cortes:
+            e = qx * nx_ + qy * ny_ + qz * nz_ - d_
+            if e > 0:
+                qx, qy, qz = qx - e * nx_, qy - e * ny_, qz - e * nz_
+        lx, ly, lz = qx * r * sx, qy * r * sy, max(qz, -0.35) * r * sz
+        va.append((x + lx * ca - ly * sa, y + lx * sa + ly * ca, z + lz))
+        luz = 0.70 + 0.42 * max(0.0, pz_)
+        cor.append([min(1.0, tom * luz * quente), min(1.0, tom * luz), min(1.0, tom * luz / quente)])
+    for a, b, c in f0:
+        fa.append((base + a, base + b, base + c))
 
 
 def pedras(quantas, ponto_ao_acaso, altura, declive, livre, semente=13):

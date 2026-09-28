@@ -497,6 +497,24 @@ relevo = relevo / max(float(relevo[terra].max()), 1e-6) * ALTURA_MAX
 # 40 m de agua, e exatamente o mesmo campo de antes.
 COSTA = 8             # ate onde o mar manda no relevo, em celulas (~40 m)
 PRAIA = -3.5          # a praia MERGULHA: a linha de agua tem de ser molhada
+# ── A DISTANCIA LISA (28/09) ────────────────────────────────────────────────
+# As duas distancias abaixo contavam CELULAS inteiras de 4,9 m (4 e 8
+# vizinhos), e o areal saia em degraus desencontrados: a beira da fita de
+# areia, a areia molhada e a luz desenhavam DENTES DE SERRA de 5 m. O
+# `distancia_costa.py` (fora do Blender: precisa de scipy) mede a distancia
+# EUCLIDIANA ao contorno do alfa -- a beira a que a malha e encostada --, a
+# 1/4 da celula. +0,5: a contagem velha dava 1 a celula junto a agua, e o
+# contorno fica, em media, a meia celula dela -- a costa nao muda de sitio.
+_dc = subprocess.run(["python", os.path.join("ferramentas", "cena", "distancia_costa.py")],
+                     capture_output=True, text=True)
+_fl = os.path.join(os.getcwd(), "ferramentas", "cena", "_dm_liso.npy")
+if _dc.returncode == 0 and os.path.exists(_fl):
+    print((_dc.stdout or "").strip(), flush=True)
+    _liso = np.load(_fl).astype(np.float32) + 0.5
+else:
+    print("SONDA AVISO distancia_costa falhou (a costa volta aos degraus): "
+          + (_dc.stderr or "")[-400:], flush=True)
+    _liso = None
 _dist = np.full(terra.shape, float(COSTA), dtype=np.float32)
 _frente = ~terra
 for _k in range(1, COSTA):
@@ -504,6 +522,8 @@ for _k in range(1, COSTA):
                        | np.roll(_frente, 1, 1) | np.roll(_frente, -1, 1))
     _dist = np.minimum(_dist, np.where(_frente, float(_k), float(COSTA)))
 _dist[~terra] = 0.0
+if _liso is not None:
+    _dist = np.where(terra, np.minimum(_liso, float(COSTA)), 0.0).astype(np.float32)
 _t = np.clip(_dist / COSTA, 0.0, 1.0)
 _t = _t * _t * (3 - 2 * _t)
 _gx = np.arange(tw, dtype=np.float32)[None, :] * px - LX / 2
@@ -544,6 +564,8 @@ for _k in range(1, ALCANCE + 1):
                  | np.roll(_f, (-1, 1), (0, 1)) | np.roll(_f, (-1, -1), (0, 1)))
     _dm[_g & ~_f] = _k
     _f = _g
+if _liso is not None:
+    _dm = np.minimum(_liso, float(ALCANCE)).astype(np.float32)
 _dm = np.where(terra, _dm, 0.0) * px                 # em metros
 # ── A ENCOSTA SEM DEGRAUS (26/09) ───────────────────────────────────────────
 # `_dm` conta CELULAS inteiras (4,9 m), com uma metrica octogonal: a encosta
@@ -2248,7 +2270,8 @@ def _fita(valor, levanta, cor_de, forcar=None):
     return va, fa, cores
 
 
-def _pousar(nome, va, fa, cores, tinta, rugosidade, uv_altura=False):
+def _pousar(nome, va, fa, cores, tinta, rugosidade, uv_altura=False, uv_caixa=False,
+            liso=False):
     """poe a fita na cena, com UV em metros e a cor de vertice ligada.
 
     `uv_altura` (COSTA2, o labio de rocha): o `v` e a ALTURA e o `u` corre ao
@@ -2262,6 +2285,12 @@ def _pousar(nome, va, fa, cores, tinta, rugosidade, uv_altura=False):
     ob.data.materials.clear()
     ob.data.materials.append(P.material_uv(tinta, rugosidade=rugosidade,
                                            cor_vertice=True))
+    # `liso` (28/09, a areia): sombreado suave. Plana, cada triangulo levava a
+    # sua normal e a encosta da praia, com o sol a 20 graus, saia num xadrez
+    # de faces claras e escuras pela diagonal das celulas -- os DENTES DE SERRA
+    # na areia (20 858 vertices para 7 689 triangulos: o glTF partia-os todos)
+    if liso:
+        ob.data.polygons.foreach_set("use_smooth", [True] * len(ob.data.polygons))
     uv = ob.data.uv_layers.new(name="UVMap")
     cv = ob.data.color_attributes.new(name="Col", type="BYTE_COLOR", domain="CORNER")
     for pol in ob.data.polygons:
@@ -2270,7 +2299,17 @@ def _pousar(nome, va, fa, cores, tinta, rugosidade, uv_altura=False):
         ao_longo_x = abs(pol.normal.y) >= abs(pol.normal.x)
         for li in pol.loop_indices:
             vi = ob.data.loops[li].vertex_index
-            if uv_altura:
+            if uv_caixa:
+                # (28/09, os penedos) cada face pelo eixo a que mais olha: de
+                # cima os lados de um bloco saiam com a textura esticada
+                nx_, ny_, nz_ = abs(pol.normal.x), abs(pol.normal.y), abs(pol.normal.z)
+                if nz_ >= nx_ and nz_ >= ny_:
+                    uv.data[li].uv = (va[vi][0], va[vi][1])
+                elif nx_ >= ny_:
+                    uv.data[li].uv = (va[vi][1], va[vi][2])
+                else:
+                    uv.data[li].uv = (va[vi][0], va[vi][2])
+            elif uv_altura:
                 uv.data[li].uv = (va[vi][0] if ao_longo_x else va[vi][1], va[vi][2])
             else:
                 uv.data[li].uv = (va[vi][0], va[vi][1])   # metros, como o chao da aldeia
@@ -2304,7 +2343,7 @@ def _cor_areia(p):
 
 
 _va, _fa, _ca = _fita(_valor_areia, AREIA_LEVANTA, _cor_areia)
-_area_a = _pousar("areia", _va, _fa, _ca, "areia", 0.97)
+_area_a = _pousar("areia", _va, _fa, _ca, "areia", 0.97, liso=True)
 print("SONDA areia: %d triangulos, %d vertices, %.0f m2 (%.1f ha)"
       % (len(_fa), len(_va), _area_a, _area_a / 1e4))
 
@@ -2671,7 +2710,7 @@ def _ponto_ao_acaso(rnd):
 
 _pedras, _n_pedras = PV.pedras(_quantas_pedras, _ponto_ao_acaso, altura_em,
                                declive_em, livre_para_pedra)
-_pousar("pedras", _pedras[0], _pedras[1], _pedras[2], "pedra", 0.94)
+_pousar("pedras", _pedras[0], _pedras[1], _pedras[2], "pedra", 0.94, uv_caixa=True)
 
 # ── A AGUA DOS RIOS E AS PONTES (F4, 26/09) ─────────────────────────────────
 # A agua e uma fita ao nivel `zw`, um pouco mais larga que o leito (as margens
