@@ -372,3 +372,25 @@ caber em 1000 chamadas/dia:
 **Gabarito da campanha em partidas**: o lado com a campanha tem menos exército no
 interior (`logistica_replay.js`) e mais tropa do interior a sair por turno
 (`banda_replay.js`) na maioria das 8 partidas, sem cair o JSON válido.
+
+## Resultado 9 (parcial, 28/09 02:15) — a CAMPANHA em partidas inteiras
+
+`pesquisa/2026-09-28/ab_campanha/`: o mesmo modelo dos dois lados, P4 × P4+campanha.
+
+| partida | resultado | lado com a campanha |
+|---|---|---|
+| dots, seed 3, A=P4 B=camp. | **B vence 22×2** (T25) | **vence** |
+| dots, seed 5, A=P4 B=camp. | **B vence 18×6** (T14) | **vence** |
+| dots, seed 3, A=camp. B=P4 | **A vence 18×6** (T18) | **vence** |
+| dots, seed 5, A=camp. B=P4 | **A vence 18×6** (T15) | **vence** |
+| Super, seed 5, A=camp. B=P4 | limite T30, **18×6** | à frente |
+| Super, 3 restantes | a correr | — |
+
+**5 de 5 até agora** (com as verdades, na mesma montagem, tinha sido 4 à frente, 2 atrás,
+2 empates). Nos planos, o lado com a campanha fala em frentes, em "strike forces", em
+"major offensive next turn"; o P4 em "next turn, we will assess the battle and decide".
+
+**A métrica de interior não serve aqui**: o lado da campanha tem MAIS exército no interior
+em 4 das 5 (41/24, 24/19, 36/18, 67/45; menos em 32/45). Quem vence tem mais aldeias, e
+logo mais interior: a medida confunde-se com o placar. A campanha ganha por outro
+caminho, que falta medir (ataques que já perdiam, tamanho dos ataques, frentes abertas).
