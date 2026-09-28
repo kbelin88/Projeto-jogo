@@ -437,3 +437,7 @@ mudanças testadas é a de maior efeito no placar, e não diz ao Rei o que fazer
 pede para pensar a guerra dos próximos turnos.
 
 **Réplica lançada já** (sobravam 368 chamadas): dots, seeds 7 e 9, assentos trocados.
+
+**Candidato para 29/09** (`lancar_ab2.sh`): as seis verdades + `campanha` + `frente`. Saem
+`avaliacao` e `semteto` (sinais fracos, p≈0,10 e 0,07 numa sonda só). Entram os dois que
+mexeram: a campanha nas partidas, o mapa da frente na logística do dots.

@@ -3,7 +3,7 @@
 # com as VERDADES (informacao, nenhum conselho). Seeds 3 e 5, assentos trocados.
 cd /home/user/Projeto-jogo
 export NODE_USE_ENV_PROXY=1 OPENROUTER_API_KEY=injetada-pelo-proxy
-V=regras,combate,intencao,alcance,capital,vigia,avaliacao,semteto
+V=regras,combate,intencao,alcance,capital,vigia,campanha,frente
 D=pesquisa/2026-09-28/ab2; mkdir -p $D
 for m in super:nvidia/nemotron-3-super-120b-a12b:free dots:dots-studio/dots-3-note-preview:free; do
   n=${m%%:*}; id=openrouter:${m#*:}
