@@ -401,3 +401,19 @@ alvos distintos em 4 (1,8/1,5; 1,5/1,3; 1,4/1,1; 1,6/1,1; Super 1,3/1,0). A camp
 resolve a logística: dá AGÊNCIA — mais frentes abertas ao mesmo tempo, que é o que o
 `MODELOS_ARENA.md` já dizia separar os modelos. (O `falhas.js` soma por nome de modelo;
 com o mesmo modelo dos dois lados não separa, fica por fazer por lado.)
+
+## Resultado 10 — o mapa da frente e a campanha, na sonda (28/09, ~02:30)
+
+12 casos de retaguarda parada × 3 respostas × 4 braços, intercalados.
+
+| braço | Super ret→front | dots ret→front | dots: sinais (ret→front / retaguarda que sai) |
+|---|---|---|---|
+| P4 | 6% | 22% | — |
+| frente | 6% (6/6) | **34%** | 8/3 p=0,23 / 9/3 p=0,15 |
+| campanha | 7% (6/6) | 21% | 5/7 / 6/6 |
+| frente+campanha | 10% (5/6) | **30%** | **9/2 p=0,07 / 10/1 p=0,01** |
+
+- **O mapa da frente é o primeiro braço SÓ de informação que mexe na logística do dots.**
+  No Super não mexe nada (como nada mexeu).
+- A campanha sozinha não muda UMA decisão, como se esperava: o efeito dela é de vários
+  turnos, e esse viu-se nas partidas (Resultado 9).
