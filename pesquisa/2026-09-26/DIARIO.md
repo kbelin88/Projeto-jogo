@@ -417,3 +417,23 @@ com o mesmo modelo dos dois lados não separa, fica por fazer por lado.)
   No Super não mexe nada (como nada mexeu).
 - A campanha sozinha não muda UMA decisão, como se esperava: o efeito dela é de vários
   turnos, e esse viu-se nas partidas (Resultado 9).
+
+## Resultado 9 (fechado, 28/09 ~03:00) — a campanha em 8 partidas
+
+| partida | resultado | lado com a campanha | ataques/turno camp./P4 |
+|---|---|---|---|
+| dots s3 (camp.=B) | B vence 22×2 | **vence** | 1,9 / 1,6 |
+| dots s5 (camp.=B) | B vence 18×6 | **vence** | 1,8 / 1,6 |
+| dots s3 (camp.=A) | A vence 18×6 | **vence** | 1,6 / 1,1 |
+| dots s5 (camp.=A) | A vence 18×6 | **vence** | 1,6 / 1,5 |
+| Super s3 (camp.=B) | limite 9×15 | à frente | 2,2 / 2,3 |
+| Super s5 (camp.=B) | limite 15×9 | atrás | 1,2 / 1,1 |
+| Super s3 (camp.=A) | limite 8×16 | atrás | 1,6 / 1,6 |
+| Super s5 (camp.=A) | limite 18×6 | à frente | 1,8 / 1,0 |
+
+**Campanha à frente em 6 de 8** (sinais p≈0,29); **no dots 4 de 4, todas vitórias**
+(p=0,125); no Super 2–2. Ataca mais por turno em 6 de 8, igual em 1, menos em 1. Das
+mudanças testadas é a de maior efeito no placar, e não diz ao Rei o que fazer: só lhe
+pede para pensar a guerra dos próximos turnos.
+
+**Réplica lançada já** (sobravam 368 chamadas): dots, seeds 7 e 9, assentos trocados.
