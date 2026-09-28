@@ -457,3 +457,26 @@ mexeram: a campanha nas partidas, o mapa da frente na logística do dots.
 - **Leitura honesta**: o 4-0 inicial era em boa parte sorte de amostra pequena. A campanha
   continua a inclinar para o lado certo (placar e agência), mas o efeito é pequeno e não
   está provado. Fica no candidato de 29/09 para medir outra vez junto com o resto.
+
+## A campanha em dois campos (28/09, ideia aprovada pelo Lucas)
+
+O Lucas: *"faz sentido ter dois campos, para o modelo conseguir ter uma continuidade de
+estratégia dentro de uma partida"*. Item `campanha2` no protótipo:
+
+- `plan` continua a nota curta de turno a turno;
+- `campaign` (novo) é a guerra de longo prazo. O runner GUARDA-a (`estado.campanhas`) e
+  ela volta igual todo turno ("YOUR CAMPAIGN (written by you on turn N; kept until you
+  change it)") até o Rei a mudar; `""` mantém a anterior. O `.txt` regista cada campanha
+  nova e cada turno em que foi mantida.
+
+Na `campanha` (um campo só) a guerra era reescrita todo turno e dividia os 600
+caracteres com a nota. **Gabarito**: igual ao da campanha (Resultado 9), mais: o Rei
+mantém a mesma campanha por vários turnos (conta-se no `.txt`: "campanha: mantida").
+
+**Agenda até aos modelos pagos (a 01/10, o Lucas põe crédito):**
+
+| quando (UTC) | o quê |
+|---|---|
+| 29/09 00:05 | `lancar_ab2.sh`: P4 × candidato (verdades + campanha + frente), 8 partidas |
+| 30/09 00:05 | `lancar_ab_campanha2.sh`: P4 × P4+campanha2, 8 partidas |
+| 01/10 | modelos pagos: a sonda de logística e as melhores versões no Sonnet |

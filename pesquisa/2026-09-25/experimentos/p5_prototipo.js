@@ -153,8 +153,14 @@ function intencaoMarcha(m, visao) {
 //   campanha  o "plan" deixa de ser "nota ao proximo turno" e passa a ser a
 //             campanha dos proximos turnos. Pergunta de partida, nao de turno;
 //             nao diz qual campanha.
-const ITENS_P5 = ["regras", "combate", "intencao", "interior", "placebo", "avaliacao", "semtotal", "conselho", "alcance", "capital", "vigia", "semteto", "movprimeiro", "atalho", "frente", "campanha"];
-const FORA_DO_PADRAO = new Set(["placebo", "avaliacao", "semtotal", "conselho", "alcance", "capital", "vigia", "semteto", "movprimeiro", "atalho", "frente", "campanha"]);
+//   campanha2 (28/09, a ideia de dois campos, aprovada pelo Lucas): o "plan" continua
+//             a nota curta de turno a turno, e um campo NOVO "campaign" guarda a
+//             guerra de longo prazo. A campanha e GUARDADA pelo runner
+//             (estado.campanhas) e volta igual todo turno ate o Rei a mudar;
+//             vazia = mantem a anterior. Na `campanha` (um campo so) a guerra
+//             era reescrita todo turno e dividia os 600 caracteres com a nota.
+const ITENS_P5 = ["regras", "combate", "intencao", "interior", "placebo", "avaliacao", "semtotal", "conselho", "alcance", "capital", "vigia", "semteto", "movprimeiro", "atalho", "frente", "campanha", "campanha2"];
+const FORA_DO_PADRAO = new Set(["placebo", "avaliacao", "semtotal", "conselho", "alcance", "capital", "vigia", "semteto", "movprimeiro", "atalho", "frente", "campanha", "campanha2"]);
 
 // o mapa da frente: so reorganiza o que a visao ja da ao Rei (vizinhas visiveis,
 // tempos de marcha do proprio P4), por aldeia propria
@@ -287,6 +293,20 @@ function montarP5(E, estado, dono, itens) {
     // so existe quando o Rei deixou nota no turno anterior
     txt = txt.replace("=== YOUR NOTE FROM LAST TURN (written by you) ===", "=== YOUR CAMPAIGN (written by you last turn) ===");
   }
+  if (liga.has("campanha2")) {
+    if (liga.has("campanha")) throw new Error("campanha e campanha2 sao alternativas, nao se juntam");
+    txt = troca(txt, "Besides your orders, write two short texts.", "Besides your orders, write these texts.");
+    txt = troca(txt, '- "plan": your NOTE TO YOUR NEXT TURN',
+      '- "campaign": your CAMPAIGN - the war you are running over the NEXT SEVERAL TURNS: which front you push, where your troops gather, what you take next and after that. Up to 600 characters. It is KEPT and shown to you every turn until you change it: write it again only when you want to change it, or send "" to keep the one you have.\n- "plan": your NOTE TO YOUR NEXT TURN');
+    txt = troca(txt, '  "plan": "<your note to your next turn>",',
+      '  "campaign": "<your campaign over the next turns, or \"\" to keep the one you have>",\n  "plan": "<your note to your next turn>",');
+    const c = estado.campanhas && estado.campanhas[dono];
+    if (c) {
+      const bloco = `=== YOUR CAMPAIGN (written by you on turn ${c.turno}; kept until you change it) ===\n${c.texto}\n`;
+      const i = txt.indexOf("=== YOUR NOTE FROM LAST TURN");
+      txt = i >= 0 ? txt.slice(0, i) + bloco + "\n" + txt.slice(i) : txt + "\n\n" + bloco;
+    }
+  }
   if (liga.has("placebo")) txt = txt.replace(/^TOTAL: .*$/m, (l) => `${l}\n  (the list of your villages follows below)`);
   return { p4, p5: txt };
 }
@@ -309,7 +329,20 @@ function expandirAtalho(cru, estado) {
   return mexeu ? JSON.stringify(d) : cru;
 }
 
-module.exports = { carregarMotorP5, montarP5, regrasP5, ITENS_P5, expandirAtalho };
+// campanha2: guarda a campanha que o Rei escreveu (vazia = mantem a anterior).
+// Devolve o texto novo, ou null se nada mudou.
+function guardarCampanha(estado, dono, cru) {
+  const m = String(cru || "").match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  let d; try { d = JSON.parse(m[0]); } catch (e) { return null; }
+  const t = typeof d.campaign === "string" ? d.campaign.trim() : "";
+  if (!t) return null;
+  if (!estado.campanhas) estado.campanhas = { A: null, B: null };
+  estado.campanhas[dono] = { texto: t.slice(0, 600), turno: estado.turno };
+  return estado.campanhas[dono].texto;
+}
+
+module.exports = { carregarMotorP5, montarP5, regrasP5, ITENS_P5, expandirAtalho, guardarCampanha };
 
 // ---- 3. CLI: reexecuta a partida e fotografa o turno pedido ------------------
 if (require.main === module) {

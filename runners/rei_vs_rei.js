@@ -430,6 +430,11 @@ async function main() {
       // ja fazia; o headless nao — entao a bateria jogava sem a memoria que o
       // proprio rei escreveu, e nao era comparavel com o que se ve na tela.
       Engine.guardarPlano(estado, dono, registro.plano);
+      // campanha2 (28/09, experimental): a campanha fica guardada e volta todo turno
+      if (itensLado[dono] && itensLado[dono].includes("campanha2")) {
+        const c = P5.guardarCampanha(estado, dono, registro.cru);
+        out(c ? "campanha (NOVA, guardada, volta todo turno): " + c : "campanha: mantida");
+      }
       coletarDiagRunner(dono, registro, cliente[dono]); // replay: o pensamento deste lado
       somarCusto(etiquetaDe[dono], cliente[dono] && cliente[dono].ultimosTokens);
       gravar(); // checkpoint por LADO
