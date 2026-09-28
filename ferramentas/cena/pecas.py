@@ -1151,49 +1151,81 @@ def proto_arvore_folha(alt=12.0, folha="folha2"):
     return _guardar(_juntar(p))
 
 
-def proto_pinheiro_manso(alt=14.0, folha="folha_pinho", semente=0):
+def proto_pinheiro_manso(alt=14.0, folha="folha_pinho", semente=0, lod=False):
     """o pinheiro-manso do Algarve: tronco alto e nu, a copa um GUARDA-SOL.
 
     A silhueta e o que o identifica a distancia de mapa: nada de cone nem de
     bola -- uma tampa larga e achatada la em cima, e o tronco a ver-se por
-    baixo dela. Varios lobos achatados, desencontrados, para a borda nao ser
-    um disco.
+    baixo dela.
+
+    (28/09) Era a receita de 25/09, anterior a F2: um cilindro direito e seis
+    esferas lisas achatadas. Agora o tronco inclina-se e abre em tres ou quatro
+    pernadas, cada uma com o seu molho de tufos -- o guarda-sol recortado que
+    se ve nas fotografias do Algarve -- e ha versao de longe.
     """
     import random as _r
     rnd = _r.Random(semente)
-    partes = [_cil(0, 0, 0, alt * 0.034, alt * 0.74, "madeira", 6)]
-    R = alt * 0.40
-    zc = alt * 0.74
-    lobos = [(0.0, 0.0, 1.0)] + [
-        (math.cos(a) * R * 0.46, math.sin(a) * R * 0.46, 0.62 + 0.18 * rnd.random())
-        for a in (0.3, 1.6, 2.9, 4.1, 5.3)]
-    for dx, dy, k in lobos:
-        bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2, radius=R * 0.58 * k,
-                                              location=(dx, dy, zc + alt * 0.06 * k))
-        o = bpy.context.object
-        o.scale = (1.0, 1.0, 0.36)
-        _aplicar_escala()
-        bpy.ops.object.shade_smooth()
-        partes.append(_novo(o, folha, 0))
+    global LOD
+    LOD = bool(lod)
+    # o fuste inclinado (o vento do mar), em dois troços
+    inc = rnd.uniform(0.04, 0.09) * alt
+    a0 = rnd.uniform(0, 2 * math.pi)
+    xm, ym, zm = math.cos(a0) * inc * 0.4, math.sin(a0) * inc * 0.4, alt * 0.38
+    xt, yt, zt = math.cos(a0) * inc, math.sin(a0) * inc, alt * 0.66
+    partes = [_galho(0, 0, 0, xm, ym, zm, alt * 0.036),
+              _galho(xm, ym, zm, xt, yt, zt, alt * 0.031)]
+    n = 3 + (semente % 2)
+    for i in range(n):
+        a = i * (2 * math.pi / n) + rnd.uniform(-0.35, 0.35)
+        d = alt * rnd.uniform(0.17, 0.24)
+        px_, py_, pz_ = xt + math.cos(a) * d, yt + math.sin(a) * d, alt * rnd.uniform(0.76, 0.82)
+        partes.append(_galho(xt, yt, zt, px_, py_, pz_, alt * 0.017))
+        _copa(px_, py_, pz_ + alt * 0.04, alt * 0.19, alt * 0.06, 8, alt * 0.085, folha, rnd,
+              sz=0.55, cima=0.5, partes=partes)
+    # a tampa por cima, que junta os molhos num guarda-sol
+    _copa(xt, yt, alt * 0.86, alt * 0.30, alt * 0.06, 10, alt * 0.10, folha, rnd, sz=0.5,
+          cima=0.6, partes=partes)
+    LOD = False
     return _guardar(_juntar(partes))
 
 
-def proto_oliveira(alt=6.0, folha="folha_oliva", semente=0):
-    """a oliveira: tronco curto e grosso, copa redonda, baixa e irregular"""
+def proto_oliveira(alt=6.0, folha="folha_oliva", semente=0, lod=False):
+    """a oliveira: tronco curto, grosso e TORCIDO que abre em duas ou tres
+    pernadas inclinadas, e a copa em molhos separados, larga e baixa.
+
+    (28/09) Era a receita de antes da F2 -- quatro esferas lisas num cilindro
+    -- e ao lado dos sobreiros novos lia-se como um cogumelo enterrado (marcas
+    do Lucas junto a Toledo). Agora segue as outras: galhos e copa em tufos,
+    com versao de longe."""
     import random as _r
     rnd = _r.Random(semente)
-    partes = [_cil(0, 0, 0, alt * 0.075, alt * 0.42, "madeira", 6)]
-    R = alt * 0.42
-    for i in range(4):
-        a = i * 1.7 + rnd.random()
-        bpy.ops.mesh.primitive_ico_sphere_add(
-            subdivisions=2, radius=R * (0.62 + 0.2 * rnd.random()),
-            location=(math.cos(a) * R * 0.35, math.sin(a) * R * 0.35, alt * (0.62 + 0.08 * rnd.random())))
-        o = bpy.context.object
-        o.scale = (1.0, 1.0, 0.70)
-        _aplicar_escala()
-        bpy.ops.object.shade_smooth()
-        partes.append(_novo(o, folha, 0))
+    global LOD
+    LOD = bool(lod)
+    # o tronco: tres troços que se desviam (a oliveira velha torce-se)
+    zt = alt * 0.30
+    x, y, z = 0.0, 0.0, 0.0
+    partes = []
+    r = alt * 0.085
+    for k in range(3):
+        nx = x + rnd.uniform(-1, 1) * alt * 0.05
+        ny = y + rnd.uniform(-1, 1) * alt * 0.05
+        nz = zt * (k + 1) / 3
+        partes.append(_galho(x, y, z, nx, ny, nz, r * (1.0 - 0.12 * k)))
+        x, y, z = nx, ny, nz
+    # as pernadas, cada uma com o seu molho de copa (a copa da oliveira nao e
+    # uma bola: sao dois ou tres molhos com ar entre eles)
+    n = 2 + (semente % 2)
+    for i in range(n):
+        a = i * (2 * math.pi / n) + rnd.uniform(-0.4, 0.4)
+        d = alt * rnd.uniform(0.20, 0.28)
+        px_, py_, pz_ = x + math.cos(a) * d, y + math.sin(a) * d, alt * rnd.uniform(0.50, 0.58)
+        partes.append(_galho(x, y, z * 0.95, px_, py_, pz_, r * 0.62))
+        _copa(px_, py_, pz_ + alt * 0.12, alt * 0.27, alt * 0.15, 10, alt * 0.11, folha, rnd,
+              sz=0.75, cima=0.35, partes=partes)
+    # e um molho ao meio, mais alto, que fecha a copa por cima
+    _copa(x, y, alt * 0.76, alt * 0.23, alt * 0.13, 8, alt * 0.10, folha, rnd, sz=0.75,
+          cima=0.4, partes=partes)
+    LOD = False
     return _guardar(_juntar(partes))
 
 
@@ -1342,15 +1374,29 @@ def proto_cipreste(alt=13.0, folha="folha_cipreste", semente=0):
     return _guardar(_juntar(partes))
 
 
-def proto_moita(raio=1.6, folha="folha_mato", semente=0):
-    """moita de mato (esteva, lentisco): dois ou tres tufos baixos"""
+def proto_moita(raio=1.6, folha="folha_mato", semente=0, lod=False):
+    """moita de mato (esteva, lentisco, carrasco): uma cupula baixa e densa de
+    tufos pequenos, com dois ou tres rebentos a volta.
+
+    (28/09) Eram tres icosferas de 20 faces: de perto e de longe liam-se como
+    PEDRAS claras pousadas no chao, ou copas enterradas (marcas do Lucas). A
+    moita e baixa mas nao e lisa: o que a faz ler-se como planta e a borda
+    recortada em tufos e a sombra entre eles."""
     import random as _r
     rnd = _r.Random(semente)
-    partes = [_lobo(0, 0, raio * 0.45, raio, 0.6, folha, rnd, rugo=0.3, sub=1)]
-    for i in range(2):
-        a = rnd.random() * 6.3
-        partes.append(_lobo(math.cos(a) * raio * 0.8, math.sin(a) * raio * 0.8, raio * 0.35,
-                            raio * 0.7, 0.6, folha, rnd, rugo=0.3, sub=1))
+    global LOD
+    LOD = bool(lod)
+    partes = []
+    # a cupula: um pouco enterrada, mais larga do que alta
+    _copa(0, 0, raio * 0.42, raio * 0.95, raio * 0.52, 9, raio * 0.40, folha, rnd,
+          sz=0.8, cima=0.15, partes=partes)
+    # os rebentos a volta, mais baixos: tiram a moita do circulo perfeito
+    for i in range(3):
+        a = i * 2.1 + rnd.uniform(-0.5, 0.5)
+        d = raio * rnd.uniform(0.85, 1.1)
+        _copa(math.cos(a) * d, math.sin(a) * d, raio * 0.22, raio * 0.42, raio * 0.28, 2,
+              raio * 0.26, folha, rnd, sz=0.8, cima=0.1, partes=partes)
+    LOD = False
     return _guardar(_juntar(partes))
 
 

@@ -343,7 +343,8 @@ if faltam:
 # versao de LONGE (a mesma receita com lod=True: um quarto dos tufos, icosferas
 # de 20 faces) e o jogo escolhe por distancia a camara.
 LODS = {}
-_COM_LOD = {"proto_sobreiro", "proto_carvalho", "proto_pinheiro_bravo", "proto_choupo"}
+_COM_LOD = {"proto_sobreiro", "proto_carvalho", "proto_pinheiro_bravo", "proto_choupo",
+            "proto_oliveira", "proto_moita", "proto_pinheiro_manso"}   # (28/09) as que faltavam
 for nome in list(feitas):
     receita = protos.get(nome)
     if not receita:
@@ -3125,6 +3126,8 @@ with open(os.path.join(SAIDA, NOME_SAIDA + ".json" if (BANCADA or MONTANHAS) els
                                "t": REDE["c"][c]["t"],
                                "nome": REDE["c"][c].get("nome", c)}
                            for c in centros},
+               # o topo das chamines das aldeias (ja no chao da aldeia): o fumo
+               "chamines": [list(c_) for c_ in A2_G.chamines],
                "mastros": {c: [[m[0], m[1], round(m[2] + patamares.get(c, 0.0), 2),
                                 m[3]] for m in ms]
                            for c, ms in mastros.items()},
@@ -3178,6 +3181,15 @@ _mc = subprocess.run(["python", os.path.join("ferramentas", "cena", "mar_costa.p
 if _mc is not None:
     print((_mc.stdout or "").strip() if _mc.returncode == 0
           else "SONDA AVISO mar_costa falhou: " + (_mc.stderr or "")[-400:])
+# as pecas que se mexem (28/09): pas, barcos, gaivotas -- outro Blender, limpo,
+# para as tintas e a cena deste nao se misturarem (`ferramentas/cena/vida.py`)
+_vd = subprocess.run([bpy.app.binary_path, "-b", "--factory-startup", "-noaudio", "-P",
+                      os.path.join("ferramentas", "cena", "vida.py")],
+                     capture_output=True, text=True) if not (BANCADA or MONTANHAS) else None
+if _vd is not None:
+    _l = [x for x in (_vd.stdout or "").splitlines() if x.startswith("SONDA")]
+    print(chr(10).join(_l) if _vd.returncode == 0 and _l
+          else "SONDA AVISO vida falhou: " + ((_vd.stderr or "") + (_vd.stdout or ""))[-600:])
 # as ondas (28/09): nao dependem do mapa, mas quem clona so tem o que o forno faz
 _an = subprocess.run(["python", os.path.join("ferramentas", "cena", "agua_normais.py")],
                      capture_output=True, text=True) if not (BANCADA or MONTANHAS) else None

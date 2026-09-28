@@ -36,6 +36,7 @@ origem), `mapa3d.json` (onde fica cada cópia), `bancada.glb`/`.json` e
 | `lanceiro_novo.glb`, `arqueiro_novo.glb`, `cavaleiro_novo.glb` | 1 MB ao todo | o jogo (as tropas) |
 | `cena.json`, `mar_costa.json`, `mar_costa.png`, `mar_costa_longe.png` | — | o jogo (o mar sabe onde é a costa e quão fundo é) |
 | `agua_normal_a.png`, `agua_normal_b.png`, `agua_normais.json`, `agua_espuma.png` | 1,5 MB | o jogo (as ondas, do `agua_normais.py`) |
+| `vida.glb` | 6 MB | o jogo (pás, barcos à vela e gaivotas, do `vida.py`) |
 | `bancada.glb`, `bancada.json` | 28 MB | só a `bancada.html` |
 | `montanhas.glb`, `montanhas.json` | 28 MB | só a `montanhas.html` (`MONTANHAS=1` no forno) |
 

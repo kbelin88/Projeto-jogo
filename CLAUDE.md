@@ -370,7 +370,13 @@ Ainda a 26/09, pelas marcas do Lucas:
   materiais (`nuvemSombra` em `shadowmap_pars_fragment`; o tempo vai no
   `shadowRadius`, que o PCFSoft não usa), **moinhos de vento** com pás a rodar
   (três grupos na Meseta, `MAPA.beira.moinhos`), **barcos à vela** em voltas ao
-  largo (`MAPA.beira.rotas`) e **bandos de aves** em V;
+  largo (`MAPA.beira.rotas`) e **bandos de aves** em V. Desde 28/09 as três
+  peças são **modeladas no forno** (`ferramentas/cena/vida.py` → `vida.glb`,
+  com as tintas da `aldeia2`): pás com varal, grade e lona; o barco das
+  enseadas com vela latina; uma gaivota com duas shape keys ("cima"/"baixo")
+  que o jogo mistura por ave (malhas próprias: o three r160 não tem morph por
+  instância). Antes eram triângulos de cor lisa no `mapa3d.js` — o atalho que
+  deu a regra "com calma e sem atalhos";
 - **a água tem fundo** (28/09, plano da água A+B): o `mar_costa.py` inventa a
   profundidade que a malha não tem (praia: plataforma larga e rasa; falésia:
   faixa turquesa estreita e depois fundo; manchas de rocha e algas) e grava-a
@@ -409,7 +415,17 @@ Ainda a 26/09, pelas marcas do Lucas:
   pinhal costeiro, mato e ribeira ao longo dos rios. O bioma sai da humidade e
   da costa (`bioma_em`). Cada espécie nova tem uma **versão de longe**
   (`lod=True`, `MAPA.lod`), e o jogo troca-as a 420 m da câmara
-  (`redistribuirLOD`): sem isso eram 13,5 M triângulos por quadro;
+  (`redistribuirLOD`): sem isso eram 13,5 M triângulos por quadro. A
+  **oliveira**, a **moita** e o **pinheiro-manso** ficaram de fora da F2 até
+  28/09 (esferas lisas; as moitas liam-se como pedras e as oliveiras como
+  cogumelos enterrados — marcas do Lucas junto a Toledo): agora seguem a mesma
+  receita, com versão de longe (18 no total);
+- **as bandeiras e o fumo** (28/09): o pano é linho do `vida.py` tingido pela cor
+  do rei, 4,6 × 3,0 m, e há **um vento só** (`VENTO` no `mapa3d.js`): os panos
+  e o fumo vão todos para o mesmo lado (antes cada pano tinha o seu rumo, que
+  saltava quando a aldeia mudava de dono). O fumo sai das **chaminés das aldeias
+  novas** (`MAPA.chamines`, da `aldeia2.casa`): lia as casas das aldeias
+  antigas e estava morto desde 26/09, sem erro;
 - perto de Pamplona, uma ravina na falésia foi cheia (`ATERROS`) e a laje ao
   lado é relva por decisão (`RELVA_FORCADA`). As duas listas são o sítio para
   pedidos parecidos.

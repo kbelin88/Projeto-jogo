@@ -395,6 +395,12 @@ roughnessFactor = mix(roughnessFactor, 0.95, espuma);`)
   float vento = 0.55 + 0.9 * marN(mp / 520.0 + vec2(tempo * 0.004, 0.0));
   // mais manso no raso, e parado na linha de agua
   dec *= vento * mix(0.25, 1.0, smoothstep(0.5, 8.0, pMar));
+  // Rasante, cada faceta espelhava ou o azul de cima ou o pessego do
+  // horizonte, e o mar saia as manchas em nuvem (visto 28/09, camara baixa
+  // junto a um barco). A esse angulo o mar de verdade e o horizonte quase
+  // liso: a onda amansa quando se olha rasante. De cima (o jogo) nao muda.
+  float cosVista = clamp(normalize(cameraPosition - vMar).y, 0.0, 1.0);
+  dec *= mix(0.3, 1.0, smoothstep(0.08, 0.45, cosVista));
   nMarW = normalize(vec3(-dec.x, 1.0, -dec.y));
   // A onda muda o BRILHO (o ceu e o sol refletidos), nao a cor de dentro: com
   // a normal inteira na luz difusa e o sol a 20 graus, cada declive acendia ou
@@ -500,6 +506,22 @@ roughnessFactor = mix(roughnessFactor, 0.95, espuma);`)
 
   const g = await new Promise((ok, mal) =>
     new GLTFLoader().load(BASE + FICH_GLB, ok, undefined, mal));
+
+  // ── AS PECAS QUE SE MEXEM (28/09) ───────────────────────────────────────
+  // Pas, barcos, gaivotas e bandeiras: modeladas no forno (`vida.py`), no
+  // `vida.glb`. O jogo so lhes da a transformacao (ver "A VIDA DO MAPA").
+  let vidaGLB = null;
+  try {
+    vidaGLB = await new Promise((ok, mal) =>
+      new GLTFLoader().load(BASE + "vida.glb" + FRESCO, ok, undefined, mal));
+  } catch (e) {
+    console.warn("sem vida.glb (correr o forno): sem pas, barcos, aves e bandeiras", e);
+  }
+  const malhasVida = (prefixo) => {
+    const l = [];
+    if (vidaGLB) vidaGLB.scene.traverse((o) => { if (o.isMesh && o.name.startsWith(prefixo)) l.push(o); });
+    return l;
+  };
 
   // uma peca pode ser VARIAS malhas: o glTF parte-as por material
   const banco = {};
@@ -1362,13 +1384,33 @@ void main() {`)
   const mastros = [];
   for (const [cid, lista] of Object.entries(MAPA.mastros || {}))
     for (const m of lista) mastros.push({ cid, p: m });
-  const ALT_MASTRO = 9.0;
-  const panoG = new THREE.PlaneGeometry(1, 1, 12, 1);
-  panoG.translate(0.5, 0, 0);            // ancorado na tralha
+  // ── O VENTO E UM SO (28/09) ─────────────────────────────────────────────
+  // O rumo de cada pano era `(conta * 2.3) % 6.28`: cada bandeira para seu
+  // lado, e quando uma aldeia mudava de dono a sua bandeira SALTAVA de rumo
+  // (a conta e por rei). Agora ha um vento no mapa (de oes-sudoeste, do mar),
+  // e cada aldeia um desvio pequeno e fixo, do nome dela.
+  const VENTO = 0.35;                    // rumo para onde o pano aponta (rad)
+  function rumoBandeira(cid) {
+    let h = 0;
+    for (const ch of cid) h = (h * 31 + ch.charCodeAt(0)) % 1000;
+    return VENTO + (h / 1000 - 0.5) * 0.5;
+  }
+  const ALT_MASTRO = 9.0;                 // o do `vida.py`
+  // ── O PANO E O MASTRO VEM DO FORNO (28/09) ──────────────────────────────
+  // Eram um plano de cor lisa e um cilindro de seis lados. Agora o pano e o
+  // linho do `vida.py` (bainha, dobra na tralha) tingido pela cor do rei, e o
+  // mastro e de madeira com pomo e adrica. Sem o `vida.glb`, os de antes.
+  const [panoV] = malhasVida("vida_pano");
+  let panoG = panoV ? panoV.geometry : null;
+  if (!panoG) {
+    panoG = new THREE.PlaneGeometry(1, 1, 12, 1);
+    panoG.translate(0.5, 0, 0);          // ancorado na tralha
+  }
   const panos = {};
   for (const rei of ["A", "B", "null"]) {
     const mat = new THREE.MeshStandardMaterial({
-      color: COR_REI[rei], roughness: 0.85, side: THREE.DoubleSide });
+      color: COR_REI[rei], roughness: 0.85, side: THREE.DoubleSide,
+      map: panoV ? panoV.material.map : null });
     mat.onBeforeCompile = (sh) => {
       sh.uniforms.tempo = { value: 0 };
       mat.userData.sh = sh;
@@ -1385,20 +1427,35 @@ transformed.y += onda * transformed.x * 0.05;`);
     panos[rei] = { im, mat };
   }
   {
-    const matM = new THREE.MeshStandardMaterial({ color: 0x3a2a18, roughness: 0.9 });
-    const imM = new THREE.InstancedMesh(
-      new THREE.CylinderGeometry(0.22, 0.26, 1, 6), matM, Math.max(1, mastros.length));
-    imM.castShadow = true;
-    cena.add(imM);
     const M2 = new THREE.Matrix4(), V2 = new THREE.Vector3();
-    const Q2 = new THREE.Quaternion(), S2 = new THREE.Vector3();
-    mastros.forEach((m, i) => {
-      V2.set(m.p[0], m.p[2] + ALT_MASTRO / 2, -m.p[1]);
-      S2.set(1, ALT_MASTRO, 1);
-      M2.compose(V2, Q2, S2);
-      imM.setMatrixAt(i, M2);
-    });
-    imM.instanceMatrix.needsUpdate = true;
+    const Q2 = new THREE.Quaternion(), S2 = new THREE.Vector3(1, 1, 1);
+    const partes = malhasVida("vida_mastro_");
+    if (partes.length) {
+      for (const pm of partes) {
+        const imM = new THREE.InstancedMesh(pm.geometry, pm.material, Math.max(1, mastros.length));
+        imM.castShadow = true;
+        cena.add(imM);
+        mastros.forEach((m, i) => {
+          // de frente para o vento: a adrica fica do lado de onde o pano sai
+          Q2.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rumoBandeira(m.cid));
+          M2.compose(V2.set(m.p[0], m.p[2], -m.p[1]), Q2, S2);
+          imM.setMatrixAt(i, M2);
+        });
+        imM.instanceMatrix.needsUpdate = true;
+      }
+    } else {
+      const matM = new THREE.MeshStandardMaterial({ color: 0x3a2a18, roughness: 0.9 });
+      const imM = new THREE.InstancedMesh(
+        new THREE.CylinderGeometry(0.22, 0.26, 1, 6), matM, Math.max(1, mastros.length));
+      imM.castShadow = true;
+      cena.add(imM);
+      mastros.forEach((m, i) => {
+        V2.set(m.p[0], m.p[2] + ALT_MASTRO / 2, -m.p[1]);
+        M2.compose(V2, Q2, S2.set(1, ALT_MASTRO, 1));
+        imM.setMatrixAt(i, M2);
+      });
+      imM.instanceMatrix.needsUpdate = true;
+    }
   }
 
   // ── as chapas com o nome ────────────────────────────────────────────────
@@ -1462,33 +1519,65 @@ transformed.y += onda * transformed.x * 0.05;`);
   for (const cid of Object.keys(chapas)) pintarChapa(cid, null, null);
 
   // ── o fumo das chamines ─────────────────────────────────────────────────
+  // (28/09) Era um disco de gradiente liso: as colunas liam-se como pilhas de
+  // circulos iguais. Agora e um TUFO -- sete lobulos de tamanhos e sitios
+  // fixos, sobrepostos -- e cada baforada roda sobre si (ver `fumegar`).
   const fumoTex = (() => {
     const c = document.createElement("canvas");
-    c.width = c.height = 64;
+    c.width = c.height = 128;
     const gg = c.getContext("2d");
-    const grad = gg.createRadialGradient(32, 32, 0, 32, 32, 32);
-    grad.addColorStop(0, "rgba(236,232,226,.85)");
-    grad.addColorStop(0.5, "rgba(214,208,200,.38)");
-    grad.addColorStop(1, "rgba(200,196,190,0)");
-    gg.fillStyle = grad; gg.fillRect(0, 0, 64, 64);
+    const lobos = [[64, 66, 40], [44, 58, 26], [84, 56, 28], [58, 42, 24], [78, 80, 24],
+                   [46, 82, 20], [70, 38, 18]];
+    for (const [x, y, r] of lobos) {
+      const grad = gg.createRadialGradient(x, y, 0, x, y, r);
+      grad.addColorStop(0, "rgba(232,228,222,.55)");
+      grad.addColorStop(0.6, "rgba(218,212,204,.28)");
+      grad.addColorStop(1, "rgba(205,200,194,0)");
+      gg.fillStyle = grad; gg.fillRect(0, 0, 128, 128);
+    }
     const t = new THREE.CanvasTexture(c);
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
   })();
+  // ── DE ONDE SAI O FUMO (28/09) ──────────────────────────────────────────
+  // Lia as casas `casa2` das copias -- as aldeias ANTIGAS. Desde 26/09 as
+  // aldeias sao as de Faro (malhas por material, nenhuma copia) e o fumo
+  // ficou sem uma chamine: morto, sem erro. Agora o forno grava o topo de
+  // cada chamine algarvia (`MAPA.chamines`) e fuma uma em cada tres.
   const fogos = [];
   let passo = 0;
-  for (const c of MAPA.copias) {
+  for (const ch of MAPA.chamines || []) {
+    if (passo++ % 3) continue;
+    fogos.push({ p: ch, dz: 0.4, fase: fogos.length * 0.37 });
+  }
+  for (const c of MAPA.copias) {           // (a bancada ainda usa as antigas)
     if (!/^casa2/.test(MAPA.pecas[c.peca] || c.peca)) continue;
     if (passo++ % 3) continue;
-    fogos.push({ p: c.p, fase: fogos.length * 0.37 });
+    fogos.push({ p: c.p, dz: 5.0, fase: fogos.length * 0.37 });
   }
+  if (!fogos.length) console.warn("mapa sem chamines (MAPA.chamines): sem fumo -- correr o forno");
   const POR_FOGO = 5;
-  const imFumo = new THREE.InstancedMesh(
-    new THREE.PlaneGeometry(1, 1),
-    new THREE.MeshBasicMaterial({ map: fumoTex, transparent: true,
-                                  depthWrite: false, toneMapped: false,
-                                  opacity: 0.55 }),
-    Math.max(1, fogos.length * POR_FOGO));
+  // cada baforada tem o seu alfa: nasce e desvanece (antes sumia de repente
+  // no fim do ciclo)
+  const nFumo = Math.max(1, fogos.length * POR_FOGO);
+  const fumoG = new THREE.PlaneGeometry(1, 1);
+  const alfaFumo = new THREE.InstancedBufferAttribute(new Float32Array(nFumo), 1);
+  fumoG.setAttribute("aAlfa", alfaFumo);
+  const matFumo = new THREE.MeshBasicMaterial({ map: fumoTex, transparent: true,
+                                                depthWrite: false, toneMapped: false,
+                                                opacity: 0.7 });
+  matFumo.onBeforeCompile = (sh) => {
+    sh.vertexShader = `attribute float aAlfa;
+varying float vAlfa;
+` + sh.vertexShader.replace(
+      "#include <begin_vertex>", `#include <begin_vertex>
+vAlfa = aAlfa;`);
+    sh.fragmentShader = `varying float vAlfa;
+` + sh.fragmentShader.replace(
+      "#include <color_fragment>", `#include <color_fragment>
+diffuseColor.a *= vAlfa;`);
+  };
+  const imFumo = new THREE.InstancedMesh(fumoG, matFumo, nFumo);
   imFumo.frustumCulled = false;
   cena.add(imFumo);
 
@@ -2165,92 +2254,65 @@ transformed.y += onda * transformed.x * 0.05;`);
   }
 
   const _fp = new THREE.Vector3(), _fs = new THREE.Vector3(), _fm = new THREE.Matrix4();
+  const _fq = new THREE.Quaternion(), _fz = new THREE.Vector3(0, 0, 1);
   // ── A VIDA DO MAPA (F5, 27/09) ───────────────────────────────────────────
   // Coisas que se mexem sem o jogo mandar: as pas dos moinhos, barcos ao largo,
   // bandos de aves. Tudo pelo RELOGIO do jogo (e nao pelo do sistema), para a
   // gravacao quadro a quadro sair igual.
+  // ── AS PECAS VEM DO BLENDER (28/09) ─────────────────────────────────────
+  // Ate 27/09 eram triangulos de cor lisa escritos aqui, porque se mexem. Agora
+  // sao modeladas no forno (`ferramentas/cena/vida.py` -> `vida.glb`), com as
+  // tintas das aldeias: as pas com varal, grade e lona; o barco das enseadas com
+  // vela latina; a gaivota com duas formas de asa. Aqui so se lhes da a
+  // transformacao (e a gaivota, os pesos das formas).
+  // uma InstancedMesh por malha da peca (o glTF parte-a por material); todas
+  // recebem a mesma matriz
+  const instanciar = (prefixo, n) => malhasVida(prefixo).map((m) => {
+    const im = new THREE.InstancedMesh(m.geometry, m.material, n);
+    im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false;
+    cena.add(im);
+    return im;
+  });
   const vida = { pas: [], barcos: [], aves: [] };
   {
     const B = (MAPA.beira && MAPA.beira.moinhos) || [];
-    if (B.length) {
-      // uma pa: varal de madeira e a vela em grade (de longe le-se como X)
-      const g = new THREE.BufferGeometry();
-      const pos = [];
-      const quad = (a, b, c, d) => pos.push(...a, ...b, ...c, ...a, ...c, ...d);
-      for (let k = 0; k < 4; k++) {
-        const ang = k * Math.PI / 2, ca = Math.cos(ang), sa = Math.sin(ang);
-        const P = (r, w) => [0, (r * ca - w * sa), (r * sa + w * ca)];
-        quad(P(0.4, -0.1), P(6.2, -0.1), P(6.2, 0.1), P(0.4, 0.1));           // o varal
-        quad(P(1.6, 0.1), P(6.0, 0.1), P(6.0, 1.1), P(1.6, 1.1));             // a vela
-      }
-      g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-      g.computeVertexNormals();
-      const m = new THREE.MeshStandardMaterial({ color: 0x8a7a62, roughness: 0.9, side: THREE.DoubleSide });
-      const im = new THREE.InstancedMesh(g, m, B.length);
-      im.castShadow = true; im.frustumCulled = false;
-      cena.add(im);
-      vida.pas = { im, B };
-    }
+    if (B.length) vida.pas = { ims: instanciar("vida_pas_", B.length), B };
   }
-  // ── os barcos a navegar: casco, mastro e vela latina, 2 por rota ────────
+  // ── os barcos a navegar: 2 por rota ────────────────────────────────────
   {
     const R = (MAPA.beira && MAPA.beira.rotas) || [];
-    if (R.length) {
-      const casco = new THREE.BufferGeometry();
-      const P = [];
-      const tri = (a, b, c) => P.push(...a, ...b, ...c);
-      // casco: proa em +x, 11 m x 3,4 m, fundo em V
-      const L = 5.5, B = 1.7, H = 1.3;
-      const top = [[L, 0, H], [L * 0.4, B, H], [-L, B * 0.8, H], [-L, -B * 0.8, H], [L * 0.4, -B, H]];
-      const fundo = [[L * 0.9, 0, 0.1], [L * 0.3, 0, -0.2], [-L, 0, 0.1]];
-      const Y = (p) => [p[0], p[2], -p[1]];     // (x, y-mapa, z) -> three
-      tri(Y(top[0]), Y(top[1]), Y(fundo[0])); tri(Y(top[0]), Y(fundo[0]), Y(top[4]));
-      tri(Y(top[1]), Y(fundo[1]), Y(fundo[0])); tri(Y(top[4]), Y(fundo[0]), Y(fundo[1]));
-      tri(Y(top[1]), Y(top[2]), Y(fundo[1])); tri(Y(top[4]), Y(fundo[1]), Y(top[3]));
-      tri(Y(top[2]), Y(fundo[2]), Y(fundo[1])); tri(Y(top[3]), Y(fundo[1]), Y(fundo[2]));
-      tri(Y(top[2]), Y(top[3]), Y(fundo[2]));
-      // o convés
-      tri(Y(top[0]), Y(top[4]), Y(top[1])); tri(Y(top[1]), Y(top[4]), Y(top[3])); tri(Y(top[1]), Y(top[3]), Y(top[2]));
-      casco.setAttribute("position", new THREE.Float32BufferAttribute(P, 3));
-      casco.computeVertexNormals();
-      const vela = new THREE.BufferGeometry();
-      vela.setAttribute("position", new THREE.Float32BufferAttribute([
-        ...Y([1.5, 0, H + 0.3]), ...Y([-3.8, 0, H + 1.2]), ...Y([2.2, 0, H + 11.0]),
-        ...Y([0.4, -0.08, H]), ...Y([0.6, -0.08, H]), ...Y([0.5, 0.0, H + 9.0])], 3));
-      vela.computeVertexNormals();
-      const mC = new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 0.8, side: THREE.DoubleSide });
-      const mV = new THREE.MeshStandardMaterial({ color: 0xe9e0c8, roughness: 0.9, side: THREE.DoubleSide });
-      const n = R.length * 2;
-      const iC = new THREE.InstancedMesh(casco, mC, n), iV = new THREE.InstancedMesh(vela, mV, n);
-      for (const im of [iC, iV]) { im.castShadow = true; im.frustumCulled = false; cena.add(im); }
-      vida.barcos = { iC, iV, R };
+    if (R.length) vida.barcos = { ims: instanciar("vida_barco_", R.length * 2), R };
+  }
+  // ── as gaivotas: bandos em V que atravessam o mapa ─────────────────────
+  // Malhas proprias (partilham geometria e material): o three r160 nao tem
+  // formas por instancia (`setMorphAt` chegou no r162). 45 desenhos de 150
+  // triangulos.
+  {
+    const [ave] = malhasVida("vida_ave");
+    if (ave) {
+      const N = 5 * 9;
+      const lista = [];
+      for (let i = 0; i < N; i++) {
+        const a = new THREE.Mesh(ave.geometry, ave.material);
+        a.morphTargetInfluences = [0, 0];
+        a.castShadow = true;             // a sombra a passar no chao ve-se de longe
+        a.frustumCulled = false;
+        a.matrixAutoUpdate = false;
+        cena.add(a);
+        lista.push(a);
+      }
+      vida.aves = { lista, N };
     }
   }
-  // ── as aves: bandos em V que atravessam o mapa, a bater as asas ────────
-  {
-    const g = new THREE.BufferGeometry();
-    // uma ave: duas asas (triangulos) com o corpo no meio; as asas batem por
-    // escala em Y no vertice da ponta (feito com duas instancias: nao -- basta
-    // achatar/esticar a ave inteira em Y por instancia)
-    g.setAttribute("position", new THREE.Float32BufferAttribute([
-      0, 0, 0, -0.5, 0.2, -1.6, 0.4, 0.2, -1.6,
-      0, 0, 0, 0.4, 0.2, 1.6, -0.5, 0.2, 1.6], 3));
-    g.computeVertexNormals();
-    const m = new THREE.MeshBasicMaterial({ color: 0x2a2620, side: THREE.DoubleSide });
-    const N = 5 * 9;
-    const im = new THREE.InstancedMesh(g, m, N);
-    im.frustumCulled = false;
-    cena.add(im);
-    vida.aves = { im, N };
-  }
   const _M = new THREE.Matrix4(), _Q = new THREE.Quaternion(), _Qr = new THREE.Quaternion(),
-        _V = new THREE.Vector3(), _S1 = new THREE.Vector3(1, 1, 1), _Se = new THREE.Vector3(),
-        // (27/09) barcos e aves maiores: a gravacao e de longe
-        _SB = new THREE.Vector3(2.4, 2.4, 2.4),
+        _V = new THREE.Vector3(), _Se = new THREE.Vector3(),
+        // barcos e aves maiores do que a escala real: a gravacao e de longe
+        // (o barco fica com ~26 m, como os das enseadas; a gaivota com ~11 m)
+        _SB = new THREE.Vector3(2.4, 2.4, 2.4), ESC_AVE = 7.0,
         _EX = new THREE.Vector3(1, 0, 0), _EY = new THREE.Vector3(0, 1, 0);
   function animarVida(t) {
-    if (vida.pas.im) {
-      const { im, B } = vida.pas;
+    if (vida.pas.ims) {
+      const { ims, B } = vida.pas;
       B.forEach((b, i) => {
         // o eixo a 7,6 m, 3,3 m a frente da torre, na direcao `vira`
         const e = b[5] || 1.0;                // a escala do moinho (forno)
@@ -2262,12 +2324,12 @@ transformed.y += onda * transformed.x * 0.05;`);
         _Qr.setFromAxisAngle(_EX, t * 0.9 * b[4] + i * 0.7);
         _Q.multiply(_Qr);
         _M.compose(_V, _Q, _Se.set(e, e, e));
-        im.setMatrixAt(i, _M);
+        for (const im of ims) im.setMatrixAt(i, _M);
       });
-      im.instanceMatrix.needsUpdate = true;
+      for (const im of ims) im.instanceMatrix.needsUpdate = true;
     }
-    if (vida.barcos.iC) {
-      const { iC, iV, R } = vida.barcos;
+    if (vida.barcos.ims) {
+      const { ims, R } = vida.barcos;
       let k = 0;
       R.forEach((rota, r) => {
         const n = rota.length;
@@ -2278,23 +2340,27 @@ transformed.y += onda * transformed.x * 0.05;`);
           const x = rota[i0][0] + (rota[i1][0] - rota[i0][0]) * f;
           const y = rota[i0][1] + (rota[i1][1] - rota[i0][1]) * f;
           const rumo = Math.atan2(rota[i1][1] - rota[i0][1], rota[i1][0] - rota[i0][0]);
-          _V.set(x, -0.8 + 0.3 * Math.sin(t * 1.3 + k), -y);
+          // o casco tem 1,3 m de pontal (x2,4 = 3,1 m): a linha de agua a ~30%
+          // dele, a meio do branco -- a -1,4 m a risca azul ficava debaixo de
+          // agua e o barco lia-se como uma tabua escura (visto 28/09)
+          _V.set(x, -0.9 + 0.2 * Math.sin(t * 1.3 + k), -y);
           _Q.setFromAxisAngle(_EY, rumo);
-          _Qr.setFromAxisAngle(_EX, 0.05 * Math.sin(t * 0.9 + k * 2.0));
+          // aderna para o lado da barriga da vela (-z local), a balancar
+          _Qr.setFromAxisAngle(_EX, -(0.07 + 0.03 * Math.sin(t * 0.9 + k * 2.0)));
           _Q.multiply(_Qr);
           _M.compose(_V, _Q, _SB);
-          iC.setMatrixAt(k, _M); iV.setMatrixAt(k, _M);
+          for (const im of ims) im.setMatrixAt(k, _M);
           k++;
         }
       });
-      iC.instanceMatrix.needsUpdate = true; iV.instanceMatrix.needsUpdate = true;
+      for (const im of ims) im.instanceMatrix.needsUpdate = true;
     }
-    if (vida.aves.im) {
-      const { im, N } = vida.aves;
+    if (vida.aves.lista) {
+      const { lista } = vida.aves;
       const LXm = MAPA.mapa_m[0], LYm = MAPA.mapa_m[1];
       let k = 0;
       for (let b = 0; b < 5; b++) {
-        // cada bando atravessa o mapa numa reta, a 55-90 m, e recomeca
+        // cada bando atravessa o mapa numa reta, a 75-110 m, e recomeca
         const ang = 0.4 + b * 1.27;
         const per = 260 + b * 47;                     // segundos por travessia
         const u = ((t + b * 71) % per) / per;
@@ -2307,14 +2373,23 @@ transformed.y += onda * transformed.x * 0.05;`);
           const fila = Math.ceil(i / 2), lado = i % 2 ? 1 : -1;
           const x = hx - cx * fila * 13.0 - cy * lado * fila * 9.0;
           const y = hy - cy * fila * 13.0 + cx * lado * fila * 9.0;
-          const bate = 0.35 + 0.65 * Math.abs(Math.sin(t * 7.0 + i * 0.9 + b));
-          _V.set(x, alt + Math.sin(t * 0.8 + i) * 0.8, -y);
+          // a gaivota bate e plana: o bater vem em rajadas de alguns segundos
+          // (cada ave a sua), e entre elas as asas ficam no planeio (a forma
+          // base, em M)
+          const rajada = Math.max(0, Math.sin(t * 0.45 + i * 1.3 + b * 2.1));
+          const bate = Math.sin(t * 5.5 + i * 0.9 + b) * Math.min(1, rajada * 2.2);
+          const a = lista[k++];
+          a.morphTargetInfluences[0] = Math.max(0, bate);
+          a.morphTargetInfluences[1] = Math.max(0, -bate);
+          // sobe um pouco a cada batida, e inclina-se de leve
+          _V.set(x, alt + Math.sin(t * 0.8 + i) * 0.8 + bate * 0.4, -y);
           _Q.setFromAxisAngle(_EY, ang);
-          _M.compose(_V, _Q, _Se.set(4.2, 4.2 * bate * 2.0, 4.2 * (0.6 + 0.4 * bate)));
-          im.setMatrixAt(k++, _M);
+          _Qr.setFromAxisAngle(_EX, 0.08 * Math.sin(t * 0.6 + i * 0.7));
+          _Q.multiply(_Qr);
+          a.matrix.compose(_V, _Q, _Se.set(ESC_AVE, ESC_AVE, ESC_AVE));
+          a.matrixWorldNeedsUpdate = true;
         }
       }
-      im.instanceMatrix.needsUpdate = true;
     }
   }
   function fumegar(t) {
@@ -2323,14 +2398,21 @@ transformed.y += onda * transformed.x * 0.05;`);
       for (let k = 0; k < POR_FOGO; k++) {
         const ciclo = ((t * 0.00022 + f.fase + k / POR_FOGO) % 1);
         const tam = 1.6 + ciclo * 7.0;
-        _fp.set(f.p[0] + Math.sin(ciclo * 3.1 + f.fase) * ciclo * 3.0,
-                f.p[2] + 5.0 + ciclo * 16.0,
-                -f.p[1] + Math.cos(ciclo * 2.3 + f.fase) * ciclo * 2.0);
+        // (28/09) o fumo vai com o VENTO das bandeiras (antes cada chamine
+        // soltava-o para o seu lado), com um balanco pequeno
+        const leva = ciclo * 9.0, bal = Math.sin(ciclo * 3.1 + f.fase) * ciclo * 1.5;
+        _fp.set(f.p[0] + Math.cos(VENTO) * leva - Math.sin(VENTO) * bal,
+                f.p[2] + f.dz + ciclo * 14.0,
+                -(f.p[1] + Math.sin(VENTO) * leva + Math.cos(VENTO) * bal));
         _fs.set(tam * (1 - ciclo * 0.15), tam * (1 - ciclo * 0.15), 1);
-        _fm.compose(_fp, cam.quaternion, _fs);
-        imFumo.setMatrixAt(i++, _fm);
+        // de frente para a camara, e rodada sobre si (cada baforada a sua)
+        _fq.setFromAxisAngle(_fz, f.fase * 7.0 + k * 1.9 + ciclo * 0.8);
+        _fm.compose(_fp, _fq.premultiply(cam.quaternion), _fs);
+        imFumo.setMatrixAt(i, _fm);
+        alfaFumo.array[i++] = Math.min(1, ciclo / 0.12) * (1 - Math.max(0, (ciclo - 0.5) / 0.5));
       }
     imFumo.instanceMatrix.needsUpdate = true;
+    alfaFumo.needsUpdate = true;
   }
 
   // ── o laco ──────────────────────────────────────────────────────────────
@@ -2573,9 +2655,10 @@ transformed.y += onda * transformed.x * 0.05;`);
         const rei = dono[m.cid] || "null";
         const alvo = panos[rei];
         if (!alvo || conta[rei] >= alvo.im.instanceMatrix.count) continue;
-        const larg = 3.4, alt = 2.2;
+        // (28/09) maior: a 3,4 x 2,2 m a cor do dono nao se lia a distancia de gravacao
+        const larg = 4.6, alt = 3.0;
         V3.set(m.p[0], m.p[2] + ALT_MASTRO - alt * 0.75, -m.p[1]);
-        Q3.setFromEuler(new THREE.Euler(0, (conta[rei] * 2.3) % 6.28, 0));
+        Q3.setFromEuler(new THREE.Euler(0, rumoBandeira(m.cid), 0));
         S3.set(larg, alt, 1);
         M3.compose(V3, Q3, S3);
         alvo.im.setMatrixAt(conta[rei]++, M3);

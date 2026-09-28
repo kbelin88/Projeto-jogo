@@ -144,6 +144,9 @@ class Malhas:
     def __init__(self):
         self.g = {}
         self.origem = Matrix.Identity(4)
+        # o topo de cada chamine, no mundo: e dali que o jogo solta o fumo
+        # (28/09 -- o fumo lia as casas das aldeias antigas e morreu com elas)
+        self.chamines = []
 
     def por(self, mat, vloc, faces, M, liso=False):
         metros = MATS[mat].get("metros", 1.0)
@@ -285,6 +288,7 @@ def casa(G, rnd, x, y, sx, sy, cfg, k):
     cy = y + math.sin(rz) * sx * 0.3 + math.sin(rz + math.pi / 2) * sy * 0.2
     caixa(G, "cal", cx, cy, h, 0.6, 0.6, 2.2, rz)
     caixa(G, "telha", cx, cy, h + 2.2, 0.85, 0.85, 0.22, rz)
+    G.chamines.append(tuple(round(c, 2) for c in (G.origem @ Vector((cx, cy, h + 2.3)))))
 
 
 def torre_quadrada(G, mat, x, y, lado, alt, rz, merlao):
