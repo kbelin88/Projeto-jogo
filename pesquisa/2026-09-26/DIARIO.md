@@ -499,3 +499,11 @@ seed 3, assentos trocados, teto 25 (cabia nas 147 requisições que sobravam).
   campanha metade dos turnos; na outra reescreveu-a quase sempre, como relato do turno.
 - 2 partidas na mesma seed: **indício, não prova**. O lote de 30/09 separa as duas
   coisas: a campanha em dois campos SOZINHA, sem a janela.
+
+## 29/09 00:07 UTC — lançadas 16 partidas A/B de uma vez (a pedido do Lucas)
+
+- `lancar_ab2.sh` → `pesquisa/2026-09-28/ab2/`: P4 × **candidato** (seis verdades + campanha +
+  frente), dots e Super, seeds 3 e 5, assentos trocados (Resultado 13);
+- `lancar_ab_campanha2.sh` → `pesquisa/2026-09-30/ab_campanha2/`: P4 × **campanha em dois
+  campos**, sem janela, o mesmo desenho (Resultado 14; adiantado de 30/09).
+- O lembrete de 30/09 passa a: repetir com seeds novas (7 e 9) a versão que se sair melhor.
