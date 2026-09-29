@@ -1,0 +1,138 @@
+=== PARTIDA Rei A (openrouter:nvidia/nemotron-3-super-120b-a12b:free) vs Rei B (openrouter:nvidia/nemotron-3-super-120b-a12b:free) | seed 5 | maxTurnos 30 | 9/29/2026, 12:07:03 AM ===
+condicoes: ambiente=iberia | temp=0 | prompt=P4 EN (esquema declarado, sem exemplo, sem minimos, vitoria real, reforco, quantidade) + FOG OF WAR + P5 EXPERIMENTAL (A: P4 | B: campanha2) + combate v3 (atq/def, counter 1.5) + clamp | regras=v4 (counter 1.5, cav def2/1t, madeira 30, dist x0.2, vitoria 75%/2t) | mesa: ordem espelhada + chegada sorteada | thinking=on (sem limite) | max_tokens_resposta=128000 (default alto, auto-ajustavel por modelo)
+
+########## TURNO 1 — Rei A (openrouter:nvidia/nemotron-3-super-120b-a12b:free) ##########
+tokens.contexto: prompt 2448 | resposta 3004 | raciocinio 2881 | finish stop | ms 34208
+resposta crua: "{\n  \"build\": [\n    {\"villageId\": 0, \"type\": \"spearman\", \"quantity\": 2}\n  ],\n  \"movements\": [\n    {\n      \"fromId\": 0,\n      \"toId\": 1,\n      \"troops\": {\n        \"spearman\": 5,\n        \"archer\": 4,\n        \"knight\": 3\n      }\n    }\n  ],\n  \"plan\": \"Next turn Santarem should be ours. Use its wood/iron to build more spearmen, then push along the road network to capture additional villages. Keep Lisboa producing and reinforcing the front.\",\n  \"statement\": \"I trained two spearmen in Lisboa and marched my full garrison to Santarem. I expect to win the battle and gain a new village.\"\n}"
+raciocinio: We need to produce JSON with build, movements, plan, statement.
+
+We have 1 village: Lisboa (id 0). It has troops: 5 spearman, 4 archer, 3 knight. Resources: wood 30, iron 20 (starting? It says wood 30 (+30/turn) iron 20 (+20/turn). So currently has 30 wood, 20 iron. It can build troops using its own resources. Build costs: spearman 15 wood, 0 iron; archer 20 wood +10 iron; knight 30 wood +30 iron.
+
+We have 30 wood, 20 iron. Options: build spearman: each costs 15 wood, so can build up to 2 spearman (30 wood). Build archer: each costs 20 wood +10 iron, can build at most 1 archer (20 wood,10 iron) leaving 10 wood,10 iron. Could also build 1 spearman (15 wood) leaving 15 wood,20 iron; could then build another spearman? Actually after 1 spearman: wood 15 left, iron 20. Could build another spearman (15 wood) leaving 0 wood,20 iron. Could not build archer because need 20 wood. Could not build knight (needs 30 wood). So max 2 spearman.
+
+Alternatively build 1 knight? needs 30 wood+30 iron, not enough iron (20). So cannot.
+
+Could build 1 archer (20 wood,10 iron) leaving wood10,iron10. Could then build maybe something else? Archer uses 20 wood,10 iron; after that wood10,iron10 left. Could build spearman? needs 15 wood, not enough. So only 1 archer.
+
+Could build 0.
+
+We need to think strategy: we have 1 village, need to capture at least 18 villages eventually. We need to expand. We see two neutral villages adjacent: Santarem (id1) with 1 knight garrison, Evora (id2) with 1 spearman garrison. Both have effective defense 3 (including location bonus). We can attack them.
+
+We need to decide which to attack first. Since we have mixed troops, we need to consider combat.
+
+We can send troops from Lisboa to attack Santarem or Evora. Travel time: 1 turn for any speed (since distance 1). So they will arrive next turn and fight then? Actually movement: you order movement now, they march along roads; they stop at first village not yours and fight there. Since the target is neutral and adjacent, they will arrive after 1 turn? The march time is 1 turn (slow/medium/fast all 1). So they will arrive at end of this turn? Usually orders are simultaneous; movement takes turns, and during those turns the enemy keeps building. So if we order to move to Santarem, they will take 1 turn to arrive, arriving at start of next turn? Actually they'd move during this turn and arrive at the end of the turn, then combat occurs? The description: "Armies march along the ROAD NETWORK ... Travel time is measured along the roads: a village that looks close on the map can be far by road. ... An army STOPS at the first village on its path that is not yours and fights there, even if you ordered a more distant destination." It doesn't explicitly say when combat occurs relative to turn. Usually you order movement, they travel for X turns, then when they arrive they fight that turn (i.e., after movement). Since travel time is 1 turn, they'd arrive next turn and fight then. We'll assume they arrive next turn and fight then.
+
+Thus we need to consider building troops now to have enough for attack next turn.
+
+We have 12 troops total. Could we send all 12 to attack Santarem? Let's compute combat.
+
+Santarem garrison: 1 knight. Effective defense 3 (includes location bonus for village). Our attacking force: we need to decide composition.
+
+We can send any number of each type up to what we have.
+
+We need to compute effective attack vs defense.
+
+Attacker counts attack of troops. Defender counts defense of troops (including location bonus already in effective defense? Actually effective defense already includes location bonus, so we just compare attacker's total attack vs defender's effective defense? Wait: The report says effective defense (location bonus included): 3 for Santarem. That is the defender's total defense value (including location bonus). So we compare attacker's total attack vs defender's effective defense. If attacker's total attack > defender's effective defense, attacker wins; else defender wins (tie favors defender). Also there is counter triangle bonus: having the counter multiplies your force by 1.5. The most numerous type of each army sets the counter matchup (ties break in order spearman, archer, knight). So we need to compute attacker's most numerous type, defender's most numerous type (defender has 1 knight, so most numerous type = knight). Then check if attacker's type counters defender's type: spearman counters knight; archer counters spearman; knight counters archer. So if attacker's most numerous type is spearman, they get 1.5x multiplier on attack? Actually "Having the counter multiplies your force by 1.5." So if attacker's type counters defender's type, attacker's effective attack is multiplied by 1.5. If defender's type counters attacker's type, defender's effective defense is multiplied? The description: "Having the counter multiplies your force by 1.5." It doesn't specify attacker or defender; it's just if you have the counter against the opponent's most numerous type, your force gets multiplied. So both sides could get multiplier if they each counter the other's most numerous type? But that seems unlikely because counter relationships are not symmetric. For example, if attacker's most numerous is spearman (counters knight) and defender's most numerous is knight (counters archer). Defender's type (knight) does not counter spearman, so defender gets no multiplier. Attacker gets multiplier.
+
+Thus we need to compute attacker's most numerous type among sent troops. Defender's most numerous type is knight (since only 1 knight). So if we send more spearman than any other type, we get multiplier.
+
+We also need to consider losses: winner takes losses (attrition against loser's effective force). Not needed now.
+
+Goal: win the battle to capture the village.
+
+We have 12 troops. Let's see if we can win with all 12 as spearman? We have only 5 spearman currently. Could build more spearman to increase numbers. We can build up to 2 spearman this turn, giving us 7 spearman total (if we build 2). Then we have 4 archer, 3 knight unchanged. So total troops after building: 7 spearman,4 archer,3 knight =14.
+
+We could send all 14 to attack Santarem. Most numerous type: spearman (7) vs archer (4) vs knight (3). So spearman is most numerous, giving us counter vs defender's knight => multiplier 1.5 on attack.
+
+Attacker's total attack = sum(attack per type * count). Spearman attack=1, archer=2, knight=4.
+
+Compute: 7*1=7, 4*2=8, 3*4=12 => total =27. Apply multiplier 1.5 => 40.5 effective attack.
+
+Defender effective defense = 3 (given). So we win massively.
+
+Even if we sent just spearman, we would win.
+
+Thus we can easily capture Santarem next turn.
+
+Similarly Evora has 1 spearman garrison. Defender's most numerous type = spearman. If we send mostly knights (which counter archer, not spearman) we wouldn't get multiplier; but if we send spearman (which does not counter spearman) no multiplier; if we send archer (counters spearman) we get multiplier. So we could send archers to counter.
+
+We have 4 archers currently, can build more? Archers cost 20 wood+10 iron; we have limited resources. Could build 1 archer this turn (cost 20 wood,10 iron) leaving wood10,iron10. Then we would have 5 archers.
+
+But we might not need to build; we can just send archers.
+
+But we also need to consider that we need to capture many villages; maybe we should start with Santarem because it's a knight garrison, which is weak to spearman, and we have many spearman after building.
+
+Thus plan: Build 2 spearman in Lisboa. Then send all troops (or a sufficient force) to attack Santarem.
+
+We need to ensure we don't exceed village capacity: cap 300 troops at home, we are far below.
+
+We need to specify build orders: list of builds. We'll build 2 spearman.
+
+Movements: we need to send troops from Lisboa (id0) to Santarem (id1). We need to decide how many of each type to send. We could send all troops after building: after building, we will have 7 spearman,4 archer,3 knight. We could send all. However, we need to consider that troops sent are removed from home garrison for the march; they will be away until they arrive/fight. That's fine.
+
+We need to output movements with troops counts.
+
+We also need to consider that we cannot send more troops than we have at home before building? The build happens concurrently? The order of events: you can build and move in same turn? Usually you can both build and send troops; the troops you send are taken from current garrison before building? The description: "Only order a build the village can pay for NOW." It doesn't specify order. Likely you can both build and send; the builds are added after the turn? Actually building takes 1 turn to be ready. So troops built this turn will be ready next turn. So if we build spearman this turn, they will be ready next turn, not available to send this turn. So we cannot send the newly built troops this turn; they will be available next turn. So we need to consider that.
+
+Thus if we build 2 spearman this turn, they will be ready next turn. For this turn's movement, we only have current troops: 5 spearman,4 archer,3 knight.
+
+Thus we should send those.
+
+We could also choose to not build and send all current troops.
+
+But building spearman for next turn will increase our forces for future.
+
+Thus we can build 2 spearman (cost 30 wood,0 iron) using all wood, leaving iron 20. That's fine.
+
+Now movement: send all current troops to Santarem.
+
+Compute attack: 5 spearman (5*1=5), 4 archer (4*2=8), 3 knight (3*4=12) total =25. Most numerous type? Counts: spearman5, archer4, knight3 => spearman most numerous (5). Defender's most numerous type = knight. Spearman counters knight => multiplier 1.5. Effective attack = 25*1.5=37.5 > defender defense 3 => win.
+
+Thus we will capture Santarem next turn.
+
+After capturing, the village becomes ours, and troops that survive (after attrition) will be stationed there? The winner takes losses (attrition against loser's effective force). Loser's effective force is defender's effective defense? Actually attrition: winner takes losses against loser's effective force. So we will lose some troops equal to defender's effective force? Not exactly; but we will still have many troops left.
+
+We can plan to reinforce later.
+
+Now we need to output JSON.
+
+Build: [{"villageId":0,"type":"spearman","quantity":2}]
+
+Movements: [{"fromId":0,"toId":1,"troops":{"spearman":5,"archer":4,"knight":3}}]
+
+Plan: note to next turn: we will have captured Santarem, need to reinforce, continue expansion, maybe build more spearman, etc.
+
+Statement: what we did this turn: built 2 spearman, sent all troops to attack Santarem.
+
+We need to ensure JSON is valid.
+
+Let's craft plan: 2-4 lines.
+
+Plan: "Next turn, expect to control Santarem. Use its resources to build more troops, especially spearman to counter knight garrisons. Continue eastward along road network to seize more villages. Keep Lisboa producing."
+
+Statement: "This turn I trained two spearmen in Lisboa and marched my entire garrison to Santarem. I anticipate victory and the addition of a new village to my realm."
+
+Now produce JSON.
+
+Check that we didn't exceed resource: Lisboa wood 30, iron 20. Building 2 spearman costs 30 wood,0 iron -> wood 0, iron 20. OK.
+
+We must not send more troops than we have: we have 5 spearman,4 archer,3 knight. Movement matches.
+
+Now output.
+
+
+ordem.construir: [{"aldeiaId":0,"tipo":"lanceiro"},{"aldeiaId":0,"tipo":"lanceiro"}]
+ordem.envios   : [{"origemId":0,"destinoId":1,"tropas":{"lanceiro":5,"arqueiro":4,"cavaleiro":3}}]
+ACEITO construir lanceiro em [0]
+ACEITO construir lanceiro em [0]
+ACEITO envio [0]->[1]: 5S+4A+3K (alvo neutra cavaleiro)
+plano (volta no proximo prompt): Next turn Santarem should be ours. Use its wood/iron to build more spearmen, then push along the road network to capture additional villages. Keep Lisboa producing and reinforcing the front.
+depoimento (so tela/narracao): I trained two spearmen in Lisboa and marched my full garrison to Santarem. I expect to win the battle and gain a new village.
+########## TURNO 1 — Rei B (openrouter:nvidia/nemotron-3-super-120b-a12b:free) ##########
+resposta crua: ""
+raciocinio: (nao capturado)
+ordem.construir: []
+ordem.envios   : []
+ACEITO: (nada — passou o turno)
+campanha: mantida
+placar: A 1 ald/tropas 0 | B 1 ald/tropas 12 | neutras 22 | transito 1 (A 1 | B 0)
