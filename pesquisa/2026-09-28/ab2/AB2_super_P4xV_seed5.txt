@@ -1,0 +1,93 @@
+=== PARTIDA Rei A (openrouter:nvidia/nemotron-3-super-120b-a12b:free) vs Rei B (openrouter:nvidia/nemotron-3-super-120b-a12b:free) | seed 5 | maxTurnos 30 | 9/29/2026, 12:07:03 AM ===
+condicoes: ambiente=iberia | temp=0 | prompt=P4 EN (esquema declarado, sem exemplo, sem minimos, vitoria real, reforco, quantidade) + FOG OF WAR + P5 EXPERIMENTAL (A: P4 | B: regras,combate,intencao,alcance,capital,vigia,campanha,frente) + combate v3 (atq/def, counter 1.5) + clamp | regras=v4 (counter 1.5, cav def2/1t, madeira 30, dist x0.2, vitoria 75%/2t) | mesa: ordem espelhada + chegada sorteada | thinking=on (sem limite) | max_tokens_resposta=128000 (default alto, auto-ajustavel por modelo)
+
+########## TURNO 1 — Rei A (openrouter:nvidia/nemotron-3-super-120b-a12b:free) ##########
+tokens.contexto: prompt 2448 | resposta 1792 | raciocinio 1713 | finish stop | ms 21653
+resposta crua: "{\n  \"build\": [],\n  \"movements\": [\n    {\n      \"fromId\": 0,\n      \"toId\": 1,\n      \"troops\": {\n        \"spearman\": 5,\n        \"archer\": 4,\n        \"knight\": 3\n      }\n    }\n  ],\n  \"plan\": \"Next turn, expect to hold Santarem. Build more troops in Lisboa and Santarem to prepare for Evora. Keep watch for enemy movements from unseen villages. Do not split forces; keep a strong garrison.\",\n  \"statement\": \"Marched all available troops from Lisboa to Santarem to seize the neutral village and expand our kingdom.\\nWe hope to capture it next turn and gain its resources.\\nNo enemy armies were sighted. Our forces remain ready for further expansion.\"\n}"
+raciocinio: We need to decide a strategy. We have only one village: Lisboa (id 0). It has 5 spear, 4 archer, 3 knight = total 12 troops. We can build more troops using resources. Each turn, Lisboa produces 30 wood, 20 iron. We can spend resources to build troops. Build costs: spear 15 wood, 0 iron; archer 20 wood +10 iron; knight 30 wood +30 iron.
+
+We have current resources? Not given, but we can assume starting resources are zero? Usually they'd have some stock from previous turn? Not given. We'll assume we have zero at start of turn 1? But we can build using this turn's production? The rule: "Only order a build the village can pay for NOW." So we need to consider current stock. Not given, but we can infer maybe they have some stock from previous turn? Since it's turn 1, maybe they have zero. However they have troops already present (12). Those were built earlier? Might be initial garrison. We'll assume we have zero resources now, but we will get production after building? Usually production occurs at start of turn? Not clear. For safety, we can build zero this turn, or we can assume we have some stock. Let's assume we have zero and cannot build.
+
+We need to capture villages to increase count. We see two neutral villages: Santarem (id1) with 1 knight garrison, Evora (id2) with 1 spearman garrison. Both are 1 turn away (any speed). We can attack them.
+
+We need to decide which to attack first. We have troops: 5 spear, 4 archer, 3 knight. We can send some to attack.
+
+Combat: Attacker uses attack values; defender uses defense values (including location bonus). For neutral village, defense is effective defense already includes location bonus (they are villages, not castles). Effective defense for Santarem: 3 (given). For Evora: 3.
+
+We need to compute effective force: attacker's total attack * (counter multiplier if applicable) vs defender's effective defense * (defender's troops? Actually defender's effective defense already includes location bonus but not troop count? Wait: effective defense values in the report ALREADY include the location bonus. Use them directly; do not apply the bonus again. But effective defense is per troop? Or total? Usually defense value per troop? The report shows effective defense (location bonus included): 3 for Santarem with garrison 1 knight. Knight defense is 2, plus location bonus? Village defense bonus is x1.25? Actually defending is easier: defense counts x1.25 in a village. So knight defense 2 *1.25 = 2.5, rounded? They show 3. So effective defense seems to be total defense of garrison after applying village bonus. So we can compare attacker's total attack (with counter) vs defender's effective defense.
+
+Thus to win, attacker's effective attack > defender's effective defense.
+
+We need to compute attacker's effective attack: sum of (troop count * attack) * counter multiplier if applicable.
+
+Counter triangle: Having the counter multiplies your force by 1.5. The most numerous type of each army sets the counter matchup (ties break in order spearman, archer, knight). So we need to determine our army's most numerous type, and defender's most numerous type (based on garrison). Then if our type counters defender's type, we get 1.5x multiplier.
+
+For Santarem: garrison 1 knight => most numerous type = knight (only). Our army: we have 5 spear, 4 archer, 3 knight => most numerous = spearman (5). Spearman counters knight (spearman vs knight). So we get 1.5x multiplier.
+
+For Evora: garrison 1 spearman => most numerous = spearman. Our most numerous = spearman (tie). Tie breaks in order spearman, archer, knight => spearman wins tie? Actually ties in count break in the order spearman, archer, knight. So if both have spearman as most numerous, then our type = spearman, defender's type = spearman. Does spearman counter spearman? No, counter only specific: spearman counters knight; archer counters spearman; knight counters archer. So same type gives no multiplier.
+
+Thus attacking Santarem gives us 1.5x multiplier; attacking Evora gives none.
+
+We should attack Santarem.
+
+Now compute attacker's effective attack if we send all troops: total attack = 5*1 + 4*2 + 3*4 = 5 + 8 + 12 = 25. Multiply by 1.5 = 37.5. Defender effective defense = 3. So we win easily.
+
+Losses: winner takes losses (attrition against loser's effective force). Loser's effective force = defender's effective defense? Actually loser's effective force is defender's effective force (defense). So we lose some troops equal to loser's effective force? Not exactly defined but we can approximate we lose some troops proportional. But we will win decisively.
+
+We need to consider movement: travel time 1 turn (any speed). So if we send now, they will arrive next turn and fight then? Actually orders are simultaneous; movement takes turns. So if we send now, they will arrive after 1 turn (i.e., at start of turn 2?) and fight then. During that turn, enemy may also move/build.
+
+We have no enemy armies sighted.
+
+We could also consider building troops while sending? But we cannot send troops that we build this turn because they'd be ready in 1 turn (build completes next turn). So we could build and send next turn.
+
+Simplify: This turn, send all troops to Santarem to capture it. After capture, we will have that village (id1) under our control, gaining its production next turn.
+
+We need to write orders: build list empty, movements list with one movement from 0 to 1 with troops: all spear, archer, knight.
+
+But we must ensure we don't exceed village's troops: we have exactly those numbers.
+
+Thus movement: fromId 0, toId 1, troops: {"spearman":5, "archer":4, "knight":3}.
+
+Now we need plan and statement.
+
+Plan: note to next turn: we will have captured Santarem, need to reinforce, maybe build more troops, consider attacking Evora next, watch for enemy movements, etc.
+
+Statement: what we did this turn: we marched all troops to Santarem to capture the neutral village.
+
+Now produce JSON.
+
+Check constraints: plan 2-4 lines, statement 2-4 lines. We'll write short.
+
+Let's craft:
+
+plan: "Next turn, expect to hold Santarem. Build more troops in Lisboa and Santarem to prepare for Evora. Keep watch for enemy movements from unseen villages. Do not split forces; keep a strong garrison."
+
+That's 3 lines? Actually lines separated by newline. We'll write as a single string with \n? The spec says "2 to 4 lines". We'll include line breaks.
+
+Statement: "Marched all available troops from Lisboa to Santarem to seize the neutral village and expand our kingdom."
+
+That's 1 line; need 2-4 lines. Add more: "We hope to capture it next turn and gain its resources. No enemy armies were sighted. Our forces remain ready for further expansion."
+
+That's 3 lines.
+
+Now produce JSON.
+
+Check IDs: villageId 0 exists. toId 1 exists.
+
+Now output.
+
+
+ordem.construir: []
+ordem.envios   : [{"origemId":0,"destinoId":1,"tropas":{"lanceiro":5,"arqueiro":4,"cavaleiro":3}}]
+ACEITO envio [0]->[1]: 5S+4A+3K (alvo neutra cavaleiro)
+plano (volta no proximo prompt): Next turn, expect to hold Santarem. Build more troops in Lisboa and Santarem to prepare for Evora. Keep watch for enemy movements from unseen villages. Do not split forces; keep a strong garrison.
+depoimento (so tela/narracao): Marched all available troops from Lisboa to Santarem to seize the neutral village and expand our kingdom.
+We hope to capture it next turn and gain its resources.
+No enemy armies were sighted. Our forces remain ready for further expansion.
+########## TURNO 1 — Rei B (openrouter:nvidia/nemotron-3-super-120b-a12b:free) ##########
+resposta crua: ""
+raciocinio: (nao capturado)
+ordem.construir: []
+ordem.envios   : []
+ACEITO: (nada — passou o turno)
+placar: A 1 ald/tropas 0 | B 1 ald/tropas 12 | neutras 22 | transito 1 (A 1 | B 0)
