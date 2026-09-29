@@ -322,6 +322,19 @@ informação que mexe na logística. No Super não mexe nada.
 
 **Candidato para as próximas partidas A/B**: as seis verdades + campanha + frente.
 
+### O candidato e a campanha em dois campos (29/09, 16 partidas A/B)
+
+| versão contra o P4 | à frente | atrás | o que mudou |
+|---|---|---|---|
+| **candidato** (seis verdades + campanha + frente) | **5** | 3 | no dots, a tropa do interior que sai sobe em 3 de 4 partidas (38/15, 44/11, 47/21): a primeira melhora de logística EM PARTIDA |
+| **campanha em dois campos** (guardada, volta até o Rei a mudar) | 1 | **7 (5 vitórias do P4)** | no dots, ataca menos nas 4 partidas |
+| campanha em dois campos + janela (exploratório, 2 partidas) | 0 | 2 | mais logística, menos ataque |
+
+**A lição**: a campanha ajuda quando é **repensada todo turno** (num campo só: 7 à frente,
+4 atrás, 1 empate) e atrapalha quando é **guardada** (1 à frente, 7 atrás). Uma
+estratégia escrita no passado vira âncora: o Rei segue um plano que o mapa já desmentiu.
+A ideia dos dois campos foi boa de testar e o número disse não.
+
 ---
 
 ## 8. O que isto diz sobre o benchmark

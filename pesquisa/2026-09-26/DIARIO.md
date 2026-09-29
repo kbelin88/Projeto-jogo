@@ -507,3 +507,46 @@ seed 3, assentos trocados, teto 25 (cabia nas 147 requisições que sobravam).
 - `lancar_ab_campanha2.sh` → `pesquisa/2026-09-30/ab_campanha2/`: P4 × **campanha em dois
   campos**, sem janela, o mesmo desenho (Resultado 14; adiantado de 30/09).
 - O lembrete de 30/09 passa a: repetir com seeds novas (7 e 9) a versão que se sair melhor.
+
+## Resultado 13 — o CANDIDATO (verdades + campanha + frente) em 8 partidas A/B (29/09)
+
+| partida | resultado | candidato | tropa do interior que sai/turno cand./P4 |
+|---|---|---|---|
+| dots s3 (cand.=B) | limite 16×8 | atrás | **38% / 15%** |
+| dots s5 (cand.=B) | A vence 18×6 | perde | **44% / 11%** |
+| dots s3 (cand.=A) | limite 14×10 | à frente | 30% / 29% |
+| dots s5 (cand.=A) | A vence 19×5 | **vence** | **47% / 21%** |
+| Super s3 (cand.=B) | limite 10×14 | à frente | 5% / 5% |
+| Super s5 (cand.=B) | limite 7×17 | à frente | 11% / 13% |
+| Super s3 (cand.=A) | limite 16×8 | à frente | 9% / 6% |
+| Super s5 (cand.=A) | limite 6×18 | atrás | 8% / 8% |
+
+- **Candidato à frente em 5 de 8** (Super 3–1, dots 2–2; no dots o assento A ganhou as
+  duas seeds, com e sem o candidato).
+- **A logística do dots melhora EM PARTIDA** pela primeira vez: a tropa do interior que sai
+  sobe em 3 das 4 (38/15, 44/11, 47/21) e fica igual na outra. É o mapa da frente (que na
+  sonda já tinha mexido no dots). No Super, nada, como sempre.
+
+## Resultado 14 — a CAMPANHA EM DOIS CAMPOS (sem janela) em 8 partidas A/B (29/09)
+
+| partida | resultado | campanha2 | ataques/turno c2/P4 | campanha nova/mantida |
+|---|---|---|---|---|
+| dots s3 (c2=B) | limite 17×7 | atrás | 1,2 / 1,4 | 20 / 10 |
+| dots s5 (c2=B) | **P4 vence** 18×6 | perde | 1,1 / 1,4 | 17 / 8 |
+| dots s3 (c2=A) | **P4 vence** 6×18 | perde | 1,2 / 1,6 | 18 / 8 |
+| dots s5 (c2=A) | **P4 vence** 6×18 | perde | 1,0 / 1,4 | 13 / 11 |
+| Super s3 (c2=B) | **P4 vence** 18×5 | perde | 0,9 / 0,9 | 13 / 15 |
+| Super s5 (c2=B) | **P4 vence** 18×6 | perde | 0,6 / 1,1 | 9 / 15 |
+| Super s3 (c2=A) | limite 9×15 | atrás | 1,3 / 0,9 | 16 / 14 |
+| Super s5 (c2=A) | limite 14×10 | à frente | 2,0 / 1,1 | 17 / 13 |
+
+- **A campanha guardada perde: P4 à frente em 7 de 8, 5 vitórias** (sinais p≈0,07).
+  No dots, o lado com ela ataca menos nas 4 partidas.
+- Somado com as 2 partidas da janela (Resultado 12, também perdidas): **guardar a
+  campanha ou a resposta anterior torna o Rei mais preso ao plano e menos agressivo.**
+- **Contraste com a campanha num campo só** (reescrita todo turno): 7 à frente, 4 atrás,
+  1 empate. A diferença não é "ter campanha", é **repensá-la todo turno**. Uma estratégia
+  guardada vira âncora: o Rei segue um plano que o mapa já desmentiu.
+
+**Decisão da réplica (30/09)**: repete-se o CANDIDATO (a melhor versão) com seeds 7 e 9.
+A campanha em dois campos sai.
