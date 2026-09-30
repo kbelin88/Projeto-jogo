@@ -1,0 +1,1101 @@
+=== PARTIDA Rei A (openrouter:nvidia/nemotron-3-super-120b-a12b:free) vs Rei B (openrouter:nvidia/nemotron-3-super-120b-a12b:free) | seed 7 | maxTurnos 30 | 9/30/2026, 2:39:45 AM ===
+condicoes: ambiente=iberia | temp=0 | prompt=P4 EN (esquema declarado, sem exemplo, sem minimos, vitoria real, reforco, quantidade) + FOG OF WAR + P5 EXPERIMENTAL (A: P4 | B: regras,combate,intencao,alcance,capital,vigia,campanha,frente) + combate v3 (atq/def, counter 1.5) + clamp | regras=v4 (counter 1.5, cav def2/1t, madeira 30, dist x0.2, vitoria 75%/2t) | mesa: ordem espelhada + chegada sorteada | thinking=on (sem limite) | max_tokens_resposta=128000 (default alto, auto-ajustavel por modelo)
+
+=== RETOMADA de pesquisa/2026-09-30/ab2_replica/AB2_super_P4xV_seed7.replay.json no turno 10 ===
+>>> memoria de fog, historico de defesa e contagem de dominancia recomecam aqui.
+########## TURNO 11 — Rei A (openrouter:nvidia/nemotron-3-super-120b-a12b:free) ##########
+tokens.contexto: prompt 3265 | resposta 6871 | raciocinio 6014 | finish stop | ms 73144
+resposta crua: "{\n  \"build\": [\n    {\"villageId\":0,\"type\":\"archer\",\"quantity\":6},\n    {\"villageId\":1,\"type\":\"archer\",\"quantity\":8},\n    {\"villageId\":2,\"type\":\"archer\",\"quantity\":8},\n    {\"villageId\":3,\"type\":\"archer\",\"quantity\":7},\n    {\"villageId\":4,\"type\":\"archer\",\"quantity\":8},\n    {\"villageId\":5,\"type\":\"archer\",\"quantity\":8},\n    {\"villageId\":6,\"type\":\"archer\",\"quantity\":6}\n  ],\n  \"movements\": [\n    {\"fromId\":0,\"toId\":4,\"troops\":{\"spearman\":0,\"archer\":1,\"knight\":0}},\n    {\"fromId\":1,\"toId\":4,\"troops\":{\"spearman\":0,\"archer\":1,\"knight\":0}},\n    {\"fromId\":2,\"toId\":4,\"troops\":{\"spearman\":0,\"archer\":1,\"knight\":0}},\n    {\"fromId\":3,\"toId\":4,\"troops\":{\"spearman\":0,\"archer\":1,\"knight\":0}},\n    {\"fromId\":5,\"toId\":4,\"troops\":{\"spearman\":0,\"archer\":1,\"knight\":0}}\n  ],\n  \"plan\": \"Next turn I will mass a strong archer force at Badajoz to attack Toledo (or Sevilha) and capture it, expanding my holdings.\",\n  \"statement\": \"I ordered archers to be built in all my villages and sent a contingent of archers to reinforce Badajoz for a future offensive.\"\n}"
+raciocinio: We need to decide orders. We have 7 villages, each with resources and troops. We need to build troops to increase numbers, and perhaps send some to capture neutral or enemy villages. Goal: hold at least 18 of 24 villages for 2 consecutive turns, or eliminate all enemy villages. Currently hold 7. Need to expand.
+
+We see enemy village Toledo [8] with garrison 2 spearmen, 2 knights. Effective defense 10 (includes location bonus). We can attack from Badajoz [4] (border) with travel time 1 slow/1 medium/1 fast turn. So if we send troops now, they will arrive next turn? Actually movement takes turns; if travel time is 1 turn (any speed), they will arrive after that many turns. Since we are at turn 11, ordering now will have them march and arrive after travel time. They will fight upon arrival at first non-owned village on path. Since Toledo is enemy and directly adjacent via road from Badajoz, they will fight there upon arrival.
+
+We need to consider building troops now to have enough to attack.
+
+We have resources per village: each village produces 30 wood, 20 iron per turn. They have current wood/iron stocks as listed.
+
+We can build troops now from each village's available resources, respecting per-village cap of 300 troops at home (currently far below). Builds take 1 turn to be ready (i.e., they will be available next turn? The description: "ready in 1 turn." Means if you order build now, they finish next turn and can be sent then? Usually you can send them same turn? It says "Only order a build the village can pay for NOW." And "Each village you hold produces resources every turn, and resources are what build your army." Likely building takes 1 turn, so troops appear at end of turn? For simplicity, we can assume they are available for movement next turn. We'll plan to build now and send next turn.
+
+We have marching armies none currently.
+
+We need to decide what to build: we need a mix to counter enemy composition. Enemy Toledo has 2 spearmen, 2 knights. Most numerous type? They have equal spearmen and knights (2 each). Tie break order: spearman, archer, knight. So most numerous type is spearman (since tie broken in favor of spearman). So enemy's most numerous type is spearman. Counter triangle: spearman counters knight; archer counters spearman; knight counters archer. Since enemy's most numerous is spearman, we want to have archer as our most numerous to counter spearman (archer counters spearman). So we should build archers primarily.
+
+But also we need to consider defense: we will be attacking, so we attack with our troops' attack values. If we have archers as most numerous, we get counter bonus vs spearman (enemy's most numerous). That gives 1.5 multiplier to our force.
+
+We need to compute effective force: our attack * multiplier if we have counter. Defender's defense * location bonus (already included). We need to overcome.
+
+Let's compute needed force.
+
+Enemy Toledo: garrison 2 spearmen (attack 1 each, defense 2 each) and 2 knights (attack 4 each, defense 2 each). For defense, we use effective defense already includes location bonus: 10. That's the total defense value? Probably effective defense is sum of defense values of troops with location bonus applied. So we can just compare our effective attack force vs their effective defense 10.
+
+Our attack: if we send X archers (attack 2 each) and maybe some spearmen/knights. If archers are most numerous, we get 1.5 multiplier on total attack? The description: "Having the counter multiplies your force by 1.5." Likely multiplies your total force (attack) if you have counter advantage. So we compute total attack (sum of attack values) then multiply by 1.5 if we have counter.
+
+We need to exceed 10.
+
+Let's say we send 4 archers: attack = 4*2=8. If archers are most numerous (yes), we get 1.5 => 12 >10, we win. Losses: winner takes losses (attrition against loser's effective force). Loser's effective force is defender's effective defense? Actually loser's effective force is defender's effective force (defense). So we lose some troops equal to loser's effective force? Not exactly; but we can approximate we will lose some troops.
+
+Thus sending 4 archers from Badajoz could win.
+
+But we need to consider travel time: 1 turn. So if we send now, they arrive turn 12 and fight then. We need to hold village after winning.
+
+We also need to consider building archers now to have enough to send.
+
+Check Badajoz resources: wood 160, iron 130. To build archers: each costs 20 wood +10 iron. We have enough for many.
+
+We also have other villages that could send reinforcements.
+
+But we must also consider that we cannot send troops past an enemy or neutral village to hit one behind it. Since Toledo is directly adjacent, fine.
+
+We also need to consider that enemy may move or build. No enemy armies sighted.
+
+We could also consider capturing neutral villages to increase holdings. Neutral villages: Salamanca [7] (3 knights), Vigo [10] (5 spearmen), Sevilha [9] (4 spearmen). Sevilha is also adjacent to Badajoz via road [4]-[9] with travel time 2 slow/1 medium/1 fast turns. So we could attack Sevilha as well.
+
+Goal: get to 18 villages. We have 7. Need 11 more. There are 17 neutral/enemy villages total (since total 24, we hold 7, enemy holds at least 1 (Toledo) maybe more unseen). So we need to capture many.
+
+But we can only send limited troops per turn due to resources.
+
+We need to plan a sustainable expansion: produce archers, send them to capture neutrals, then use those villages to produce more troops.
+
+We need to consider that each village caps at 300 troops, but we are far from that.
+
+We should focus on building archers in all villages, then send waves.
+
+Let's compute resource production per village per turn: 30 wood, 20 iron.
+
+If we build archers each turn, each costs 20 wood,10 iron. So each village can support 1 archer per turn (since wood 30 -> 1 archer uses 20 wood leaving 10 wood; iron 20 -> 1 archer uses 10 iron leaving 10 iron). Actually could build 1 archer per turn, leaving surplus resources. Could also build spearmen (15 wood,0 iron) - could build 2 spearmen per turn (30 wood) using no iron. Or knights (30 wood,30 iron) limited by iron.
+
+Thus archers are reasonable.
+
+We need to send troops to attack; sending reduces home garrison.
+
+We should keep some troops at home for defense (though interior villages have low defense but unlikely attacked). Border village Badajoz may be attacked.
+
+We need to defend Badajoz: currently has 3 troops at home (2 spearman,1 archer). Effective defense 8. If enemy attacks, we need to hold.
+
+We could reinforce Badajoz with troops from interior.
+
+Now, let's decide orders for this turn.
+
+We will build archers in each village as much as possible given resources.
+
+Compute each village's available resources and max archers we can build now (integer). We'll also consider building some spearmen maybe for defense.
+
+But we need to send troops now to attack Toledo or Sevilha.
+
+We have no marching armies currently, so we can send now.
+
+We need to ensure we don't send more troops than available to send now (listed under AVAILABLE TO SEND NOW). That list shows what we can send now without building? It shows troops at home minus maybe some reserved? Actually "AVAILABLE TO SEND NOW: ..." likely the number of troops you can send now (i.e., you can send up to that number). It seems based on troops at home minus maybe some needed for defense? But we can send any number up to that? The description: "AVAILABLE TO SEND NOW: ..." likely the number you can send now without leaving the village defenseless? But we can also send troops that we build this turn? Probably not; builds take a turn.
+
+Thus we should use the available to send now for immediate attacks. We can also send troops we built previous turn (none). So we can send up to those numbers.
+
+Let's list available to send now per village:
+
+Lisboa [0]: 8 spearman, 1 archer, 0 knight
+Santarem [1]: 0 spearman, 2 archer, 0 knight
+Evora [2]: 0 spearman, 2 archer, 0 knight
+Coimbra [3]: 0 spearman, 2 archer, 0 knight
+Badajoz [4]: 2 spearman, 1 archer, 0 knight
+Faro [5]: 2 spearman, 1 archer, 1 knight
+Porto [6]: 0 spearman, 1 archer, 0 knight
+
+We could send a combination.
+
+We need to attack Toledo [8] from Badajoz [4] (distance 1 turn). Available from Badajoz: 2 spearman,1 archer. That's only 3 troops. Not enough to win likely.
+
+We could also send reinforcements from other villages to Badajoz first (reinforce) then attack next turn. But we cannot send troops through an enemy village; but we can send to Badajoz (owned) from other villages via roads.
+
+We could send troops from Lisboa, Santarem, etc to Badajoz to reinforce, then next turn attack.
+
+But we also could attack Sevilha [9] from Badajoz with travel time 2 slow/1 medium/1 fast turns (so 1 turn if fast? Actually the fastest speed determines travel time? The travel time per speed: e.g., "march from [x]: 5 slow / 3 medium / 2 fast turns". For Badajoz to Sevilha: 2 slow / 1 medium / 1 fast turns. So if we send a fast troop (knight) it takes 1 turn; medium (archer) 1 turn; slow (spearman) 2 turns. Since we have mostly archers and spearmen, we need to consider.
+
+We have archers (medium) from Badajoz: 1 archer available, would take 1 medium turn = 1 turn to reach Sevilha. Spearmen would take 2 turns.
+
+Thus we could send the archer now to Sevilha arriving next turn.
+
+But we need enough force.
+
+Alternatively, we could build more archers in Badajoz this turn to increase available to send next turn.
+
+Let's compute resources: Badajoz wood 160, iron 130. Can build archers: each 20 wood,10 iron. Max archers limited by wood: floor(160/20)=8; iron: floor(130/10)=13. So 8 archers possible. Building 8 archers would cost 160 wood,80 iron, leaving wood 0, iron 50. After building, they will be ready next turn.
+
+Thus next turn we could have many archers to send.
+
+Similarly other villages can build archers.
+
+Thus a good plan: this turn, build archers in all villages as much as possible, and send available troops to reinforce Badajoz (or directly attack if enough). Next turn, launch attack.
+
+We also need to consider that we must not exceed 300 troops at home after building; we are far.
+
+Now compute builds per village:
+
+We'll decide to build archers only, using as many resources as possible but maybe keep some resources for future.
+
+But we need to ensure we don't overspend iron; we have plenty.
+
+Let's compute each village's wood and iron, and max archers:
+
+Lisboa: wood130, iron180. Max archers wood: floor(130/20)=6; iron: floor(180/10)=18 => 6 archers. Cost: wood120, iron60 -> remaining wood10, iron120.
+
+Santarem: wood160, iron120. Archers: wood8, iron12 => 8 archers (wood160, iron80) -> remaining wood0, iron40.
+
+Evora: wood160, iron120 -> same 8 archers.
+
+Coimbra: wood150, iron110 -> wood7 (140), iron11 (110) => 7 archers (wood140, iron70) -> remaining wood10, iron40.
+
+Badajoz: wood160, iron130 -> 8 archers (wood160, iron80) -> remaining wood0, iron50.
+
+Faro: wood160, iron130 -> 8 archers (wood160, iron80) -> remaining wood0, iron50.
+
+Porto: wood120, iron80 -> wood6 (120), iron8 (80) => 6 archers (wood120, iron60) -> remaining wood0, iron20.
+
+Total archers built: 6+8+8+7+8+8+6 = 51 archers.
+
+That's a lot; will exceed home capacity? Each village currently has low troops; adding these will increase home troops significantly but still under 300.
+
+Let's compute new home troops after building (assuming builds ready next turn, but they'd be added to home after build completes). For planning, we can note.
+
+But we also need to consider sending troops now: we can send available to send now (pre-build). We might want to send some to reinforce Badajoz now.
+
+Let's decide to send from Lisboa 8 spearman,1 archer to Badajoz (distance? Lisboa to Badajoz path: Lisboa [0] - Santarem [1] - Badajoz [4]? Actually road: Lisboa connects to Santarem and Evora. Santarem connects to Lisboa, Coimbra, Badajoz. So Lisboa -> Santarem (1 turn) -> Badajoz (another turn) total 2 turns? But we need to check travel times: from Lisboa to nearest border village [4] Badajoz: given as "from here to your nearest border village [4] Badajoz: 2 slow / 1 medium / 1 fast turns". So Lisboa to Badajoz takes 1 turn if fast (knight), 1 turn if medium (archer), 2 turns if slow (spearman). So sending archers (medium) takes 1 turn. Spearmen take 2 turns.
+
+Thus if we send archers from Lisboa to Badajoz now, they arrive next turn.
+
+Similarly Santarem to Badajoz: "from here to your nearest border village [4] Badajoz: 1 slow / 1 medium / 1 fast turns". So archers (medium) take 1 turn.
+
+Evora to Badajoz: 2 slow /1 medium/1 fast => archers 1 turn.
+
+Coimbra to Badajoz: 2 slow/1 medium/1 fast => archers 1 turn.
+
+Faro to Badajoz: 1 slow/1 medium/1 fast => archers 1 turn.
+
+Porto to Badajoz: 2 slow/2 medium/1 fast => archers 2 turns? Actually medium is 2 turns per report: "from here to your nearest border village [4] Badajoz: 2 slow / 2 medium / 1 fast turns". So archers (medium) take 2 turns.
+
+Thus we can send archers from most villages to Badajoz arriving next turn.
+
+We could also send spearmen but they'd take longer.
+
+Goal: reinforce Badajoz with archers to have strong attack force next turn.
+
+We also might want to send some troops to attack Sevilha now? But we lack enough.
+
+Let's compute available archers to send now from each village (from list):
+
+Lisboa: 1 archer
+Santarem: 2 archers
+Evora: 2 archers
+Coimbra: 2 archers
+Badajoz: 1 archer
+Faro: 1 archer
+Porto: 1 archer
+
+Total archers available now: 1+2+2+2+1+1+1 = 10 archers.
+
+We could send all these archers to Badajoz (or directly to Toledo/Sevilha) arriving next turn (except Porto takes 2 turns). But we need to consider that sending troops from a village reduces its available to send now; but we can send all.
+
+If we send all archers to Badajoz, they will arrive next turn (except Porto's archers take 2 turns). Let's compute arrival:
+
+- Lisboa archer: 1 turn (medium) -> arrives turn12.
+- Santarem 2 archers: 1 turn -> turn12.
+- Evora 2 archers: 1 turn -> turn12.
+- Coimbra 2 archers: 1 turn -> turn12.
+- Badajoz archer: staying? Actually sending from Badajoz to Badajoz? Not needed.
+- Faro archer: 1 turn -> turn12.
+- Porto archer: 2 turns -> turn13.
+
+Thus by turn12 we will have many archers at Badajoz.
+
+Additionally, we will have built archers this turn that will be ready next turn (turn12) and can be sent then (or stay). So by turn12 we could have a large garrison.
+
+Thus plan: this turn, build archers everywhere, send available archers to Badajoz (reinforce). Next turn, we will have a strong force at Badajoz to attack Toledo or Sevilha.
+
+We also need to consider defending Badajoz: we will be sending away many troops, leaving Badajoz possibly weak. But we will also have built archers there (8) arriving next turn, plus we might keep some.
+
+We should keep some troops in Badajoz for defense. Perhaps we send only a portion.
+
+Let's compute Badajoz current home troops: 3 (2 spearman,1 archer). Available to send now: 2 spearman,1 archer. If we send all, Badajoz would have 0 troops left (defenseless). Not good.
+
+We should keep at least some for defense. Maybe send only the archer and keep spearmen? Or send none and reinforce later.
+
+Better: we send reinforcements to Badajoz, not away.
+
+Thus we should send archers from other villages TO Badajoz, not from Badajoz out.
+
+Thus we will not send from Badajoz; we will keep its troops.
+
+Thus we will send archers from Lisboa, Santarem, Evora, Coimbra, Faro, Porto to Badajoz.
+
+Now compute how many we can send: each village's available archers as above.
+
+Lisboa: 1 archer
+Santarem: 2
+Evora: 2
+Coimbra: 2
+Faro: 1
+Porto: 1
+
+Total = 9 archers.
+
+We could send all.
+
+Now we need to ensure we don't exceed the village's capacity to send (they have those numbers). Yes.
+
+Now we need to write orders: movements list with fromId, toId, troops.
+
+We'll send each group separately? Could combine but spec says each send fights alone; we can send multiple movements.
+
+We'll create movements for each village.
+
+Now builds: we will build archers in each village as many as possible (as computed). However we must ensure we can pay for them NOW. We have resources as listed; we will spend them.
+
+We need to output build array with objects.
+
+We'll compute for each village the number of archers to build.
+
+But we must also consider that building archers consumes resources; we must not exceed available.
+
+We'll use the max we computed.
+
+Now we need to ensure we don't exceed 300 troops at home after building (but they'll be added next turn). Currently home troops low; adding up to maybe 50 per village still far below 300.
+
+Thus fine.
+
+Now we need to write plan and statement.
+
+Plan: note to next turn: we will have reinforced Badajoz with archers, built archers everywhere, next turn we will attack Toledo (or Sevilha) with overwhelming archer force to capture.
+
+Statement: what we did this turn: we built archers in all villages and sent available archers to reinforce Badajoz.
+
+Now we need to format JSON.
+
+Let's compute builds precisely:
+
+Lisboa: build 6 archers.
+Santarem: 8 archers.
+Evora: 8 archers.
+Coimbra: 7 archers.
+Badajoz: 8 archers.
+Faro: 8 archers.
+Porto: 6 archers.
+
+Check resources after building: we already computed remaining.
+
+Now movements:
+
+From Lisboa [0] to Badajoz [4]: troops: archer 1.
+From Santarem [1] to Badajoz [4]: archers 2.
+From Evora [2] to Badajoz [4]: archers 2.
+From Coimbra [3] to Badajoz [4]: archers 2.
+From Faro [5] to Badajoz [4]: archers 1.
+From Porto [6] to Badajoz [4]: archers 1.
+
+We could also send spearmen? Not needed.
+
+Now we need to ensure we don't send more than available to send now. Check each:
+
+Lisboa available: 8 spearman,1 archer -> sending 1 archer ok.
+Santarem: 0 spearman,2 archer -> sending 2 archers ok.
+Evora: 0 spearman,2 archer -> ok.
+Coimbra: 0 spearman,2 archer -> ok.
+Faro: 2 spearman,1 archer,1 knight -> sending 1 archer ok.
+Porto: 0 spearman,1 archer,0 knight -> sending 1 archer ok.
+
+Now we need to consider that sending troops reduces the village's home garrison instantly? Probably yes; they leave immediately. That's fine.
+
+Now we need to compute statement: "I ordered archers to be built in every village and sent available archers to reinforce Badajoz for a upcoming assault."
+
+Plan: "Next turn I will amass a large archer force at Badajoz to attack Toledo (or Sevilha) and capture it, expanding my holdings."
+
+Now we need to output JSON.
+
+Let's craft.
+
+{
+  "build": [
+    {"villageId":0,"type":"archer","quantity":6},
+    {"villageId":1,"type":"archer","quantity":8},
+    {"villageId":2,"type":"archer","quantity":8},
+    {"villageId":3,"type":"archer","quantity":7},
+    {"villageId":4,"type":"archer","quantity":8},
+    {"villageId":5,"type":"archer","quantity":8},
+    {"villageId":6,"type":"archer","quantity":6}
+  ],
+  "movements": [
+    {"fromId":0,"toId":4,"troops":{"spearman":0,"archer":1,"knight":0}},
+    {"fromId":1,"toId":4,"troops":{"spearman":0,"archer":2,"knight":0}},
+    {"fromId":2,"toId":4,"troops":{"spearman":0,"archer":2,"knight":0}},
+    {"fromId":3,"toId":4,"troops":{"spearman":0,"archer":2,"knight":0}},
+    {"fromId":5,"toId":4,"troops":{"spearman":0,"archer":1,"knight":0}},
+    {"fromId":6,"toId":4,"troops":{"spearman":0,"archer":1,"knight":0}}
+  ],
+  "plan": "Next turn I will have a strong archer garrison at Badajoz to launch an attack on Toledo (or Sevilha) and capture it, expanding my territory.",
+  "statement": "I ordered archers to be built in all my villages and sent the available archers to reinforce Badajoz for a future offensive."
+}
+
+Check JSON validity: no trailing commas.
+
+Now ensure we didn't exceed any limits: movements list okay.
+
+Now we should double-check that we didn't send troops from a village that doesn't have that many archers available to send now. We used available numbers.
+
+Now we should also consider that we might want to keep some archers in each village for defense; but we sent all available archers from each village, leaving them with zero archers available to send now, but they still have other troops (spearmen, knights) maybe. Let's see each village's remaining troops after sending:
+
+Lisboa: originally 9 spearman,10 archer,1 knight? Actually Lisboa troops at home: 9 spearman,10 archer,1 knight. Available to send now: 8 spearman,1 archer. We sent 1 archer. So remaining troops at home: 9 spearman, (10-1)=9 archer,1 knight. Plus we will build 6 archers (arriving next turn). So fine.
+
+Santarem: troops at home: 2 archer. Available to send now: 0 spearman,2 archer,0 knight. We sent 2 archers, leaving 0 archers. They have 0 troops at home after sending? Actually they had 2 archers total; after sending both, they have 0 troops at home. That's risky; they'd be defenseless. But they are interior, no enemy border; but still could be attacked if enemy reaches them via road? Enemy could come via Toledo? Not likely immediate. But we might want to leave at least some troops.
+
+We should adjust: maybe send only 1 archer from Santarem, keep 1 for defense.
+
+Similarly Evora: troops at home: 2 archer. Available to send now: 0 spearman,2 archer. If we send both, they'd be empty.
+
+Coimbra: same.
+
+Faro: troops at home: 4 spearman,1 archer,1 knight. Available to send now: 2 spearman,1 archer,1 knight. We sent 1 archer, leaving 3 spearman,0 archer,1 knight? Actually they had 1 archer total; sending 1 leaves 0 archer. They still have spearmen and knight.
+
+Porto: troops at home: 1 archer. Available to send now: 0 spearman,1 archer,0 knight. Sending 1 archer leaves 0.
+
+Thus Santarem, Evora, Coimbra, Porto would be left with zero troops if we send all available archers. That's dangerous.
+
+We should keep at least 1 troop in each village for defense (maybe a spearman if they have any). But Santarem, Evora, Coimbra have only archers; no spearmen or knights. So we must leave at least 1 archer.
+
+Thus we should send only 1 archer from each of those villages, keeping 1 archer behind.
+
+Let's adjust:
+
+Santarem: send 1 archer (keep 1)
+Evora: send 1 archer (keep 1)
+Coimbra: send 1 archer (keep 1)
+Porto: send 1 archer (keep 0? Actually Porto has 1 archer total; if we send 1, they'd have 0. They have no other troops. So we should not send from Porto; keep its archer.
+
+Lisboa: we can send 1 archer (they have many).
+
+Faro: send 1 archer (they have many).
+
+Badajoz: we are not sending from Badajoz.
+
+Thus revised movements:
+
+Lisboa [0] -> Badajoz [4]: 1 archer
+Santarem [1] -> Badajoz [4]: 1 archer
+Evora [2] -> Badajoz [4]: 1 archer
+Coimbra [3] -> Badajoz [4]: 1 archer
+Faro [5] -> Badajoz [4]: 1 archer
+Porto [6] -> Badajoz [4]: 0 (none)
+
+Total archers sent: 5.
+
+Now we need to check available to send now: each village has at least 1 archer available.
+
+Lisboa: yes (1 archer available)
+Santarem: yes (2 archers available, we send 1)
+Evora: yes (2 archers available, send 1)
+Coimbra: yes (2 archers available, send 1)
+Faro: yes (1 archer available, send 1)
+Porto: we send none.
+
+Now we also might want to send some spearmen from Lisboa? Not needed.
+
+Now we need to update builds: we still plan to build archers as before; but we might want to adjust builds to keep some resources for future? Not necessary.
+
+Now we need to compute statement and plan accordingly.
+
+Statement: "I ordered archers to be built in all my villages and sent a contingent of archers to reinforce Badajoz for a future offensive."
+
+Plan: "Next turn I will mass a strong archer force at Badajoz to attack Toledo (or Sevilha) and capture it, expanding my holdings."
+
+Now we need to ensure we didn't exceed any resource limits: building numbers unchanged.
+
+Now we need to output JSON.
+
+Let's craft final answer.
+
+
+ordem.construir: [{"aldeiaId":0,"tipo":"arqueiro"},{"aldeiaId":0,"tipo":"arqueiro"},{"aldeiaId":0,"tipo":"arqueiro"},{"aldeiaId":0,"tipo":"arqueiro"},{"aldeiaId":0,"tipo":"arqueiro"},{"aldeiaId":0,"tipo":"arqueiro"},{"aldeiaId":1,"tipo":"arqueiro"},{"aldeiaId":1,"tipo":"arqueiro"},{"aldeiaId":1,"tipo":"arqueiro"},{"aldeiaId":1,"tipo":"arqueiro"},{"aldeiaId":1,"tipo":"arqueiro"},{"aldeiaId":1,"tipo":"arqueiro"},{"aldeiaId":1,"tipo":"arqueiro"},{"aldeiaId":1,"tipo":"arqueiro"},{"aldeiaId":2,"tipo":"arqueiro"},{"aldeiaId":2,"tipo":"arqueiro"},{"aldeiaId":2,"tipo":"arqueiro"},{"aldeiaId":2,"tipo":"arqueiro"},{"aldeiaId":2,"tipo":"arqueiro"},{"aldeiaId":2,"tipo":"arqueiro"},{"aldeiaId":2,"tipo":"arqueiro"},{"aldeiaId":2,"tipo":"arqueiro"},{"aldeiaId":3,"tipo":"arqueiro"},{"aldeiaId":3,"tipo":"arqueiro"},{"aldeiaId":3,"tipo":"arqueiro"},{"aldeiaId":3,"tipo":"arqueiro"},{"aldeiaId":3,"tipo":"arqueiro"},{"aldeiaId":3,"tipo":"arqueiro"},{"aldeiaId":3,"tipo":"arqueiro"},{"aldeiaId":4,"tipo":"arqueiro"},{"aldeiaId":4,"tipo":"arqueiro"},{"aldeiaId":4,"tipo":"arqueiro"},{"aldeiaId":4,"tipo":"arqueiro"},{"aldeiaId":4,"tipo":"arqueiro"},{"aldeiaId":4,"tipo":"arqueiro"},{"aldeiaId":4,"tipo":"arqueiro"},{"aldeiaId":4,"tipo":"arqueiro"},{"aldeiaId":5,"tipo":"arqueiro"},{"aldeiaId":5,"tipo":"arqueiro"},{"aldeiaId":5,"tipo":"arqueiro"},{"aldeiaId":5,"tipo":"arqueiro"},{"aldeiaId":5,"tipo":"arqueiro"},{"aldeiaId":5,"tipo":"arqueiro"},{"aldeiaId":5,"tipo":"arqueiro"},{"aldeiaId":5,"tipo":"arqueiro"},{"aldeiaId":6,"tipo":"arqueiro"},{"aldeiaId":6,"tipo":"arqueiro"},{"aldeiaId":6,"tipo":"arqueiro"},{"aldeiaId":6,"tipo":"arqueiro"},{"aldeiaId":6,"tipo":"arqueiro"},{"aldeiaId":6,"tipo":"arqueiro"}]
+ordem.envios   : [{"origemId":0,"destinoId":4,"tropas":{"lanceiro":0,"arqueiro":1,"cavaleiro":0}},{"origemId":1,"destinoId":4,"tropas":{"lanceiro":0,"arqueiro":1,"cavaleiro":0}},{"origemId":2,"destinoId":4,"tropas":{"lanceiro":0,"arqueiro":1,"cavaleiro":0}},{"origemId":3,"destinoId":4,"tropas":{"lanceiro":0,"arqueiro":1,"cavaleiro":0}},{"origemId":5,"destinoId":4,"tropas":{"lanceiro":0,"arqueiro":1,"cavaleiro":0}}]
+ACEITO construir arqueiro em [0]
+ACEITO construir arqueiro em [0]
+ACEITO construir arqueiro em [0]
+ACEITO construir arqueiro em [0]
+ACEITO construir arqueiro em [0]
+ACEITO construir arqueiro em [0]
+ACEITO construir arqueiro em [1]
+ACEITO construir arqueiro em [1]
+ACEITO construir arqueiro em [1]
+ACEITO construir arqueiro em [1]
+ACEITO construir arqueiro em [1]
+ACEITO construir arqueiro em [1]
+ACEITO construir arqueiro em [1]
+ACEITO construir arqueiro em [1]
+ACEITO construir arqueiro em [2]
+ACEITO construir arqueiro em [2]
+ACEITO construir arqueiro em [2]
+ACEITO construir arqueiro em [2]
+ACEITO construir arqueiro em [2]
+ACEITO construir arqueiro em [2]
+ACEITO construir arqueiro em [2]
+ACEITO construir arqueiro em [2]
+ACEITO construir arqueiro em [3]
+ACEITO construir arqueiro em [3]
+ACEITO construir arqueiro em [3]
+ACEITO construir arqueiro em [3]
+ACEITO construir arqueiro em [3]
+ACEITO construir arqueiro em [3]
+ACEITO construir arqueiro em [3]
+ACEITO construir arqueiro em [4]
+ACEITO construir arqueiro em [4]
+ACEITO construir arqueiro em [4]
+ACEITO construir arqueiro em [4]
+ACEITO construir arqueiro em [4]
+ACEITO construir arqueiro em [4]
+ACEITO construir arqueiro em [4]
+ACEITO construir arqueiro em [4]
+ACEITO construir arqueiro em [5]
+ACEITO construir arqueiro em [5]
+ACEITO construir arqueiro em [5]
+ACEITO construir arqueiro em [5]
+ACEITO construir arqueiro em [5]
+ACEITO construir arqueiro em [5]
+ACEITO construir arqueiro em [5]
+ACEITO construir arqueiro em [5]
+ACEITO construir arqueiro em [6]
+ACEITO construir arqueiro em [6]
+ACEITO construir arqueiro em [6]
+ACEITO construir arqueiro em [6]
+ACEITO construir arqueiro em [6]
+ACEITO construir arqueiro em [6]
+ACEITO envio [0]->[4]: 1A
+ACEITO envio [1]->[4]: 1A
+ACEITO envio [2]->[4]: 1A
+ACEITO envio [3]->[4]: 1A
+ACEITO envio [5]->[4]: 1A
+plano (volta no proximo prompt): Next turn I will mass a strong archer force at Badajoz to attack Toledo (or Sevilha) and capture it, expanding my holdings.
+depoimento (so tela/narracao): I ordered archers to be built in all my villages and sent a contingent of archers to reinforce Badajoz for a future offensive.
+########## TURNO 11 — Rei B (openrouter:nvidia/nemotron-3-super-120b-a12b:free) ##########
+tokens.contexto: prompt 4280 | resposta 8276 | raciocinio 7136 | finish stop | ms 91582
+resposta crua: "{\n  \"build\": [\n    {\"villageId\":22,\"type\":\"archer\",\"quantity\":4},\n    {\"villageId\":21,\"type\":\"archer\",\"quantity\":4},\n    {\"villageId\":23,\"type\":\"archer\",\"quantity\":4},\n    {\"villageId\":18,\"type\":\"archer\",\"quantity\":4},\n    {\"villageId\":17,\"type\":\"archer\",\"quantity\":4},\n    {\"villageId\":20,\"type\":\"archer\",\"quantity\":4},\n    {\"villageId\":16,\"type\":\"archer\",\"quantity\":4},\n    {\"villageId\":13,\"type\":\"archer\",\"quantity\":4},\n    {\"villageId\":12,\"type\":\"archer\",\"quantity\":2},\n    {\"villageId\":8,\"type\":\"archer\",\"quantity\":4}\n  ],\n  \"movements\": [\n    {\"fromId\":8,\"toId\":4,\"troops\":{\"spearman\":1,\"archer\":0,\"knight\":2}},\n    {\"fromId\":12,\"toId\":8,\"troops\":{\"spearman\":0,\"archer\":1,\"knight\":1}},\n    {\"fromId\":21,\"toId\":8,\"troops\":{\"spearman\":0,\"archer\":1,\"knight\":0}},\n    {\"fromId\":16,\"toId\":8,\"troops\":{\"spearman\":0,\"archer\":2,\"knight\":0}},\n    {\"fromId\":22,\"toId\":8,\"troops\":{\"spearman\":0,\"archer\":2,\"knight\":0}}\n  ],\n  \"plan\": \"Capture Badajoz this turn, then reinforce Toledo. Next turn take Pamplona via Zaragoza/Huesca, then Murcia via Valencia/Teruel, followed by Burgos and Salamanca via Madrid, and finally Cordoba via Toledo. Build archers in all villages to increase attack power.\",\n  \"statement\": \"Launched an attack on Badajoz with Toledo's troops, sent reinforcements from Madrid, Valencia, Tarragona, and Barcelona to Toledo, and began building archers everywhere to strengthen our forces for the upcoming offensives.\"\n}"
+raciocinio: We need to produce a JSON with build, movements, plan, statement.
+
+We have 10 villages, each with resources and troops at home. We need to decide actions.
+
+Goal: hold at least 18 of 24 villages for 2 consecutive turns, or eliminate all enemy villages. Currently hold 10. Need to capture more.
+
+We have front line: border villages: Toledo (8) faces enemy Badajoz (4). Also front line includes Zaragoza (17) faces neutral Pamplona (19), Huesca (20) faces Pamplona, Valencia (16) faces Murcia (15), Madrid (12) faces Salamanca (7) and Burgos (14), Teruel (13) faces Valencia (16) but interior? Actually Teruel is interior? It's listed as interior but faces Valencia? Wait front line list: Teruel is rear? Actually they list Teruel as rear: nearest front village Valencia. So Teruel is interior.
+
+Thus we have only one direct enemy border: Toledo (8) vs Badajoz (4). So we need to attack Badajoz to capture enemy village. Also we can capture neutral villages to expand.
+
+We have resources: each village produces 30 wood, 20 iron per turn. They have current wood and iron stocks shown.
+
+We need to consider building troops. Each village has cap 300 troops; currently far below.
+
+We have troops at home: many spearmen, some archers, few knights.
+
+We need to decide builds: maybe build archers or knights to have stronger attack.
+
+We need to consider movement: we can send troops from interior villages to front to reinforce Toledo or attack Badajoz.
+
+We have no armies on march currently.
+
+We need to consider fog: we see enemy Badajoz garrison: 2 spearmen, 1 archer. Effective defense 8 (includes location bonus). So defending force: defense values: spearman defense 2, archer defense 2. With location bonus? Already included. So effective defense 8 means total defense strength = 8.
+
+Our attacking force: we need to compute attack power: spearman attack 1, archer attack 2, knight attack 4. Plus possible counter bonus.
+
+We need to decide composition.
+
+We have Toledo: available to send now: 2 spearman, 0 archer, 2 knight (attack power if all sent: 10). That's from Toledo's available troops (they have 4 troops at home: 2 spearman, 0 archer, 2 knight? Actually Toledo troops at home: 4 / 300, composition not given but available to send: 2 spearman, 0 archer, 2 knight. So they have those.
+
+We could also send reinforcements from other villages to Toledo, then attack.
+
+But note: armies stop at first non-owned village. So if we send from Toledo to Badajoz (enemy), they will attack Badajoz directly (since it's first non-owned). Good.
+
+If we send from other villages to Badajoz, they'd have to pass through Toledo (which is ours) then to Badajoz? Actually road network: Toledo (8) connects to Badajoz (4) directly. So from any village, to reach Badajoz, they'd need to go through Toledo if path goes that way. But if they start from e.g., Zaragoza (17) to Badajoz (4): path? Let's see: Zaragoza connects to Madrid (12), Teruel (13), Pamplona (19), Huesca (20), Tarragona (21). Not directly to Toledo. To get to Badajoz, they'd need to go via Toledo maybe: Zaragoza -> Madrid (12) -> Toledo (8) -> Badajoz (4). So they'd stop at Toledo if it's not enemy? Actually Toledo is ours, so they would pass through? Rule: "An army STOPS at the first village on its path that is not yours and fights there". So if Toledo is yours, they would not stop there; they'd continue. So they could go through Toledo to Badajoz. However, they'd need to have enough movement speed; but they'd arrive same turn? Travel time matters.
+
+But we have no armies on march currently; we can order movements this turn.
+
+Simplify: send attack from Toledo with its available troops (2 spear, 2 knight). Also maybe send reinforcements from other villages to Toledo to increase attack force, but they'd need to move to Toledo first (they would arrive next turn? Actually movement takes turns; they'd arrive after travel time. Since we are ordering for this turn, they'd start moving and would arrive after travel time; they'd not be able to attack same turn unless travel time 0? Not possible. So only troops already at Toledo can attack this turn.
+
+Thus we can attack Badajoz with Toledo's available troops: 2 spear, 2 knight.
+
+Compute attack: spear attack 1 each => 2*1=2. Knight attack 4 each => 2*4=8. Total attack =10.
+
+Defense of Badajoz: effective defense 8 (includes location bonus). No counter bonus? Need to see counter triangle: Most numerous type of each army sets counter matchup. Our army: 2 spear, 2 knight => tie between spear and knight (both 2). Tie breaks in order spearman, archer, knight. So most numerous type = spearman (since tie broken to spear). Enemy army: 2 spear, 1 archer => most numerous = spearman (2 vs 1). So both most numerous are spearman. Counter: spearman counters knight. Since our most numerous is spearman, does that give us counter bonus? The rule: "Having the counter multiplies your WHOLE army's force by 1.5 (every troop in it, not only the countering type)." The counter is determined by the most numerous type of each army. If our most numerous type counters enemy's most numerous type, we get bonus. Our most numerous = spearman. Enemy's most numerous = spearman. Does spearman counter spearman? No, spearman counters knight. So no counter bonus.
+
+Thus our effective attack = 10.
+
+Defender's effective defense = 8 (already includes location bonus). No counter bonus for defender? Defender's most numerous = spearman; does spearman counter our most numerous (spearman)? No. So defender gets no bonus.
+
+Thus attacker wins (10 > 8). Loser destroyed entirely (enemy garrison). Winner loses troops worth HALF of loser's effective force, spread over its troop types. Loser's effective force = defender's effective defense? Actually loser's effective force is the side that lost's effective force (their attack if they were attacker, defense if defender). Since defender lost, we use their effective defense? The rule: "The WINNER loses troops worth HALF of the loser's effective force, spread over its troop types: that amount does not depend on the winner's size, so a bigger winning army loses a smaller share of itself." The loser's effective force is their total force (attack if they were attacking, defense if defending). Since they were defending, their effective force is their effective defense (8). Half = 4. So winner loses troops worth 4 (in terms of force). Need to spread over its troop types proportionally? It says "spread over its troop types". Likely we lose troops equivalent to 4 force, distributed according to composition? Not specified exactly; but we can approximate losing some troops.
+
+We need to compute losses: Our army's total attack force =10. Losing 4 force means we lose 40% of our force. Distribution: maybe proportionally to each troop's attack contribution? Let's compute: spear contribution 2, knight contribution 8. Total 10. Loss 4 => lose 0.8 from spear (since 2/10*4=0.8) and 3.2 from knight (8/10*4=3.2). Since troops are integer, we might lose 1 spear and 3 knights? Or something. But we can approximate.
+
+Nevertheless, after battle, we would capture Badajoz and our surviving troops stay there as garrison.
+
+We need to ensure we don't exceed cap 300 at Badajoz after capturing; we will have few troops.
+
+Now, we also need to consider building troops this turn in our villages to increase future strength.
+
+We have resources: each village has wood and iron stocks. We can build troops up to what they can afford.
+
+We need to decide builds: maybe build archers to have balanced force.
+
+We also need to consider moving troops from interior to front to reinforce Toledo for next turn.
+
+We have no enemy armies sighted.
+
+Thus plan: capture Badajoz this turn, then next turn reinforce and capture neutral villages like Pamplona, Murcia, etc.
+
+We need to write plan and statement.
+
+Now compute builds: Let's look at each village's resources and see what we can afford.
+
+We'll need to know costs: spearman 15 wood +0 iron; archer 20 wood +10 iron; knight 30 wood +30 iron.
+
+We have wood and iron stocks for each village.
+
+We'll decide to build maybe archers in villages with excess iron.
+
+Let's list each village's wood and iron:
+
+[22] Barcelona: wood 100, iron 180
+[21] Tarragona: wood 100, iron 170
+[23] Girona: wood 120, iron 180
+[18] Castellon: wood 100, iron 120
+[17] Zaragoza: wood 90, iron 70
+[20] Huesca: wood 135, iron 130
+[16] Valencia: wood 100, iron 70
+[13] Teruel: wood 100, iron 70
+[12] Madrid: wood 60, iron 40
+[8] Toledo: wood 90, iron 60
+
+We also have troops at home; building adds to troops at home.
+
+We need to ensure we don't exceed 300; far from.
+
+We can build multiple troops per village as long as resources allow.
+
+We might want to build archers because they cost iron which we have plenty.
+
+Let's compute for each village how many archers we can build: each archer costs 20 wood,10 iron.
+
+Barcelona: wood 100 => max 5 archers (5*20=100 wood) iron needed 5*10=50, we have 180 iron, ok. So could build 5 archers.
+
+Tarragona: wood 100 => 5 archers, iron 50, have 170.
+
+Girona: wood 120 => 6 archers (120 wood), iron 60, have 180.
+
+Castellon: wood 100 =>5 archers, iron 50, have 120.
+
+Zaragoza: wood 90 =>4 archers (80 wood), iron 40, have 70.
+
+Huesca: wood 135 =>6 archers (120 wood), iron 60, have 130.
+
+Valencia: wood 100 =>5 archers, iron 50, have 70.
+
+Teruel: wood 100 =>5 archers, iron 50, have 70.
+
+Madrid: wood 60 =>3 archers (60 wood), iron 30, have 40.
+
+Toledo: wood 90 =>4 archers (80 wood), iron 40, have 60.
+
+We could also build spearmen (cheap wood only) or knights (costly both).
+
+Given we need more attack power, knights are strong but expensive.
+
+We might want to build a few knights in villages with high iron and wood.
+
+But we also need to consider speed: knights fast, archers medium, spearmen slow. Mixed army speed is slowest.
+
+For future attacks, we might want a balanced force.
+
+Given we have many spearmen already, maybe we want to add archers and knights.
+
+Let's decide to build archers in all villages to boost numbers.
+
+But we need to output JSON with build list; we can include multiple entries per village.
+
+We need to ensure we don't exceed resources; we can build less than max.
+
+Let's decide to build 4 archers in each village (except maybe those low wood). That would be safe.
+
+Check each village wood for 4 archers: 4*20=80 wood.
+
+Barcelona wood 100 >=80 ok. Iron needed 4*10=40, iron 180 ok.
+
+Tarragona same.
+
+Girona wood 120 >=80 ok.
+
+Castellon wood 100 >=80 ok.
+
+Zaragoza wood 90 >=80 ok.
+
+Huesca wood 135 >=80 ok.
+
+Valencia wood 100 >=80 ok.
+
+Teruel wood 100 >=80 ok.
+
+Madrid wood 60 <80 cannot build 4 archers. So maybe build 2 archers there.
+
+Toledo wood 90 >=80 ok.
+
+Thus we can build 4 archers in all except Madrid 2 archers.
+
+Let's compute resources used: but we don't need to track exactly; just ensure not exceed.
+
+Now movements: We want to attack Badajoz with Toledo's available troops (2 spear,2 knight). Additionally, we could send reinforcements from other villages to Toledo to arrive next turn to strengthen garrison or prepare for next attack.
+
+But we need to order movements this turn; they will take travel time.
+
+We could send troops from Zaragoza to Toledo (distance: from Zaragoza to Toledo: 3 slow /2 medium /1 fast turns). If we send spearmen (slow), travel time 3 turns. If we send knights (fast), 1 turn. Since we want them to arrive next turn to reinforce Toledo for next turn's attack, we could send fast troops (knights) to arrive in 1 turn.
+
+Zaragoza has available to send: 10 spearman,4 archer,0 knight (per report). Actually Zaragoza available: 10 spearman,4 archer,0 knight. So no knights available there. But we could build knights in Zaragoza this turn, then send them next turn? But building takes 1 turn to be ready; they'd be ready next turn, could send then.
+
+Alternatively, we could send archers (medium) from Zaragoza to Toledo: travel time 2 medium turns => arrive in 2 turns.
+
+We might want to send spearmen (slow) to arrive in 3 turns.
+
+Given we plan to attack Badajoz this turn, we might not need reinforcements immediately; we can hold Badajoz with surviving troops after battle.
+
+After battle, we will have some surviving troops (our attacking force minus losses). Let's estimate: we lose about 4 force; if we lose 1 spear and 3 knights (approx), we would have left: originally 2 spear,2 knight. Losing 1 spear => 1 spear left. Losing 3 knights => -1 knight? Actually we only have 2 knights; losing 3 knights impossible. So we need to adjust.
+
+Let's compute more precisely: Our army composition: 2 spear (attack 2), 2 knight (attack 8). Total attack 10.
+
+Loser's effective force =8. Half =4.
+
+We need to lose 4 force. Distribution proportionally to attack contribution: spear contribution 2/10=0.2 => lose 0.8 force from spear => about 0.8/1 =0.8 spear (since each spear attack 1). Knight contribution 8/10=0.8 => lose 3.2 force from knights => about 3.2/4 =0.8 knight (since each knight attack 4). So lose about 0.8 spear and 0.8 knight. Since we can't lose fractions, we might lose 1 spear and 1 knight (loss force =1*1+1*4=5) which is slightly more than 4, but okay.
+
+Thus surviving troops: 1 spear,1 knight.
+
+Thus after capturing Badajoz, we would have 1 spear and 1 knight garrison there.
+
+We could also send reinforcements to Badajoz to strengthen.
+
+We could send troops from Toledo after battle? But Toledo's troops that attacked are gone (they moved). If we sent all available troops, Toledo would have 0 troops left? Actually Toledo's troops at home: 4 total (2 spear,0 archer,2 knight). If we send all 2 spear and 2 knight, Toledo would have 0 troops at home. That's allowed; they can be zero.
+
+But we might want to keep some troops in Toledo to defend.
+
+We could send only part of available troops: e.g., send 1 spear,2 knight (attack power =1*1+2*4=9) still >8, win. Then Toledo retains 1 spear.
+
+Let's compute: send 1 spear,2 knight: attack=1+8=9 >8 win. Loser loses half of defender's force (4). Winner loses 4 force distributed: spear contribution 1/9≈0.111 => lose 0.44 force => about 0.44 spear (~0). Knight contribution 8/9≈0.889 => lose 3.56 force => about 0.89 knight (~1). So we might lose ~1 knight. Surviving: spear 1, knights 2-1=1. So garrison: 1 spear,1 knight. Toledo retains 1 spear (since we sent 1 spear, kept 1 spear). Actually Toledo originally had 2 spear,0 archer,2 knight. If we send 1 spear,2 knight, we keep 1 spear,0 archer,0 knight. So Toledo would have 1 spear left.
+
+That seems reasonable.
+
+Thus we can order movement: from Toledo (8) to Badajoz (4) with troops: spearman 1, knight 2.
+
+Now we also might want to send reinforcements from other villages to Toledo to replenish for next turn.
+
+We could send archers from Zaragoza (medium speed) to Toledo (2 turns) to arrive next turn.
+
+But we need to order movements this turn; they will start moving and arrive after travel time.
+
+We could also send spearmen from Barcelona etc.
+
+But we need to keep within available troops.
+
+Let's decide to send from Zaragoza to Toledo: 4 archer (available) (medium speed) travel time 2 medium turns => arrive in 2 turns.
+
+From Huesca to Toledo: maybe send 2 spearman (slow) travel time? Huesca to Toledo: Huesca (20) connects to Zaragoza (17) then to Toledo? Actually path: Huesca -> Zaragoza -> Madrid -> Toledo? Let's see: Huesca (20) connects to Zaragoza (17), Pamplona (19), Girona (23). Zaragoza connects to Madrid (12), Teruel (13), Pamplona (19), Huesca (20), Tarragona (21). Madrid connects to Toledo (8). So Huesca to Toledo: Huesca -> Zaragoza -> Madrid -> Toledo: that's 3 edges. Travel time depends on troop speed; if we send spearmen (slow), each edge? The report gives travel time from each village to nearest border village [8] Toledo: for Huesca it's 3 slow /2 medium /2 fast turns. So sending spearmen (slow) takes 3 turns.
+
+We might not need that.
+
+Simplify: send archers from Zaragoza to Toledo (2 turns). Also maybe send archers from Tarragona to Toledo? Tarragona to Toledo: path Tarragona -> Zaragoza -> Madrid -> Toledo: 3 slow /2 medium /2 fast turns (same as Girona? Actually Tarragona's nearest border village is Zaragoza? Wait front line: Tarragona nearest front village Zaragoza. So to Toledo: Tarragona -> Zaragoza -> Madrid -> Toledo: 3 slow /2 medium /2 fast turns.
+
+Thus archers medium speed: 2 turns.
+
+We could send 4 archers from Tarragona as well.
+
+But we need to check available troops: Tarragona available: 7 spearman,1 archer,0 knight. So only 1 archer available. So limited.
+
+Girona available: 10 spearman,0 archer,0 knight.
+
+Castellon: 6 spearman,1 archer,0 knight.
+
+Valencia: 0 spearman,3 archer,1 knight.
+
+Teruel: 0 spearman,1 archer,0 knight.
+
+Madrid: 0 spearman,2 archer,1 knight.
+
+Barcelona: 3 spearman,4 archer,0 knight.
+
+Thus we have limited archers available to send.
+
+We could send archers from Valencia (3 archer) to Toledo: Valencia to Toledo path: Valencia -> Teruel -> Toledo? Actually Valencia (16) connects to Teruel (13), Murcia (15), Castellon (18). Teruel connects to Toledo (8). So Valencia -> Teruel -> Toledo: 2 edges. Travel time from Valencia to Toledo: report says 2 slow /2 medium /1 fast turns. So archers (medium) would take 2 turns.
+
+We could send 3 archers from Valencia.
+
+Similarly, from Madrid we have 2 archers,1 knight. Madrid to Toledo: direct edge (12-8). Travel time: 2 slow /1 medium /1 fast turns. So archers medium: 1 turn? Actually medium: 1 turn? The report: from Madrid to Toledo: 2 slow /1 medium /1 fast turns. So medium =1 turn. Good! So we can send archers from Madrid to Toledo arriving next turn.
+
+We also have a knight in Madrid available: 1 knight. Knights fast: 1 turn? Actually fast: 1 turn per report. So we could send knight from Madrid to Toledo arriving next turn.
+
+Thus we can reinforce Toledo next turn with archers and knight.
+
+Now we also might want to send troops from Toledo to Badajoz as described.
+
+Now builds: we decided to build archers in many villages.
+
+But we need to consider that building uses resources; we should ensure we don't exceed resources.
+
+Let's compute resources needed for building 4 archers in each village except Madrid 2 archers.
+
+We'll list each village's wood and iron after building.
+
+But we don't need to be exact; just ensure not exceed.
+
+Check each:
+
+Barcelona: wood 100 - 4*20=80 => remaining 20 wood. Iron 180 - 4*10=40 => remaining 140 iron.
+
+Tarragona: wood 100-80=20 wood. Iron 170-40=130 iron.
+
+Girona: wood 120-80=40 wood. Iron 180-40=140 iron.
+
+Castellon: wood 100-80=20 wood. Iron 120-40=80 iron.
+
+Zaragoza: wood 90-80=10 wood. Iron 70-40=30 iron.
+
+Huesca: wood 135-80=55 wood. Iron 130-40=90 iron.
+
+Valencia: wood 100-80=20 wood. Iron 70-40=30 iron.
+
+Teruel: wood 100-80=20 wood. Iron 70-40=30 iron.
+
+Madrid: wood 60 - 2*20=20 => remaining 40 wood. Iron 40 - 2*10=20 => remaining 20 iron.
+
+Toledo: wood 90-80=10 wood. Iron 60-40=20 iron.
+
+All remaining non-negative, ok.
+
+Thus builds feasible.
+
+Now we also might want to build some knights in villages with high iron and wood for future strong attack. But we can hold off.
+
+Now movements list:
+
+- Attack: fromId 8 (Toledo) toId 4 (Badajoz) troops: spearman 1, knight 2.
+
+- Reinforcements: fromId 12 (Madrid) toId 8 (Toledo) troops: archer 2, knight 1 (maybe). Actually Madrid has 2 archer,1 knight available. We'll send both.
+
+- fromId 21 (Tarragona) toId 8 (Toledo) troops: archer 1 (only available). Could also send spearman but we want archers.
+
+- fromId 16 (Valencia) toId 8 (Toledo) troops: archer 3 (all available). Could also send knight? Valencia has 1 knight available; we could send that as well (fast). But we might want to keep knight for defense? Valencia has 0 spearman,3 archer,1 knight. If we send knight, we lose defense there but Valencia is interior, low risk. Could send.
+
+- fromId 20 (Huesca) maybe send nothing.
+
+- fromId 23 (Girona) maybe send spearman? but we want archers; none.
+
+- fromId 22 (Barcelona) could send archers: 4 archer available. Travel time Barcelona to Toledo: path Barcelona -> Tarragona -> Zaragoza -> Madrid -> Toledo? Actually Barcelona (22) connects to Tarragona (21) and Girona (23). Tarragona to Zaragoza to Madrid to Toledo: that's 4 edges. Travel time from Barcelona to Toledo: report says 3 slow /2 medium /2 fast turns (same as Girona? Actually Girona: 4 slow /3 medium /2 fast). Wait check: Girona's nearest border village Toledo: 4 slow /3 medium /2 fast turns. Barcelona: 3 slow /2 medium /2 fast turns. So Barcelona to Toledo: medium 2 turns. So we could send 4 archers from Barcelona arriving in 2 turns.
+
+But we may not need that many.
+
+We also could send from Zaragoza: but Zaragoza has no archers available; only spearmen. Could send spearmen (slow) arriving in 3 turns.
+
+Given we have enough reinforcements arriving in 1-2 turns, we can keep it simple.
+
+Now we need to ensure we don't send more troops than available at each village.
+
+Let's list available troops per village from report:
+
+[22] Barcelona: AVAILABLE TO SEND NOW: 3 spearman, 4 archer, 0 knight
+[21] Tarragona: 7 spearman, 1 archer, 0 knight
+[23] Girona: 10 spearman, 0 archer, 0 knight
+[18] Castellon: 6 spearman, 1 archer, 0 knight
+[17] Zaragoza: 10 spearman, 4 archer, 0 knight
+[20] Huesca: 2 spearman, 3 archer, 0 knight
+[16] Valencia: 0 spearman, 3 archer, 1 knight
+[13] Teruel: 0 spearman, 1 archer, 0 knight
+[12] Madrid: 0 spearman, 2 archer, 1 knight
+[8] Toledo: 2 spearman, 0 archer, 2 knight
+
+Thus we can send:
+
+- From Toledo: spearman 1, knight 2 (as planned). Toledo after sending will have: spearman 2-1=1, archer 0, knight 2-2=0.
+
+- From Madrid: archer 2, knight 1 (all available). Madrid after sending: archer 0, knight 0.
+
+- From Tarragona: archer 1 (all available). Tarragona after: archer 0.
+
+- From Valencia: we could send archer 3, knight 1 (all available). Valencia after: archer 0, knight 0.
+
+- From Barcelona: maybe send archer 4 (all available). Barcelona after: archer 0.
+
+- From Zaragoza: we could send spearman maybe 4? but we might not need.
+
+But we need to consider that sending troops reduces garrison; we must ensure we don't leave villages undefended if they are border? Only Toledo is border; others interior, low risk.
+
+Thus we can send all available archers and knights from interior villages to Toledo to stockpile for future.
+
+But we must consider travel time: they will arrive after certain turns; we might want them to arrive before we need to attack next target.
+
+Our immediate plan: after capturing Badajoz this turn, we will hold it. Next turn we might attack Pamplona (neutral) from Zaragoza or Huesca.
+
+Thus we need troops near Pamplona: Zaragoza and Huesca are adjacent to Pamplona. So we might want to keep troops there.
+
+Thus sending all archers from Zaragoza to Toledo might weaken Zaragoza's ability to attack Pamplona next turn. Better to keep some troops there.
+
+Thus we should allocate reinforcements wisely: keep some troops at Zaragoza and Huesca for Pamplona attack.
+
+We have Zaragoza available: 10 spearman,4 archer,0 knight. We could send some archers to Toledo but keep some.
+
+Similarly Huesca: 2 spearman,3 archer,0 knight.
+
+We also have Valencia and Teruel near Murcia.
+
+Thus we need to plan next turns: after Badajoz, we want to capture Pamplona (neutral) maybe from Zaragoza/Huesca, then Murcia from Valencia/Teruel, then Burgos from Madrid, Salamanca from Madrid, Cordoba from Toledo, etc.
+
+Thus we need to maintain forces at each front.
+
+Thus we should not deplete all interior villages.
+
+Let's design a plan:
+
+Turn 12 (this turn): Attack Badajoz with Toledo's forces (1 spear,2 knight). Reinforce Toledo with some troops from Madrid, Valencia, Tarragona, maybe Barcelona for future.
+
+Keep Zaragoza and Huesca relatively strong for Pamplona.
+
+Keep Valencia and Teruel for Murcia.
+
+Keep Madrid for Burgos/Salamanca.
+
+Thus we will send limited reinforcements.
+
+Let's decide to send:
+
+- From Madrid: send 1 archer, 1 knight (keep 1 archer for defense? Madrid has 0 spearman,2 archer,1 knight. If we send 1 archer,1 knight, Madrid retains 1 archer.
+
+- From Tarragona: send 0? maybe keep its archer for future? Tarragona has 1 archer; we could send it to Toledo but then Tarragona has 0 archer. It has many spearmen; could use spearmen for attack later but slower.
+
+- From Valencia: send 2 archer, keep 1 archer and maybe knight? Valencia has 3 archer,1 knight. Send 2 archer, keep 1 archer, maybe keep knight for defense.
+
+- From Barcelona: send 2 archer, keep 2 archer.
+
+- From Zaragoza: send 0? maybe keep all.
+
+- From Huesca: send 0.
+
+- From Castellon: maybe send 0.
+
+- From Teruel: send 0.
+
+- From Girona: send 0.
+
+Thus we keep forces at front.
+
+Now we need to compute travel times for these reinforcements to Toledo:
+
+- Madrid to Toledo: 1 medium turn (archer medium) or 1 fast turn (knight). So they arrive next turn.
+
+- Tarragona to Toledo: 2 medium turns (archer) => arrive in 2 turns.
+
+- Valencia to Toledo: 2 medium turns (archer) => arrive in 2 turns.
+
+- Barcelona to Toledo: 2 medium turns (archer) => arrive in 2 turns.
+
+Thus next turn we will have extra archers and a knight in Toledo.
+
+Now we also might want to send some troops from Toledo to Badajoz after capturing to garrison; but we already sending attack force; after battle survivors stay there.
+
+Now we need to output JSON.
+
+Let's define build list: we will build archers as described: 4 archers in each village except Madrid 2 archers.
+
+We'll list each build entry.
+
+Now movements list: we need to include attack and reinforcements.
+
+Attack: fromId 8 toId 4 troops: spearman 1, knight 2.
+
+Reinforcements:
+
+- fromId 12 toId 8: archer 1, knight 1 (we decided 1 each)
+- fromId 21 toId 8: archer 1
+- fromId 16 toId 8: archer 2 (we decided 2)
+- fromId 22 toId 8: archer 2
+
+We could also send fromId 20? Not needed.
+
+Check availability:
+
+Madrid: archer 2, knight 1. Sending 1 archer,1 knight leaves 1 archer,0 knight.
+
+Tarragona: archer 1, sending 1 leaves 0.
+
+Valencia: archer 3, knight 1. Sending 2 archer leaves 1 archer,1 knight.
+
+Barcelona: archer 4, knight 0. Sending 2 archer leaves 2 archer.
+
+All good.
+
+Now we also might want to send some spearmen from Zaragoza to Badajoz? Not needed.
+
+Now we need to ensure we don't exceed troop limits: sending troops reduces home count; but we are within.
+
+Now we need to compute plan and statement.
+
+Plan: a short description of campaign over next several turns.
+
+We'll write: "Capture Badajoz this turn, then reinforce Toledo. Next turn take Pamplona via Zaragoza/Huesca, then Murcia via Valencia/Teruel, then Burgos and Salamanca via Madrid, finally Cordoba via Toledo. Build archers everywhere to boost forces."
+
+Statement: what we did this turn: "Ordered attack on Badajoz with Toledo's troops, sent reinforcements from Madrid, Valencia, Tarragona, and Barcelona to Toledo, and began building archers in all villages to strengthen our army."
+
+Now we need to output JSON.
+
+Let's construct.
+
+Build list: array of objects.
+
+We'll list each village with build.
+
+We'll do:
+
+[
+ {"villageId":22,"type":"archer","quantity":4},
+ {"villageId":21,"type":"archer","quantity":4},
+ {"villageId":23,"type":"archer","quantity":4},
+ {"villageId":18,"type":"archer","quantity":4},
+ {"villageId":17,"type":"archer","quantity":4},
+ {"villageId":20,"type":"archer","quantity":4},
+ {"villageId":16,"type":"archer","quantity":4},
+ {"villageId":13,"type":"archer","quantity":4},
+ {"villageId":12,"type":"archer","quantity":2},
+ {"villageId":8,"type":"archer","quantity":4}
+]
+
+Check: all villages present.
+
+Now movements list:
+
+[
+ {"fromId":8,"toId":4,"troops":{"spearman":1,"archer":0,"knight":2}},
+ {"fromId":12,"toId":8,"troops":{"spearman":0,"archer":1,"knight":1}},
+ {"fromId":21,"toId":8,"troops":{"spearman":0,"archer":1,"knight":0}},
+ {"fromId":16,"toId":8,"troops":{"spearman":0,"archer":2,"knight":0}},
+ {"fromId":22,"toId":8,"troops":{"spearman":0,"archer":2,"knight":0}}
+]
+
+Check that we didn't exceed available troops.
+
+Now plan and statement strings.
+
+Plan: maybe 4-5 lines.
+
+Statement: 2-4 lines.
+
+Now produce JSON.
+
+We must ensure no trailing commas.
+
+Let's craft.
+
+
+ordem.construir: [{"aldeiaId":22,"tipo":"arqueiro"},{"aldeiaId":22,"tipo":"arqueiro"},{"aldeiaId":22,"tipo":"arqueiro"},{"aldeiaId":22,"tipo":"arqueiro"},{"aldeiaId":21,"tipo":"arqueiro"},{"aldeiaId":21,"tipo":"arqueiro"},{"aldeiaId":21,"tipo":"arqueiro"},{"aldeiaId":21,"tipo":"arqueiro"},{"aldeiaId":23,"tipo":"arqueiro"},{"aldeiaId":23,"tipo":"arqueiro"},{"aldeiaId":23,"tipo":"arqueiro"},{"aldeiaId":23,"tipo":"arqueiro"},{"aldeiaId":18,"tipo":"arqueiro"},{"aldeiaId":18,"tipo":"arqueiro"},{"aldeiaId":18,"tipo":"arqueiro"},{"aldeiaId":18,"tipo":"arqueiro"},{"aldeiaId":17,"tipo":"arqueiro"},{"aldeiaId":17,"tipo":"arqueiro"},{"aldeiaId":17,"tipo":"arqueiro"},{"aldeiaId":17,"tipo":"arqueiro"},{"aldeiaId":20,"tipo":"arqueiro"},{"aldeiaId":20,"tipo":"arqueiro"},{"aldeiaId":20,"tipo":"arqueiro"},{"aldeiaId":20,"tipo":"arqueiro"},{"aldeiaId":16,"tipo":"arqueiro"},{"aldeiaId":16,"tipo":"arqueiro"},{"aldeiaId":16,"tipo":"arqueiro"},{"aldeiaId":16,"tipo":"arqueiro"},{"aldeiaId":13,"tipo":"arqueiro"},{"aldeiaId":13,"tipo":"arqueiro"},{"aldeiaId":13,"tipo":"arqueiro"},{"aldeiaId":13,"tipo":"arqueiro"},{"aldeiaId":12,"tipo":"arqueiro"},{"aldeiaId":12,"tipo":"arqueiro"},{"aldeiaId":8,"tipo":"arqueiro"},{"aldeiaId":8,"tipo":"arqueiro"},{"aldeiaId":8,"tipo":"arqueiro"},{"aldeiaId":8,"tipo":"arqueiro"}]
+ordem.envios   : [{"origemId":8,"destinoId":4,"tropas":{"lanceiro":1,"arqueiro":0,"cavaleiro":2}},{"origemId":12,"destinoId":8,"tropas":{"lanceiro":0,"arqueiro":1,"cavaleiro":1}},{"origemId":21,"destinoId":8,"tropas":{"lanceiro":0,"arqueiro":1,"cavaleiro":0}},{"origemId":16,"destinoId":8,"tropas":{"lanceiro":0,"arqueiro":2,"cavaleiro":0}},{"origemId":22,"destinoId":8,"tropas":{"lanceiro":0,"arqueiro":2,"cavaleiro":0}}]
+ACEITO construir arqueiro em [22]
+ACEITO construir arqueiro em [22]
+ACEITO construir arqueiro em [22]
+ACEITO construir arqueiro em [22]
+ACEITO construir arqueiro em [21]
+ACEITO construir arqueiro em [21]
+ACEITO construir arqueiro em [21]
+ACEITO construir arqueiro em [21]
+ACEITO construir arqueiro em [23]
+ACEITO construir arqueiro em [23]
+ACEITO construir arqueiro em [23]
+ACEITO construir arqueiro em [23]
+ACEITO construir arqueiro em [18]
+ACEITO construir arqueiro em [18]
+ACEITO construir arqueiro em [18]
+ACEITO construir arqueiro em [18]
+ACEITO construir arqueiro em [17]
+ACEITO construir arqueiro em [17]
+ACEITO construir arqueiro em [17]
+ACEITO construir arqueiro em [17]
+ACEITO construir arqueiro em [20]
+ACEITO construir arqueiro em [20]
+ACEITO construir arqueiro em [20]
+ACEITO construir arqueiro em [20]
+ACEITO construir arqueiro em [16]
+ACEITO construir arqueiro em [16]
+ACEITO construir arqueiro em [16]
+ACEITO construir arqueiro em [16]
+ACEITO construir arqueiro em [13]
+ACEITO construir arqueiro em [13]
+ACEITO construir arqueiro em [13]
+ACEITO construir arqueiro em [13]
+ACEITO construir arqueiro em [12]
+ACEITO construir arqueiro em [12]
+ACEITO construir arqueiro em [8]
+ACEITO construir arqueiro em [8]
+ACEITO construir arqueiro em [8]
+ACEITO construir arqueiro em [8]
+ACEITO envio [8]->[4]: 1S+2K
+ACEITO envio [12]->[8]: 1A+1K
+ACEITO envio [21]->[8]: 1A
+ACEITO envio [16]->[8]: 2A
+ACEITO envio [22]->[8]: 2A
+plano (volta no proximo prompt): Capture Badajoz this turn, then reinforce Toledo. Next turn take Pamplona via Zaragoza/Huesca, then Murcia via Valencia/Teruel, followed by Burgos and Salamanca via Madrid, and finally Cordoba via Toledo. Build archers in all villages to increase attack power.
+depoimento (so tela/narracao): Launched an attack on Badajoz with Toledo's troops, sent reinforcements from Madrid, Valencia, Tarragona, and Barcelona to Toledo, and began building archers everywhere to strengthen our forces for the upcoming offensives.
+placar: A 7 ald/tropas 18 | B 10 ald/tropas 53 | neutras 7 | transito 10 (A 5 | B 5)
+
+########## TURNO 12 — Rei A (openrouter:nvidia/nemotron-3-super-120b-a12b:free) ##########
+>>> ERRO DE REDE — turno NAO contabilizado (sem resposta do modelo)
+>>> detalhe: Unexpected end of JSON input
+resposta crua: ""
+raciocinio: (nao capturado)
+ordem.construir: []
+ordem.envios   : []
+ACEITO: (nada — passou o turno)
+########## TURNO 12 — Rei B (openrouter:nvidia/nemotron-3-super-120b-a12b:free) ##########
+>>> ERRO DE REDE — turno NAO contabilizado (sem resposta do modelo)
+>>> detalhe: Unexpected end of JSON input
+resposta crua: ""
+raciocinio: (nao capturado)
+ordem.construir: []
+ordem.envios   : []
+ACEITO: (nada — passou o turno)
+REFORCO [4] Badajoz dono A: 1A
+REFORCO [4] Badajoz dono A: 1A
+REFORCO [4] Badajoz dono A: 1A
+REFORCO [4] Badajoz dono A: 1A
+REFORCO [4] Badajoz dono A: 1A
+COMBATE [4] Badajoz: atacante B Fatk=9 (ef 14) Fdef=32 (ef 40) vant=1 -> vence defensor | baixas~5
+REFORCO [8] Toledo dono B: 1A+1K
+placar: A 7 ald/tropas 72 | B 10 ald/tropas 93 | neutras 7 | transito 3 (A 0 | B 3)
+
+########## TURNO 13 — Rei A (openrouter:nvidia/nemotron-3-super-120b-a12b:free) ##########
+>>> ERRO DE REDE — turno NAO contabilizado (sem resposta do modelo)
+>>> detalhe: fetch failed
+resposta crua: ""
+raciocinio: (nao capturado)
+ordem.construir: []
+ordem.envios   : []
+ACEITO: (nada — passou o turno)
+########## TURNO 13 — Rei B (openrouter:nvidia/nemotron-3-super-120b-a12b:free) ##########
+>>> ERRO DE REDE — turno NAO contabilizado (sem resposta do modelo)
+>>> detalhe: fetch failed
+resposta crua: ""
+raciocinio: (nao capturado)
+ordem.construir: []
+ordem.envios   : []
+ACEITO: (nada — passou o turno)
+REFORCO [8] Toledo dono B: 1A
+REFORCO [8] Toledo dono B: 2A
+REFORCO [8] Toledo dono B: 2A
+placar: A 7 ald/tropas 72 | B 10 ald/tropas 98 | neutras 7 | transito 0 (A 0 | B 0)
+
+>>> INTERROMPIDO: 2+ erros de rede consecutivos do Rei A (openrouter:nvidia/nemotron-3-super-120b-a12b:free) — provavel teto diario/throttle (limite LIM_ERRO_REDE=2) (turno 13)
+=== FIM === turno 13 | resultado: interrompido | A 7 ald | B 10 ald | neutras 7
+
+================== RESUMO ==================
+Rei A (openrouter:nvidia/nemotron-3-super-120b-a12b:free): 5 envios, 5 tropas, tamanho medio 1.00
+Rei B (openrouter:nvidia/nemotron-3-super-120b-a12b:free): 5 envios, 10 tropas, tamanho medio 2.00
+NOTA: partida interrompida antes do fim natural — 2+ erros de rede consecutivos do Rei A (openrouter:nvidia/nemotron-3-super-120b-a12b:free) — provavel teto diario/throttle (limite LIM_ERRO_REDE=2).
+============================================
+
+============== TOKENS DE CONTEXTO (prompt/input por turno) ==============
+Rei A (openrouter:nvidia/nemotron-3-super-120b-a12b:free): turnos validos 1 | media 3265 tok | min 3265 | max 3265
+  crescimento: 1o turno 3265 -> ultimo 3265 tok | 1o terco media 3265 -> ultimo terco media 3265 (0%)
+  serie (turno:prompt): 11:3265
+Rei B (openrouter:nvidia/nemotron-3-super-120b-a12b:free): turnos validos 1 | media 4280 tok | min 4280 | max 4280
+  crescimento: 1o turno 4280 -> ultimo 4280 tok | 1o terco media 4280 -> ultimo terco media 4280 (0%)
+  serie (turno:prompt): 11:4280
+========================================================================
