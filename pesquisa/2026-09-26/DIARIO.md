@@ -567,3 +567,33 @@ maioria, e a tropa do interior que sai sobe no dots como no Resultado 13.
   04:22 — **segunda retomada** (`retomar2_ab2_replica.sh`, saída `*_cont2.txt`) com uma espera
   ativa, re-armada quando o ambiente a cortar. **Lição de método**: partidas longas precisam
   de uma espera ativa a correr; um lembrete agendado sozinho deixa o container morrer.
+- 30/09 ~07:00 — a última (Super P4×V s9) ficou presa no T25 ~54 min a gastar cota sem
+  avançar (placar A 13 × B 11): **parada à mão**, conta como "parada no T25".
+
+## Resultado 15 — a RÉPLICA do candidato (seeds 7 e 9, 30/09)
+
+| partida | resultado | candidato | tropa do interior que sai/turno cand./P4 |
+|---|---|---|---|
+| dots s7 (cand.=B) | limite 12×12 | empate | **41% / 13%** |
+| dots s9 (cand.=B) | A vence 18×6 (T22) | perde | **56% / 15%** |
+| dots s7 (cand.=A) | limite 8×16 | atrás | **31% / 19%** |
+| dots s9 (cand.=A) | A vence 18×6 (T28) | **vence** | **31% / 13%** |
+| Super s7 (cand.=B) | limite 8×16 | à frente | 17% / 15% |
+| Super s9 (cand.=B) | parada no T25, 13×11 | atrás | 14% / 21% |
+| Super s7 (cand.=A) | limite 11×13 | atrás | 21% / 9% |
+| Super s9 (cand.=A) | limite 13×11 | à frente | 5% / 13% |
+
+(`banda_replay.js` sobre os `*_cont2.replay.json`, que levam a partida inteira.)
+
+- **Placar: candidato à frente em 3, atrás em 4, 1 empate.** No dots, a seed 9 volta a dar
+  a vitória ao assento A, com e sem o candidato (como a seed 5 no Resultado 13).
+- **A logística do dots REPETE: a tropa do interior que sai sobe nas 4 partidas**, de 13–19%
+  para 31–56%. Somado ao Resultado 13: **sobe em 7 de 8, igual em 1** (sinais, p≈0,016).
+  É o efeito mais sólido de toda a pesquisa, e é do mapa da frente (a sonda já o dizia).
+- **No Super, nada**, pela terceira vez (2 acima, 2 abaixo).
+- **Juntando 13 + 15 (16 partidas): candidato à frente 8, atrás 7, empate 1.** O pacote
+  muda COMO o dots joga (manda a retaguarda para a frente), mas **não muda quem ganha**.
+  Mais tropa na fronteira não basta para vencer; o gabarito ("à frente na maioria") falhou,
+  o da logística passou.
+- O mapa da frente quase não é citado nos raciocínios (0–3 vezes por partida): o Rei usa-o
+  sem falar dele.

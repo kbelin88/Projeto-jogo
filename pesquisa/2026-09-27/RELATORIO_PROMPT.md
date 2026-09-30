@@ -335,6 +335,19 @@ informação que mexe na logística. No Super não mexe nada.
 estratégia escrita no passado vira âncora: o Rei segue um plano que o mapa já desmentiu.
 A ideia dos dois campos foi boa de testar e o número disse não.
 
+### A réplica do candidato (30/09, seeds 7 e 9, mais 8 partidas)
+
+| | à frente | atrás | empate | tropa do interior que sai no dots (cand./P4) |
+|---|---|---|---|---|
+| 29/09 (seeds 3, 5) | 5 | 3 | 0 | sobe em 3 de 4 |
+| 30/09 (seeds 7, 9) | 3 | 4 | 1 | **sobe em 4 de 4** (41/13, 56/15, 31/19, 31/13) |
+| **total, 16 partidas** | **8** | **7** | **1** | **sobe em 7 de 8** (p≈0,016) |
+
+**O que a réplica diz:** o mapa da frente muda de verdade a forma como o dots joga (manda a
+retaguarda para a fronteira, o efeito mais sólido desta pesquisa), mas **não muda quem
+ganha**: 8–7–1 é empate. No Super nada muda, nem logística nem placar. Mais tropa na
+fronteira é necessário para jogar bem, não suficiente para vencer.
+
 ---
 
 ## 8. O que isto diz sobre o benchmark
