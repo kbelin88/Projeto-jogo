@@ -557,3 +557,7 @@ A campanha em dois campos sai.
 verdades + campanha + frente, SEM a melhoria do tempo de marcha, para a réplica ser do
 mesmo pacote), dots e Super, assentos trocados, teto 30. Gabarito: o candidato à frente na
 maioria, e a tropa do interior que sai sobe no dots como no Resultado 13.
+- 30/09 ~02:00 — o worker da sessão reiniciou e **matou as 8 partidas da réplica** (entre T6 e
+  T15, marcadas "interrompido"). 02:40 — **retomadas** do replay (`retomar_ab2_replica.sh`,
+  `RETOMAR_DE`), saída em `*_cont.txt`; o replay `*_cont.replay.json` leva a partida inteira.
+  Na retomada recomeçam a memória de fog e o histórico de defesa (o plano/campanha volta).
