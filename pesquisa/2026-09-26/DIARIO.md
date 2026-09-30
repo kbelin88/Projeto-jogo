@@ -550,3 +550,10 @@ seed 3, assentos trocados, teto 25 (cabia nas 147 requisições que sobravam).
 
 **Decisão da réplica (30/09)**: repete-se o CANDIDATO (a melhor versão) com seeds 7 e 9.
 A campanha em dois campos sai.
+
+## 30/09 00:07 UTC — réplica do CANDIDATO lançada (seeds 7 e 9)
+
+`lancar_ab2_replica.sh` → `pesquisa/2026-09-30/ab2_replica/`: o mesmo candidato (seis
+verdades + campanha + frente, SEM a melhoria do tempo de marcha, para a réplica ser do
+mesmo pacote), dots e Super, assentos trocados, teto 30. Gabarito: o candidato à frente na
+maioria, e a tropa do interior que sai sobe no dots como no Resultado 13.
