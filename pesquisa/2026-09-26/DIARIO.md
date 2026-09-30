@@ -561,3 +561,9 @@ maioria, e a tropa do interior que sai sobe no dots como no Resultado 13.
   T15, marcadas "interrompido"). 02:40 — **retomadas** do replay (`retomar_ab2_replica.sh`,
   `RETOMAR_DE`), saída em `*_cont.txt`; o replay `*_cont.replay.json` leva a partida inteira.
   Na retomada recomeçam a memória de fog e o histórico de defesa (o plano/campanha volta).
+- 30/09 02:44 — as retomadas pararam TODAS juntas 4 min depois: o container foi reciclado por
+  inatividade (a espera em segundo plano, que mantinha a sessão ativa nas noites anteriores,
+  passou a ser cortada por limite de tempo, e na retomada só havia um lembrete agendado).
+  04:22 — **segunda retomada** (`retomar2_ab2_replica.sh`, saída `*_cont2.txt`) com uma espera
+  ativa, re-armada quando o ambiente a cortar. **Lição de método**: partidas longas precisam
+  de uma espera ativa a correr; um lembrete agendado sozinho deixa o container morrer.
