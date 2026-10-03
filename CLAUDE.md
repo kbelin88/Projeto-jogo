@@ -46,7 +46,8 @@ gabarito escrito antes do experimento, artefato publicado antes da próxima fase
 | **`clienteor.js`** | o ÚNICO cliente de OpenRouter, partilhado pelo browser e pelo runner: honra o `Retry-After`, aprende o teto de resposta pelo HTTP 400 do modelo, conta throttles |
 | **`rei.js`** | o decisor do runner headless (`criarCliente`, `decidirRei`, `rodarPartidaRei`); o OpenRouter vem do `clienteor.js` |
 | **`runners/rei_vs_rei.js`** | duelo headless; grava o `.txt` e o `.replay.json` ao lado |
-| **`sessao.js`** | o Rei joga N turnos SEGUIDOS na mesma conversa (`SESSAO_N=4`), em formato compacto, e no fim volta a mensagem 1 mais uma memória que ele escreveu (`decidirReiSessao`); traz o `clienteFalso` do ensaio a seco. Desligado por omissão: sem `SESSAO_N` o runner é o de sempre |
+| **`sessao.js`** | o Rei joga N turnos SEGUIDOS na mesma conversa (`SESSAO_N=4`), em formato compacto, e no fim volta a mensagem 1 mais uma memória que ele escreveu (`decidirReiSessao`); o relatório novo **substitui** o antigo na conversa; segunda chamada em resposta vazia; traz o `clienteFalso` do ensaio a seco |
+| **`pacote2.js`** | o **pacote 2**, a outra metade do **prompt campeão** (§5.5): as seis verdades das regras, a campanha e o mapa da frente v2. Só texto (`sistema`, `turno`); os números vêm do motor |
 | **`servir.py`** | servidor local (`localhost:8000`). Rotas: `/checkpoint` (auto-save do `.txt` por turno), `/marcas` (o caderno), `/salvar-mapa` (só o `ferramentas/tracar-rede.html`) |
 | **`sonda3d/`** | o mapa 3D (`mapa3d.js`, `batalha.js`) e as bancadas. Ficheiro a ficheiro no `sonda3d/LEIA-ME.md` |
 
@@ -68,7 +69,7 @@ gabarito escrito antes do experimento, artefato publicado antes da próxima fase
 
 ### Os testes
 
-**36 ficheiros de teste** em `testes/` e **13 smokes** em `testes_arena/`. Os que
+**37 ficheiros de teste** em `testes/` e **13 smokes** em `testes_arena/`. Os que
 guardam mais:
 
 - `test_prompt_p4.js` — o P4, o fog e o parser tolerante;
@@ -79,6 +80,7 @@ guardam mais:
 - `test_runner_simultaneo.js` — o runner headless joga o mesmo jogo que o motor;
 - `test_ruleset_vivo.js` — há um ruleset só, e é o que pensamos;
 - `test_prompt_compacto.js` — o formato compacto da sessão perde rótulos, nunca informação (mesmos registos que o P4, em estados reais);
+- `test_pacote2.js` — o prompt campeão está no motor (evento de combate completo, âncoras da mensagem 1, mapa da frente) e é o padrão do runner; `SESSAO_N=0` volta ao P4;
 - `test_sessao.js` — fronteiras de sessão, o que fica no histórico, o corpo dos pedidos ao OpenRouter (cache) e ao Gemini (multi-turno), sem tocar a rede;
 - `test_guia_verdadeiro.js` — este ficheiro diz a verdade;
 - `test_index_carrega.js` — o `index.html` corre inteiro (`node --check` NÃO basta);
@@ -107,7 +109,8 @@ burro 1 40 out.txt`). Chaves no `.env` (`OPENROUTER_API_KEY`, `GEMINI_API_KEY`,
 `GROK_API_KEY`). `REASONING_MAX_TOKENS=N` dá orçamento de raciocínio — ⚠️ muda o
 que se mede, e alguns provedores ignoram-no.
 
-**Sessão:** `SESSAO_N=4 MAX_TENTATIVAS=1 TETO_CUSTO=1.25 node runners/rei_vs_rei.js <A> <B> <seed> <maxTurnos> <saida.txt>`.
+**Prompt campeão (padrão do runner desde 03/10):** sessão de 4 turnos + pacote 2 + substituição do relatório + segunda chamada em resposta vazia, tudo ligado sem variáveis. `SESSAO_N=0` volta ao P4 de um turno por vez (o que o browser joga). Interruptores só para pesquisa: `PACOTE2=0`, `SESSAO_SUBSTITUI=0`, `SEGUNDA_CHAMADA=0`; `SESSAO_LADOS=A` põe só um lado em sessão (o A/B dentro da mesma partida). `RETOMAR_DE` força o P4 (a conversa não se reconstrói de um replay).
+**Sessão com teto de custo:** `SESSAO_N=4 MAX_TENTATIVAS=1 TETO_CUSTO=1.25 node runners/rei_vs_rei.js <A> <B> <seed> <maxTurnos> <saida.txt>`.
 `falso:sonnet` e `falso:gemini` correm a partida inteira **sem tocar a rede** (ensaio a seco); depois
 `node ferramentas/analisar-sessao.js <saida.txt>`. Cada mensagem fica em `<saida>.sessao.jsonl`.
 
@@ -240,6 +243,28 @@ listas "desligadas" desses dois testes**. A história de cada lote está em
 `docs/HISTORIA.md`.
 
 ---
+
+### 5.5 O prompt campeão (03/10)
+
+O **P4 continua a ser o prompt do browser** (um turno por vez, o que se vê no vídeo). O que
+o benchmark joga por omissão é o **prompt campeão**: o P4 mais o **pacote 2**, dentro do
+**modo sessão**.
+
+- **Sessão** (`sessao.js`): 4 turnos na mesma conversa; o relatório novo substitui o antigo
+  (só ficam as respostas do Rei); no fim o Rei escreve a memória que volta na sessão seguinte.
+- **Pacote 2** (`pacote2.js`): as seis verdades (o counter vale para o exército inteiro; o
+  atrito do vencedor é metade da força efetiva do perdedor; quem conquista fica; o interior só
+  é atacável depois de cair uma aldeia vizinha; perder a capital não perde o jogo; os
+  exércitos inimigos a caminho aparecem sempre), a campanha (`plan` passa a ser a guerra dos
+  próximos turnos) e o **mapa da frente v2** (por aldeia de fronteira: a tropa que pode estar
+  ali agora, no turno seguinte e daqui a 2, por rotas só de aldeias próprias; e a retaguarda
+  com o tempo de marcha). **Informa, não recomenda.** O combate de aldeia sai com números.
+- **O que se mediu (29/09–03/10, contra o P4 do mesmo modelo na mesma partida, lados trocados):**
+  à frente em **11 de 12** (Luna 2–0; dots, Super e Ultra 9 de 10). Separadas as peças (dots 4
+  jogos por braço, Super 2): **o pacote sozinho leva a tropa do interior para a frente** (+31 pp
+  de saída por turno no dots) **mas só ganhou 1 de 4**; **a sessão sozinha não mexe na logística**
+  e ganhou 2 de 4. **Só juntas ganham.** O porquê não está medido.
+- **Não está no browser.** Pôr o campeão no `index.html` pede a sessão no browser; fica por fazer.
 
 ## 6. Convenções e INVARIANTES (não quebrar)
 

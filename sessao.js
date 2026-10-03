@@ -25,8 +25,20 @@ const Engine = require("./engine.js");
 const TOK_POR_CHAR = 0.396;
 const estTok = (chars) => Math.round(chars * TOK_POR_CHAR);
 
+// Tres opcoes (29/09, a partida do pacote 2 em sessao), todas DESLIGADAS por
+// omissao, para o que ja foi medido continuar igual:
+//   transformar    { sistema(txt), turno(txt, visao, dono) }: muda a mensagem 1 e
+//                  cada mensagem de turno (o pacote2_sessao.js);
+//   substituir     o relatorio novo SUBSTITUI o anterior na conversa (pedido do
+//                  Lucas: o contexto nao acumula mapas velhos). No historico, cada
+//                  relatorio passado vira uma linha que diz que foi substituido; a
+//                  resposta do Rei fica. A memoria da sessao anterior fica no 1.o;
+//   segundaChamada resposta VAZIA sem erro de rede ganha UMA chamada nova (o filtro
+//                  de conteudo do provedor bloqueia depois de o modelo responder).
 function criarSessao(opc) {
-  return { N: (opc && opc.N) || 4, numero: 0, turnosNaSessao: 0, sistema: null, msgs: [], memoria: null, memorias: [] };
+  opc = opc || {};
+  return { N: opc.N || 4, numero: 0, turnosNaSessao: 0, sistema: null, msgs: [], memoria: null, memorias: [],
+    transformar: opc.transformar || null, substituir: !!opc.substituir, segundaChamada: !!opc.segundaChamada };
 }
 
 // motivo pelo qual a resposta nao conta como turno jogado (ou null se conta)
@@ -49,24 +61,46 @@ async function decidirReiSessao(estado, dono, sessao, cliente, opcoes) {
   if (inicio) {
     sessao.numero++;
     sessao.sistema = Engine.montarPromptSessao(visao, { N });
+    if (sessao.transformar) sessao.sistema = sessao.transformar.sistema(sessao.sistema);
+    if (sessao.substituir) {
+      const de = "When a number in a newer report differs from an older one, the newer one is the truth.";
+      if (!sessao.sistema.includes(de)) throw new Error("sessao.substituir: ancora da mensagem 1 nao encontrada");
+      sessao.sistema = sessao.sistema.replace(de, "Older reports are taken out of the conversation: only the newest report is shown in full, and it is the truth.");
+    }
     sessao.msgs = [];
     log({ tipo: "sessao_inicio", lado: dono, sessao: sessao.numero, turno: estado.turno,
       system: sessao.sistema, memoria: sessao.memoria });
   }
   // no ultimo turno da PARTIDA nao se pede memoria: ninguem a leria (gastaria saida a toa)
   const ultimo = sessao.turnosNaSessao === N - 1 && !(opcoes.maxTurnos && estado.turno >= opcoes.maxTurnos);
-  const user = Engine.montarMensagemTurno(visao, {
+  let user = Engine.montarMensagemTurno(visao, {
     memoria: inicio ? sessao.memoria : null, inexplorado: inicio, ultimoDaSessao: ultimo,
   });
+  if (sessao.transformar) user = sessao.transformar.turno(user, visao, dono);
   const envio = { system: sessao.sistema, mensagens: sessao.msgs.concat([{ role: "user", content: user }]) };
   const ctxChars = sessao.sistema.length + envio.mensagens.reduce((s, m) => s + m.content.length, 0);
   // CONTRAFACTUAL: o prompt de "um turno por vez" para o MESMO estado. Nao e enviado.
   const sombraChars = Engine.montarPrompt(visao, { rejeicaoNoFim: true }).length;
 
   if (typeof cliente.preparar === "function") cliente.preparar({ estado, dono, visao, sessao, ultimo, inicio }); // so o falso
-  let cru = "", raciocinio = null, erroRede = null;
+  let cru = "", raciocinio = null, erroRede = null, segunda = false;
   try { const r = await cliente.gerar(envio); cru = r.texto; raciocinio = r.raciocinio; }
   catch (e) { erroRede = e.message; }
+  if (sessao.segundaChamada && !erroRede && !String(cru || "").trim()) {
+    // a primeira custou (o provedor cobra o raciocinio mesmo filtrado): soma-se,
+    // para o teto de custo do runner ver as duas
+    const tk1 = cliente.ultimosTokens ? Object.assign({}, cliente.ultimosTokens) : null;
+    segunda = true;
+    try { const r = await cliente.gerar(envio); cru = r.texto; raciocinio = r.raciocinio; }
+    catch (e) { erroRede = e.message; }
+    const tk2 = cliente.ultimosTokens;
+    if (tk1 && tk2 && tk2 !== tk1) {
+      const soma = Object.assign({}, tk2);
+      for (const k of ["custo", "prompt", "resposta", "raciocinio", "cacheLido", "cacheEscrito"])
+        if (typeof tk1[k] === "number" || typeof tk2[k] === "number") soma[k] = (tk1[k] || 0) + (tk2[k] || 0);
+      cliente.ultimosTokens = soma;
+    }
+  }
   const p = Engine.parsearOrdem(cru);
   const motivo = motivoInvalido(cliente, erroRede, cru, p);
 
@@ -76,7 +110,16 @@ async function decidirReiSessao(estado, dono, sessao, cliente, opcoes) {
     let guardada = null;
     try { guardada = JSON.parse(p.bloco); } catch (e) { guardada = null; }
     if (guardada) for (const k of ["statement", "depoimento", "memory", "memoria"]) delete guardada[k];
-    sessao.msgs.push({ role: "user", content: user },
+    // substituir: o relatorio deste turno sai do historico (o proximo traz o estado
+    // inteiro); fica uma linha no lugar dele, e a memoria da sessao anterior, que
+    // so vem no 1.o turno da sessao, continua la
+    let noHistorico = user;
+    if (sessao.substituir) {
+      const mem = (inicio && sessao.memoria && sessao.memoria.texto)
+        ? `=== YOUR MEMORY FROM THE LAST SESSION (written by you on turn ${sessao.memoria.turno}) ===\n${sessao.memoria.texto}\n\n` : "";
+      noHistorico = mem + `[TURN ${estado.turno} report: replaced by the newer report below. Your reply to it follows.]`;
+    }
+    sessao.msgs.push({ role: "user", content: noHistorico },
       { role: "assistant", content: guardada ? JSON.stringify(guardada) : String(cru) });
     sessao.turnosNaSessao++;
     if (ultimo) {
@@ -92,7 +135,7 @@ async function decidirReiSessao(estado, dono, sessao, cliente, opcoes) {
   const tk = cliente.ultimosTokens || null;
   log({ tipo: "turno", lado: dono, turno: estado.turno, sessao: sessao.numero, turnoNaSessao, ultimo,
     user, resposta: cru, raciocinio, usage: erroRede ? null : tk, ctxChars, sombraChars,
-    foraDoContexto: motivo, memoria: p.memoria || null });
+    foraDoContexto: motivo, memoria: p.memoria || null, segundaChamada: segunda });
   return {
     ordem: p.ordem,
     registro: {
@@ -106,7 +149,7 @@ async function decidirReiSessao(estado, dono, sessao, cliente, opcoes) {
       rejeicoes: diag.rejeicoes,
       counter: Rei.avaliarCounter(estado, diag.aceitoEnvios),
       sessao: { numero: sessao.numero, turnoNaSessao, inicio, ultimo, N,
-        memoria: p.memoria || null, foraDoContexto: motivo,
+        memoria: p.memoria || null, foraDoContexto: motivo, segundaChamada: segunda,
         ctxChars, userChars: user.length, sistemaChars: sessao.sistema.length, sombraChars },
     },
   };

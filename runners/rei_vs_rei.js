@@ -49,14 +49,33 @@ const etiqueta = etiquetaDe.A + " vs " + etiquetaDe.B;
 // ── SESSAO (29/09/2026, SPEC_TESTE_SESSAO_0929) ─────────────────────────────
 //   SESSAO_N=4 node runners/rei_vs_rei.js <A> <B> <seed> <turnos> <saida.txt>
 // O Rei joga N turnos seguidos na mesma conversa (formato compacto V2) e no fim
-// volta a mensagem 1 mais a memoria que ele escreveu. Sem SESSAO_N o runner e o
-// de sempre. Cada mensagem enviada e recebida fica em <saida>.sessao.jsonl
+// volta a mensagem 1 mais a memoria que ele escreveu. Sem SESSAO_N joga o
+// PROMPT CAMPEAO (ver abaixo); SESSAO_N=0 e o P4 de um turno por vez. Cada mensagem enviada e recebida fica em <saida>.sessao.jsonl
 // (o reconstruir-prompts assume UM prompt por turno e nao serve aqui).
 // "falso:sonnet" / "falso:gemini" correm a partida inteira sem tocar a rede.
-const SESSAO_N = parseInt(process.env.SESSAO_N, 10) || 0;
+// O PROMPT CAMPEAO e o padrao do runner (03/10): sessao de 4 turnos + pacote 2 (pacote2.js)
+// + o relatorio novo a substituir o anterior + segunda chamada em resposta vazia. Em
+// partidas inteiras contra o P4 do mesmo modelo, 11 de 12 a frente. SESSAO_N=0 volta ao
+// P4 de um turno por vez (sem sessao, sem pacote, sem substituicao). Cada peca tem o seu
+// interruptor, so para pesquisa: PACOTE2=0, SESSAO_SUBSTITUI=0, SEGUNDA_CHAMADA=0.
+const SESSAO_N = process.env.SESSAO_N !== undefined && process.env.SESSAO_N !== "" ? (parseInt(process.env.SESSAO_N, 10) || 0) : (process.env.RETOMAR_DE ? 0 : 4); // retomar de um replay nao combina com a conversa em sessao: volta ao P4
+const CAMPEAO = SESSAO_N > 0;
 const Sessao = SESSAO_N ? require("../sessao.js") : null;
 const sessoes = { A: null, B: null };
-if (SESSAO_N) for (const d of ["A", "B"]) if (cliente[d]) sessoes[d] = Sessao.criarSessao({ N: SESSAO_N });
+const flag = (nome) => (process.env[nome] !== undefined && process.env[nome] !== "" ? process.env[nome] === "1" : CAMPEAO);
+// SESSAO_SUBSTITUI: o relatorio novo substitui o anterior na conversa (so fica a resposta
+// do Rei). SEGUNDA_CHAMADA: resposta vazia ganha uma chamada nova (vale tambem no P4). PACOTE2:
+// as seis verdades, a campanha e o mapa da frente v2 (so em sessao).
+const SUBSTITUI = SESSAO_N > 0 && flag("SESSAO_SUBSTITUI");
+const SEGUNDA = flag("SEGUNDA_CHAMADA");
+const PACOTE2 = SESSAO_N > 0 && flag("PACOTE2");
+const Pac2 = PACOTE2 ? require("../pacote2.js") : null;
+// SESSAO_LADOS=A (30/09): so esse lado joga em sessao (com o pacote); o outro joga o P4 de
+// um turno por vez. E o A/B dentro da mesma partida: o mesmo modelo dos dois lados, os dois
+// bracos no mesmo momento. Omissao: os dois lados.
+const SESSAO_LADOS = (process.env.SESSAO_LADOS || "AB").toUpperCase();
+if (SESSAO_N) for (const d of ["A", "B"]) if (cliente[d] && SESSAO_LADOS.includes(d)) sessoes[d] = Sessao.criarSessao({ N: SESSAO_N,
+  transformar: Pac2 ? Pac2.transformador(Engine) : null, substituir: SUBSTITUI, segundaChamada: SEGUNDA });
 const sessaoFile = outfile.replace(/\.txt$/i, "") + ".sessao.jsonl";
 if (SESSAO_N) fs.writeFileSync(sessaoFile, "");
 const logSessao = (obj) => { if (SESSAO_N) fs.appendFileSync(sessaoFile, JSON.stringify(obj) + "\n"); };
@@ -65,8 +84,17 @@ const serieSessao = { A: [], B: [] }; // tokens reais de cada turno em sessao, p
 // decisor de um lado: LLM (async, com registro) ou burro (sync). Devolve o
 // mesmo formato de registro para o log sair igual dos dois lados.
 async function decidirLado(estado, dono) {
-  if (cliente[dono] && SESSAO_N) return (await Sessao.decidirReiSessao(estado, dono, sessoes[dono], cliente[dono], { log: logSessao, maxTurnos })).registro;
-  if (cliente[dono]) return (await Rei.decidirRei(estado, dono, cliente[dono])).registro;
+  if (cliente[dono] && sessoes[dono]) return (await Sessao.decidirReiSessao(estado, dono, sessoes[dono], cliente[dono], { log: logSessao, maxTurnos })).registro;
+  if (cliente[dono]) {
+    let reg = (await Rei.decidirRei(estado, dono, cliente[dono])).registro;
+    // SEGUNDA_CHAMADA vale para os DOIS modos (30/09): no A/B, so o lado em sessao a
+    // ter penalizaria o P4 pelo filtro de conteudo do provedor, e nao pelo prompt
+    if (SEGUNDA && !reg.erroRede && !String(reg.cru || "").trim()) {
+      reg = (await Rei.decidirRei(estado, dono, cliente[dono])).registro;
+      reg.segundaChamada = true;
+    }
+    return reg;
+  }
   const visao = Engine.montarVisao(estado, dono);
   const ordem = Engine.jogadorBurro(visao);
   const diag = Engine.diagnosticarOrdem(estado, dono, ordem);
@@ -176,7 +204,10 @@ out("condicoes: ambiente=" + (cfg.layout || "v1") + " | temp=0 | prompt=" +
       : process.env.REASONING_EFFORT ? "esforco " + process.env.REASONING_EFFORT : "on (sem limite)") +
   " | max_tokens_resposta=" + (maxTokens || Rei.TETO_ALTO || 128000) +
   (maxTokens ? " (fixado por MAX_TOKENS_RESPOSTA)" : " (default alto, auto-ajustavel por modelo)") +
-  (SESSAO_N ? " | SESSAO N=" + SESSAO_N + " (formato compacto V2; memoria de ate " + Engine.TETO_MEMORIA + " caracteres no ultimo turno de cada sessao; sem correcao de formato)" : ""));
+  (SESSAO_N ? " | SESSAO N=" + SESSAO_N + (SESSAO_LADOS === "AB" ? "" : " SO NO REI " + SESSAO_LADOS + " (o outro: P4 de um turno por vez)") + " (formato compacto V2; memoria de ate " + Engine.TETO_MEMORIA + " caracteres no ultimo turno de cada sessao; sem correcao de formato)" : "") +
+  (PACOTE2 ? " | PACOTE2 (seis verdades + campanha na mensagem 1; mapa da frente v2, combate com numeros e intencao em cada turno)" : "") +
+  (SUBSTITUI ? " | relatorio novo SUBSTITUI o anterior na conversa" : "") +
+  (SEGUNDA ? " | segunda chamada em resposta vazia" : ""));
 out("");
 
 function logEventos(estado, turno) {

@@ -992,6 +992,10 @@
       conquista: false,
     };
 
+    // o evento leva quem atacou com o que e quem defendia (29/09): o relato com numeros do pacote 2 le-os
+    rep.atkTropas = Object.assign({}, exercito.tropas);
+    rep.defTropasAntes = Object.assign({}, alvo.tropas);
+    rep.defensorDono = alvo.dono;
     if (atacanteVence) {
       // sobreviventes do atacante viram a guarnicao tipada da aldeia tomada
       const sobrevivente = Object.assign({}, exercito.tropas);
@@ -1002,10 +1006,12 @@
       alvo.construindo = [];
       rep.conquista = true;
       rep.sobreviventesForca = contarTropas(alvo.tropas); // contagem de sobreviventes (nao poder)
+      rep.baixasTropas = contarTropas(rep.atkTropas) - contarTropas(alvo.tropas);
     } else {
       // defensor segura (rei ou neutra); atacante eliminado; defensor sofre baixas
       aplicarBaixas(estado, alvo.tropas, fracao);
       rep.sobreviventesForca = contarTropas(alvo.tropas);
+      rep.baixasTropas = contarTropas(rep.defTropasAntes) - contarTropas(alvo.tropas);
     }
     return rep;
   }
