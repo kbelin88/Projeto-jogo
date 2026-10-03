@@ -135,26 +135,32 @@ function clienteGemini(opcoes) {
     nome: `gemini:${modelo}`,
     ultimosTokens: null, // E3/1b — mesmo canal lateral do clienteOllama
     async gerar(prompt) {
+      const sess = prompt !== null && typeof prompt === "object" && Array.isArray(prompt.mensagens);
       for (let tentativa = 1; ; tentativa++) {
         await respeitarPiso();
         const t0 = Date.now(); // LOTE E, E5
         const resp = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
+          body: JSON.stringify(Object.assign({
+            // SESSAO (29/09/2026): { system, mensagens } -> systemInstruction + contents com papeis
+            contents: sess ? prompt.mensagens.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] }))
+                           : [{ parts: [{ text: prompt }] }],
             // thinking sempre-ligado: pede os thought parts de volta (senao o
             // texto do raciocinio nunca chega — so o thoughtsTokenCount).
             generationConfig: { temperature: temperatura, thinkingConfig: { includeThoughts: true }, maxOutputTokens: (opcoes.maxTokens != null ? opcoes.maxTokens : 32000) }, // LOTE C, E1
-          }),
+          }, (sess && prompt.system) ? { systemInstruction: { parts: [{ text: prompt.system }] } } : {})),
         });
         if (resp.ok) {
           const data = await resp.json();
           const um = data.usageMetadata;
           this.ultimosTokens = um
-            ? { prompt: um.promptTokenCount || 0, resposta: (um.candidatesTokenCount || 0) + (um.thoughtsTokenCount || 0), ms: Date.now() - t0 } // LOTE E, E5
+            ? Object.assign({ prompt: um.promptTokenCount || 0, resposta: (um.candidatesTokenCount || 0) + (um.thoughtsTokenCount || 0), ms: Date.now() - t0 }, // LOTE E, E5
+                // SESSAO: o pensamento e o cache implicito, que o modo de um turno nunca registou
+                sess ? { raciocinio: um.thoughtsTokenCount || 0, cacheLido: um.cachedContentTokenCount || 0 } : {})
             : null;
           const cand = data.candidates && data.candidates[0];
+          if (sess) this.ultimoFinish = ({ STOP: "stop", MAX_TOKENS: "length" })[cand && cand.finishReason] || (cand && cand.finishReason) || null;
           const parts = (cand && cand.content && cand.content.parts) || [];
           // CRITICO: separar por p.thought. Sem isso o raciocinio entra em
           // texto e quebra o parsearOrdem (texto tem que ser SO o JSON).
@@ -246,6 +252,9 @@ function clienteOpenRouter(opcoes) {
 
   return {
     nome: `openrouter:${modelo}`,
+    // SESSAO: a Anthropic tem cache; sem ele a sessao custa muito mais. O runner
+    // corta a partida se o turno 2 de uma sessao nao ler nada do cache.
+    exigeCache: /^anthropic\//.test(modelo),
     ultimosTokens: null, // E3/1b — mesmo canal lateral dos outros clientes
     ultimoFinish: null,  // A1: finish_reason ("length" = truncou no teto de tokens)
     ultimosThrottles: 0, // 22/09: o runner passou a saber isto, como o browser
@@ -253,8 +262,11 @@ function clienteOpenRouter(opcoes) {
       const r = await or.gerar(prompt, modelo);
       const t = r.tele;
       this.ultimosTokens = t.tokens
-        ? { prompt: t.tokens.prompt, resposta: t.tokens.resposta,
-            raciocinio: t.tokens.raciocinio, ms: t.ms }   // LOTE E, E5
+        ? Object.assign({ prompt: t.tokens.prompt, resposta: t.tokens.resposta,
+            raciocinio: t.tokens.raciocinio, ms: t.ms },   // LOTE E, E5
+            t.tokens.cacheLido != null ? { cacheLido: t.tokens.cacheLido } : {},
+            t.tokens.cacheEscrito != null ? { cacheEscrito: t.tokens.cacheEscrito } : {},
+            t.tokens.custo != null ? { custo: t.tokens.custo } : {})
         : null;
       this.ultimoFinish = t.finish;
       this.ultimosThrottles = t.throttles;
@@ -282,6 +294,7 @@ function criarCliente(id, opcoes) {
   if (backend === "gemini") return clienteGemini(opc);
   if (backend === "ollama") return clienteOllama(opc);
   if (backend === "openrouter") return clienteOpenRouter(opc);
+  if (backend === "falso") return require("./sessao.js").clienteFalso(opc); // ensaio a seco: nao toca a rede
   throw new Error(`backend desconhecido: "${backend}" (use "ollama", "gemini" ou "openrouter")`);
 }
 
@@ -577,4 +590,4 @@ async function rodarPartidaRei(opcoes) {
   };
 }
 
-module.exports = { TETO_ALTO: ClienteOR.TETO_ALTO, clienteOllama, clienteGemini, clienteOpenRouter, criarCliente, carregarEnv, criarReiIA, decidirRei, decidirReiComposto, montarPromptValidador, avaliarCounter, rodarPartidaRei };
+module.exports = { TETO_ALTO: ClienteOR.TETO_ALTO, clienteOllama, clienteGemini, clienteOpenRouter, criarCliente, carregarEnv, criarReiIA, decidirRei, decidirReiComposto, montarPromptValidador, avaliarCounter, classificarIds, rodarPartidaRei };

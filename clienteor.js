@@ -71,6 +71,23 @@
     return m ? Math.ceil(parseFloat(m[1]) * 1000) : 0;
   }
 
+  // SESSAO (29/09/2026): em vez de um prompt-string, o pedido pode ser
+  // { system, mensagens: [{role, content}] }. O system e a ULTIMA mensagem do
+  // prefixo estavel (regras, estradas, esquema) e leva um ponto de cache; a
+  // ultima mensagem tambem (o ponto vai andando de turno para turno). Sao 2 dos
+  // 4 pontos que a Anthropic permite. Com um prompt-string nada disto acontece:
+  // o corpo do pedido e o de sempre.
+  function mensagensSessao(p, cache) {
+    const cc = cache ? { cache_control: { type: "ephemeral" } } : {};
+    const out = [];
+    if (p.system) out.push({ role: "system", content: [Object.assign({ type: "text", text: p.system }, cc)] });
+    p.mensagens.forEach((m, i) => {
+      const ultimo = i === p.mensagens.length - 1;
+      out.push({ role: m.role, content: (ultimo && cache) ? [Object.assign({ type: "text", text: m.content }, cc)] : m.content });
+    });
+    return out;
+  }
+
   function criar(opcoes) {
     const o = opcoes || {};
     const url = o.url || URL_PADRAO;
@@ -104,20 +121,21 @@
       const temperatura = ex.temperatura != null ? ex.temperatura
                         : (o.temperatura != null ? o.temperatura : 0);
       let throttles = 0;
+      const sessao = prompt !== null && typeof prompt === "object" && Array.isArray(prompt.mensagens);
       for (let tentativa = 1; ; tentativa++) {
         await respeitarRitmo();
         const t0 = Date.now();
         const resp = await buscar(url, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": "Bearer " + chave },
-          body: JSON.stringify({
+          body: JSON.stringify(Object.assign({
             model: modelo,
-            messages: [{ role: "user", content: prompt }],
+            messages: sessao ? mensagensSessao(prompt, ex.cache !== false) : [{ role: "user", content: prompt }],
             temperature: temperatura,
             stream: false,
             reasoning: raciocinio,
             max_tokens: teto[modelo] || maxTokens,
-          }),
+          }, sessao ? { usage: { include: true } } : {})),
         });
         if (resp.ok) {
           const data = await resp.json();
@@ -136,9 +154,14 @@
             raciocinio: rac,
             tele: {
               ms: Date.now() - t0,
-              tokens: u ? { prompt: u.prompt_tokens || 0,
+              tokens: u ? Object.assign({ prompt: u.prompt_tokens || 0,
                             resposta: u.completion_tokens || 0,
-                            raciocinio: det.reasoning_tokens || 0 } : null,
+                            raciocinio: det.reasoning_tokens || 0 },
+                // SESSAO: quanto do prompt veio do cache, quanto foi escrito nele,
+                // e o custo REAL que o OpenRouter contou (so aparecem se existirem)
+                (u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens != null) ? { cacheLido: u.prompt_tokens_details.cached_tokens } : {},
+                (u.prompt_tokens_details && u.prompt_tokens_details.cache_write_tokens != null) ? { cacheEscrito: u.prompt_tokens_details.cache_write_tokens } : {},
+                (u.cost != null) ? { custo: u.cost } : {}) : null,
               finish: ch.finish_reason || null,
               finishNativo: ch.native_finish_reason || null,
               erro: (data.error && (data.error.message || JSON.stringify(data.error))) || null,

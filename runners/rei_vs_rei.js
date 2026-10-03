@@ -36,6 +36,9 @@ const ehBurro = (spec) => spec.toLowerCase() === "burro";
 // Uso: MAX_TOKENS_RESPOSTA=64000 node runners/rei_vs_rei.js ...
 const maxTokens = process.env.MAX_TOKENS_RESPOSTA ? parseInt(process.env.MAX_TOKENS_RESPOSTA, 10) : null;
 const opcCliente = maxTokens ? { temperatura: 0, maxTokens } : { temperatura: 0 };
+// MAX_TENTATIVAS=1: nenhum reenvio em 429/503. No Gemini gratis cada pedido conta
+// para os 20 do dia, e repetir a chamada gastaria um turno de outro.
+if (process.env.MAX_TENTATIVAS) opcCliente.maxTentativas = parseInt(process.env.MAX_TENTATIVAS, 10);
 const cliente = {
   A: ehBurro(modelA) ? null : Rei.criarCliente(modelA, opcCliente),
   B: ehBurro(modelB) ? null : Rei.criarCliente(modelB, opcCliente),
@@ -43,9 +46,26 @@ const cliente = {
 const etiquetaDe = { A: cliente.A ? cliente.A.nome : "burro", B: cliente.B ? cliente.B.nome : "burro" };
 const etiqueta = etiquetaDe.A + " vs " + etiquetaDe.B;
 
+// ── SESSAO (29/09/2026, SPEC_TESTE_SESSAO_0929) ─────────────────────────────
+//   SESSAO_N=4 node runners/rei_vs_rei.js <A> <B> <seed> <turnos> <saida.txt>
+// O Rei joga N turnos seguidos na mesma conversa (formato compacto V2) e no fim
+// volta a mensagem 1 mais a memoria que ele escreveu. Sem SESSAO_N o runner e o
+// de sempre. Cada mensagem enviada e recebida fica em <saida>.sessao.jsonl
+// (o reconstruir-prompts assume UM prompt por turno e nao serve aqui).
+// "falso:sonnet" / "falso:gemini" correm a partida inteira sem tocar a rede.
+const SESSAO_N = parseInt(process.env.SESSAO_N, 10) || 0;
+const Sessao = SESSAO_N ? require("../sessao.js") : null;
+const sessoes = { A: null, B: null };
+if (SESSAO_N) for (const d of ["A", "B"]) if (cliente[d]) sessoes[d] = Sessao.criarSessao({ N: SESSAO_N });
+const sessaoFile = outfile.replace(/\.txt$/i, "") + ".sessao.jsonl";
+if (SESSAO_N) fs.writeFileSync(sessaoFile, "");
+const logSessao = (obj) => { if (SESSAO_N) fs.appendFileSync(sessaoFile, JSON.stringify(obj) + "\n"); };
+const serieSessao = { A: [], B: [] }; // tokens reais de cada turno em sessao, por lado
+
 // decisor de um lado: LLM (async, com registro) ou burro (sync). Devolve o
 // mesmo formato de registro para o log sair igual dos dois lados.
 async function decidirLado(estado, dono) {
+  if (cliente[dono] && SESSAO_N) return (await Sessao.decidirReiSessao(estado, dono, sessoes[dono], cliente[dono], { log: logSessao, maxTurnos })).registro;
   if (cliente[dono]) return (await Rei.decidirRei(estado, dono, cliente[dono])).registro;
   const visao = Engine.montarVisao(estado, dono);
   const ordem = Engine.jogadorBurro(visao);
@@ -155,7 +175,8 @@ out("condicoes: ambiente=" + (cfg.layout || "v1") + " | temp=0 | prompt=" +
   " | thinking=" + (process.env.REASONING_MAX_TOKENS ? "orcamento " + process.env.REASONING_MAX_TOKENS + " tokens"
       : process.env.REASONING_EFFORT ? "esforco " + process.env.REASONING_EFFORT : "on (sem limite)") +
   " | max_tokens_resposta=" + (maxTokens || Rei.TETO_ALTO || 128000) +
-  (maxTokens ? " (fixado por MAX_TOKENS_RESPOSTA)" : " (default alto, auto-ajustavel por modelo)"));
+  (maxTokens ? " (fixado por MAX_TOKENS_RESPOSTA)" : " (default alto, auto-ajustavel por modelo)") +
+  (SESSAO_N ? " | SESSAO N=" + SESSAO_N + " (formato compacto V2; memoria de ate " + Engine.TETO_MEMORIA + " caracteres no ultimo turno de cada sessao; sem correcao de formato)" : ""));
 out("");
 
 function logEventos(estado, turno) {
@@ -248,6 +269,7 @@ let custoAcum = 0;
 const PRECOS_RUNNER = {
   "anthropic/claude-opus-5":                 { in: 5.00, out: 25.00 },
   "anthropic/claude-sonnet-5":               { in: 2.00, out: 10.00 },
+  "anthropic/claude-sonnet-5.5":             { in: 2.00, out: 10.00, lido: 0.20, escrito: 2.50 },
   "openai/gpt-5.1":                          { in: 1.25, out: 10.00 },
   "openai/gpt-5.6-luna":                     { in: 0.20, out:  1.20 },
   "deepseek/deepseek-v4-pro":                { in: 1.04, out:  2.07 },
@@ -260,9 +282,13 @@ const PRECOS_RUNNER = {
 };
 function somarCusto(etiqueta, tk) {
   if (!tk) return;
+  // SESSAO: o OpenRouter devolve o custo REAL (usage.cost) e e esse que conta
+  if (tk.custo != null) { custoAcum += tk.custo; return; }
   const p = PRECOS_RUNNER[String(etiqueta).replace(/^openrouter:/, "")];
   if (!p) return;
-  custoAcum += ((tk.prompt || 0) * p.in + (tk.resposta || 0) * p.out) / 1e6;
+  const lido = tk.cacheLido || 0, escrito = tk.cacheEscrito || 0;
+  custoAcum += (((tk.prompt || 0) - lido - escrito) * p.in + lido * (p.lido != null ? p.lido : p.in)
+    + escrito * (p.escrito != null ? p.escrito : p.in) + (tk.resposta || 0) * p.out) / 1e6;
 }
 let jaFinalizou = false;
 // escreve FIM + RESUMO uma unica vez (chamado do fim normal E dos caminhos de
@@ -294,6 +320,18 @@ function finalizar(estado, venc, motivo) {
     out(`  serie (turno:prompt): ${serieTokens[d].map((x) => x.turno + ":" + x.prompt).join("  ")}`);
   }
   out("========================================================================");
+  if (SESSAO_N) {
+    out("");
+    out("============== SESSAO (N=" + SESSAO_N + "): TOKENS, CACHE E CUSTO POR LADO ==============");
+    for (const d of ["A", "B"]) {
+      const sr = serieSessao[d];
+      if (!sr.length) { out(`Rei ${d} (${etiquetaDe[d]}): sem turnos em sessao`); continue; }
+      const som = (k) => sr.reduce((a, x) => a + (x[k] || 0), 0);
+      out(`Rei ${d} (${etiquetaDe[d]}): ${sr.length} turnos | entrada ${som("prompt")} tok (cache lido ${som("cacheLido")}, escrito ${som("cacheEscrito")}) | saida ${som("resposta")} tok (raciocinio ${som("raciocinio")}) | custo real ${sr.every((x) => x.custo != null) ? "$" + som("custo").toFixed(4) : "(o provedor nao o informou)"}`);
+      out(`  serie (turno:prompt/cache_lido/saida): ${sr.map((x) => x.turno + ":" + x.prompt + "/" + (x.cacheLido != null ? x.cacheLido : "?") + "/" + x.resposta).join("  ")}`);
+    }
+    out("========================================================================");
+  }
   gravar();
 }
 
@@ -321,6 +359,7 @@ async function main() {
   //   - `dominancia` recomeca — so importa se alguem ja estivesse EM cima do
   //     limiar no momento do corte, e nesse caso NAO retome.
   const retomarDe = process.env.RETOMAR_DE || null;
+  if (SESSAO_N && retomarDe) throw new Error("SESSAO_N e RETOMAR_DE nao combinam: a conversa nao se reconstroi de um replay");
   let turnoRetoma = 0;
   if (retomarDe) {
     const velho = JSON.parse(fs.readFileSync(retomarDe, "utf8"));
@@ -351,6 +390,7 @@ async function main() {
   const t0 = Date.now();
   let venc = null;
   let motivoAbort = null;
+  let semCache = null; // SESSAO: motivo do corte quando o cache nao le nada
 
   try {
   while (estado.turno < maxTurnos) {
@@ -391,6 +431,19 @@ async function main() {
         serieTokens[dono].push({ turno, prompt: tk.prompt || 0, resposta: tk.resposta || 0 });
         // LOTE C, E2: raciocinio e finish sempre presentes (colunas fixas p/ parser).
         out(`tokens.contexto: prompt ${tk.prompt} | resposta ${tk.resposta} | raciocinio ${tk.raciocinio || 0} | finish ${(cliente[dono] && cliente[dono].ultimoFinish) || "?"}${tk.ms != null ? " | ms " + tk.ms : ""}`); // LOTE E, E5
+      }
+      if (registro.sessao) {
+        const ss = registro.sessao;
+        out(`sessao: ${ss.numero}${ss.turnoNaSessao ? " turno " + ss.turnoNaSessao + "/" + ss.N : " (turno FORA do contexto: " + ss.foraDoContexto + ")"}` +
+          ` | mensagem de turno ${ss.userChars} chars | contexto enviado ${ss.ctxChars} chars | prompt de um turno por vez (sombra) ${ss.sombraChars} chars` +
+          (tk ? ` | cache lido ${tk.cacheLido != null ? tk.cacheLido : "?"} escrito ${tk.cacheEscrito != null ? tk.cacheEscrito : "?"}${tk.custo != null ? " | custo real $" + tk.custo.toFixed(4) : ""}` : ""));
+        if (ss.ultimo && ss.turnoNaSessao) out("memoria (" + (ss.memoria ? ss.memoria.length : 0) + " chars): " + (ss.memoria || "(o Rei nao escreveu)"));
+        if (tk) serieSessao[dono].push(Object.assign({ turno }, tk, { ctxChars: ss.ctxChars, userChars: ss.userChars, sombraChars: ss.sombraChars }));
+        // CORTE (SPEC_TESTE_SESSAO_0929 §6): no 2o turno da 1a sessao de um modelo com
+        // cache, cacheLido = 0 quer dizer que o cache nao chega ao provedor. Sem ele o
+        // custo de entrada triplica e o teste nao cabe no saldo: parar aqui, nao no fim.
+        if (cliente[dono] && cliente[dono].exigeCache && ss.numero === 1 && ss.turnoNaSessao === 2 && tk && !tk.cacheLido)
+          semCache = `o cache nao le nada no 2o turno da sessao do Rei ${dono} (${etiquetaDe[dono]}): cacheLido=${tk.cacheLido == null ? "ausente" : tk.cacheLido}. Sem cache o custo de entrada triplica`;
       }
       if (!registro.erroRede && cliente[dono] && cliente[dono].ultimoFinish === "length")
         out("TRUNCADO: resposta atingiu o teto de tokens do provedor (finish_reason=length) — turno conta como passado, sem retry"); // A1
@@ -457,6 +510,11 @@ async function main() {
         break;
       }
       if (motivoAbort) break;
+    }
+    if (semCache) {
+      motivoAbort = semCache;
+      console.error("\n!!! ENCERRANDO: " + motivoAbort);
+      break;
     }
     // ABORT por teto de custo: encerra LIMPO, com log e replay salvos.
     if (TETO_CUSTO_RUNNER > 0 && custoAcum >= TETO_CUSTO_RUNNER) {

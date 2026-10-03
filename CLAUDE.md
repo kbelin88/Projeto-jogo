@@ -46,6 +46,7 @@ gabarito escrito antes do experimento, artefato publicado antes da próxima fase
 | **`clienteor.js`** | o ÚNICO cliente de OpenRouter, partilhado pelo browser e pelo runner: honra o `Retry-After`, aprende o teto de resposta pelo HTTP 400 do modelo, conta throttles |
 | **`rei.js`** | o decisor do runner headless (`criarCliente`, `decidirRei`, `rodarPartidaRei`); o OpenRouter vem do `clienteor.js` |
 | **`runners/rei_vs_rei.js`** | duelo headless; grava o `.txt` e o `.replay.json` ao lado |
+| **`sessao.js`** | o Rei joga N turnos SEGUIDOS na mesma conversa (`SESSAO_N=4`), em formato compacto, e no fim volta a mensagem 1 mais uma memória que ele escreveu (`decidirReiSessao`); traz o `clienteFalso` do ensaio a seco. Desligado por omissão: sem `SESSAO_N` o runner é o de sempre |
 | **`servir.py`** | servidor local (`localhost:8000`). Rotas: `/checkpoint` (auto-save do `.txt` por turno), `/marcas` (o caderno), `/salvar-mapa` (só o `ferramentas/tracar-rede.html`) |
 | **`sonda3d/`** | o mapa 3D (`mapa3d.js`, `batalha.js`) e as bancadas. Ficheiro a ficheiro no `sonda3d/LEIA-ME.md` |
 
@@ -61,12 +62,13 @@ gabarito escrito antes do experimento, artefato publicado antes da próxima fase
 | `ferramentas/medir-assento.js` | a mesa é neutra? (jogador-base contra ele próprio, dos dois lados) |
 | `ferramentas/medir-tropa-inicial.js` | que parte da força fica parada nas aldeias de partida |
 | `ferramentas/acompanhar-partida.js` | partida a correr: os Reis estão a AGIR? (turno a turno, alarme de turnos sem envio) |
+| `ferramentas/analisar-sessao.js` | o que uma partida em sessão custou de verdade: tokens, cache, custo real contra o contrafactual de «um turno por vez», e o gabarito da spec linha a linha (lê o `.sessao.jsonl` ao lado do `.txt`) |
 | `ferramentas/verificar-replay.js` | **antes de gravar**: atravessamentos, identidades repetidas no desenho, saltos, costuras entre turnos, inimigas coladas sem lutar — tudo a 0 ou não se grava. Replays de antes de 25/09 não passam (o motor antigo só fazia lutar no mesmo ponto) |
 | `ferramentas/medir-cruzamentos.js` | colunas que se atravessam no desenho sem lutar (jogador-base, ou `--replay`) |
 
 ### Os testes
 
-**34 ficheiros de teste** em `testes/` e **13 smokes** em `testes_arena/`. Os que
+**36 ficheiros de teste** em `testes/` e **13 smokes** em `testes_arena/`. Os que
 guardam mais:
 
 - `test_prompt_p4.js` — o P4, o fog e o parser tolerante;
@@ -76,6 +78,8 @@ guardam mais:
 - `test_sem_atravessar.js` — no replay, nenhuma coluna atravessa outra sem lutar;
 - `test_runner_simultaneo.js` — o runner headless joga o mesmo jogo que o motor;
 - `test_ruleset_vivo.js` — há um ruleset só, e é o que pensamos;
+- `test_prompt_compacto.js` — o formato compacto da sessão perde rótulos, nunca informação (mesmos registos que o P4, em estados reais);
+- `test_sessao.js` — fronteiras de sessão, o que fica no histórico, o corpo dos pedidos ao OpenRouter (cache) e ao Gemini (multi-turno), sem tocar a rede;
 - `test_guia_verdadeiro.js` — este ficheiro diz a verdade;
 - `test_index_carrega.js` — o `index.html` corre inteiro (`node --check` NÃO basta);
 - `Smoke5fog` / `Smoke8estrada` — correm a `ponte3d.js` a sério;
@@ -102,6 +106,10 @@ ficheiros do forno (§7), que não estão no git.
 burro 1 40 out.txt`). Chaves no `.env` (`OPENROUTER_API_KEY`, `GEMINI_API_KEY`,
 `GROK_API_KEY`). `REASONING_MAX_TOKENS=N` dá orçamento de raciocínio — ⚠️ muda o
 que se mede, e alguns provedores ignoram-no.
+
+**Sessão:** `SESSAO_N=4 MAX_TENTATIVAS=1 TETO_CUSTO=1.25 node runners/rei_vs_rei.js <A> <B> <seed> <maxTurnos> <saida.txt>`.
+`falso:sonnet` e `falso:gemini` correm a partida inteira **sem tocar a rede** (ensaio a seco); depois
+`node ferramentas/analisar-sessao.js <saida.txt>`. Cada mensagem fica em `<saida>.sessao.jsonl`.
 
 **Testes:**
 ```bash

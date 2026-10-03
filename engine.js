@@ -2285,6 +2285,13 @@
     const semRejeicoes = !!(opcoes && opcoes.semRejeicoes);
     const fog = !!visao.fog;
     const L = [];
+    // FORMATO COMPACTO (V2, 29/09/2026 - SPEC_TESTE_SESSAO_0929). So para a
+    // mensagem de turno de uma SESSAO: perde rotulos e constantes, nunca
+    // informacao. Desligado por omissao (opcoes.compacto), entao o P4 de sempre
+    // fica BYTE A BYTE igual - a regra do §5.4 do CLAUDE.md.
+    const compacto = !!(opcoes && opcoes.compacto);
+    const SIGLA = { lanceiro: "S", arqueiro: "A", cavaleiro: "K" };
+    const compL = (t) => TIPOS.filter((k) => t[k]).map((k) => t[k] + SIGLA[k]).join(" ");
 
     // ---- marcha pela rede (mesmas funcoes do motor; ver L3 no legado) ----
     const temRede = !!visao.estradas;
@@ -2317,8 +2324,9 @@
       return bestM;
     };
     const marchaTexto = (a) => {
-      const vs = `${marchaVel(a, { lanceiro: 1 })} slow / ${marchaVel(a, { arqueiro: 1 })} medium / ${marchaVel(a, { cavaleiro: 1 })} fast`;
       const o = origemMaisProxima(a);
+      if (compacto) return `from ${o ? "[" + o.id + "]" : "?"} ${marchaVel(a, { lanceiro: 1 })}/${marchaVel(a, { arqueiro: 1 })}/${marchaVel(a, { cavaleiro: 1 })}`;
+      const vs = `${marchaVel(a, { lanceiro: 1 })} slow / ${marchaVel(a, { arqueiro: 1 })} medium / ${marchaVel(a, { cavaleiro: 1 })} fast`;
       return `march from ${o ? "[" + o.id + "]" + (o.nome ? " " + o.nome : "") : "?"}: ${vs} turns`;
     };
     const marchaMedia = (a) => { const t = marchaVel(a, { arqueiro: 1 }); return t === "?" ? Infinity : t; };
@@ -2331,6 +2339,7 @@
     const deltaTexto = (a) => {
       if (!deltaDefesa || !a.defAntes) return "";
       const dt = visao.turno - a.defAntes.turno;
+      if (compacto) return defefetiva(a) === a.defAntes.defEf ? ` (stable for ${dt} turns)` : ` (was ${a.defAntes.defEf})`;
       return defefetiva(a) === a.defAntes.defEf ? ` (stable for ${dt} turns)` : ` (was ${a.defAntes.defEf}, ${dt} turns ago)`;
     };
     const memoriaTexto = (a) =>
@@ -2343,8 +2352,12 @@
     const compEN = compTextoEN;
 
     // ---- cabecalho ----
-    L.push(`TURN ${visao.turno} - You are King ${me}.`);
-    L.push(`These numbers are from TURN ${visao.turno}. Ignore quantities from earlier turns.`);
+    if (compacto) {
+      L.push(`TURN ${visao.turno} - these numbers replace all earlier ones. You hold ${visao.minhas.length} of ${visao.minhas.length + visao.alvos.length} villages.`);
+    } else {
+      L.push(`TURN ${visao.turno} - You are King ${me}.`);
+      L.push(`These numbers are from TURN ${visao.turno}. Ignore quantities from earlier turns.`);
+    }
     L.push("");
 
     if (!semRejeicoes && visao.rejeicoesAnteriores && visao.rejeicoesAnteriores.length) {
@@ -2369,7 +2382,8 @@
     let marchando = 0;
     for (const m of visao.minhas) for (const t of TIPOS) casa[t] += m.tropas[t];
     if (visao.transito) for (const mv of visao.transito) if (mv.dono === me) marchando += mv.tropas.lanceiro + mv.tropas.arqueiro + mv.tropas.cavaleiro;
-    L.push(`TOTAL: ${casa.lanceiro + casa.arqueiro + casa.cavaleiro} soldiers at home (${casa.lanceiro} ${en("lanceiro")}, ${casa.arqueiro} ${en("arqueiro")}, ${casa.cavaleiro} ${en("cavaleiro")}) + ${marchando} marching`);
+    if (compacto) L.push(`TOTAL: ${casa.lanceiro + casa.arqueiro + casa.cavaleiro} home (${casa.lanceiro}S ${casa.arqueiro}A ${casa.cavaleiro}K) + ${marchando} marching`);
+    else L.push(`TOTAL: ${casa.lanceiro + casa.arqueiro + casa.cavaleiro} soldiers at home (${casa.lanceiro} ${en("lanceiro")}, ${casa.arqueiro} ${en("arqueiro")}, ${casa.cavaleiro} ${en("cavaleiro")}) + ${marchando} marching`);
     const adj = visao.estradas || {};
     const donoDe = {};
     for (const m of visao.minhas) donoDe[m.id] = me;
@@ -2377,6 +2391,10 @@
     const ehFronteira = (id) => (adj[id] || []).some((v) => donoDe[v] === inimigo);
     const fronteiraTag = (a) => {
       const inimigos = (adj[a.id] || []).filter((v) => donoDe[v] === inimigo);
+      if (compacto) {
+        if (!inimigos.length) return " INT";
+        return ` BORDER ${inimigos.slice(0, 2).map((v) => `[${v}]`).join(",")}${inimigos.length > 2 ? `+${inimigos.length - 2}` : ""}`;
+      }
       if (!inimigos.length) return " | INTERIOR (no enemy border)";
       const lista = inimigos.slice(0, 2).map((v) => `[${v}]`).join(", ");
       return ` | BORDER with ${lista}${inimigos.length > 2 ? ` +${inimigos.length - 2}` : ""} (enemy)`;
@@ -2406,14 +2424,16 @@
     };
     for (const a of minhasOrd) {
       const nome = a.nome ? ` ${a.nome}` : "";
-      const cap = a.capital ? " - YOUR CAPITAL" : "";
-      L.push(`[${a.id}]${nome}${cap}${fronteiraTag(a)} | wood ${a.recursos.madeira} (+${prod.madeira}/turn) | iron ${a.recursos.ferro} (+${prod.ferro}/turn) | effective defense (location bonus included): ${defefetiva(a)} | troops at home: ${contarTropas(a.tropas)} / ${cfg.limite_tropas_aldeia}`);
-      L.push(`    AVAILABLE TO SEND NOW: ${a.tropas.lanceiro} ${en("lanceiro")}, ${a.tropas.arqueiro} ${en("arqueiro")}, ${a.tropas.cavaleiro} ${en("cavaleiro")} (attack power if all sent: ${ataqueDe(a.tropas, cfg)})`);
+      const cap = a.capital ? (compacto ? " CAP" : " - YOUR CAPITAL") : "";
+      if (compacto) L.push(`[${a.id}]${nome}${cap}${fronteiraTag(a)} | w${a.recursos.madeira} i${a.recursos.ferro} | def ${defefetiva(a)} | home ${contarTropas(a.tropas)}`);
+      else L.push(`[${a.id}]${nome}${cap}${fronteiraTag(a)} | wood ${a.recursos.madeira} (+${prod.madeira}/turn) | iron ${a.recursos.ferro} (+${prod.ferro}/turn) | effective defense (location bonus included): ${defefetiva(a)} | troops at home: ${contarTropas(a.tropas)} / ${cfg.limite_tropas_aldeia}`);
+      if (compacto) L.push(`    send ${a.tropas.lanceiro}S ${a.tropas.arqueiro}A ${a.tropas.cavaleiro}K (atk ${ataqueDe(a.tropas, cfg)})`);
+      else L.push(`    AVAILABLE TO SEND NOW: ${a.tropas.lanceiro} ${en("lanceiro")}, ${a.tropas.arqueiro} ${en("arqueiro")}, ${a.tropas.cavaleiro} ${en("cavaleiro")} (attack power if all sent: ${ataqueDe(a.tropas, cfg)})`);
       const emMarcha = { lanceiro: 0, arqueiro: 0, cavaleiro: 0 };
       let temMarcha = false;
       if (visao.transito) for (const mv of visao.transito) if (mv.origemId === a.id && mv.dono === me) { for (const t of TIPOS) emMarcha[t] += (mv.tropas[t] || 0); temMarcha = true; }
       if (temMarcha && (emMarcha.lanceiro + emMarcha.arqueiro + emMarcha.cavaleiro) > 0)
-        L.push(`    already marching out (NOT available): ${compEN(emMarcha)}`);
+        L.push(compacto ? `    out: ${compL(emMarcha)}` : `    already marching out (NOT available): ${compEN(emMarcha)}`);
       // DISTANCIA DA RETAGUARDA A FRONTE (28/08). O relatorio ja pre-calculava
       // tempo de marcha para aldeias ALVO, mas NUNCA entre duas aldeias
       // PROPRIAS — entao um Rei que quisesse mover tropa do interior para a
@@ -2427,14 +2447,16 @@
       // aresta na rede: tres arestas de "1t" nao somam 3 turnos).
       const rota = rotaParaFronteira(a);
       if (rota) {
-        L.push(`    from here to your nearest border village [${rota.id}]${rota.nome ? " " + rota.nome : ""}: ` +
+        if (compacto) L.push(`    to front [${rota.id}]${rota.nome ? " " + rota.nome : ""}: ${rota.lento}s/${rota.medio}m/${rota.rapido}f`);
+        else L.push(`    from here to your nearest border village [${rota.id}]${rota.nome ? " " + rota.nome : ""}: ` +
           `${rota.lento} slow / ${rota.medio} medium / ${rota.rapido} fast turns`);
       }
       if (a.construindo.length) {
         const cont = {}; let maxT = 0;
         for (const c of a.construindo) { cont[c.tipo] = (cont[c.tipo] || 0) + 1; maxT = Math.max(maxT, c.turnosRestantes); }
         const desc = TIPOS.filter((t) => cont[t]).map((t) => `${cont[t]} ${en(t)}`).join(", ");
-        L.push(`    ${maxT > 1 ? `ready in ${maxT} turns` : "ready next turn"}: ${desc} (cannot be sent this turn)`);
+        if (compacto) L.push(`    ${maxT > 1 ? `ready in ${maxT} turns` : "ready next turn"}: ${TIPOS.filter((t) => cont[t]).map((t) => `${cont[t]}${SIGLA[t]}`).join(" ")}`);
+        else L.push(`    ${maxT > 1 ? `ready in ${maxT} turns` : "ready next turn"}: ${desc} (cannot be sent this turn)`);
       }
     }
     L.push("");
@@ -2447,6 +2469,7 @@
     const ordenar = (lista) => lista.map((a) => ({ a, t: marchaMedia(a) })).sort((p, q) => p.t - q.t || posVisao.get(p.a.id) - posVisao.get(q.a.id));
     const linhaAlvo = (a) => {
       const donoTag = a.dono === null ? "NEUTRAL" : (a.capital ? `ENEMY CAPITAL (King ${a.dono})` : `ENEMY (King ${a.dono})`);
+      if (compacto) return `[${a.id}]${nomeDe(a)} | ${donoTag} | ${compEN(a.tropas)} | def ${defefetiva(a)}${deltaTexto(a)} | ${marchaTexto(a)}${memoriaTexto(a)}`;
       return `[${a.id}]${nomeDe(a)} | ${donoTag} | garrison: ${compEN(a.tropas)} | effective defense (location bonus included): ${defefetiva(a)}${deltaTexto(a)} | ${marchaTexto(a)}${memoriaTexto(a)}`;
     };
     if (!fog) {
@@ -2477,15 +2500,16 @@
         L.push("");
       }
       const nunca = visao.alvos.filter((a) => !a.visivel && !a.visto);   // na ordem da visao
-      if (nunca.length) {
-        L.push(`=== UNEXPLORED (${nunca.length}) - never seen; find them on the ROAD NETWORK below ===`);
+      if (nunca.length && (!compacto || (opcoes && opcoes.inexplorado))) {
+        L.push(`=== UNEXPLORED (${nunca.length}) - never seen; find them on the ROAD NETWORK ${compacto ? "in the first message" : "below"} ===`);
         L.push(nunca.map((a) => `[${a.id}]${nomeDe(a)}${a.capital ? " (THE ENEMY CAPITAL - its garrison is unknown to you)" : ""}`).join(", "));
         L.push("");
       }
     }
 
     // ---- rede de estradas (compacta: uma linha por aldeia, dono so quando sabido) ----
-    if (visao.estradas) {
+    // (no compacto vive na mensagem 1 da sessao: montarPromptSessao)
+    if (visao.estradas && !compacto) {
       L.push("=== ROAD NETWORK (armies march along these roads; the geography never changes) ===");
       const conhecidoDe = (id) => {
         if (donoDe[id] === me) return " (yours)";
@@ -2679,6 +2703,109 @@
       L.push(String(visao.planoAnterior));
       L.push("Reread it: the map has changed since. Follow it if it still makes sense; change it if it does not.");
     }
+    return L.join("\n");
+  }
+
+
+  // ══ SESSAO (29/09/2026, SPEC_TESTE_SESSAO_0929) ══════════════════════════
+  // O Rei joga N turnos SEGUIDOS na mesma conversa; no fim volta a mensagem 1
+  // (esta) mais uma memoria que ELE escreveu. Duas pecas:
+  //   montarPromptSessao  -> a mensagem 1 (vai como "system": fica no prefixo do
+  //                          cache e e igual em todas as sessoes do mesmo Rei)
+  //   montarMensagemTurno -> o estado de cada turno, em formato COMPACTO
+  // Nada aqui altera o P4 de um turno por vez: o compacto e uma opcao do
+  // relatorioTextoP4, desligada por omissao.
+  const TETO_MEMORIA = 1200;
+  function montarPromptSessao(visao, opcoes) {
+    opcoes = opcoes || {};
+    const cfg = visao.config;
+    const fog = !!visao.fog;
+    const totalAldeias = visao.minhas.length + visao.alvos.length;
+    const N = opcoes.N || 4;
+    const L = [];
+    L.push(`You are King ${visao.dono}. The villages listed under "YOUR VILLAGES" are yours.`);
+    if (cfg.vitoriaPorDominancia) {
+      const alvoDom = Math.ceil(totalAldeias * (cfg.vitoriaFracao || 0.75));
+      L.push(`HOW TO WIN: hold at least ${alvoDom} of the map's ${totalAldeias} villages (${Math.round((cfg.vitoriaFracao || 0.75) * 100)}%) for ${cfg.vitoriaTurnos || 2} consecutive turns, or eliminate every enemy village. The enemy capital is the hardest single target on the map; taking it is NOT required to win.`);
+    } else {
+      L.push("HOW TO WIN: eliminate every enemy village. The enemy capital is the hardest single target on the map.");
+    }
+    L.push("Each village you hold produces resources every turn, and resources are what build your army.");
+    if (cfg.ordensSimultaneas !== false) {
+      L.push("Orders are SIMULTANEOUS: the enemy writes their orders at the same time as you, over the same snapshot of the map you are reading now. Nothing you order this turn is visible to them before it happens.");
+    }
+    L.push("");
+    L.push(regrasP4Texto(cfg));
+    if (fog) {
+      L.push("");
+      L.push("=== FOG OF WAR ===");
+      L.push("You do NOT see the whole map. You see: your own villages, every village directly connected to one of yours by road, and the destination of each army you have on the march. Anything else shows only what you knew the LAST time you saw it (marked \"last seen\"), or nothing at all (marked \"unexplored\"). The road map itself is public knowledge. The enemy is under the same rule: they see you only where their villages and armies reach.");
+    }
+    L.push("");
+    L.push("=== HOW THIS CONVERSATION WORKS ===");
+    L.push("You play in one long conversation. Each turn arrives as a new message with the current report, and your own earlier replies stay above it. When a number in a newer report differs from an older one, the newer one is the truth.");
+    L.push(`Every ${N} turns the conversation restarts from this first message. The only thing that carries over is what you write in the "memory" field when a report asks you for it.`);
+    L.push("");
+    if (visao.estradas) {
+      const adj = visao.estradas;
+      const nomePorId = {}, capTag = {};
+      for (const m of visao.minhas) { nomePorId[m.id] = m.nome; if (m.capital) capTag[m.id] = " - YOUR CAPITAL"; }
+      for (const a of visao.alvos) { nomePorId[a.id] = a.nome; if (a.capital) capTag[a.id] = " - THE ENEMY CAPITAL"; }
+      L.push("=== ROAD NETWORK (armies march along these roads; the geography never changes) ===");
+      for (const id of Object.keys(adj).map(Number).sort((x, y) => x - y)) {
+        const nm = nomePorId[id] ? " " + nomePorId[id] : "";
+        L.push(`[${id}]${nm}${capTag[id] || ""}: ${(adj[id] || []).map((v) => `[${v}]`).join(", ")}`);
+      }
+      L.push("");
+    }
+    L.push("=== HOW THE REPORT IS WRITTEN ===");
+    L.push("S = spearman, A = archer, K = knight.");
+    L.push(`Your villages: [id] Name, CAP = your capital, INT = no enemy border, BORDER [ids] = touches those enemy villages | w and i = wood and iron in stock (each village gains +${cfg.producao.madeira} wood and +${cfg.producao.ferro} iron per turn) | def = effective defense, location bonus included | home = troops at home (cap ${cfg.limite_tropas_aldeia}).`);
+    L.push("  send = troops the village can send now, and their attack power if all are sent | out = troops of that village already marching (not available) | ready = troops being built (cannot be sent yet) | to front [x] a/b/c = turns to march to your nearest border village x with slow/medium/fast troops.");
+    L.push("Villages you can see: garrison | def = effective defense, location bonus included ((was N) = what it was before) | from [x] a/b/c = turns to march there from your village x with slow/medium/fast troops.");
+    L.push("");
+    L.push("Besides your orders, write two short texts. Write them in ENGLISH, every turn:");
+    L.push('- "plan": your NOTE TO YOUR NEXT TURN, 2 to 4 lines (anything past 600 characters is cut off). Write what you are trying to do, what you must not forget, and what you decided NOT to do. It is a note to yourself: be useful, not eloquent.');
+    L.push('- "statement": 2 to 4 lines telling the audience what you did THIS turn. It may have emotion. This text never comes back to you.');
+    L.push("");
+    L.push("Reply with ONE valid JSON object and nothing else - no text before or after it.");
+    L.push("");
+    L.push("Field by field - this describes the SHAPE of the reply; it is not a suggested move, and there is no example to copy:");
+    L.push("{");
+    L.push('  "build": [ {"villageId": <id of one of YOUR villages>, "type": <"spearman" | "archer" | "knight">, "quantity": <how many to build, 1 or more>} ],');
+    L.push('  "movements": [ {"fromId": <id of one of YOUR villages>, "toId": <id of ANY other village - enemy or neutral to attack it, one of YOURS to reinforce it>, "troops": {"spearman": <n>, "archer": <n>, "knight": <n>}} ],');
+    L.push('  "plan": "<your note to your next turn>",');
+    L.push('  "statement": "<2-4 lines for the audience>",');
+    L.push('  "memory": "<only when the report asks for it>"');
+    L.push("}");
+    L.push("Use only ids that appear in the reports. Do not send troops a village does not have. Empty lists are valid orders.");
+    return L.join("\n");
+  }
+
+  // opcoes: { memoria: {turno, texto}, inexplorado: bool (1o turno da sessao),
+  //           ultimoDaSessao: bool (pede o campo "memory") }
+  function montarMensagemTurno(visao, opcoes) {
+    opcoes = opcoes || {};
+    const L = [];
+    if (opcoes.memoria && opcoes.memoria.texto) {
+      L.push(`=== YOUR MEMORY FROM THE LAST SESSION (written by you on turn ${opcoes.memoria.turno}) ===`);
+      L.push(String(opcoes.memoria.texto));
+      L.push("");
+    }
+    L.push(relatorioTextoP4(visao, { compacto: true, inexplorado: !!opcoes.inexplorado, semRejeicoes: true }));
+    if (visao.rejeicoesAnteriores && visao.rejeicoesAnteriores.length) {
+      L.push("");
+      L.push("=== WARNING: ORDERS OF YOURS REFUSED LAST TURN ===");
+      L.push("The orders below were REFUSED by the engine:");
+      for (const r of visao.rejeicoesAnteriores) L.push(`- ${r}`);
+      L.push("Do NOT repeat the same order. The troop and resource numbers AVAILABLE are in the report above: use them.");
+    }
+    if (opcoes.ultimoDaSessao) {
+      L.push("");
+      L.push(`This is the last turn of this session. After your orders the conversation restarts. Add a "memory" field to your JSON (up to ${TETO_MEMORIA} characters): it is the only thing that carries over. Whatever you do not write is forgotten.`);
+    }
+    L.push("");
+    L.push("Reply with ONE valid JSON object and nothing else.");
     return L.join("\n");
   }
 
@@ -2955,6 +3082,7 @@
           construir: c || [], envios: e || [],
           plano: extrairStringDoCampo(textoCru, "plano") || extrairStringDoCampo(textoCru, "plan"),
           depoimento: extrairStringDoCampo(textoCru, "depoimento") || extrairStringDoCampo(textoCru, "statement"),
+          memory: extrairStringDoCampo(textoCru, "memory"),
         };
         salvamento = true;
       }
@@ -3019,13 +3147,21 @@
       const t = v.trim();
       return t ? t.slice(0, 600) : null;
     };
-    return {
+    // SESSAO (29/09): o campo "memory" so aparece no resultado quando existe,
+    // para o objeto devolvido continuar IGUAL ao de sempre nas respostas sem ele.
+    const memTxt = (() => {
+      const v = obj.memory != null ? obj.memory : obj.memoria;
+      if (typeof v !== "string") return null;
+      const t = v.trim();
+      return t ? t.slice(0, TETO_MEMORIA) : null;
+    })();
+    return Object.assign({
       // salvamento: ok=false (a resposta FOI invalida; a metrica de formato nao
       // mente) mas a ordem recuperada executa e o erro diz a causa real.
       ok: !salvamento, ordem: { construir, envios }, erro: salvamento ? erroBase : null,
       bloco, normalizacoes,
       plano: txt(obj.plano), depoimento: txt(obj.depoimento),
-    };
+    }, memTxt ? { memoria: memTxt } : {});
   }
 
   // Guarda a nota do Rei para o proximo turno. Chamada pelo caller (browser ou
@@ -3609,6 +3745,7 @@
     registrarAvistamentos,
     relatorioTextoP4,
     montarPromptP4,
+    montarPromptSessao, montarMensagemTurno, TETO_MEMORIA,
     diagnosticarBloco,
     guardarPlano,
     diagnosticarOrdem,
