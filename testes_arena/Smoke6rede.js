@@ -40,6 +40,8 @@ const rei = fs.readFileSync(path.join(__dirname, "..", "rei.js"), "utf8");
 let esperas = [], chamadas = 0, plano = [], tetos = {};
 const fetchFalso = async () => {
   const p = plano[chamadas++] || { ok: true };
+  // erroNoCorpo (29/09): o OpenRouter tambem devolve HTTP 200 com {"error": ...} e sem choices
+  if (p.ok && p.erroNoCorpo) return { ok: true, json: async () => ({ error: p.erroNoCorpo }) };
   if (p.ok) return { ok: true, json: async () => ({
     choices: [{ message: { content: '{"construir":[],"envios":[]}' }, finish_reason: "stop" }],
     usage: { prompt_tokens: 10, completion_tokens: 5 } }) };
@@ -106,6 +108,17 @@ const run = async (pl) => {
   ok("o teto aprendido cabe no contexto do modelo e nao e ridiculo",
     tetos.m > 4096 && tetos.m < 65536,
     "teto=" + tetos.m);
+
+  // 29/09 — ERRO DO PROVEDOR DENTRO DE UM HTTP 200. Com pedidos em paralelo, o
+  // OpenRouter respondeu 200 com {"error":{"code":503,"message":"Upstream error
+  // from Nvidia: Service temporarily overloaded"}} e sem choices. O cliente
+  // devolvia texto vazio e o turno passava como falha do MODELO.
+  const sobrecarga = { code: 503, message: "Upstream error from Nvidia: Service temporarily overloaded", metadata: { error_type: "provider_overloaded" } };
+  r = await run([{ ok: true, erroNoCorpo: sobrecarga }, { ok: true }]);
+  ok("HTTP 200 com erro 503 no corpo: repete e devolve a resposta (nao vira texto vazio)",
+    r.ok && chamadas === 2 && /construir/.test(r.r.texto), `chamadas=${chamadas}`);
+  r = await run([{ ok: true, erroNoCorpo: { code: 400, message: "bad" } }]);
+  ok("HTTP 200 com erro 400 no corpo: falha de imediato, como o 400", !r.ok && chamadas === 1, `chamadas=${chamadas}`);
 
   ok("existe deliberarComRetentativa", /async function deliberarComRetentativa/.test(html));
   ok("o passoTurnoDuelo usa a versao com retentativa",

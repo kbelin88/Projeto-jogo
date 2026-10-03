@@ -139,6 +139,22 @@
         });
         if (resp.ok) {
           const data = await resp.json();
+          // ⚠ ERRO DO PROVEDOR DENTRO DE UM HTTP 200 (29/09). O OpenRouter devolve
+          // 200 com {"error": {"code": 503, "message": "Upstream error from
+          // Nvidia: Service temporarily overloaded"}} e SEM choices. Isto virava
+          // texto vazio, e o turno passava como falha do modelo: sao as
+          // "respostas vazias sem usage" do Super (207 dos 222 turnos que ele
+          // perdeu em 42 partidas). Trata-se pelo codigo que o erro traz.
+          if (data && data.error && !(data.choices && data.choices.length)) {
+            const cod = Number(data.error.code) || 0;
+            const corpoErr = JSON.stringify(data.error);
+            if (!(cod === 429 || cod === 502 || cod === 503 || cod === 504) || tentativa >= maxTentativas)
+              throw new Error("OpenRouter HTTP 200 com erro " + (cod || "?") + ": " + corpoErr);
+            throttles++;
+            aviso("[erro do provedor em HTTP 200, " + cod + "] repetindo: " + String(data.error.message || "").slice(0, 120));
+            await espera(Math.min(Math.min(1000 * Math.pow(2, tentativa), 40000) + 500, TETO_ESPERA_MS));
+            continue;
+          }
           const u = data.usage;
           const det = (u && u.completion_tokens_details) || {};
           const ch = (data.choices && data.choices[0]) || {};
