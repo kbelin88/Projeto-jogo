@@ -2,7 +2,7 @@
 const DIC = {
   pt:{
     marca_sub:"benchmark de estratégia para LLMs",
-    nav_class:"Classificação", nav_part:"Partidas", nav_metodo:"Método", nav_repo:"Repositório",
+    nav_class:"Classificação", nav_part:"Partidas", nav_forca:"Força", nav_metodo:"Método", nav_repo:"Repositório",
     hero_h1:"LLMs jogam como Reis. A gente mede quem joga melhor.",
     hero_p1:"O jogo existe para testar diferentes LLMs num jogo de estratégia simples: cada modelo comanda um exército num mapa, constrói tropas, administra recursos e conquista aldeias para vencer a outra LLM.",
     kpi_part:"partidas", kpi_mod:"modelos medidos",
@@ -60,7 +60,7 @@ const DIC = {
   },
   en:{
     marca_sub:"a strategy benchmark for LLMs",
-    nav_class:"Leaderboard", nav_part:"Matches", nav_metodo:"Method", nav_repo:"Repository",
+    nav_class:"Leaderboard", nav_part:"Matches", nav_forca:"Strength", nav_metodo:"Method", nav_repo:"Repository",
     hero_h1:"LLMs play as Kings. We measure who plays better.",
     hero_p1:"The game exists to test different LLMs on a simple strategy game: each model commands an army on a map, builds troops, manages resources and captures villages to beat the other LLM.",
     kpi_part:"matches", kpi_mod:"models measured",
@@ -136,6 +136,7 @@ function cabecalho(ativo){
     <nav class="menu">
       <a href="index.html#classificacao" class="${ativo==='c'?'on':''}" data-t="nav_class"></a>
       <a href="index.html#partidas" class="${ativo==='p'?'on':''}" data-t="nav_part"></a>
+      <a href="forca.html" class="${ativo==='f'?'on':''}" data-t="nav_forca"></a>
       <a href="index.html#metodo" data-t="nav_metodo"></a>
       <a href="https://github.com/kbelin88/Projeto-jogo" target="_blank" rel="noopener" data-t="nav_repo"></a>
       <div class="lang">

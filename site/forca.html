@@ -1,0 +1,114 @@
+<!doctype html><html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Kings Arena — força dos modelos</title>
+<meta name="description" content="A força de cada modelo na Arena dos Reis, com a faixa de confiança: Bradley-Terry sobre as partidas entre modelos diferentes.">
+<meta name="theme-color" content="#12100c">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="estilo.css">
+<link rel="icon" href="assets/simbolo.png">
+<style>
+  /* so desta pagina: o grafico da forca com a faixa */
+  .forca-svg{width:100%;height:auto;display:block;margin:6px 0 18px}
+  .forca-svg text{font-family:var(--fonte);fill:var(--txt2);font-size:14px}
+  .forca-svg .nome{fill:var(--txt);font-size:15px}
+  .forca-svg .eixo{stroke:var(--linha)}
+  .forca-svg .ancora{stroke:var(--txt3);stroke-dasharray:3 4}
+  .forca-svg .faixa{stroke:var(--ouro);stroke-opacity:.35;stroke-width:8;stroke-linecap:round}
+  .forca-svg .ponto{fill:var(--ouro)}
+  .nota-met{color:var(--txt2);font-size:14px;max-width:78ch}
+  .nota-met li{margin:4px 0}
+</style>
+</head><body>
+<div id="cab"></div>
+
+<section><div class="wrap">
+  <h2 data-t="forca_h"></h2>
+  <p class="sub" data-t="forca_p"></p>
+  <p class="mini" id="forca-data"></p>
+  <div id="forca-grafico"></div>
+  <div style="overflow-x:auto"><table id="tab-forca"><thead><tr>
+    <th>#</th><th data-t="th_mod"></th><th class="num" data-t="forca_th_nota"></th><th class="num" data-t="forca_th_faixa"></th>
+    <th class="num" data-t="th_partidas"></th><th class="num" data-t="th_v"></th><th class="num" data-t="forca_th_e"></th><th class="num" data-t="th_d"></th>
+  </tr></thead><tbody></tbody></table></div>
+</div></section>
+
+<section><div class="wrap">
+  <h2 data-t="forca_met_h"></h2>
+  <ul class="nota-met">
+    <li data-t="forca_met_1"></li>
+    <li data-t="forca_met_2"></li>
+    <li data-t="forca_met_3"></li>
+    <li data-t="forca_met_4"></li>
+  </ul>
+</div></section>
+
+<script src="arena.js"></script>
+<script>
+// Os textos desta pagina juntam-se ao dicionario comum (arena.js)
+Object.assign(DIC.pt, {
+  forca_h: "Quem joga melhor — e com quanta certeza",
+  forca_p: "A classificação conta vitórias. Esta página mede outra coisa: a força de cada modelo e a faixa onde ela está com 95% de confiança. Faixa larga quer dizer poucas partidas; duas faixas que se cruzam querem dizer que ainda não dá para separar os dois modelos.",
+  forca_th_nota: "força", forca_th_faixa: "faixa de 95%", forca_th_e: "E",
+  forca_data: "Atualizado em {d}, com {n} partidas decididas entre modelos diferentes.",
+  forca_met_h: "Como se calcula",
+  forca_met_1: "Bradley-Terry: cada modelo tem uma força, e a chance de A vencer B é força(A) / (força(A) + força(B)). As forças são as que melhor explicam todas as partidas ao mesmo tempo. A escala é a do Elo: 400 pontos de diferença são 10 contra 1.",
+  forca_met_2: "A faixa vem de reamostrar as partidas 1000 vezes (bootstrap) e recalcular: 95% das forças caem dentro dela.",
+  forca_met_3: "Só contam partidas decididas entre modelos diferentes. Empate vale meia vitória. Partidas espelho (o mesmo modelo dos dois lados) e partidas interrompidas ficam de fora.",
+  forca_met_4: "Âncora em 1000: cada modelo recebe uma vitória e uma derrota contra um adversário imaginário de força 1000. Assim, quem jogou pouco não vai ao infinito com duas vitórias seguidas — e a faixa larga mostra que ainda falta jogo.",
+  sem_forca: "Ainda não há partidas decididas suficientes.",
+});
+Object.assign(DIC.en, {
+  forca_h: "Who plays better — and how sure we are",
+  forca_p: "The leaderboard counts wins. This page measures something else: each model's strength and the range it sits in with 95% confidence. A wide range means few matches; two ranges that overlap mean the two models can't be told apart yet.",
+  forca_th_nota: "strength", forca_th_faixa: "95% range", forca_th_e: "D",
+  forca_data: "Updated on {d}, from {n} decided matches between different models.",
+  forca_met_h: "How it's computed",
+  forca_met_1: "Bradley-Terry: each model has a strength, and the chance that A beats B is strength(A) / (strength(A) + strength(B)). The strengths are the ones that best explain every match at once. The scale is Elo's: a 400-point gap means 10 to 1.",
+  forca_met_2: "The range comes from resampling the matches 1000 times (bootstrap) and recomputing: 95% of the strengths fall inside it.",
+  forca_met_3: "Only decided matches between different models count. A draw is half a win. Mirror matches (the same model on both sides) and matches cut short are left out.",
+  forca_met_4: "Anchored at 1000: every model gets one win and one loss against an imaginary opponent of strength 1000. That way a model with two straight wins doesn't shoot to infinity — and the wide range shows it still needs games.",
+  sem_forca: "Not enough decided matches yet.",
+});
+
+document.getElementById('cab').innerHTML = cabecalho('f');
+let DADOS = null;
+
+function desenhar(){
+  if(!DADOS) return;
+  const ms = DADOS.modelos || [];
+  document.getElementById('forca-data').textContent = t('forca_data').replace('{d}', DADOS.data).replace('{n}', DADOS.partidas);
+  const tb = document.querySelector('#tab-forca tbody');
+  if(!ms.length){ tb.innerHTML = '<tr><td colspan="8" class="mini">'+escaparHTML(t('sem_forca'))+'</td></tr>'; return; }
+  tb.innerHTML = ms.map((m,k)=>`<tr><td class="num">${k+1}</td><td>${escaparHTML(curto(m.modelo))}</td>
+    <td class="num"><b>${m.nota}</b></td><td class="num">${m.baixo}–${m.alto}</td><td class="num">${m.jogos}</td>
+    <td class="num">${m.v}</td><td class="num">${m.e}</td><td class="num">${m.d}</td></tr>`).join('');
+  // o grafico: a bolinha e a forca, a barra e a faixa
+  const L = 1000, ESQ = 230, DIR = 90, LIN = 40, TOPO = 20;
+  const lo = Math.min(...ms.map(m=>m.baixo)) - 30, hi = Math.max(...ms.map(m=>m.alto)) + 30;
+  const x = v => ESQ + (v - lo) / (hi - lo) * (L - ESQ - DIR);
+  const H = TOPO + ms.length * LIN + 40;
+  const passo = (hi - lo) > 500 ? 200 : 100;
+  let s = `<svg class="forca-svg" viewBox="0 0 ${L} ${H}" role="img" aria-label="${escaparHTML(t('forca_h'))}">`;
+  for(let v = Math.ceil(lo/passo)*passo; v <= hi; v += passo){
+    s += `<line class="eixo" x1="${x(v)}" x2="${x(v)}" y1="${TOPO-6}" y2="${H-34}"/><text x="${x(v)}" y="${H-12}" text-anchor="middle">${v}</text>`;
+  }
+  if(lo < 1000 && hi > 1000) s += `<line class="ancora" x1="${x(1000)}" x2="${x(1000)}" y1="${TOPO-6}" y2="${H-34}"/>`;
+  ms.forEach((m,k)=>{
+    const y = TOPO + k*LIN + LIN/2;
+    s += `<text class="nome" x="${ESQ-14}" y="${y+5}" text-anchor="end">${escaparHTML(curto(m.modelo))}</text>`
+      + `<line class="faixa" x1="${x(m.baixo)}" x2="${x(m.alto)}" y1="${y}" y2="${y}"/>`
+      + `<circle class="ponto" cx="${x(m.nota)}" cy="${y}" r="7"/>`
+      + `<text x="${x(m.alto)+12}" y="${y+5}">${m.nota}</text>`;
+  });
+  document.getElementById('forca-grafico').innerHTML = s + '</svg>';
+}
+window.aoTrocarIdioma = desenhar;
+function carregar(){
+  marcarCarregando('#tab-forca tbody', 8);
+  buscarJSON('dados/ranking_bt.json').then(d=>{ DADOS = d; aplicarIdioma(); }).catch(e=>mostrarErroDados(e, carregar));
+}
+aplicarIdioma();
+carregar();
+</script>
+</body></html>
