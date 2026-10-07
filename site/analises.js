@@ -347,5 +347,100 @@ en:`
 
 <h3>The final march</h3>
 <p>From turns 9 to 16, Ultra consolidated absolute dominance. On turn 16, Ultra affirmed it held 22 villages and promised its legions would converge on Huesca and Tarragona like a tide. Dots, reduced to 2 villages (Girona and Barcelona, with a single archer each), declared focus on rebuilding — but it was irreversible. Victory of strategy and execution.</p>
+`},
+"E1007-01": {
+pt:`
+<p><code>ling-3.1-flash</code> caiu de 9 aldeias no turno 6 para 5 no turno 15, derrotado pelo <code>nemotron-3-super-120b-a12b</code> com placar final de 19 × 5. A diferença estava na disciplina: Flash sofreu <b>13 turnos inválidos</b> enquanto Super manteve 0, e esse ruído custou expansão.</p>
+
+<h3>A aposta errada em arqueiros</h3>
+<p>Flash construiu <b>64 arqueiros contra 27 lanceiros</b>; Super fez o inverso, com <b>171 lanceiros contra 36 arqueiros</b>. Flash esperava vencer por atrito, mas seus turnos inválidos quebraram o ritmo de consolidação. No turno 6 os dois estavam 7 × 7; Super aproveitou para avançar enquanto Flash perdia coesão, caindo para 5 × 12 no turno 10.</p>
+
+<h3>O colapso tardio</h3>
+<p>Flash resistiu até o turno 10 (10 × 12), mas o investimento pesado em arcos não se traduziu em defesa de fronteira. Super conquistou Madrid, Teruel e Pamplona todas no turno 8, consolidando o centro do mapa. No turno 13 Flash perdeu 3 aldeias de uma vez (9 × 16). Flash tentou recuperar com 9 arqueiros em cada aldeia no turno 15, declarando que arcos eram "a resposta", mas chegava tarde.</p>
+`,
+en:`
+<p><code>ling-3.1-flash</code> fell from 9 villages on turn 6 to 5 on turn 15, defeated by <code>nemotron-3-super-120b-a12b</code> with a final score of 19 × 5. The difference was discipline: Flash suffered <b>13 invalid turns</b> while Super held 0, and that noise cost expansion momentum.</p>
+
+<h3>The wrong bet on archers</h3>
+<p>Flash built <b>64 archers against 27 spearmen</b>; Super did the reverse, with <b>171 spearmen against 36 archers</b>. Flash expected to win by attrition, but its invalid turns broke the consolidation rhythm. On turn 6 both stood 7 × 7; Super capitalized to advance while Flash lost cohesion, dropping to 5 × 12 by turn 10.</p>
+
+<h3>The late collapse</h3>
+<p>Flash held on until turn 10 (10 × 12), but the heavy investment in bows did not translate into frontier defense. Super conquered Madrid, Teruel, and Pamplona all on turn 8, consolidating the center of the map. By turn 13 Flash lost 3 villages at once (9 × 16). Flash tried recovery with 9 archers in each village on turn 15, declaring archers were "the answer", but arrived too late.</p>
+`},
+"E1007-02": {
+pt:`
+<p><code>ling-3.1-flash</code> conquistou Santarem e Évora cedo (turno 3, placar 3 × 5), mas <code>nemotron-3-ultra-550b-a55b</code> respondeu com uma campanha de <b>0 turnos inválidos</b> que acelerou a dominância. Resultado final: 20 × 4 em 13 turnos, a vitória mais rápida desta noite.</p>
+
+<h3>O start ofensivo que não durou</h3>
+<p>Flash saiu na frente com <b>23 cavaleiros contra 62 do Ultra</b>, mas desperdiçou a vantagem. Construiu 6 lanceiros e 17 arqueiros — numeros que sugerem improviso. Flash ficou 7 × 7 entre os turnos 5 e 8, período em que Ultra conquistava calmamente: Castellon, Huesca, Zaragoza, Valência. Quando Flash tomou Salamanca no turno 8, Ultra recapturou no mesmo turno e avançou para Toledo no turno 9.</p>
+
+<h3>Colapso acelerado</h3>
+<p>No turno 9 Flash caiu de 7 para 13 aldeias do Ultra. Ultra construiu <b>65 arqueiros e 62 cavaleiros</b>, um equilíbrio que Flash não conseguiu contra-atacar. Flash sofreu <b>13 turnos inválidos e 5 ordens rejeitadas</b> no mesmo arquivo onde Ultra marcou <b>zero de tudo</b>. O contraste de qualidade de comando era demais: Ultra consolidou a Península em 13 turnos.</p>
+`,
+en:`
+<p><code>ling-3.1-flash</code> conquered Santarem and Évora early (turn 3, score 3 × 5), but <code>nemotron-3-ultra-550b-a55b</code> answered with a campaign of <b>0 invalid turns</b> that accelerated dominance. Final result: 20 × 4 in 13 turns, the fastest victory of tonight.</p>
+
+<h3>The offensive start that didn't last</h3>
+<p>Flash went ahead with <b>23 knights against 62 of Ultra</b>, but wasted the edge. Built 6 spearmen and 17 archers — numbers suggesting improvisation. Flash held 7 × 7 between turns 5 and 8, the period when Ultra calmly conquered: Castellon, Huesca, Zaragoza, Valencia. When Flash took Salamanca on turn 8, Ultra recaptured on the same turn and advanced to Toledo on turn 9.</p>
+
+<h3>Accelerated collapse</h3>
+<p>On turn 9 Flash fell from 7 to 13 villages for Ultra. Ultra built <b>65 archers and 62 knights</b>, a balance Flash couldn't counter-attack. Flash suffered <b>13 invalid turns and 5 rejected orders</b> in the same match where Ultra scored <b>zero of everything</b>. The contrast in command quality was overwhelming: Ultra consolidated the Peninsula in 13 turns.</p>
+`},
+"E1007-03": {
+pt:`
+<p>Flash começou agressivo e liderou 13 × 9 no turno 10, mas <code>dots-3-note-preview</code> guardou <b>103 cavaleiros</b> para o ataque final: no turno 16, quatro exércitos simultâneos tomaram Coimbra, Faro, Sevilha e Lisboa numa única jogada, destruindo a resistência de Flash que caiu de 6 aldeias para o isolamento em Évora. Resultado: 19 × 5.</p>
+
+<h3>A armadilha dos cavaleiros</h3>
+<p>Flash construiu 16 cavaleiros; Dots construiu 103. Dots também investiu pesado em lanceiros (79), criando um arsenal que Flash não viu vindo. No turno 7, Dots ainda tinha apenas 7 aldeias contra 9 de Flash. Mas Dots estava acumulando: nos turnos 8 a 14, conquistou Madrid e Pamplona enquanto Flash se expandia localmente e sentia-se seguro.</p>
+
+<h3>A queda de um turno</h3>
+<p>No turno 15 a primeira brecha: Dots conquistou uma aldeia e Flash perdeu uma, score 6 × 18. No turno 16, o golpe: os <b>103 cavaleiros e 79 lanceiros de Dots</b> convergiram de quatro frentes simultâneas (Coimbra, Faro, Sevilha, Lisboa). Flash caiu para a única aldeia restante, Évora. Flash sofreu <b>16 turnos inválidos</b> e Dots apenas 2, e esse ruído impediu Flash de perceber a acumulação.</p>
+`,
+en:`
+<p>Flash started aggressive and led 13 × 9 on turn 10, but <code>dots-3-note-preview</code> kept <b>103 knights</b> for the final assault: on turn 16, four simultaneous armies took Coimbra, Faro, Sevilha and Lisboa in a single move, destroying Flash's resistance as it fell from 6 villages to isolation in Évora. Result: 19 × 5.</p>
+
+<h3>The knight trap</h3>
+<p>Flash built 16 knights; Dots built 103. Dots also invested heavily in spearmen (79), creating an arsenal Flash didn't see coming. On turn 7, Dots still had only 7 villages against 9 for Flash. But Dots was accumulating: between turns 8 and 14, it conquered Madrid and Pamplona while Flash expanded locally and felt secure.</p>
+
+<h3>The one-turn collapse</h3>
+<p>On turn 15 the first crack: Dots conquered one village and Flash lost one, score 6 × 18. On turn 16, the strike: Dots' <b>103 knights and 79 spearmen</b> converged from four simultaneous fronts (Coimbra, Faro, Sevilha, Lisboa). Flash fell to the only remaining village, Évora. Flash suffered <b>16 invalid turns</b> and Dots only 2, and that noise prevented Flash from noticing the buildup.</p>
+`},
+"E1007-05": {
+pt:`
+<p>Repetição: <code>ling-3.1-flash</code> contra <code>nemotron-3-super-120b-a12b</code> novamente (era a partida E1007-01). Super vence 20 × 4 em 18 turnos, um comando mais longo mas com o mesmo desfecho. Flash começou bem (5 × 3 no turno 3) mas a liderança virou 3 vezes e Flash desabou de 13 aldeias no turno 10-11 para 4 no turno 18.</p>
+
+<h3>O começo esperançoso</h3>
+<p>Flash conquistou Santarem, Évora e Coimbra nos primeiros turnos, enquanto Super partia de Tarragona. Flash abriu vantagem 6 × 4 (turno 4), mas Super respondeu. A liderança virou nos turnos 4, 6 (Flash na frente 9 × 7) e turno 13. Flash construiu <b>78 lanceiros e 23 cavaleiros</b>; Super contrabalanceou com <b>101 arqueiros e 98 cavaleiros</b>, quase dois terços cavalaria.</p>
+
+<h3>A resistência que não segurou</h3>
+<p>Flash chegou ao pico de 13 aldeias no turno 10-11, mas aí começou o colapso. Super conquistou Córdoba (turno 10) e começou o cerco. No turno 13 a liderança virou para Super novamente (11 × 12). Flash ainda mandou no turno 18 uma declaração sobre fortalecer as garitas (35 lanceiros em Coimbra, 28 em Porto), mas já estava em apenas 4 aldeias. Super construiu cavaleiros e arqueiros em número que Flash, com seus 15 turnos inválidos no arquivo, nunca conseguiu contabilizar.</p>
+`,
+en:`
+<p>Repeat: <code>ling-3.1-flash</code> versus <code>nemotron-3-super-120b-a12b</code> again (it was match E1007-01). Super wins 20 × 4 in 18 turns, a longer match but the same outcome. Flash started well (5 × 3 on turn 3) but leadership switched 3 times and Flash collapsed from 13 villages on turns 10-11 to 4 on turn 18.</p>
+
+<h3>The hopeful start</h3>
+<p>Flash conquered Santarem, Évora and Coimbra in the first turns, while Super departed from Tarragona. Flash opened a 6 × 4 lead (turn 4), but Super responded. Leadership switched on turns 4, 6 (Flash ahead 9 × 7) and turn 13. Flash built <b>78 spearmen and 23 knights</b>; Super balanced with <b>101 archers and 98 knights</b>, almost two-thirds cavalry.</p>
+
+<h3>The resistance that didn't hold</h3>
+<p>Flash peaked at 13 villages on turns 10-11, but then collapse began. Super conquered Córdoba (turn 10) and started the siege. On turn 13 leadership switched to Super again (11 × 12). Flash still sent on turn 18 a declaration about fortifying the garrisons (35 spearmen in Coimbra, 28 in Porto), but stood in only 4 villages. Super built knights and archers in numbers that Flash, with its 15 invalid turns in the record, never managed to account for.</p>
+`},
+"E1007-04": {
+pt:`
+<p>Única vitória do Flash em cinco noites: <code>ling-3.1-flash</code> venceu <code>nemotron-3.5-lightning</code> com 18 × 2 em 18 turnos. Mas esta não é uma história de competência — é um retrato de colapso de Lightning, que sofreu <b>82 ordens rejeitadas</b> e construiu apenas 4 lanceiros, 4 arqueiros, 0 cavaleiros em toda a partida.</p>
+
+<h3>O adversário que não atacou</h3>
+<p>Lightning conquistou apenas Tarragona, Castellon, Valencia e Teruel; nunca evoluiu a estratégia além dessa tríade de aldeias. Flash, por sua vez, sofreu 16 turnos inválidos (padrão da noite) mas construiu <b>85 lanceiros, 49 arqueiros, 35 cavaleiros</b>. No turno 4, Flash já tinha 6 aldeias contra 4 de Lightning. Lightning nunca respondeu — ficou preso em seus 4 vilarejos.</p>
+
+<h3>Quando a máquina não funciona</h3>
+<p>Lightning gerou <b>82 ordens rejeitadas</b> em 18 turnos. Isso sugere tentativas de comando que o sistema não entendia ou recusava. Flash consolidou a Península enquanto Lightning tropecia em suas próprias instruções. É uma vitória ruidosa — Flash não ganhou por ser melhor, mas porque seu adversário literalmente não conseguiu atacar.</p>
+`,
+en:`
+<p>Flash's only victory in five nights: <code>ling-3.1-flash</code> defeated <code>nemotron-3.5-lightning</code> 18 × 2 in 18 turns. But this is not a story of competence — it is a portrait of Lightning's collapse, which suffered <b>82 rejected orders</b> and built only 4 spearmen, 4 archers, 0 knights across the entire match.</p>
+
+<h3>The opponent that didn't attack</h3>
+<p>Lightning conquered only Tarragona, Castellon, Valencia and Teruel; never evolved strategy beyond that trio of villages. Flash, in turn, suffered 16 invalid turns (the night's pattern) but built <b>85 spearmen, 49 archers, 35 knights</b>. By turn 4, Flash already held 6 villages against 4 for Lightning. Lightning never responded — stuck in its 4 hamlets.</p>
+
+<h3>When the machine doesn't work</h3>
+<p>Lightning generated <b>82 rejected orders</b> in 18 turns. This suggests command attempts that the system didn't understand or refused. Flash consolidated the Peninsula while Lightning stumbled over its own instructions. It's a noisy victory — Flash didn't win by being better, but because its opponent literally couldn't attack.</p>
 `}
 };
