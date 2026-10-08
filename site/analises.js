@@ -442,5 +442,81 @@ en:`
 
 <h3>When the machine doesn't work</h3>
 <p>Lightning generated <b>82 rejected orders</b> in 18 turns. This suggests command attempts that the system didn't understand or refused. Flash consolidated the Peninsula while Lightning stumbled over its own instructions. It's a noisy victory — Flash didn't win by being better, but because its opponent literally couldn't attack.</p>
+`},
+"E1008-01": {
+pt:`
+<p>A vitória do <code>ultra</code> sobre o <code>flash</code> mostra como a quantidade de turnos inválidos pode prejudicar a estratégia. O Ultra fechou em 19 × 5 no turno 15 — após dominar completamente a segunda metade da partida, mas enfrentou <b>um Flash que quase virou com um pico agressivo no turno 5</b>.</p>
+
+<h3>O pico e a queda</h3>
+<p>No turno 5, o Flash disparou: saiu de 6 aldeias para 8, com Girona, Valencia, Huesca e Madrid caindo em sequência. Ultra permanecia em 7. Mas no turno 8, com Toledo e Sevilha conquistadas, Ultra virou a mesa. Flash ainda cresceu para 11 aldeias no turno 9, alcançando seu pico máximo, mas a diferença de construção era letal: Ultra produziu 58 lanceiros, 41 arqueiros e 77 cavaleiros, contra apenas 16 lanceiros, 37 arqueiros e 19 cavaleiros do Flash.</p>
+
+<h3>A diferença que decidiu</h3>
+<p>Flash enfrentou 11 turnos inválidos durante a partida contra apenas 2 do Ultra. Isso custou reações rápidas em momentos decisivos. Do turno 11 em diante, Ultra cresceu de forma imparável: 12, 13, 16 e finalmente 19 aldeias, enquanto Flash desabou para 5. A superioridade numérica de tropas, somada à confiabilidade de turnos válidos, transformou um momento de risco em dominância incontestável.</p>
+`,
+en:`
+<p>The victory of <code>ultra</code> over <code>flash</code> shows how invalid turns can damage strategy. Ultra finished 19 × 5 on turn 15 — after completely dominating the second half, but faced <b>a Flash that almost turned the game with an aggressive spike on turn 5</b>.</p>
+
+<h3>The spike and the fall</h3>
+<p>On turn 5, Flash surged: from 6 villages to 8, with Girona, Valencia, Huesca, and Madrid falling in sequence. Ultra remained at 7. But on turn 8, with Toledo and Sevilha conquered, Ultra turned the tables. Flash even grew to 11 villages on turn 9, reaching its peak, but the construction gap was lethal: Ultra produced 58 spearmen, 41 archers, and 77 knights, against only 16 spearmen, 37 archers, and 19 knights for Flash.</p>
+
+<h3>The difference that decided</h3>
+<p>Flash faced 11 invalid turns during the match versus only 2 for Ultra. This cost quick reactions at crucial moments. From turn 11 onwards, Ultra grew unstoppably: 12, 13, 16, and finally 19 villages, while Flash collapsed to 5. The numerical superiority in troops, combined with reliable valid turns, transformed a moment of risk into undeniable dominance.</p>
+`},
+"E1008-02": {
+pt:`
+<p>A vitória do <code>dots</code> sobre o <code>lightning</code> é quase sem suspense: Dots liderou desde o turno 2 e nunca olhou para trás, encerrando em 19 × 4 no turno 13. O <b>choque é a assimetria de construção</b>: Dots produziu 61 lanceiros, 77 arqueiros e 69 cavaleiros, enquanto Lightning construiu apenas 21 lanceiros, 12 arqueiros e 4 cavaleiros — e ainda teve 16 ordens rejeitadas.</p>
+
+<h3>Liderança precoce</h3>
+<p>Desde o turno 2, Dots já tinha 3 aldeias contra 2 do Lightning. Turno 3: 5 × 2. Turno 4: 7 × 4. Turno 5: 9 × 6. O padrão é claro e consistente: Dots toma duas aldeias a cada turno enquanto Lightning fica para trás. Dots conquistou Santarém, Évora, Coimbra, Faro, Badajoz, Porto, Sevilha, Vigo, Salamanca, Córdoba, Madrid, Toledo e Burgos — uma rota praticamente ininterrupta pelo mapa.</p>
+
+<h3>A diferença nas unidades</h3>
+<p>Lightning construiu apenas 21 lanceiros, 12 arqueiros e 4 cavaleiros em 13 turnos. Dots foi para 61 lanceiros, 77 arqueiros e 69 cavaleiros. Além disso, Lightning sofreu 16 rejeições de ordem, sugerindo problemas na execução das estratégias. Com tal desequilíbrio, a partida foi apenas um exercício de expansão contínua de Dots até a vitória previsível.</p>
+`,
+en:`
+<p>The victory of <code>dots</code> over <code>lightning</code> is almost without suspense: Dots led from turn 2 and never looked back, ending 19 × 4 on turn 13. The <b>shock is the construction asymmetry</b>: Dots produced 61 spearmen, 77 archers, and 69 knights, while Lightning built only 21 spearmen, 12 archers, and 4 knights — and still suffered 16 rejected orders.</p>
+
+<h3>Early leadership</h3>
+<p>From turn 2, Dots already had 3 villages against 2 for Lightning. Turn 3: 5 × 2. Turn 4: 7 × 4. Turn 5: 9 × 6. The pattern is clear and consistent: Dots takes two villages each turn while Lightning falls behind. Dots conquered Santarém, Évora, Coimbra, Faro, Badajoz, Porto, Sevilha, Vigo, Salamanca, Córdoba, Madrid, Toledo, and Burgos — an almost uninterrupted path across the map.</p>
+
+<h3>The difference in units</h3>
+<p>Lightning built only 21 spearmen, 12 archers, and 4 knights in 13 turns. Dots reached 61 spearmen, 77 archers, and 69 knights. Furthermore, Lightning suffered 16 order rejections, suggesting problems in strategy execution. With such imbalance, the match was merely an exercise in Dots' continuous expansion toward predictable victory.</p>
+`},
+"E1008-03": {
+pt:`
+<p>A vitória do <code>ultra</code> sobre o <code>super</code> é dominante: 18 × 6 no turno 13, com zero turnos inválidos em ambos os lados — a execução foi limpa, mas o resultado não foi competitivo. Ultra liderou desde o turno 2 e jamais foi ameaçado, apesar de <b>ambos terem construído majoritariamente arqueiros</b>.</p>
+
+<h3>A aposta nos arqueiros</h3>
+<p>Super investiu em arqueiros: 82 do total de suas unidades, com apenas 6 lanceiros e 6 cavaleiros. Ultra também apostou em arqueiros: 146 do total, mas mantendo 20 lanceiros para suporte — uma escolha que deixou Ultra com mais opções de ataque em diferentes fronteiras durante a partida.</p>
+
+<h3>O domínio sem contestação</h3>
+<p>Ultra conquistou 2 aldeias no turno 2 (Tarragona, Girona) e 3 no turno 3 (Zaragoza, Castellón, Huesca), alcançando 6 aldeias enquanto Super tinha apenas 2. De lá em diante, a diferença só cresceu. Com construção tão superior em quantidade — 20 lanceiros vs 6, 146 arqueiros vs 82, 1 cavaleiro vs 6 — Ultra garantiu controle de qualquer confronto. Super jamais liderou, jamais ameaçou, e a partida foi mais um teste de capacidades do que uma disputa.</p>
+`,
+en:`
+<p>The victory of <code>ultra</code> over <code>super</code> is dominant: 18 × 6 on turn 13, with zero invalid turns on both sides — execution was clean, but the result wasn't competitive. Ultra led from turn 2 and was never threatened, despite <b>both building primarily archers</b>.</p>
+
+<h3>The bet on archers</h3>
+<p>Super invested in archers: 82 of its units, with only 6 spearmen and 6 knights. Ultra also bet on archers: 146 of its total, but maintaining 20 spearmen for support — a choice that left Ultra with more attack options across different frontiers during the match.</p>
+
+<h3>Uncontested dominance</h3>
+<p>Ultra conquered 2 villages on turn 2 (Tarragona, Girona) and 3 on turn 3 (Zaragoza, Castellón, Huesca), reaching 6 villages while Super had only 2. From there, the gap only grew. With such superior construction in quantity — 20 spearmen vs 6, 146 archers vs 82, 1 knight vs 6 — Ultra ensured control of any engagement. Super never led, never threatened, and the match was more a test of capabilities than a real competition.</p>
+`},
+"E1008-05": {
+pt:`
+<p>A vitória do <code>dots</code> sobre o <code>flash</code> é uma maratona de 26 turnos onde <b>Flash enfrentou 22 turnos inválidos</b> — quase exclusivamente prejudicado — enquanto Dots produzia 364 lanceiros, 3 arqueiros e 122 cavaleiros. O placar final foi 18 × 6, mas os dois chegaram a empate raro de 12 × 12 no turno 21.</p>
+
+<h3>A batalha do meio</h3>
+<p>Nos turnos 4 a 10, a partida foi decisivamente competitiva. Flash tomou Madrid, Girona e Valencia no turno 4, abrindo para 7 × 7 no turno 5. Flash cresceu para 9 aldeias (turnos 6-7), enquanto Dots permanecia em 8. Mas no turno 8, Dots atacou: Salamanca caiu de volta, virando para 9 × 8. No turno 10, Madrid e Toledo também caíram para Dots, abrindo para 13 × 7. Foi o ponto de virada definitivo.</p>
+
+<h3>A construção massiva vs os turnos inválidos</h3>
+<p>Dots produziu 364 lanceiros, 3 arqueiros e 122 cavaleiros — uma estratégia de carne de lança massiva. Flash produziu 6 lanceiros, 147 arqueiros e 27 cavaleiros. Mas Flash sofreu 22 turnos inválidos, paralisando sua execução enquanto Dots agia. Mesmo com Dots sofrendo 5 turnos inválidos e 27 ordens rejeitadas, a quantidade de ações válidas foi incomparável. No turno 21 chegaram a 12 aldeias cada — empate raro — mas Dots recuperou no turno 22 com 13 e nunca mais deixou Flash voltar.</p>
+`,
+en:`
+<p>The victory of <code>dots</code> over <code>flash</code> is a 26-turn marathon where <b>Flash faced 22 invalid turns</b> — almost exclusively hampered — while Dots produced 364 spearmen, 3 archers, and 122 knights. The final score was 18 × 6, but both reached a rare 12 × 12 tie on turn 21.</p>
+
+<h3>The mid-game battle</h3>
+<p>In turns 4 to 10, the match was decisively competitive. Flash took Madrid, Girona, and Valencia on turn 4, opening to 7 × 7 on turn 5. Flash grew to 9 villages (turns 6-7), while Dots remained at 8. But on turn 8, Dots attacked: Salamanca fell back, turning to 9 × 8. On turn 10, Madrid and Toledo also fell to Dots, opening to 13 × 7. It was the definitive turning point.</p>
+
+<h3>Massive construction vs invalid turns</h3>
+<p>Dots produced 364 spearmen, 3 archers, and 122 knights — a strategy of massive cannon fodder. Flash produced 6 spearmen, 147 archers, and 27 knights. But Flash suffered 22 invalid turns, paralyzing its execution while Dots acted. Even with Dots suffering 5 invalid turns and 27 rejected orders, the volume of valid actions executed was incomparable. On turn 21 both reached 12 villages each — a rare tie — but Dots recovered on turn 22 with 13 and never let Flash return.</p>
 `}
 };
