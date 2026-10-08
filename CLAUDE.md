@@ -69,7 +69,7 @@ gabarito escrito antes do experimento, artefato publicado antes da próxima fase
 
 ### Os testes
 
-**37 ficheiros de teste** em `testes/` e **13 smokes** em `testes_arena/`. Os que
+**38 ficheiros de teste** em `testes/` e **13 smokes** em `testes_arena/`. Os que
 guardam mais:
 
 - `test_prompt_p4.js` — o P4, o fog e o parser tolerante;

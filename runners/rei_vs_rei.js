@@ -3,6 +3,10 @@
 // logs de 03/08 (o analisar-log.js le), com checkpoint por turno (o harness com
 // fila so chega na Fase 6). Ollama local — sem cota, so tempo.
 //
+// PROMPT_EXTRA=<arquivo.txt> (UTF-8): o texto entra no prompt do rei como bloco a parte
+//   "INSTRUCOES EXTRA DO TREINADOR" — na mensagem 1 de cada sessao e, no P4, no fim do prompt de
+//   cada turno. PROMPT_EXTRA_LADOS=A|B|AB (padrao AB): quem recebe; o outro lado joga o prompt
+//   puro (A/B no mesmo jogo, mesmo modelo). Sem PROMPT_EXTRA nada muda. O cabecalho do log registra.
 // Uso: node runners/rei_vs_rei.js <modelA> <modelB> <seed> <maxTurnos> <outfile>
 //   modelA/modelB = "backend:modelo" OU "burro" (jogadorBurro, zero API).
 //   ex.: node runners/rei_vs_rei.js gemini:gemini-2.5-flash openrouter:nvidia/nemotron-3-super-120b-a12b:free 1 20 out.txt
@@ -62,6 +66,12 @@ const SESSAO_N = process.env.SESSAO_N !== undefined && process.env.SESSAO_N !== 
 const CAMPEAO = SESSAO_N > 0;
 const Sessao = SESSAO_N ? require("../sessao.js") : null;
 const sessoes = { A: null, B: null };
+// PROMPT_EXTRA / PROMPT_EXTRA_LADOS (09/10/2026): texto extra do treinador, por lado (ver cabecalho)
+const EXTRA_LADOS = (process.env.PROMPT_EXTRA_LADOS || "AB").toUpperCase();
+const EXTRA_ARQ = process.env.PROMPT_EXTRA || "";
+const EXTRA_TXT = EXTRA_ARQ && fs.existsSync(EXTRA_ARQ) ? fs.readFileSync(EXTRA_ARQ, "utf8").replace(/^﻿/, "").trim() : "";
+const extraDe = { A: EXTRA_TXT && EXTRA_LADOS.includes("A") ? EXTRA_TXT : "", B: EXTRA_TXT && EXTRA_LADOS.includes("B") ? EXTRA_TXT : "" };
+if (EXTRA_ARQ && !EXTRA_TXT) console.error("AVISO: PROMPT_EXTRA=" + EXTRA_ARQ + " nao existe ou esta vazio; ignorado");
 const flag = (nome) => (process.env[nome] !== undefined && process.env[nome] !== "" ? process.env[nome] === "1" : CAMPEAO);
 // SESSAO_SUBSTITUI: o relatorio novo substitui o anterior na conversa (so fica a resposta
 // do Rei). SEGUNDA_CHAMADA: resposta vazia ganha uma chamada nova (vale tambem no P4). PACOTE2:
@@ -75,7 +85,7 @@ const Pac2 = PACOTE2 ? require("../pacote2.js") : null;
 // bracos no mesmo momento. Omissao: os dois lados.
 const SESSAO_LADOS = (process.env.SESSAO_LADOS || "AB").toUpperCase();
 if (SESSAO_N) for (const d of ["A", "B"]) if (cliente[d] && SESSAO_LADOS.includes(d)) sessoes[d] = Sessao.criarSessao({ N: SESSAO_N,
-  transformar: Pac2 ? Pac2.transformador(Engine) : null, substituir: SUBSTITUI, segundaChamada: SEGUNDA });
+  transformar: Pac2 ? Pac2.transformador(Engine) : null, substituir: SUBSTITUI, segundaChamada: SEGUNDA, extra: extraDe[d] });
 const sessaoFile = outfile.replace(/\.txt$/i, "") + ".sessao.jsonl";
 if (SESSAO_N) fs.writeFileSync(sessaoFile, "");
 const logSessao = (obj) => { if (SESSAO_N) fs.appendFileSync(sessaoFile, JSON.stringify(obj) + "\n"); };
@@ -86,11 +96,11 @@ const serieSessao = { A: [], B: [] }; // tokens reais de cada turno em sessao, p
 async function decidirLado(estado, dono) {
   if (cliente[dono] && sessoes[dono]) return (await Sessao.decidirReiSessao(estado, dono, sessoes[dono], cliente[dono], { log: logSessao, maxTurnos })).registro;
   if (cliente[dono]) {
-    let reg = (await Rei.decidirRei(estado, dono, cliente[dono])).registro;
+    let reg = (await Rei.decidirRei(estado, dono, cliente[dono], undefined, extraDe[dono])).registro;
     // SEGUNDA_CHAMADA vale para os DOIS modos (30/09): no A/B, so o lado em sessao a
     // ter penalizaria o P4 pelo filtro de conteudo do provedor, e nao pelo prompt
     if (SEGUNDA && !reg.erroRede && !String(reg.cru || "").trim()) {
-      reg = (await Rei.decidirRei(estado, dono, cliente[dono])).registro;
+      reg = (await Rei.decidirRei(estado, dono, cliente[dono], undefined, extraDe[dono])).registro;
       reg.segundaChamada = true;
     }
     return reg;
@@ -207,7 +217,8 @@ out("condicoes: ambiente=" + (cfg.layout || "v1") + " | temp=0 | prompt=" +
   (SESSAO_N ? " | SESSAO N=" + SESSAO_N + (SESSAO_LADOS === "AB" ? "" : " SO NO REI " + SESSAO_LADOS + " (o outro: P4 de um turno por vez)") + " (formato compacto V2; memoria de ate " + Engine.TETO_MEMORIA + " caracteres no ultimo turno de cada sessao; sem correcao de formato)" : "") +
   (PACOTE2 ? " | PACOTE2 (seis verdades + campanha na mensagem 1; mapa da frente v2, combate com numeros e intencao em cada turno)" : "") +
   (SUBSTITUI ? " | relatorio novo SUBSTITUI o anterior na conversa" : "") +
-  (SEGUNDA ? " | segunda chamada em resposta vazia" : ""));
+  (SEGUNDA ? " | segunda chamada em resposta vazia" : "") +
+  (EXTRA_TXT ? " | PROMPT_EXTRA " + path.basename(EXTRA_ARQ) + " (" + EXTRA_TXT.length + " caracteres) nos lados " + ["A", "B"].filter((d) => extraDe[d]).join("") : ""));
 out("");
 
 function logEventos(estado, turno) {

@@ -38,7 +38,7 @@ const estTok = (chars) => Math.round(chars * TOK_POR_CHAR);
 function criarSessao(opc) {
   opc = opc || {};
   return { N: opc.N || 4, numero: 0, turnosNaSessao: 0, sistema: null, msgs: [], memoria: null, memorias: [],
-    transformar: opc.transformar || null, substituir: !!opc.substituir, segundaChamada: !!opc.segundaChamada };
+    transformar: opc.transformar || null, extra: opc.extra || null, substituir: !!opc.substituir, segundaChamada: !!opc.segundaChamada };
 }
 
 // motivo pelo qual a resposta nao conta como turno jogado (ou null se conta)
@@ -67,6 +67,7 @@ async function decidirReiSessao(estado, dono, sessao, cliente, opcoes) {
       if (!sessao.sistema.includes(de)) throw new Error("sessao.substituir: ancora da mensagem 1 nao encontrada");
       sessao.sistema = sessao.sistema.replace(de, "Older reports are taken out of the conversation: only the newest report is shown in full, and it is the truth.");
     }
+    if (sessao.extra) sessao.sistema += Rei.blocoExtra(sessao.extra); // PROMPT_EXTRA: na mensagem 1 de cada sessao
     sessao.msgs = [];
     log({ tipo: "sessao_inicio", lado: dono, sessao: sessao.numero, turno: estado.turno,
       system: sessao.sistema, memoria: sessao.memoria });

@@ -311,9 +311,16 @@ function criarReiIA(cliente) {
 
 // Decisao do Rei num turno + REGISTRO completo p/ o eval (o entregavel):
 // prompt -> resposta crua -> ordem parseada -> aceito/rejeitado.
-async function decidirRei(estado, dono, cliente, opcoesPrompt) {
+// Bloco de texto extra do treinador (PROMPT_EXTRA do runner): marcado e a parte. Vazio = "".
+function blocoExtra(texto) {
+  const t = String(texto || "").trim();
+  return t ? "\n\n=== INSTRUÇÕES EXTRA DO TREINADOR: ===\n" + t + "\n=== FIM DAS INSTRUÇÕES EXTRA ===" : "";
+}
+
+// extraTreinador (opcional): no P4 o bloco vai no fim do prompt do turno. Sem ele, nada muda.
+async function decidirRei(estado, dono, cliente, opcoesPrompt, extraTreinador) {
   const visao = Engine.montarVisao(estado, dono);
-  const prompt = Engine.montarPrompt(visao, opcoesPrompt || { rejeicaoNoFim: true }); // P4 (17/08): rejeicoes no fim por padrao, igual ao browser
+  const prompt = Engine.montarPrompt(visao, opcoesPrompt || { rejeicaoNoFim: true }) + blocoExtra(extraTreinador); // P4 (17/08): rejeicoes no fim por padrao, igual ao browser
   let cru = "", raciocinio = null, erroRede = null;
   try { const r = await cliente.gerar(prompt); cru = r.texto; raciocinio = r.raciocinio; }
   catch (e) { erroRede = e.message; }
@@ -590,4 +597,4 @@ async function rodarPartidaRei(opcoes) {
   };
 }
 
-module.exports = { TETO_ALTO: ClienteOR.TETO_ALTO, clienteOllama, clienteGemini, clienteOpenRouter, criarCliente, carregarEnv, criarReiIA, decidirRei, decidirReiComposto, montarPromptValidador, avaliarCounter, classificarIds, rodarPartidaRei };
+module.exports = { blocoExtra, TETO_ALTO: ClienteOR.TETO_ALTO, clienteOllama, clienteGemini, clienteOpenRouter, criarCliente, carregarEnv, criarReiIA, decidirRei, decidirReiComposto, montarPromptValidador, avaliarCounter, classificarIds, rodarPartidaRei };
