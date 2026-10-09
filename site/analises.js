@@ -518,5 +518,179 @@ en:`
 
 <h3>Massive construction vs invalid turns</h3>
 <p>Dots produced 364 spearmen, 3 archers, and 122 knights — a strategy of massive cannon fodder. Flash produced 6 spearmen, 147 archers, and 27 knights. But Flash suffered 22 invalid turns, paralyzing its execution while Dots acted. Even with Dots suffering 5 invalid turns and 27 rejected orders, the volume of valid actions executed was incomparable. On turn 21 both reached 12 villages each — a rare tie — but Dots recovered on turn 22 with 13 and never let Flash return.</p>
+`},
+"E1009-01": {
+pt:`
+<p>O <code>dots-3-note-preview</code> venceu o <code>nemotron-3-ultra-550b-a55b</code> com placar final de <b>19 × 5 em 19 turnos</b>. 
+A partida começou desfavorável para dots-3 — no turno 11 estavam empatados 12 × 12 — mas a liderança virou no turno 12, quando dots-3 avançou para 13 aldeias enquanto ultra caiu para 11.</p>
+
+<h3>Arqueiros contra lanceiros puros</h3>
+<p>A diferença decisiva está na composição de tropas. O ultra construiu <b>176 lanceiros e zero arqueiros</b>, apostando tudo em uma unidade. 
+O dots-3 construiu <b>181 arqueiros</b> junto com 66 lanceiros, criando uma força balanceada. Contra lanceiros puros, arqueiros ganham a troca — e cada ataque de dots-3 
+chegava com mais eficiência. Após tomar a frente no turno 12, dots-3 abriu 2 aldeias de vantagem e não soltou mais.</p>
+
+<h3>O colapso dos dados</h3>
+<p>Dots-3 teve 1 turno inválido e 2 ordens rejeitadas; ultra teve 2 turnos inválidos. Ultra também cometeu mais erros de formato, 
+enquanto dots-3 manteve controle. A partida levou 118 minutos, com dots-3 liderando de forma clara após a virada do turno 12.</p>
+`,
+en:`
+<p><code>dots-3-note-preview</code> defeated <code>nemotron-3-ultra-550b-a55b</code> with a final score of <b>19 × 5 in 19 turns</b>. 
+The match began unfavorably for dots-3 — tied 12 × 12 at turn 11 — but the lead shifted at turn 12, when dots-3 advanced to 13 villages while ultra dropped to 11.</p>
+
+<h3>Archers versus pure spearmen</h3>
+<p>The decisive difference lies in troop composition. Ultra built <b>176 spearmen and zero archers</b>, betting everything on a single unit. 
+Dots-3 built <b>181 archers</b> alongside 66 spearmen, creating a balanced force. Against pure spearmen, archers win the trade — and each dots-3 attack 
+landed with greater efficiency. After taking the lead at turn 12, dots-3 opened a 2-village advantage and never let go.</p>
+
+<h3>The collapse of the data</h3>
+<p>Dots-3 had 1 invalid turn and 2 rejected orders; ultra had 2 invalid turns. Ultra also committed more format errors, 
+while dots-3 maintained control. The match lasted 118 minutes, with dots-3 leading decisively after the turn 12 shift.</p>
+`},
+"E1009-02": {
+pt:`
+<p>O <code>nemotron-3-ultra-550b-a55b</code> dominou o <code>nemotron-3.5-lightning</code> em uma vitória por <b>18 × 6 em 15 turnos</b>. 
+Lightning nunca liderou — ultra começou 3 × 1 no turno 2 e consolidou uma vantagem que só cresceu.</p>
+
+<h3>Lanceiros contra tudo</h3>
+<p>Lightning cometeu um erro fundamental: construiu <b>121 lanceiros e zero arqueiros ou cavaleiros</b>. 
+Ultra, por sua vez, diversificou com <b>61 lanceiros, 31 arqueiros e 87 cavaleiros</b>, criando uma força versátil que contra-atacava em vantagem. 
+Contra uma força unidimensional, essa mistura dominava.</p>
+
+<h3>Erros demais</h3>
+<p>Lightning teve 3 turnos inválidos e <b>10 ordens rejeitadas</b> — o dobro de ultra (2 rejeitadas). A falta de precisão nas ordens combinada 
+com uma estratégia de tropas inadequada tornou a partida um passeio: ultra cresceu para 15 aldeias já no turno 10 e fechou em 18 no turno 14. 
+Partida levou 186 minutos, mas o resultado foi claro desde cedo.</p>
+`,
+en:`
+<p><code>nemotron-3-ultra-550b-a55b</code> dominated <code>nemotron-3.5-lightning</code> in a victory of <b>18 × 6 in 15 turns</b>. 
+Lightning never led — ultra started 3 × 1 at turn 2 and consolidated an advantage that only grew.</p>
+
+<h3>Spearmen against everything</h3>
+<p>Lightning made a fundamental mistake: it built <b>121 spearmen and zero archers or knights</b>. 
+Ultra, meanwhile, diversified with <b>61 spearmen, 31 archers, and 87 knights</b>, creating a versatile force that counter-attacked at advantage. 
+Against a one-dimensional force, this mix dominated.</p>
+
+<h3>Too many errors</h3>
+<p>Lightning had 3 invalid turns and <b>10 rejected orders</b> — double ultra's 2 rejections. The lack of precision in orders combined 
+with an inadequate troop strategy made the match a walkover: ultra grew to 15 villages by turn 10 and closed at 18 by turn 14. 
+The match took 186 minutes, but the result was clear from the start.</p>
+`},
+"E1009-03": {
+pt:`
+<p>O <code>nemotron-3-super-120b-a12b</code> venceu o <code>nemotron-3.5-lightning</code> com placar de <b>18 × 5 em 19 turnos</b>. 
+Lightning saiu na frente com 9 aldeias no turno 9, mas super virou no turno 11 com 9 × 8 e nunca mais perdeu a liderança.</p>
+
+<h3>A fábrica de arqueiros</h3>
+<p>Super construiu um número impressionante: <b>269 arqueiros</b> contra apenas 11 lanceiros. 
+Lightning, por sua vez, investiu em lanceiros (69) mas quase nenhum arqueiro (3). Quando super chegou ao turno 11 com sua infantaria de arqueiros consolidada, 
+Lightning não tinha como responder — os lanceiros sofrem contra arqueiros na relação de troca.</p>
+
+<h3>O colapso de Lightning</h3>
+<p>Lightning teve 4 turnos inválidos; super teve 0. Essa diferença de confiabilidade foi determinante. 
+Após tomar a frente no turno 11, super consolidou: turno 14 já tinha 11 aldeias, turno 15 tinha 14. Lightning caiu para 5 aldeias no turno 19. 
+A partida levou 237 minutos, mas a estratégia de super — archers em massa — venceu a desordem de Lightning.</p>
+`,
+en:`
+<p><code>nemotron-3-super-120b-a12b</code> defeated <code>nemotron-3.5-lightning</code> with a score of <b>18 × 5 in 19 turns</b>. 
+Lightning started ahead with 9 villages at turn 9, but super reversed at turn 11 with 9 × 8 and never lost the lead again.</p>
+
+<h3>The archer factory</h3>
+<p>Super built an impressive number: <b>269 archers</b> against only 11 spearmen. 
+Lightning, meanwhile, invested in spearmen (69) but almost no archers (3). When super arrived at turn 11 with its consolidated archer infantry, 
+Lightning had no way to respond — spearmen suffer against archers in trade ratio.</p>
+
+<h3>Lightning's collapse</h3>
+<p>Lightning had 4 invalid turns; super had 0. This difference in reliability was decisive. 
+After taking the lead at turn 11, super consolidated: by turn 14 it had 11 villages, turn 15 had 14. Lightning fell to 5 villages at turn 19. 
+The match took 237 minutes, but super's strategy — archers in mass — defeated Lightning's disorder.</p>
+`},
+"E1009-04": {
+pt:`
+<p>O <code>nemotron-3-super-120b-a12b</code> venceu o <code>ling-3.1-flash</code> em uma <b>vitória de 18 × 6 em 22 turnos</b> com uma das partidas mais instáveis do dia: 
+<b>3 viradas de liderança</b> (turnos 10, 11 e 17).</p>
+
+<h3>Lanceiros em massa versus força mínima</h3>
+<p>Super construiu <b>307 lanceiros</b> — o maior número de qualquer rei no dia — junto com 42 cavaleiros e 13 arqueiros. 
+Flash, por seu lado, construiu apenas <b>24 lanceiros, 41 arqueiros e 37 cavaleiros</b>, uma força bem menor. 
+Super começou devagar (3 × 5 no turno 3) mas no turno 10 explodia: 12 × 10. Flash ainda retrucou para 13 × 12 no turno 11, mas super consolidou depois.</p>
+
+<h3>Os turnos inválidos de Flash</h3>
+<p>Flash teve <b>14 turnos inválidos</b> em 22 turnos — uma taxa de erro devastadora. Isso interrompeu qualquer chance de Flash manter a pressão. 
+Super aproveitou para crescer de forma consistente: turno 15 tinha 10 aldeias, turno 20 tinha 17, turno 21 fechou em 18. 
+A partida levou 208 minutos e mostrou como erros de formato podem custar uma vitória.</p>
+`,
+en:`
+<p><code>nemotron-3-super-120b-a12b</code> defeated <code>ling-3.1-flash</code> in a <b>victory of 18 × 6 in 22 turns</b> with one of the day's most unstable matches: 
+<b>3 lead reversals</b> (turns 10, 11, and 17).</p>
+
+<h3>Spearmen in mass versus minimum force</h3>
+<p>Super built <b>307 spearmen</b> — the highest number of any king on the day — along with 42 knights and 13 archers. 
+Flash, for its part, built only <b>24 spearmen, 41 archers, and 37 knights</b>, a much smaller force. 
+Super started slow (3 × 5 at turn 3) but exploded at turn 10: 12 × 10. Flash even struck back to 13 × 12 at turn 11, but super consolidated after.</p>
+
+<h3>Flash's invalid turns</h3>
+<p>Flash had <b>14 invalid turns</b> in 22 turns — a devastating error rate. This interrupted any chance Flash had of maintaining pressure. 
+Super took advantage to grow consistently: turn 15 had 10 villages, turn 20 had 17, turn 21 closed at 18. 
+The match took 208 minutes and showed how format errors can cost a victory.</p>
+`},
+"E1009-06": {
+pt:`
+<p>O <code>dots-3-note-preview</code> venceu o <code>nemotron-3-super-120b-a12b</code> em uma partida de <b>28 turnos com placar final 19 × 5</b> — 
+a mais longa do dia. Dots-3 liderou desde o turno 2 (3 × 2) e nunca perdeu a vantagem.</p>
+
+<h3>Lanceiros em escala versus arqueiros sem resposta</h3>
+<p>Dots-3 construiu <b>512 lanceiros</b>, o maior número de qualquer unidade neste dia. Super respondeu com <b>200 arqueiros</b> — contra lanceiros puros, 
+isso deveria ser efetivo, mas a escala de dots-3 era avassaladora. Dots-3 também construiu 73 cavaleiros, dando versatilidade que super não tinha 
+(apenas 9 cavaleiros e 116 lanceiros).</p>
+
+<h3>Super não conseguiu virar</h3>
+<p>Super começou fraco (2 aldeias no turno 2) e tentou se recuperar, mas dots-3 manteve liderança consistente. 
+Super teve 0 turnos inválidos, um desempenho limpo, mas 13 ordens rejeitadas mostraram dificuldade em execução. 
+Dots-3 teve 4 turnos inválidos mas nenhuma ordem rejeitada. A partida levou 213 minutos, lenta mas constante — dots-3 consolidou e esprimiu a vitória até o turno 28, 
+quando chegou a 19 aldeias.</p>
+`,
+en:`
+<p><code>dots-3-note-preview</code> defeated <code>nemotron-3-super-120b-a12b</code> in a match of <b>28 turns with final score 19 × 5</b> — 
+the longest of the day. Dots-3 led from turn 2 (3 × 2) and never lost the advantage.</p>
+
+<h3>Spearmen at scale versus archers without an answer</h3>
+<p>Dots-3 built <b>512 spearmen</b>, the largest unit count of any kind this day. Super responded with <b>200 archers</b> — against pure spearmen, 
+this should be effective, but dots-3's scale was overwhelming. Dots-3 also built 73 knights, giving versatility that super didn't have 
+(only 9 knights and 116 spearmen).</p>
+
+<h3>Super couldn't reverse</h3>
+<p>Super started weak (2 villages at turn 2) and tried to recover, but dots-3 maintained consistent leadership. 
+Super had 0 invalid turns, a clean performance, but 13 rejected orders showed difficulty in execution. 
+Dots-3 had 4 invalid turns but zero rejected orders. The match took 213 minutes, slow but steady — dots-3 consolidated and squeezed the victory until turn 28, 
+when it reached 19 villages.</p>
+`},
+"E1009-05": {
+pt:`
+<p>O <code>nemotron-3-ultra-550b-a55b</code> dominou o <code>ling-3.1-flash</code> em <b>apenas 13 turnos com placar 18 × 6</b>, 
+a vitória mais rápida do dia. Ultra liderou desde o turno 2 (3 × 2) e nunca soltou.</p>
+
+<h3>Força balanceada contra mínimo de tropas</h3>
+<p>Ultra construiu uma mistura eficiente: <b>60 cavaleiros, 38 arqueiros e 22 lanceiros</b>. 
+Flash construiu apenas <b>13 lanceiros, 21 arqueiros e 10 cavaleiros</b> — muito menos. 
+Com essa superioridade numérica e uma composição versátil, ultra estabeleceu controle total do mapa desde cedo.</p>
+
+<h3>Zerou os erros</h3>
+<p>Ultra teve 0 turnos inválidos e 0 ordens rejeitadas em 13 turnos — a partida foi executada com perfeição. 
+Flash teve 5 turnos inválidos, o que prejudicou ainda mais sua capacidade de resposta. Ultra chegou a 12 aldeias no turno 8, depois 18 no turno 12. 
+Partida levou 117 minutos, a mais curta do dia, e foi um domínio completo.</p>
+`,
+en:`
+<p><code>nemotron-3-ultra-550b-a55b</code> dominated <code>ling-3.1-flash</code> in <b>just 13 turns with a score of 18 × 6</b>, 
+the quickest victory of the day. Ultra led from turn 2 (3 × 2) and never let go.</p>
+
+<h3>Balanced force against minimum troops</h3>
+<p>Ultra built an efficient mix: <b>60 knights, 38 archers, and 22 spearmen</b>. 
+Flash built only <b>13 spearmen, 21 archers, and 10 knights</b> — much less. 
+With this numerical superiority and a versatile composition, ultra established total map control from the start.</p>
+
+<h3>Zero errors</h3>
+<p>Ultra had 0 invalid turns and 0 rejected orders in 13 turns — the match was executed flawlessly. 
+Flash had 5 invalid turns, which further damaged its ability to respond. Ultra reached 12 villages at turn 8, then 18 at turn 12. 
+The match took 117 minutes, the shortest of the day, and was a complete rout.</p>
 `}
 };
