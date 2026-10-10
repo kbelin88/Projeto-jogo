@@ -692,5 +692,138 @@ With this numerical superiority and a versatile composition, ultra established t
 <p>Ultra had 0 invalid turns and 0 rejected orders in 13 turns — the match was executed flawlessly. 
 Flash had 5 invalid turns, which further damaged its ability to respond. Ultra reached 12 villages at turn 8, then 18 at turn 12. 
 The match took 117 minutes, the shortest of the day, and was a complete rout.</p>
+`},
+"E1010-01": {
+pt:`
+<p>O <code>nemotron-3-ultra-550b-a55b</code> vence o <code>nemotron-3-super-120b-a12b</code> por <b>18 × 6 em 17 turnos</b>. Ambos os lados escolheram tipologias radicalmente diferentes — o Super apostou em 126 lanceiros contra 108 cavaleiros do Ultra — e o mapa revelou quem estava certo.</p>
+
+<h3>Armas e momentum</h3>
+<p>O Super começou bem (5 aldeias no turno 5) mas o Ultra construiu uma máquina de guerra: 108 cavaleiros contra os 45 arqueiros do Super. Desde o turno 3, o Ultra já tinha 5 aldeias contra 4 do Super. No turno 9, capturou Toledo e nunca mais perdeu a liderança. O que separou os dois foi o tamanho do ataque: o Ultra, com 85 lanceiros, 15 arqueiros e 108 cavaleiros, conseguia massa suficiente para conquistar e defender. O Super, com apenas lanceiros e alguns arqueiros, ficava espalhado.</p>
+
+<h3>O cerco final</h3>
+<p>Nos turnos 16 e 17, o Ultra tinha 18 aldeias e o Super caía de 8 para 6. O Super recuou em Salamanca (perdida no turno 8 para o Ultra), e não conseguiu reconquistar. O Ultra consolidava com 17 ou 18 aldeias por turno, mantendo guarnições fortes e reforços constantes. Ambos os lados fizeram <b>zero turnos inválidos</b> — uma partida tecnicamente limpa entre dois dos maiores modelos disponíveis.</p>
+`,
+en:`
+<p>The <code>nemotron-3-ultra-550b-a55b</code> defeats the <code>nemotron-3-super-120b-a12b</code> <b>18 × 6 in 17 turns</b>. Both sides made radically different unit choices — Super built 126 spearmen against Ultra's 108 knights — and the map revealed who was right.</p>
+
+<h3>Weapons and momentum</h3>
+<p>Super started strong (5 villages by turn 5) but Ultra engineered a war machine: 108 knights against Super's 45 archers. From turn 3 onward, Ultra held 5 villages to Super's 4. By turn 9, it took Toledo and never lost the lead. What separated them was attack mass: Ultra, with 85 spearmen, 15 archers, and 108 knights, could gather enough force to conquer and hold. Super, with spearmen and a handful of archers, remained scattered.</p>
+
+<h3>The final encirclement</h3>
+<p>In turns 16 and 17, Ultra held 18 villages while Super fell from 8 to 6. Super retreated at Salamanca (lost to Ultra on turn 8) and could not recapture it. Ultra consolidated with 17 or 18 villages per turn, maintaining strong garrisons and constant reinforcements. Both sides executed <b>zero invalid turns</b> — a technically clean match between two of the strongest models available.</p>
+`},
+"E1010-02": {
+pt:`
+<p>O <code>dots-3-note-preview</code> domina o <code>ling-3.1-flash</code>: <b>22 × 2 em 14 turnos</b>. Flash começou com promessa (9 aldeias no turno 7) mas caiu em cascata. Dots, que corrigiu erros em turnos posteriores, construiu um exército de 141 arqueiros — uma tipologia muito mais adequada para esta Península.</p>
+
+<h3>O colapso do Flash</h3>
+<p>Flash sofreu <b>5 turnos inválidos</b> contra 3 do Dots; isso custou tempo e criou janelas de oportunidade. O Flash começou com 3 aldeias (Santarem, Evora, Faro) no turno 2, mas no turno 8 tinha apenas 11 — enquanto Dots já tinha 8 e acelerava. O Flash construiu 80 lanceiros e só 3 arqueiros: uma aposta perdida num mapa que premia mobilidade e fogo à distância.</p>
+
+<h3>O turno 11: a virada</h3>
+<p>No turno 11, Flash tinha 9 aldeias e Dots 13. Dali em diante foi desabamento: Dots conquistou Madrid (turno 8), Salamanca (turno 9) e depois Badajoz, Santarem e Lisboa. Flash, com reforços fracos, não conseguia defender. No turno 14, Flash tinha apenas 2 aldeias. Dots falava de <b>"Four fronts open at once"</b> — e de fato abriu, com archers e knights fluindo de Madrid, Valencia, Badajoz e Santarem em simultâneo. Flash não tinha resposta.</p>
+`,
+en:`
+<p>The <code>dots-3-note-preview</code> dominates <code>ling-3.1-flash</code>: <b>22 × 2 in 14 turns</b>. Flash started with promise (9 villages by turn 7) but collapsed. Dots, correcting errors in later turns, built an army of 141 archers — a far better choice for this Iberian map.</p>
+
+<h3>Flash's collapse</h3>
+<p>Flash suffered <b>5 invalid turns</b> against Dots' 3; this cost time and opened windows of opportunity. Flash started with 3 villages (Santarem, Evora, Faro) on turn 2 but by turn 8 had only 11 — while Dots already had 8 and accelerating. Flash built 80 spearmen and just 3 archers: a losing bet on a map that rewards mobility and ranged fire.</p>
+
+<h3>Turn 11: the pivot</h3>
+<p>By turn 11, Flash held 9 villages and Dots 13. From there it was collapse: Dots conquered Madrid (turn 8), Salamanca (turn 9), then Badajoz, Santarem, and Lisboa. Flash, with weak reinforcements, could not defend. By turn 14, Flash held only 2 villages. Dots spoke of <b>"Four fronts open at once"</b> — and it did open, with archers and knights flowing from Madrid, Valencia, Badajoz, and Santarem simultaneously. Flash had no answer.</p>
+`},
+"E1010-03": {
+pt:`
+<p>O <code>nemotron-3-super-120b-a12b</code> vence o <code>ling-3.1-flash</code> por <b>19 × 5 em 18 turnos</b>. Flash teve um início brilhante (14 aldeias no turno 7) mas sofreu de um problema crítico: <b>10 turnos inválidos contra zero do Super</b>. Isso não é detalhe. É o jogo inteiro.</p>
+
+<h3>Tecnologia versus tática</h3>
+<p>Flash começou bem em 2-3 turnos: Santarem, Evora, Faro, Badajoz, Sevilha, Coimbra (5 aldeias no turno 5). Mas no turno 6 tinha 11 e no turno 7, o pico, 14 aldeias. Dali em diante desceu: turno 8 (14), turno 9 (13), turno 10 (13), turno 11 (13), turno 12 (13), turno 14 (10). O Super, que tinha construído 193 arqueiros, conquistava aldeias no ritmo que Flash as perdia. A diferença é simples: Super fez <b>zero turnos inválidos</b>, Flash fez 10. Cada turno inválido é uma rodada perdida de reforços.</p>
+
+<h3>A consolidação do Super</h3>
+<p>No turno 14, o Super alcançou Flash (10 × 14) e a partir daí o Super nunca mais parou: turno 15 (17), turno 16 (17), turno 17 (19). Flash caiu para 7, 7, 5. O Super diz que "conquistamos Porto, Cordoba e Badajoz com forças de lanceiros" — exatamente o que se vê nos fatos. Sem os 10 turnos inválidos, essa partida seria diferente.</p>
+`,
+en:`
+<p>The <code>nemotron-3-super-120b-a12b</code> defeats <code>ling-3.1-flash</code> <b>19 × 5 in 18 turns</b>. Flash had a brilliant start (14 villages by turn 7) but suffered from a critical flaw: <b>10 invalid turns against zero for Super</b>. That's not a detail. It's the entire game.</p>
+
+<h3>Technology versus tactics</h3>
+<p>Flash started well in turns 2–3: Santarem, Evora, Faro, Badajoz, Sevilha, Coimbra (5 villages by turn 5). But by turn 6 it had 11 and by turn 7, its peak, 14 villages. From there it fell: turn 8 (14), turn 9 (13), turn 10 (13), turn 11 (13), turn 12 (13), turn 14 (10). Super, which had built 193 archers, conquered villages at the rate Flash lost them. The difference is simple: Super made <b>zero invalid turns</b>, Flash made 10. Each invalid turn is a lost round of reinforcements.</p>
+
+<h3>Super's consolidation</h3>
+<p>By turn 14, Super caught Flash (10 × 14) and from there Super never slowed: turn 15 (17), turn 16 (17), turn 17 (19). Flash fell to 7, 7, 5. Super states it "conquered Porto, Cordoba, and Badajoz with spearmen forces" — exactly what the facts show. Without those 10 invalid turns, this match would tell a very different story.</p>
+`},
+"E1010-04": {
+pt:`
+<p>O <code>dots-3-note-preview</code> vence o <code>nemotron-3-ultra-550b-a55b</code> por <b>19 × 5 em 18 turnos</b>. Uma partida tecnicamente limpa: <b>zero turnos inválidos em ambos os lados</b>. Dots construiu 224 arqueiros; Ultra apostou em 56 cavaleiros e 77 arqueiros. Foi suficiente para perder.</p>
+
+<h3>O turno 8: o ponto de inflexão</h3>
+<p>Até o turno 7, Ultra e Dots estavam próximos: Ultra tinha 10 aldeias, Dots 8. No turno 8, o Dots tomou a liderança (9 × 12 no placar final de turno 8 parece estar invertido nos dados — vendo a curva: turno 7 [10, 8], turno 8 [9, 12]). Ultra caiu para 9 enquanto Dots saltou para 12. Dali em diante, nunca mais se recuperou. No turno 9: Ultra 11, Dots 13. Turno 10: Ultra 9, Dots 15. O Ultra diz que "Strike with both wings" mas a realidade foi que as duas asas do Dots queimavam em sincronismo — Pamplona e Madrid avançando juntos em turnos estratégicos.</p>
+
+<h3>Archers contra tudo</h3>
+<p>Dots construiu 224 arqueiros contra Ultra's 77 arqueiros e 56 cavaleiros. No mapa da Península, onde as distâncias são longas e os reforços demoram, ter massa de fogo à distância é decisivo. Ultra, com seu foco em cavaleiros, precisaria de concentração pontual — exactamente o que não conseguiu. Dots consolidou turno a turno, com 15-19 aldeias nos últimos 6 turnos.</p>
+`,
+en:`
+<p>The <code>dots-3-note-preview</code> defeats the <code>nemotron-3-ultra-550b-a55b</code> <b>19 × 5 in 18 turns</b>. A technically clean match: <b>zero invalid turns on both sides</b>. Dots built 224 archers; Ultra bet on 56 knights and 77 archers. It was not enough to win.</p>
+
+<h3>Turn 8: the inflection point</h3>
+<p>Through turn 7, Ultra and Dots were close: Ultra held 10 villages, Dots 8. On turn 8, Dots took the lead (9 × 12). Ultra fell to 9 while Dots jumped to 12. From there it never recovered. Turn 9: Ultra 11, Dots 13. Turn 10: Ultra 9, Dots 15. Ultra claims to "strike with both wings" but the reality was that Dots' two wings burned in synchrony — Pamplona and Madrid advancing together on strategic turns.</p>
+
+<h3>Archers against everything</h3>
+<p>Dots built 224 archers against Ultra's 77 archers and 56 knights. On the Iberian map, where distances are long and reinforcements take time, having mass ranged firepower is decisive. Ultra, with its knight focus, would need pinpoint concentration — exactly what it could not achieve. Dots consolidated turn by turn, holding 15–19 villages in the final 6 turns.</p>
+`},
+"E1010-05": {
+pt:`
+<p>O <code>nemotron-3-ultra-550b-a55b</code> vence o <code>nemotron-3-super-120b-a12b</code> por <b>18 × 6 em 16 turnos</b> — uma rematch de E1010-01, resolvida em 1 turno menos. O Super alcançou 11 aldeias no turno 9, foi líder no placar, mas o Ultra conquistou 13 no turno 10 e nunca mais olhou para trás.</p>
+
+<h3>O turno 9: pico do Super</h3>
+<p>O Super começou bem (7 aldeias turno 5, 8 turno 6) e no turno 9 chegou a 11. Nesse mesmo turno, o Ultra tinha 10 — uma diferença de apenas 1 aldeia. Mas o Ultra construiu 81 arqueiros e 74 cavaleiros; o Super construiu 122 lanceiros e 28 cavaleiros. No turno 10, o Ultra estava a 13 aldeias e o Super começava a cair: 10 aldeias. O Ultra, com sua mistura de archers e knights, conseguia concentração que o Super, com lance pesado, não podia acompanhar.</p>
+
+<h3>A diferença na organização</h3>
+<p>O Super teve 12 ordens rejeitadas contra apenas 2 do Ultra. Isso significa que o Ultra conseguiu enviar reforços de forma mais precisa, sem desperdiçar movimentos. O Super, apesar de ter construído mais lanceiros, viu muitas ordens serem recusadas — erros de rota, erros de sintaxe, cálculos errados. No turno 16, o Ultra consolidava com 18 aldeias enquanto o Super caía para 6. O Ultra diz: <b>"Teruel crushes Toledo, Madrid storms Salamanca"</b> — e é exatamente o que aconteceu nos turnos críticos.</p>
+`,
+en:`
+<p>The <code>nemotron-3-ultra-550b-a55b</code> defeats the <code>nemotron-3-super-120b-a12b</code> <b>18 × 6 in 16 turns</b> — a rematch of E1010-01, resolved one turn faster. Super reached 11 villages on turn 9, held the lead on the board, but Ultra conquered 13 by turn 10 and never looked back.</p>
+
+<h3>Turn 9: Super's peak</h3>
+<p>Super started strong (7 villages turn 5, 8 turn 6) and by turn 9 reached 11. That same turn, Ultra held 10 — a difference of just 1 village. But Ultra built 81 archers and 74 knights; Super built 122 spearmen and 28 knights. By turn 10, Ultra was at 13 villages and Super began to fall: 10 villages. Ultra, with its archer-knight blend, achieved concentration that Super, with heavy spearmen, could not match.</p>
+
+<h3>The difference in logistics</h3>
+<p>Super had 12 rejected orders against only 2 for Ultra. This means Ultra sent reinforcements with greater precision, wasting no moves. Super, despite building more spearmen, saw many orders refused — routing errors, syntax errors, bad calculations. By turn 16, Ultra consolidated with 18 villages while Super fell to 6. Ultra states: <b>"Teruel crushes Toledo, Madrid storms Salamanca"</b> — and that is exactly what happened in the critical turns.</p>
+`},
+"E1010-06": {
+pt:`
+<p>O <code>nemotron-3-ultra-550b-a55b</code> vence o <code>ling-3.1-flash</code> por <b>20 × 4 em 15 turnos</b>. Flash começou bem (10 aldeias turnos 6-8) mas no turno 9 o Ultra tomou a liderança e nunca mais soltou. Flash sofreu <b>6 turnos inválidos</b>; Ultra fez zero. A diferença custou a partida.</p>
+
+<h3>Início promissor, fim devastador</h3>
+<p>Flash conquistou Santarem, Evora, Badajoz, Faro, Coimbra, Toledo, Sevilha e Cordoba nos primeiros 6 turnos (10 aldeias total, turno 6). Parecia uma performance sólida. Mas o Ultra, com sua construção de 90 cavaleiros, estava se preparando para os ataques. No turno 9, Dots conquistou Teruel e Pamplona enquanto Flash ainda construía lanceiros (47 no total). De repente: Ultra 12, Flash 10. O Flash nunca conseguiu recuperar.</p>
+
+<h3>A precisão do Ultra</h3>
+<p>No turno 9, o Ultra relata: <b>"Three prongs strike: Madrid claims Burgos, Murcia seizes Cordoba, Salamanca grabs Badajoz."</b> Três aldeias em um turno. Flash perdia Cordoba e Badajoz para o Ultra, que as conquistava de forma coordenada. Os 6 turnos inválidos do Flash custaram tempo e deixaram aberturas. No turno 15, o Ultra tinha 20 aldeias — o máximo do mapa — e Flash tinha apenas 4: Santarem, Evora, Coimbra e nada mais. Uma vitória sem volta.</p>
+`,
+en:`
+<p>The <code>nemotron-3-ultra-550b-a55b</code> defeats <code>ling-3.1-flash</code> <b>20 × 4 in 15 turns</b>. Flash started strong (10 villages turns 6–8) but on turn 9 Ultra took the lead and never released it. Flash suffered <b>6 invalid turns</b>; Ultra made zero. The difference cost the game.</p>
+
+<h3>Promising start, devastating end</h3>
+<p>Flash conquered Santarem, Evora, Badajoz, Faro, Coimbra, Toledo, Sevilha, and Cordoba in the first 6 turns (10 villages total, turn 6). It looked like solid play. But Ultra, building 90 knights, was preparing for strikes. On turn 9, Ultra conquered Teruel and Pamplona while Flash was still building spearmen (47 total). Suddenly: Ultra 12, Flash 10. Flash never recovered.</p>
+
+<h3>Ultra's precision</h3>
+<p>On turn 9, Ultra reports: <b>"Three prongs strike: Madrid claims Burgos, Murcia seizes Cordoba, Salamanca grabs Badajoz."</b> Three villages in one turn. Flash lost Cordoba and Badajoz to Ultra's coordinated conquest. Flash's 6 invalid turns cost time and left openings. By turn 15, Ultra held 20 villages — the maximum on the map — and Flash held just 4: Santarem, Evora, Coimbra, and nothing else. An irreversible victory.</p>
+`},
+"E1010-07": {
+pt:`
+<p>O <code>dots-3-note-preview</code> vence o <code>nemotron-3-super-120b-a12b</code> por <b>20 × 4 em 20 turnos</b>. Uma partida longa onde o Super nunca conseguiu alcançar o Dots. O Dots tomou a liderança no turno 5 (6 × 7) e consolidou uma vantagem que o Super não conseguiu quebrar em 15 turnos.</p>
+
+<h3>Construção e paciência</h3>
+<p>O Super começou competitivo (6 aldeias turno 5) mas o Dots, que construiu 120 arqueiros e 100 cavaleiros contra os 64 lanceiros, 57 arqueiros e 61 cavaleiros do Super, manteve o ritmo. No turno 5, o Dots saiu na frente com 7 aldeias contra 6 do Super. Dali em diante, o Dots cresceu: turno 6 (8), turno 11 (12), turno 12 (14). O Super ficou preso entre 5 e 11 aldeias, nunca conseguindo romper a linha de frente do Dots.</p>
+
+<h3>O colapso na reta final</h3>
+<p>No turno 16, o Dots tinha 16 aldeias e o Super ainda 8. Turno 17: Dots 15, Super 9. Turno 19: Dots 19, Super 5. O Dots conquistou Santarem no turno 20 e consolidou 20 aldeias. O Super foi perdendo aldeias sem conseguir reconquistar, caindo de 8 para 4 aldeias entre os turnos 16 e 20. Uma dominância técnica que durou 20 turnos sem reversão da liderança.</p>
+`,
+en:`
+<p>The <code>dots-3-note-preview</code> defeats the <code>nemotron-3-super-120b-a12b</code> <b>20 × 4 in 20 turns</b>. A long game where Super never managed to catch Dots. Dots took the lead on turn 5 (6 × 7) and consolidated an advantage Super could not break across 15 turns.</p>
+
+<h3>Building and patience</h3>
+<p>Super started competitive (6 villages turn 5) but Dots, which built 120 archers and 100 knights against Super's 64 spearmen, 57 archers, and 61 knights, maintained the pace. On turn 5, Dots went ahead with 7 villages to Super's 6. From there, Dots grew: turn 6 (8), turn 11 (12), turn 12 (14). Super stayed trapped between 5 and 11 villages, never able to break Dots' front line.</p>
+
+<h3>Collapse in the final stretch</h3>
+<p>By turn 16, Dots held 16 villages and Super still had 8. Turn 17: Dots 15, Super 9. Turn 19: Dots 19, Super 5. Dots conquered Santarem on turn 20 and consolidated 20 villages. Super kept losing villages without recapturing any, falling from 8 to 4 villages between turns 16 and 20. A technical dominance that lasted 20 turns without a single reversal of the lead.</p>
 `}
 };
