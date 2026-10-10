@@ -2,8 +2,8 @@
 
 ## Ferramentas na máquina
 - **GPU**: NVIDIA RTX 3050 Ti Laptop, **4 GB de VRAM** (limite duro: SDXL/Flux só quantizados; vídeo por IA fora de questão).
-- **Blender 5.2** instalado (`C:/Program Files/Blender Foundation`).
-- **ComfyUI** portátil em `C:/Users/biolu/ComfyUI_windows_portable_nvidia` (há `ferramentas/comfy/` no repo).
+- **Blender 5.2** instalado.
+- **ComfyUI** portátil instalado na máquina (há `ferramentas/comfy/` no repo).
 - **HyperFrames** via `npx` (npm global presente); **ffmpeg 8.1.1** full build; **Node 24**, **Python 3.12** + Pillow.
 
 ## Replays do Kings Arena
