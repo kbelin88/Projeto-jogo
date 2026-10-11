@@ -247,6 +247,8 @@ function clienteOpenRouter(opcoes) {
     minIntervaloMs: opcoes.minIntervaloMs != null ? opcoes.minIntervaloMs : 3000,
     maxTokens: opcoes.maxTokens != null ? opcoes.maxTokens : ClienteOR.TETO_ALTO,
     raciocinio,
+    // os backends compativeis (clienteCompativel, 11/10/2026) nao mandam os campos so do OpenRouter
+    compativel: !!opcoes.semRaciocinio,
     aviso: (m) => { if (!silencioso) console.error("  " + m); },
   });
 
@@ -294,8 +296,40 @@ function criarCliente(id, opcoes) {
   if (backend === "gemini") return clienteGemini(opc);
   if (backend === "ollama") return clienteOllama(opc);
   if (backend === "openrouter") return clienteOpenRouter(opc);
+  if (COMPATIVEIS[backend]) return clienteCompativel(backend, opc);
   if (backend === "falso") return require("./sessao.js").clienteFalso(opc); // ensaio a seco: nao toca a rede
-  throw new Error(`backend desconhecido: "${backend}" (use "ollama", "gemini" ou "openrouter")`);
+  throw new Error(`backend desconhecido: "${backend}" (use "ollama", "gemini", "openrouter", "nvidia" ou "cloudflare")`);
+}
+
+// ---- BACKENDS COMPATIVEIS COM A OPENAI (11/10/2026, o Banco da Cidade) ─────
+// A NVIDIA (build.nvidia.com) e o Cloudflare Workers AI falam o mesmo formato
+// que o OpenRouter: usa-se o MESMO cliente (clienteor.js, com as mesmas licoes
+// de 429/503 e Retry-After), so com outro endereco e outra chave, e SEM o campo
+// `reasoning` (e do OpenRouter). O teto de resposta e mais baixo que o TETO_ALTO
+// porque estes provedores nao dizem o limite no erro como o OpenRouter.
+// O Groq NAO esta aqui de proposito: no plano gratis aceita no maximo 8.000
+// tokens por minuto, e um turno da Arena tem 6 a 15 mil (medido a 11/10).
+const COMPATIVEIS = {
+  nvidia: { url: () => "https://integrate.api.nvidia.com/v1/chat/completions", chave: "NVIDIA_API_KEY", teto: 32768 },
+  cloudflare: {
+    url: () => "https://api.cloudflare.com/client/v4/accounts/" + process.env.CLOUDFLARE_ACCOUNT_ID + "/ai/v1/chat/completions",
+    chave: "CLOUDFLARE_API_TOKEN", teto: 16384, precisa: "CLOUDFLARE_ACCOUNT_ID",
+  },
+};
+
+function clienteCompativel(backend, opcoes) {
+  const b = COMPATIVEIS[backend];
+  carregarEnv();
+  const apiKey = process.env[b.chave];
+  if (!apiKey) throw new Error(b.chave + " ausente (defina no .env desta pasta ou no ambiente)");
+  if (b.precisa && !process.env[b.precisa]) throw new Error(b.precisa + " ausente");
+  if (!opcoes.modelo) throw new Error(`diga o modelo: "${backend}:<modelo>"`);
+  const c = clienteOpenRouter(Object.assign({}, opcoes, {
+    url: b.url(), apiKey, semRaciocinio: true,
+    maxTokens: opcoes.maxTokens != null ? opcoes.maxTokens : b.teto,
+  }));
+  c.nome = backend + ":" + opcoes.modelo;
+  return c;
 }
 
 // criarReiIA(cliente) -> decisor ASSINCRONO reiIA(visao) -> Promise<ordem>.

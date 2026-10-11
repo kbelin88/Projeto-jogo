@@ -116,7 +116,10 @@
     //   tele: { ms, tokens, finish, finishNativo, erro, modoRac, throttles }
     async function gerar(prompt, modelo, extra) {
       const ex = extra || {};
-      const raciocinio = ex.raciocinio || o.raciocinio || { enabled: true };
+      // compativel: true = um provedor compativel com a OpenAI que nao e o OpenRouter (a NVIDIA, o
+      // Cloudflare): nao se mandam os campos so do OpenRouter, `reasoning` e `usage` (a NVIDIA
+      // devolve 400 "Unsupported parameter(s): `usage`") -- 11/10/2026
+      const raciocinio = o.compativel ? null : (ex.raciocinio || o.raciocinio || { enabled: true });
       const chave = ex.chave != null ? ex.chave : o.chave;
       const temperatura = ex.temperatura != null ? ex.temperatura
                         : (o.temperatura != null ? o.temperatura : 0);
@@ -133,9 +136,8 @@
             messages: sessao ? mensagensSessao(prompt, ex.cache !== false) : [{ role: "user", content: prompt }],
             temperature: temperatura,
             stream: false,
-            reasoning: raciocinio,
             max_tokens: teto[modelo] || maxTokens,
-          }, sessao ? { usage: { include: true } } : {})),
+          }, raciocinio ? { reasoning: raciocinio } : {}, (sessao && !o.compativel) ? { usage: { include: true } } : {})),
         });
         if (resp.ok) {
           const data = await resp.json();
