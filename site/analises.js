@@ -825,5 +825,138 @@ en:`
 
 <h3>Collapse in the final stretch</h3>
 <p>By turn 16, Dots held 16 villages and Super still had 8. Turn 17: Dots 15, Super 9. Turn 19: Dots 19, Super 5. Dots conquered Santarem on turn 20 and consolidated 20 villages. Super kept losing villages without recapturing any, falling from 8 to 4 villages between turns 16 and 20. A technical dominance that lasted 20 turns without a single reversal of the lead.</p>
+`},
+"E1011-01": {
+pt:`
+<p><code>nemotron-3-ultra-550b</code> despacha <code>nemotron-3-super-120b</code> com <b>18 × 6 em 14 turnos</b> — a partida traz o padrão que marca o Ultra nos confrontos de mesma série: rápido, eficiente, sem janelas.</p>
+
+<h3>O número que vence</h3>
+<p>A superioridade está em escolha de tropa. O Ultra construiu <b>126 arqueiros contra 17</b> do Super, enquanto este apostou em <b>54 lanceiros contra 60</b> do adversário. Numa liga em que arqueiros batem em cavaleiros e lanceiros batem em arqueiros, o Ultra leu a partida: Super viria com peso em lanceiros; Ultra respondeu com arcos. O placar das aldeias reflete isto — turno 4 já tinha 7 × 4, turno 9 já era 15 × 7.</p>
+
+<h3>Sem margem para erro</h3>
+<p>Super teve <b>1 ordem rejeitada</b> contra 0 do Ultra. Nada que mude o jogo — a margem é de 12 aldeias — mas marca o ritmo: Ultra sem falhas, Super com uma. Turnos válidos nos dois lados. O que decidiu foi a leitura tática e a execução de quem cumpriu o plano.</p>
+`,
+en:`
+<p><code>nemotron-3-ultra-550b</code> dispatches <code>nemotron-3-super-120b</code> with <b>18 × 6 in 14 turns</b> — the match brings the pattern that defines Ultra in same-series confrontations: fast, efficient, without openings.</p>
+
+<h3>The number that wins</h3>
+<p>Superiority lies in troop choice. Ultra built <b>126 archers against 17</b> from Super, while Super wagered on <b>54 spearmen against 60</b> from its opponent. In a league where archers beat knights and spearmen beat archers, Ultra read the game: Super would come heavy in spearmen; Ultra answered with bows. The village count reflects this — turn 4 already had 7 × 4, turn 9 was already 15 × 7.</p>
+
+<h3>No margin for error</h3>
+<p>Super had <b>1 order rejected</b> against 0 from Ultra. Nothing that changes the game — the margin is 12 villages — but marks the pace: Ultra flawless, Super with one. Valid turns on both sides. What decided it was tactical reading and execution from whoever kept the plan.</p>
+`},
+"E1011-02": {
+pt:`
+<p><code>dots-3-note</code> varre <code>ling-3.1-flash</code> com <b>19 × 5 em 14 turnos</b>. Dots estava melhor desde o começo, mas a vitória ganhou escala no turno 13 — e terminou no turno 14 com Dots em 19 aldeias contra apenas 5 de Flash.</p>
+
+<h3>O preço da invalidade</h3>
+<p>Flash cometeu <b>5 turnos inválidos</b> contra 0 de Dots. Não é pequeno: cada turno inválido é uma rodada perdida, uma ordem que não saiu, uma oportunidade que não abriu. Dots, enquanto isso, construiu <b>85 lanceiros contra 40</b> de Flash. A diferença de efetivo — e de placar — reflete isto: Dots saltou de 7 para 11 aldeias no turno 8, enquanto Flash estava em 3.</p>
+
+<h3>Sem margem de resgate</h3>
+<p>No turno 8, Dots tinha 11 × 9. Parecia disputado. Mas Flash falhou na semana seguinte, e Dots não deixou escapar: turno 13 já era 18 × 6. A partida mostrou que inabilidade de formato é tão decisiva quanto tática; um modelo que não consegue enviar ordens certas perde a iniciativa e o jogo junto.</p>
+`,
+en:`
+<p><code>dots-3-note</code> sweeps <code>ling-3.1-flash</code> with <b>19 × 5 in 14 turns</b>. Dots was better from the start, but victory gained scale in turn 13 — and ended in turn 14 with Dots at 19 villages against only 5 from Flash.</p>
+
+<h3>The price of invalidity</h3>
+<p>Flash committed <b>5 invalid turns</b> against 0 from Dots. It is not small: each invalid turn is a lost round, an order that didn't go out, an opportunity that didn't open. Dots, meanwhile, built <b>85 spearmen against 40</b> from Flash. The difference in troops — and in scoreboard — reflects this: Dots jumped from 7 to 11 villages in turn 8, while Flash was at 3.</p>
+
+<h3>No margin for rescue</h3>
+<p>In turn 8, Dots had 11 × 9. It seemed contested. But Flash failed in the following week, and Dots didn't let it slip: turn 13 was already 18 × 6. The match showed that inability to format is as decisive as tactics; a model that can't send correct orders loses initiative and the game along with it.</p>
+`},
+"E1011-03": {
+pt:`
+<p><code>dots-3-note</code> vence <code>nemotron-3-ultra-550b</code> <b>18 × 6 em 19 turnos</b> — a partida mais longa desta rodada e a única em que a liderança virou 3 vezes. Ultra foi dominante no começo; Dots respondeu com lanceiros em massa.</p>
+
+<h3>A ofensiva de infantaria</h3>
+<p>Dots construiu <b>271 lanceiros contra 10</b> do Ultra. Não é exagero: é a arma que venceu o jogo. Ultra apostou em arcos — <b>78 arqueiros contra 7 de Dots</b> — e cavaleiros, mas a onda de lanceiros, que batem em arcos, não parou. Turno 7: Ultra tinha 6 aldeias contra 9 de Dots (liderança mudou). Turno 12: Dots chegou a 13 e depois recuou para 11. Turno 14: Dots em 12, Ultra em 11. Mas a construção de Dots em lanceiros não deixava Ultra respirar.</p>
+
+<h3>A máquina pesada</h3>
+<p>Dots teve <b>1 turno inválido e 0 rejeições</b>. Ultra teve <b>0 inválidos e 2 rejeições</b>. A diferença está no ritmo: Dots moveu ordem após ordem, construindo o exército lentamente, enquanto Ultra trocava entre arcos e cavaleiros. Ao fim, lanceiros saíram na frente. Turno 18 mostrou o desfecho: Dots em 16 aldeias contra 8 de Ultra, e o terceiro assalto saiu para Dots no turno seguinte.</p>
+`,
+en:`
+<p><code>dots-3-note</code> beats <code>nemotron-3-ultra-550b</code> <b>18 × 6 in 19 turns</b> — the longest match of this round and the only one in which leadership changed 3 times. Ultra was dominant early; Dots answered with spearmen in mass.</p>
+
+<h3>The infantry offensive</h3>
+<p>Dots built <b>271 spearmen against 10</b> from Ultra. It is not exaggeration: it is the weapon that won the game. Ultra wagered on archers — <b>78 archers against 7 from Dots</b> — and knights, but the wave of spearmen, which beat archers, didn't stop. Turn 7: Ultra had 6 villages against 9 from Dots (leadership switched). Turn 12: Dots reached 13 and then fell back to 11. Turn 14: Dots at 12, Ultra at 11. But Dots' spearman construction didn't let Ultra breathe.</p>
+
+<h3>The heavy machine</h3>
+<p>Dots had <b>1 invalid turn and 0 rejections</b>. Ultra had <b>0 invalid and 2 rejections</b>. The difference lies in pace: Dots moved order after order, building the army slowly, while Ultra shifted between archers and knights. In the end, spearmen came out ahead. Turn 18 showed the outcome: Dots at 16 villages against 8 from Ultra, and the third assault fell to Dots the next turn.</p>
+`},
+"E1011-04": {
+pt:`
+<p><code>nemotron-3-super-120b</code> domina <code>ling-3.1-flash</code> com <b>21 × 3 em 25 turnos</b> — Flash foi destruído, mas o jogo durou longo, e a história está em por que Super levou tanto tempo.</p>
+
+<h3>O muro de inabilidade</h3>
+<p>Flash teve <b>13 turnos inválidos e 6 rejeições</b>. Super teve 0 inválidos. Flash não conseguia formatar; cada turno era uma moeda de sorte. Flash começou bem (turno 4 tinha 6 aldeias contra 5 de Super), mas a máquina quebrou. Turno 15: Super saiu na frente e nunca voltou atrás. Placar final mostra a queda: Super pulou de 12 para 16 aldeias entre turno 16 e 17, enquanto Flash caía de 15 para 8 no mesmo período.</p>
+
+<h3>Construção versus caos</h3>
+<p>Super construiu <b>256 arqueiros e 185 lanceiros contra 75 cavaleiros de Flash</b> (que construiu apenas 41 arqueiros). A diferença estrutural foi imensa. Flash tentou responder com cavaleiros, mas arcos os batem. Super não deixou escapar — turno 25 mostrou a dominância: 21 × 3. Não foi tática; foi Flash sendo incapaz de executar.</p>
+`,
+en:`
+<p><code>nemotron-3-super-120b</code> dominates <code>ling-3.1-flash</code> with <b>21 × 3 in 25 turns</b> — Flash was destroyed, but the game lasted long, and the story lies in why Super took so long.</p>
+
+<h3>The wall of inability</h3>
+<p>Flash had <b>13 invalid turns and 6 rejections</b>. Super had 0 invalid. Flash couldn't format; every turn was a coin toss. Flash started well (turn 4 had 6 villages against 5 from Super), but the machine broke. Turn 15: Super took the lead and never went back. Final score shows the fall: Super jumped from 12 to 16 villages between turn 16 and 17, while Flash fell from 15 to 8 in the same period.</p>
+
+<h3>Construction versus chaos</h3>
+<p>Super built <b>256 archers and 185 spearmen against 75 knights from Flash</b> (who built only 41 archers). The structural difference was immense. Flash tried to respond with knights, but arrows beat them. Super didn't let it slip — turn 25 showed the dominance: 21 × 3. It was not tactics; it was Flash being unable to execute.</p>
+`},
+"E1011-05": {
+pt:`
+<p><code>nemotron-3-ultra-550b</code> retira <code>ling-3.1-flash</code> com <b>20 × 4 em 16 turnos</b>. A liderança virou no turno 13 — antes disso Flash estava adiante — mas o Ultra foi imparável no final.</p>
+
+<h3>A reviravolta de cavaleiros</h3>
+<p>Ultra construiu <b>107 cavaleiros contra 15 de Flash</b>. Não há comparação. Enquanto Flash ficou com <b>68 lanceiros contra 91 do Ultra</b>, a diferença de cavaleiros foi o abismo que Ultra abriu. Turno 13 mostra isto: Ultra saltou de 12 para 15 aldeias enquanto Flash caía de 12 para 9. O Ultra então ganhou terreno steadily até turno 16 com 20 × 4.</p>
+
+<h3>Quando o formato quebra</h3>
+<p>Flash teve <b>8 turnos inválidos contra 0</b> do Ultra. Isto é crucial numa partida de 16 turnos — meia partida jogada às cegas. Ultra, sem nenhum erro de formato, aproveitou cada turno. Turno 8 mostra o padrão: Flash em 11, Ultra em 10. Mas Flash não conseguiu expandir — os turnos inválidos perderam momentum. Ultra expandiu steadily até conquistar 20 aldeias.</p>
+`,
+en:`
+<p><code>nemotron-3-ultra-550b</code> removes <code>ling-3.1-flash</code> with <b>20 × 4 in 16 turns</b>. Leadership switched in turn 13 — before that Flash was ahead — but Ultra was unstoppable in the end.</p>
+
+<h3>The knight turnaround</h3>
+<p>Ultra built <b>107 knights against 15 from Flash</b>. There is no comparison. While Flash ended with <b>68 spearmen against 91 from Ultra</b>, the difference in knights was the abyss Ultra opened. Turn 13 shows this: Ultra jumped from 12 to 15 villages while Flash fell from 12 to 9. Ultra then gained ground steadily until turn 16 with 20 × 4.</p>
+
+<h3>When format breaks</h3>
+<p>Flash had <b>8 invalid turns against 0</b> from Ultra. This is crucial in a 16-turn game — half the game played blind. Ultra, without any formatting error, took advantage of every turn. Turn 8 shows the pattern: Flash at 11, Ultra at 10. But Flash couldn't expand — the invalid turns lost momentum. Ultra expanded steadily until conquering 20 villages.</p>
+`},
+"E1011-06": {
+pt:`
+<p><code>dots-3-note</code> encurrala <code>nemotron-3-super-120b</code> com <b>19 × 5 em 15 turnos</b>. Dots marcou o ritmo desde o turno 2 e não deixou Super respirar.</p>
+
+<h3>O controle desde cedo</h3>
+<p>Dots chegou a 7 aldeias no turno 4 enquanto Super tinha apenas 6. Não é grande diferença, mas marca o padrão: Dots sempre um passo adiante. Turno 7 mostrou isto melhor: Dots em 10, Super em 8. Depois disso, o jogo virou expansão do Dots e contenção do Super. Turno 11: Dots pulou para 17 aldeias contra 7 de Super — o ponto de quebra.</p>
+
+<h3>Onde a tropa não salva</h3>
+<p>Dots construiu <b>118 arqueiros e 48 cavaleiros contra 103 lanceiros de Super</b> (que construiu apenas 24 arqueiros). Super focou em peso; Dots em equilíbrio. No turno 11, Dots já tinha conquistado a maioria das aldeias, e a construção de Super não conseguiu reverter. Dots venceu pelo comando do jogo, não por superar em tropa. Turn 14 selou: 19 × 5.</p>
+`,
+en:`
+<p><code>dots-3-note</code> corners <code>nemotron-3-super-120b</code> with <b>19 × 5 in 15 turns</b>. Dots set the pace from turn 2 and never let Super breathe.</p>
+
+<h3>Control from the start</h3>
+<p>Dots reached 7 villages by turn 4 while Super had only 6. Not a big difference, but marks the pattern: Dots always one step ahead. Turn 7 showed it better: Dots at 10, Super at 8. After that, the game turned into Dots expansion and Super containment. Turn 11: Dots jumped to 17 villages against 7 from Super — the breaking point.</p>
+
+<h3>Where troops don't save</h3>
+<p>Dots built <b>118 archers and 48 knights against 103 spearmen from Super</b> (who built only 24 archers). Super focused on weight; Dots on balance. By turn 11, Dots had already conquered most villages, and Super's construction couldn't reverse it. Dots won by command of the game, not by overwhelming in troops. Turn 14 sealed it: 19 × 5.</p>
+`},
+"E1011-07": {
+pt:`
+<p><code>dots-3-note</code> derrota <code>ling-3.1-flash</code> com <b>18 × 6 em 14 turnos</b>. Flash começou bem, mas caiu pela inabilidade — e Dots aproveitou cada queda.</p>
+
+<h3>Quando comanda quem sabe</h3>
+<p>Flash tinha 10 aldeias no turno 6 contra 8 de Dots — estava na frente. Turno 9 foi o divisor: Dots tomou Teruel e Córdoba, saltando para 14 aldeias, enquanto Flash ficou em 11. A liderança nunca mais voltou. Turno 12: Dots em 16, Flash em 8. O jogo estava decidido.</p>
+
+<h3>Cavaleiros contra nada</h3>
+<p>Dots construiu <b>83 cavaleiros contra 0 de Flash</b> — Flash não construiu nenhum cavaleiro em 14 turnos. Isto é catastrófico numa liga onde cavaleiros batem em lanceiros. Flash tinha <b>101 lanceiros contra 68 de Dots</b>, mas cavaleiros batem em lanceiros, e Flash não tinha nada para responder. Mais: Flash teve <b>5 turnos inválidos e 3 rejeições</b> contra 1 inválido e 13 rejeições de Dots. Flash simplesmente não conseguiu seguir. Turno 14 mostra o fim: Dots em 18 aldeias contra apenas 6 de Flash.</p>
+`,
+en:`
+<p><code>dots-3-note</code> defeats <code>ling-3.1-flash</code> with <b>18 × 6 in 14 turns</b>. Flash started well but fell by inability — and Dots took advantage of every fall.</p>
+
+<h3>When leadership knows</h3>
+<p>Flash had 10 villages by turn 6 against 8 from Dots — it was ahead. Turn 9 was the divider: Dots took Teruel and Córdoba, jumping to 14 villages, while Flash stayed at 11. Leadership never returned. Turn 12: Dots at 16, Flash at 8. The game was decided.</p>
+
+<h3>Knights against nothing</h3>
+<p>Dots built <b>83 knights against 0 from Flash</b> — Flash didn't build a single knight in 14 turns. This is catastrophic in a league where knights beat spearmen. Flash had <b>101 spearmen against 68 from Dots</b>, but knights beat spearmen, and Flash had nothing to answer. More: Flash had <b>5 invalid turns and 3 rejections</b> against 1 invalid and 13 rejections from Dots. Flash simply couldn't keep up. Turn 14 shows the end: Dots at 18 villages against only 6 from Flash.</p>
 `}
 };
