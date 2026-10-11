@@ -210,6 +210,8 @@
   body.limpo #cinemaCtl, body.limpo #hoverTip, body.limpo #cartaoFinal {
     display: none !important;
   }
+  /* a gravacao quadro a quadro (?gravar=1) nao leva o contador de afinacao */
+  body.gravando #fps3d { display: none !important; }
   #zlimpo.on { background: linear-gradient(#c08a3e, #7a5220); }
 
   /* ===== MODO CINEMA: esconde o chrome de dev p/ gravar ===== */
@@ -904,6 +906,8 @@
 <script src="marcas.js"></script>
 <!-- a unica porta entre a partida e o desenho -->
 <script src="ponte3d.js"></script>
+<!-- a camera por roteiro (keyframes), funcoes puras -->
+<script src="camera-roteiro.js"></script>
 <!-- um so cliente de OpenRouter, partilhado com o runner (22/09) -->
 <script src="clienteor.js"></script>
 <script>
@@ -1086,6 +1090,7 @@
     if (!M3D) return;
     try { empurrarPara3D(); }
     catch (e) { if (!erro3D) { erro3D = e; console.error("ponte 3D:", e); } }
+    if (roteiro) aplicarRoteiroAgora();   // camera por roteiro (so com ?roteiro=)
   }
 
   // ===== O MAPA ============================================================
@@ -1250,6 +1255,7 @@
         // corre sem mapa -- que e o que os smokes sempre precisaram: o motor, o
         // HUD e o log, sem desenho nenhum.
         console.error("mapa 3d nao carregou:", e);
+        if (!erro3D) erro3D = e;   // quem espera o mapa (?gravar=1) falha logo, em vez de esperar
         if (typeof alert === "function")
           alert("o mapa 3D nao carregou (ver a consola). "
               + "Nao ha mapa de reserva: " + e);
@@ -1906,18 +1912,31 @@
     const rd = new FileReader();
     rd.onload = () => {
       try {
-        const dados = JSON.parse(rd.result);
-        if (!dados.frames || !dados.frames.length) throw new Error("replay vazio");
-        pause();
-        if (!game) game = Engine.criarEstadoInicial(Engine.CONFIG);
-        // capitais do replay: aldeias com dono no primeiro frame gravado
-        capitalIds = new Set(dados.frames[0].aldeias.filter((a) => a.dono !== null).map((a) => a.id));
-        rep = { dados, idx: 0 };
-        const meuRun = ++runId;
-        runReplay(meuRun);
+        carregarReplayDados(JSON.parse(rd.result));
       } catch (e) { alert("Replay invalido: " + e.message); }
     };
     rd.readAsText(file);
+  }
+
+  // O que vem DEPOIS de ler o JSON: o botao "carregar replay" e o `?replay=` da
+  // URL passam os dois por aqui. `opcoes.inicio` = turno por onde comecar;
+  // `opcoes.gravar` = modo quadro a quadro (ver `prepararGravacao`), sem runReplay.
+  function carregarReplayDados(dados, opcoes) {
+    const o = opcoes || {};
+    if (!dados.frames || !dados.frames.length) throw new Error("replay vazio");
+    pause();
+    if (!game) game = Engine.criarEstadoInicial(Engine.CONFIG);
+    // capitais do replay: aldeias com dono no primeiro frame gravado
+    capitalIds = new Set(dados.frames[0].aldeias.filter((a) => a.dono !== null).map((a) => a.id));
+    rep = { dados, idx: 0 };
+    if (o.inicio != null) {
+      const i = dados.frames.findIndex((f) => f.turno >= o.inicio);
+      rep.idx = i < 0 ? dados.frames.length - 1 : i;
+    }
+    rep.inicioIdx = rep.idx;   // t = 0 do roteiro
+    const meuRun = ++runId;
+    if (o.gravar) prepararGravacao();
+    else runReplay(meuRun);
   }
 
   function baixarReplay() {
@@ -2061,6 +2080,7 @@
   // metros e a mesma do caderno de marcas -- calibrada por duas aldeias
   // medidas, nunca por constantes copiadas do exportador.
   function apontarCamera(cx, cy, aproximar) {
+    if (roteiro) return;                   // a camera e do roteiro
     if (emReplay && !camAuto) return;      // usuario esta no comando
     if (!M3D) return;
     const m = vbParaMetros(cx, cy);
@@ -2069,10 +2089,138 @@
                                saltar: !!REDUZ_MOV });
   }
 
+  // ===== CAMERA POR ROTEIRO + GRAVACAO QUADRO A QUADRO (camera-roteiro.js) =====
+  // O roteiro (keyframes) manda na camera: a pose sai SO do tempo do replay
+  // (turno + fracao x segundos por turno), nunca do relogio real -- e e isso que
+  // faz duas gravacoes darem o mesmo filme. Tudo o que e gravacao fica atras de
+  // `?gravar=1`; o replay normal nao muda.
+  //   ?replay=<caminho>          abre esse replay sozinho
+  //   ?roteiro=<roteiro.json | JSON em base64url>
+  //   ?gravar=1                  modo quadro a quadro: window.gravarQuadro(n)
+  //   ?inicio=<turno>  ?segPorTurno=<s> (por omissao 2)
+  // `var`: o draw() corre antes destas linhas
+  var roteiro = null;
+  var modoGravar = false;
+  const FPS_GRAVACAO = 30;
+  let segPorTurno = 2;
+  let _linha = null;   // { dados, off[], dur[], inicioIdx, total }
+
+  // linha do tempo: o quadro k anima do quadro k ao k+1, e dura
+  // segPorTurno x (plano.duracao dos combates do SEGUINTE, senao 1) -- a mesma
+  // regra do runReplay/encontrosPorVir. Conta-se desde o quadro inicial.
+  function linhaDoTempo() {
+    if (_linha && _linha.dados === rep.dados && _linha.seg === segPorTurno && _linha.inicioIdx === rep.inicioIdx) return _linha;
+    const fs = rep.dados.frames, off = [], dur = [];
+    let acc = 0;
+    const ini = rep.inicioIdx || 0;
+    for (let k = ini; k < fs.length; k++) {
+      let mult = 1;
+      const prox = fs[k + 1];
+      if (prox && prox.eventos && typeof Ponte3D !== "undefined" && Ponte3D && Ponte3D.planoDoTurno) {
+        const lista = prox.eventos.filter((e) => e.tipo === "combate_estrada" && e.sEncontro != null);
+        if (lista.length) mult = Ponte3D.planoDoTurno(lista).duracao || 1;
+      }
+      off[k] = acc; dur[k] = segPorTurno * mult; acc += dur[k];
+    }
+    _linha = { dados: rep.dados, seg: segPorTurno, inicioIdx: ini, off, dur, total: acc };
+    return _linha;
+  }
+  // t (s) do replay agora: quadro atual + fracao
+  function tempoDoReplay() {
+    const L = linhaDoTempo();
+    const k = Math.min(Math.max(L.inicioIdx, rep.idx - 1), rep.dados.frames.length - 1);
+    return L.off[k] + Math.min(1, Math.max(0, repFrac)) * L.dur[k];
+  }
+  const _semAcento = (s) => String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+  // aldeia (slug, id ou nome) -> metros do mundo 3D; z = -y do mapa
+  function resolverAlvoRoteiro(a) {
+    const MA = M3D.MAPA.aldeias;
+    let slug = MA[a] ? a : null;
+    if (!slug) {
+      const q = _semAcento(a);
+      const al = (game.aldeias || []).find((x) =>
+        String(x.id) === String(a) || _semAcento(x.nome || "") === q || _semAcento(x.slug || "") === q);
+      if (al && MA[al.slug]) slug = al.slug;
+      if (!slug) slug = Object.keys(MA).find((s) => _semAcento(s) === q) || null;
+    }
+    if (!slug) return null;
+    const m3 = MA[slug];
+    return [m3.p[0], m3.z || 0, -m3.p[1]];
+  }
+  // poe a camera na pose. O amortecimento desliga-se POR UM PASSO (o mesmo truque
+  // do enquadrarGravacao): senao a camera leva ~2 s a assentar e a pose nao vale ja.
+  function aplicarPoseCamera(pose) {
+    M3D.ctrl.target.set(pose.alvo[0], pose.alvo[1], pose.alvo[2]);
+    M3D.cam.position.set(pose.posicao[0], pose.posicao[1], pose.posicao[2]);
+    const tinha = M3D.ctrl.enableDamping;
+    M3D.ctrl.enableDamping = false;
+    M3D.ctrl.update();
+    M3D.ctrl.enableDamping = tinha;
+  }
+  var _erroRoteiro = false;
+  function aplicarRoteiroAgora() {
+    if (!roteiro || !M3D || !rep || !emReplay) return;
+    try {
+      aplicarPoseCamera(CameraRoteiro.poseNoTempo(roteiro, tempoDoReplay(), resolverAlvoRoteiro));
+    } catch (e) {
+      if (!_erroRoteiro) { _erroRoteiro = true; console.error("roteiro:", e); window.erroGravacao = String(e.message || e); }
+    }
+  }
+  function ligarRoteiro(r) {
+    if (typeof CameraRoteiro === "undefined") throw new Error("camera-roteiro.js nao carregou");
+    roteiro = CameraRoteiro.validarRoteiro(r);
+    camAuto = false;
+    const g = document.getElementById("grepCam");
+    if (g) g.classList.remove("ativo");
+    if (M3D) M3D.seguirBatalhas(false);
+  }
+
+  // ----- gravacao quadro a quadro -----
+  let _quadroAplicado = -1, _ultimoQuadro = -1;
+  function prepararGravacao() {
+    modoGravar = true;
+    emReplay = true;
+    playing = false;
+    // cinema + limpo, SEM pedir tela cheia (nao ha gesto num navegador sem janela)
+    document.body.classList.add("replay", "cinema", "limpo", "gravando");
+    limparFeeds();
+    limparBanners();
+    camAuto = false;
+    rep.inicioIdx = rep.idx;
+    _quadroAplicado = rep.idx - 1;
+    _ultimoQuadro = -1;
+    window.duracaoGravacao = linhaDoTempo().total;
+  }
+  window.gravarQuadro = async function (n) {
+    if (!modoGravar) throw new Error("gravarQuadro: abra a pagina com ?gravar=1");
+    await window.gravacaoPronta;
+    n = Math.floor(n);
+    if (!(n >= 0)) throw new Error("gravarQuadro: n invalido");
+    if (n < _ultimoQuadro)
+      throw new Error("recarregue a pagina: gravarQuadro so anda para a frente (pediu " + n + " depois de " + _ultimoQuadro + ")");
+    _ultimoQuadro = n;
+    const L = linhaDoTempo(), fr = rep.dados.frames;
+    const t = n / FPS_GRAVACAO;
+    let k = L.inicioIdx;
+    while (k + 1 < fr.length && L.off[k + 1] <= t) k++;
+    // os turnos que faltam, por ordem (so para a frente)
+    for (let j = _quadroAplicado + 1; j <= k; j++) {
+      rep.idx = j;
+      aplicarFrame(fr[j]);
+      rep.idx = j + 1;
+      _quadroAplicado = j;
+    }
+    repFrac = Math.min(1, Math.max(0, (t - L.off[k]) / L.dur[k]));
+    draw();                       // empurra para o mapa e aplica a pose do roteiro
+    if (M3D) M3D.avancar(1000 / FPS_GRAVACAO);   // tropas, mar, batalhas: um passo fixo
+    return { n, t, turno: game.turno, repFrac };
+  };
+
   // ===== BANNERS DE EVENTO (fila; um de cada vez) =====
   const filaBanner = [];
   let bannerAtivo = false;
   function mostrarBanner(txt, cor, prioridade) {
+    if (modoGravar) return;   // vao por setTimeout real: o filme sairia diferente
     // fila curta: banner atrasado e banner errado. Sem prioridade, cai
     // primeiro quando a fila enche; com fila cheia, o mais velho sai.
     if (filaBanner.length >= 3) {
@@ -3630,6 +3778,78 @@
 
   // ---------- Início ----------
   novaPartida();
+
+  // ---------- Replay / roteiro / gravacao pela URL (ver o bloco da camera por roteiro) ----------
+  // base64url -> texto UTF-8
+  function _b64urlTexto(s) {
+    s = s.replace(/-/g, "+").replace(/_/g, "/");
+    while (s.length % 4) s += "=";
+    const bin = atob(s), u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(u8);
+  }
+  async function iniciarPorURL() {
+    let q;
+    try { q = new URLSearchParams((window.location && window.location.search) || ""); } catch (e) { return; }
+    if (!q.has("replay") && !q.has("roteiro") && !q.has("gravar")) return;
+    const gravar = q.get("gravar") === "1";
+    let pronta = null;
+    if (gravar) {
+      modoGravar = true;
+      window.gravacaoPronta = new Promise((res, rej) => { pronta = { res, rej }; });
+      window.gravacaoPronta.catch(() => {});   // o erro chega a quem espera; sem aviso de "nao tratado"
+    }
+    try {
+      if (q.has("segPorTurno")) {
+        const v = parseFloat(q.get("segPorTurno"));
+        if (isFinite(v) && v > 0) segPorTurno = v;
+      }
+      // roteiro: caminho de .json ou o JSON em base64url
+      let r = null;
+      if (q.has("roteiro")) {
+        const v = q.get("roteiro");
+        if (/\.json$/i.test(v)) {
+          const resp = await fetch(v);
+          if (!resp.ok) throw new Error("roteiro: HTTP " + resp.status + " em " + v);
+          r = await resp.json();
+        } else r = JSON.parse(_b64urlTexto(v));
+        ligarRoteiro(r);
+      }
+      if (q.has("replay")) {
+        const resp = await fetch(q.get("replay"));
+        if (!resp.ok) throw new Error("replay: HTTP " + resp.status + " em " + q.get("replay"));
+        const dados = await resp.json();
+        const ini = q.has("inicio") ? parseInt(q.get("inicio"), 10) : null;
+        carregarReplayDados(dados, { inicio: isFinite(ini) ? ini : null, gravar });
+      } else if (gravar) throw new Error("?gravar=1 precisa de ?replay=");
+      if (gravar) {
+        // espera o mapa 3D
+        const t0 = Date.now();
+        while (!M3D) {
+          if (Date.now() - t0 > 120000) throw new Error("o mapa 3D nao carregou em 120 s");
+          if (erro3D) throw erro3D;
+          await new Promise((s) => setTimeout(s, 50));
+        }
+        M3D.pausarLaco(true);                         // quem avanca e o gravarQuadro
+        M3D.fixarMsPorTurno(segPorTurno * 1000);      // o turno dura o que o roteiro diz
+        M3D.ctrl.enableDamping = false;               // a pose vale ja
+        M3D.seguirBatalhas(false);
+        if (roteiro) {
+          // aldeias que nao existem: falha ja, e nao a meio do filme
+          for (const k of roteiro.keyframes)
+            if (!Array.isArray(k.alvo) && !resolverAlvoRoteiro(k.alvo))
+              throw new Error("roteiro: aldeia desconhecida '" + k.alvo + "'");
+        } else enquadrarGravacao();                   // sem roteiro: o plano geral fixo
+        pronta.res(true);
+      }
+    } catch (e) {
+      console.error("iniciarPorURL:", e);
+      window.erroGravacao = String(e && e.message || e);
+      if (pronta) pronta.rej(e);
+      else if (typeof alert === "function") alert("URL: " + window.erroGravacao);
+    }
+  }
+  iniciarPorURL();
 
 
 })();
