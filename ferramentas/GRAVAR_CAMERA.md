@@ -81,7 +81,12 @@ A gravação **só anda para a frente** — recarregue a página para voltar ao 
 
 ## Tempos medidos
 
-TEMPOS: (preencher)
+Medidos em 11/10/2026 (Edge sem janela, WebGL pela GPU da máquina; a flag `predefinido` bastou, sem `--use-angle` nem SwiftShader):
+
+- 1920×1080: ~2,2 s por quadro; 8 s = 240 quadros em ~9 min.
+- 1080×1920: ~2,1 s por quadro; 8 s = 240 quadros em ~8,5 min.
+- `--formato ambos` grava um formato de cada vez (o Edge fecha entre eles): ~17 min no total.
+- Repetida, a gravação dá quadros quase iguais (PSNR > 73 dB entre duas corridas; não são bit a bit).
 
 ## Limitações
 
