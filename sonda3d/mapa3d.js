@@ -1813,11 +1813,15 @@ diffuseColor.a *= vAlfa;`);
   // Entao mede-se: quanto tempo levou o ultimo turno? E a marcha espalha-se
   // por esse tempo. Ninguem tem de configurar nada.
   let msPorTurno = 4000, turnoAnterior = null, marcadoEm = 0;
+  // na gravacao quadro a quadro o turno nao dura o que o relogio da parede diz
+  // (os turnos viram em milissegundos): `fixarMsPorTurno` poe-no a mao
+  let msFixo = null;
   // o relogio do replay (turno + fracao), que o jogo manda em `atualizar`; e
   // nele que a cena de batalha se mede (23/09). null ao vivo e nas bancadas.
   let relogioJogo = null;
   function relogioDoTurno(turno) {
     if (turno === turnoAnterior) return;
+    if (msFixo) { msPorTurno = msFixo; turnoAnterior = turno; return; }
     const agora = performance.now();
     if (turnoAnterior !== null && marcadoEm)
       msPorTurno = Math.max(400, Math.min(60000, agora - marcadoEm));
@@ -2421,6 +2425,9 @@ diffuseColor.a *= vAlfa;`);
   // ── o laco ──────────────────────────────────────────────────────────────
   let relogio = 0, parado = false, ultimo = performance.now();
   let quadros = 0, fps = 0, vivo = true;
+  // gravacao quadro a quadro: o rAF continua vivo mas o laco nao avanca; quem
+  // grava chama `avancar` a passo fixo (ver index.html, `gravarQuadro`)
+  let lacoPausado = false;
   function tamanho() {
     // ⚠ UM ECRA DE ZERO POR ZERO ENVENENA A CAMARA. `aspect = 0/0` e NaN, a
     // matriz de projecao fica NaN, e a partir dai TUDO o que se projeta sai
@@ -2497,6 +2504,7 @@ diffuseColor.a *= vAlfa;`);
     // sem isto as tropas teleportavam-se meio mapa ao voltar
     const dt = Math.min(agora - ultimo, 100);
     ultimo = agora;
+    if (lacoPausado) return;
     avancar(dt);
   }
   setInterval(() => { fps = quadros * 2; quadros = 0; }, 500);
@@ -2509,6 +2517,11 @@ diffuseColor.a *= vAlfa;`);
     cena, cam, ctrl, rend, MAPA, THREE,
     // um quadro a passo FIXO, para gravar video (ver `avancar`)
     avancar,
+    // interruptor do laco: com `pausarLaco(true)` o rAF corre mas nao avanca
+    pausarLaco(v) { lacoPausado = v === undefined ? !lacoPausado : !!v; return lacoPausado; },
+    laco(v) { lacoPausado = !(v === undefined ? lacoPausado : !!v); return !lacoPausado; },
+    // duracao do turno em ms, fixa (null volta a medir pelo relogio)
+    fixarMsPorTurno(ms) { msFixo = ms > 0 ? ms : null; if (msFixo) msPorTurno = msFixo; },
     get fps() { return fps; },
     get pecas() { return nInst; },
     get triangulos() { return nTri; },
