@@ -958,5 +958,62 @@ en:`
 
 <h3>Knights against nothing</h3>
 <p>Dots built <b>83 knights against 0 from Flash</b> — Flash didn't build a single knight in 14 turns. This is catastrophic in a league where knights beat spearmen. Flash had <b>101 spearmen against 68 from Dots</b>, but knights beat spearmen, and Flash had nothing to answer. More: Flash had <b>5 invalid turns and 3 rejections</b> against 1 invalid and 13 rejections from Dots. Flash simply couldn't keep up. Turn 14 shows the end: Dots at 18 villages against only 6 from Flash.</p>
+`},
+"E1012-01": {
+pt:`
+<p>O <code>nemotron-3-ultra-550b-a55b</code> fechou em <b>19 × 5 no turno 13</b>, dominando a <code>nemotron-3.5-lightning</code> sem nunca estar atrás. A partida decide-se no turno 2: o Ultra já tinha Tarragona e Girona enquanto a Lightning não tinha nenhuma aldeia.</p>
+
+<h3>A força dos arcos</h3>
+<p>O Ultra construiu <b>104 arqueiros contra 3 lanceiros e 40 cavaleiros</b>. A Lightning construiu 17 lanceiros, 21 arqueiros e 11 cavaleiros — uma mistura que não acompanhou a especialização do Ultra. No turno 9, o Ultra já tinha 15 aldeias; a Lightning tinha 5. No turno 13, enquanto a Lightning perdia Porto e Evora, o Ultra tomava Tarragona, Girona, Zaragoza, Castellon, Huesca, Valencia, Toledo, Murcia, Burgos, Salamanca, Cordoba — onze aldeias neutras em treze turnos.</p>
+
+<h3>A precisão contra a rejeição</h3>
+<p>O Ultra teve <b>1 ordem rejeitada em 13 turnos</b>; a Lightning teve 5. No turno 13, a Lightning fala de "desenvolvimento económico e construção de exército". O Ultra fala de: "Faro toma Evora, Badajoz toma Santarem, cavaleiros de Porto destroem Coimbra, arcos inundam Madrid e Badajoz". A diferença é entre reação e plano.</p>
+`,
+en:`
+<p>The <code>nemotron-3-ultra-550b-a55b</code> closed at <b>19 × 5 on turn 13</b>, dominating <code>nemotron-3.5-lightning</code> without ever trailing. The match decides itself on turn 2: Ultra already held Tarragona and Girona while Lightning held none.</p>
+
+<h3>The strength of archers</h3>
+<p>Ultra built <b>104 archers against 3 spearmen and 40 knights</b>. Lightning built 17 spearmen, 21 archers, and 11 knights — a mix that did not match Ultra's specialization. By turn 9, Ultra held 15 villages; Lightning held 5. By turn 13, as Lightning lost Porto and Evora, Ultra took Tarragona, Girona, Zaragoza, Castellon, Huesca, Valencia, Toledo, Murcia, Burgos, Salamanca, and Cordoba — eleven neutral villages in thirteen turns.</p>
+
+<h3>Precision against rejection</h3>
+<p>Ultra had <b>1 rejected order in 13 turns</b>; Lightning had 5. On turn 13, Lightning speaks of "economic development and army building." Ultra speaks thus: "Faro takes Evora, Badajoz takes Santarem, Porto's knights crush Coimbra, archers flood Madrid and Badajoz." The difference is between reaction and plan.</p>
+`},
+"E1012-02": {
+pt:`
+<p>O <code>nemotron-3-super-120b-a12b</code> venceu em <b>21 turnos, 19 × 2</b>, a partida mais longa entre a Lightning e um modelo novo desta noite. A Lightning ficou presa com <b>27 ordens rejeitadas</b> — um padrão que sugere desajuste entre estratégia e formato.</p>
+
+<h3>Lançeiros demais, arcos de menos</h3>
+<p>A Lightning construiu <b>32 lanceiros, 8 arqueiros e 1 cavaleiro</b>. O Super construiu 143 lanceiros, 30 arqueiros e 89 cavaleiros. A Lightning investiu em massa de lanceiros mas sem suporte de arcos — o inverso da partida anterior. No turno 15, a Lightning tomou Santarem, Badajoz e Evora, mas o Super já tinha 12 aldeias. Na volta, o Super atacou Coimbra no turno 18 e manteve a pressão até 19 aldeias.</p>
+
+<h3>O formato quebrou a Lightning</h3>
+<p>27 rejeições em 21 turnos é sinal de que a Lightning mandava ordens que o simulador não processava — talvez simultaneidade demais, talvez tamanho de grupo. O Super, com apenas <b>3 rejeições</b>, manteve uma cadência que o jogo aceitava. No turno 21, a Lightning fala de retomar Santarem. O Super fala de reforçar Santarem com cavaleiros e atacar Vigo e Sevilha — já tinha tomado a iniciativa.</p>
+`,
+en:`
+<p>The <code>nemotron-3-super-120b-a12b</code> won in <b>21 turns, 19 × 2</b>, the longest match between Lightning and a new model tonight. Lightning became stuck with <b>27 rejected orders</b> — a pattern suggesting misalignment between strategy and format.</p>
+
+<h3>Too many spearmen, too few archers</h3>
+<p>Lightning built <b>32 spearmen, 8 archers, and 1 knight</b>. Super built 143 spearmen, 30 archers, and 89 knights. Lightning invested in spearmen mass but without archer support — the inverse of the previous match. On turn 15, Lightning took Santarem, Badajoz, and Evora, but Super already held 12 villages. In return, Super attacked Coimbra on turn 18 and maintained pressure to 19 villages.</p>
+
+<h3>The format broke Lightning</h3>
+<p>27 rejections in 21 turns signals that Lightning sent orders the simulator could not process — perhaps too much simultaneity, perhaps group size. Super, with only <b>3 rejections</b>, maintained a cadence the game accepted. On turn 21, Lightning speaks of retaking Santarem. Super speaks of reinforcing Santarem with knights and attacking Vigo and Sevilha — already held the initiative.</p>
+`},
+"E1012-03": {
+pt:`
+<p>O <code>dots-3-note-preview</code> venceu em <b>19 × 5 no turno 17</b>, com <b>zero ordens rejeitadas</b> — enquanto <code>nemotron-3.5-lightning</code> acumulou 7. A partida mostra a Dots a fazer o oposto: construiu <b>290 lanceiros contra 111 da Lightning</b> e manteve precisão total.</p>
+
+<h3>Massa de lançeiros como estratégia</h3>
+<p>A Dots começou a expandir no turno 2 (Tarragona, Girona) e manteve o ritmo. A Lightning pegou em Santarem, Coimbra e Porto, mas a Dots tomou o resto: Castellon, Huesca, Zaragoza, Valencia, Murcia, Madrid, Teruel, Pamplona, Toledo, Cordoba. No turno 8, a Lightning conseguiu retomar Madrid, mas perdeu-a novamente. Até ao turno 17, a Dots tinha 19 aldeias; a Lightning tinha 5.</p>
+
+<h3>Zero rejeições, uma vantagem clara</h3>
+<p>A Dots teve <b>zero ordens rejeitadas em 17 turnos</b>. Cada comando foi aceite, cada aldeia construiu, cada tropa saiu na hora. A Lightning teve <b>7 rejeições</b> — erros de cadência que a derrotaram. A Lightning, no turno 17, diz que vai contra-atacar. A Dots diz que "o laço aperta: Cordoba toma Sevilha e Badajoz toma Faro no mesmo turno, varrendo o sul do tabuleiro". Não há resposta a esse nível de controlo.</p>
+`,
+en:`
+<p>The <code>dots-3-note-preview</code> won at <b>19 × 5 on turn 17</b>, with <b>zero rejected orders</b> — while <code>nemotron-3.5-lightning</code> accumulated 7. The match shows Dots doing the opposite: it built <b>290 spearmen against Lightning's 111</b> and maintained total precision.</p>
+
+<h3>Spearmen mass as strategy</h3>
+<p>Dots began expanding on turn 2 (Tarragona, Girona) and maintained momentum. Lightning took Santarem, Coimbra, and Porto, but Dots took the rest: Castellon, Huesca, Zaragoza, Valencia, Murcia, Madrid, Teruel, Pamplona, Toledo, Cordoba. On turn 8, Lightning retook Madrid, but lost it again. By turn 17, Dots held 19 villages; Lightning held 5.</p>
+
+<h3>Zero rejections, a clear advantage</h3>
+<p>Dots had <b>zero rejected orders in 17 turns</b>. Every command was accepted, every village built, every unit moved on time. Lightning had <b>7 rejections</b> — cadence errors that defeated it. On turn 17, Lightning speaks of counter-attacking. Dots speaks thus: "the noose tightens: Cordoba takes Sevilha and Badajoz takes Faro in the same turn, wiping the south from the board." There is no answer to that level of control.</p>
 `}
 };
