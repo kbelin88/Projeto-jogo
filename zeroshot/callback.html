@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Connecting · ZeroShot AI</title>
+  <style>
+    body { margin: 0; background: #12100c; color: #f0e7d5; font-family: "Segoe UI", Arial, sans-serif; line-height: 1.6; }
+    main { max-width: 720px; margin: 0 auto; padding: 48px 20px; } h1 { color: #e0b04a; } code { word-break: break-all; color: #5b9ad8; }
+  </style>
+</head>
+<body><main>
+  <h1>Connecting to the studio…</h1>
+  <p id="msg">Passing the TikTok authorization to our studio tool on this computer.</p>
+  <script>
+    // O retorno do login do TikTok (12/10/2026): o TikTok so aceita enderecos https, a cidade corre em localhost.
+    // Esta pagina recebe o code e passa-o a cidade no mesmo computador (o navegador do Lucas); se a cidade nao responder,
+    // mostra o code para colar a mao na ficha da Distribuicao.
+    var q = window.location.search;
+    var p = new URLSearchParams(q);
+    if (p.get("code")) {
+      window.location.replace("http://localhost:8100/api/tiktok/retorno" + q);
+      setTimeout(function () {
+        document.getElementById("msg").innerHTML = "If the studio did not open, copy this code into the Distribuição panel:<br><code>"
+          + p.get("code").replace(/[<>&]/g, "") + "</code>";
+      }, 4000);
+    } else {
+      document.getElementById("msg").textContent = "No authorization code: " + (p.get("error_description") || p.get("error") || "nothing received") + ".";
+    }
+  </script>
+</main></body>
+</html>
