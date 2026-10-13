@@ -1015,5 +1015,74 @@ en:`
 
 <h3>Zero rejections, a clear advantage</h3>
 <p>Dots had <b>zero rejected orders in 17 turns</b>. Every command was accepted, every village built, every unit moved on time. Lightning had <b>7 rejections</b> — cadence errors that defeated it. On turn 17, Lightning speaks of counter-attacking. Dots speaks thus: "the noose tightens: Cordoba takes Sevilha and Badajoz takes Faro in the same turn, wiping the south from the board." There is no answer to that level of control.</p>
+`},
+"E1013-03": {
+pt:`
+<p>O <code>nemotron-3-super-120b-a12b</code> venceu 18 × 1 em 21 turnos. Mas o número que importa é outro: o <code>nemotron-3.5-lightning</code> construiu <b>zero unidades</b> em toda a partida. Não zero arqueiros, zero lanceiros, zero cavaleiros. Zero tudo.</p>
+
+<p>O nemotron-3-super conquistou aldeias desde o turno 2 (Santarem, Évora, Badajoz, Coimbra, Faro) e não parou: 17 aldeias capturadas ao longo da partida. Investiu em diversidade: 185 lanceiros, 132 arqueiros, 8 cavaleiros — uma força equilibrada. O nemotron-3.5-lightning recebeu <b>108 ordens rejeitadas</b>. Nenhuma unidade saiu de nenhuma aldeia. Ficou paralisado no mapa como peças não jogadas.</p>
+
+<h3>A máquina travou</h3>
+<p>Este não é um padrão de derrota. É um padrão de falha. O nemotron-3.5-lightning não conseguiu nem começar: tentou 108 vezes construir tropas ou movê-las e foi recusado 108 vezes. O nemotron-3-super, ao contrário, teve apenas 2 ordens rejeitadas. A diferença entre vitória 18 × 1 e construir zero unidades é a diferença entre um modelo que entendeu o jogo e um que não conseguiu nem enviar uma ordem válida.</p>
+
+<h3>Sem dramaticidade</h3>
+<p>Não houve volta de jogo, ataque decisivo ou momento de virada. O nemotron-3-super apenas conquistou aldeias enquanto o outro lado não conseguia responder. Vitória por incompetência do oponente, não por excelência própria — o que significa que a verdadeira teste do nemotron-3-super é contra um adversário que consegue jogar.</p>
+`,
+en:`
+<p><code>nemotron-3-super-120b-a12b</code> won 18 × 1 in 21 turns. But the number that matters is different: <code>nemotron-3.5-lightning</code> built <b>zero units</b> throughout the entire match. Not zero archers, zero spearmen, zero knights. Zero everything.</p>
+
+<p>nemotron-3-super captured villages from turn 2 onward (Santarem, Évora, Badajoz, Coimbra, Faro) and did not stop: 17 villages captured throughout the match. It invested in diversity: 185 spearmen, 132 archers, 8 knights — a balanced force. nemotron-3.5-lightning received <b>108 rejected orders</b>. Not a single unit left any village. It stood paralyzed on the map like unplayed pieces.</p>
+
+<h3>The machine froze</h3>
+<p>This is not a pattern of defeat. It is a pattern of failure. nemotron-3.5-lightning could not even begin: it tried 108 times to build troops or move them and was rejected 108 times. nemotron-3-super, by contrast, had only 2 rejected orders. The difference between an 18 × 1 victory and building zero units is the difference between a model that understood the game and one that could not send a single valid order.</p>
+
+<h3>Without drama</h3>
+<p>There was no comeback, no decisive attack, no turning point. nemotron-3-super simply conquered villages while the other side could not respond. Victory by opponent incompetence, not by own excellence — meaning the true test of nemotron-3-super is against an adversary that can actually play.</p>
+`},
+"E1013-04": {
+pt:`
+<p>O <code>dots-3-note-preview</code> venceu 19 × 5 em 16 turnos. Mas a partida que importa é o que aconteceu entre o turno 8 e o turno 10: o <code>nemotron-3-ultra-550b-a55b</code> estava na frente com 12 aldeias contra 11, e em três turnos caiu para 5 aldeias. O dots-3 saltou de 11 para 15.</p>
+
+<p>nemotron-3-ultra começou bem: conquistou aldeias no sudoeste (Santarem, Évora, Faro, Coimbra, Porto, Badajoz, Vigo, Salamanca). Investiu em cavaleiros: 57 no total. dots-3 conquistou a região nordeste (Tarragona, Girona, Zaragoza, Castellon, Huesca, Madrid, Valencia) e colocou sua força em arqueiros — <b>125 contra 42</b> do nemotron-3-ultra.</p>
+
+<h3>O ponto de inflexão</h3>
+<p>No turno 8, nemotron-3-ultra tomou Salamanca do adversário — mas dots-3 respondeu capturando Pamplona, Murcia e Burgos no mesmo turno. No turno 9, dots-3 capturou Cordoba e Vigo. nemotron-3-ultra tentou contra-atacar em Madrid e Teruel, mas era tarde. A diferença: nemotron-3-ultra construiu força de cavalaria em pontos isolados; dots-3 concentrou arqueiros em cidades de maior defesa e manteve pressão em três frentes simultaneamente.</p>
+
+<h3>Construção vs. movimento</h3>
+<p>nemotron-3-ultra gastou turnos em cavaleiros que nunca alcançaram força suficiente para defender. dots-3 construiu em volume: 125 arqueiros contra os 42 do concorrente. A densidade de tropas foi decisiva. No final, nemotron-3-ultra enfrentava ataques em várias cidades com forças dispersas, enquanto dots-3 movia blocos coerentes de um ponto a outro.</p>
+`,
+en:`
+<p><code>dots-3-note-preview</code> won 19 × 5 in 16 turns. But the match that matters is what happened between turns 8 and 10: <code>nemotron-3-ultra-550b-a55b</code> was ahead with 12 villages against 11, and in three turns fell to 5 villages. dots-3 jumped from 11 to 15.</p>
+
+<p>nemotron-3-ultra started well: it conquered villages in the southwest (Santarem, Évora, Faro, Coimbra, Porto, Badajoz, Vigo, Salamanca). It invested in knights: 57 total. dots-3 conquered the northeast region (Tarragona, Girona, Zaragoza, Castellon, Huesca, Madrid, Valencia) and put its strength in archers — <b>125 against 42</b> for nemotron-3-ultra.</p>
+
+<h3>The inflection point</h3>
+<p>On turn 8, nemotron-3-ultra took Salamanca from the opponent — but dots-3 responded by capturing Pamplona, Murcia, and Burgos in the same turn. On turn 9, dots-3 captured Cordoba and Vigo. nemotron-3-ultra attempted to counter-attack in Madrid and Teruel, but it was too late. The difference: nemotron-3-ultra built knight strength at isolated points; dots-3 concentrated archers in higher-defense cities and maintained pressure on three fronts simultaneously.</p>
+
+<h3>Building vs. movement</h3>
+<p>nemotron-3-ultra spent turns on knights that never reached sufficient strength to defend. dots-3 built in volume: 125 archers against the 42 of its competitor. The density of troops was decisive. In the end, nemotron-3-ultra faced attacks on multiple cities with scattered forces, while dots-3 moved coherent blocks from point to point.</p>
+`},
+"E1013-02": {
+pt:`
+<p>O <code>kimi-k3</code> terminou com 21 aldeias — <b>em 17 turnos de jogo</b>, sem nunca ter perdido a liderança. O <code>nemotron-3.5-lightning</code> capturou apenas 2 aldeias no total.</p>
+
+<p>O que separou os dois não foi a qualidade da estratégia, mas a capacidade de executá-la. O kimi-k3 construiu 266 arqueiros e 10 lanceiros, expandindo de forma consistente desde o turno 2 (Santarem, Évora, Coimbra, Faro). O nemotron-3.5-lightning sofreu com uma taxa de rejeição de ordens altíssima: <b>81 ordens recusadas contra 8</b> do kimi-k3. Mesmo assim, kimi-k3 teve 4 turnos inválidos — mas isso não alterou o resultado.</p>
+
+<h3>Expansão sem contestação</h3>
+<p>Pelo turno 9, o kimi-k3 já controlava 11 aldeias e o nemotron-3.5-lightning apenas 4. O ritmo não mudou depois: enquanto nemotron-3.5 continuou a enfrentar rejeições em suas ordens, o kimi-k3 manteve uma progressão estável. No turno 12, nemotron-3.5 estava com 7 aldeias; no final, apenas 2. O kimi-k3 foi construindo sua hegemonia turno a turno — turno 17, 21 aldeias.</p>
+
+<h3>Eficiência nas ordens</h3>
+<p>A diferença fundamental: o nemotron-3.5-lightning gastou 81 tentativas para capturar e construir (número que indica confusão no sistema ou incompreensão das regras); o kimi-k3 usou apenas 8. Uma vitória de consistência, não de brilhantismo tático.</p>
+`,
+en:`
+<p><code>kimi-k3</code> finished with 21 villages — <b>in 17 turns of play</b>, never losing the lead. <code>nemotron-3.5-lightning</code> captured just 2 villages total.</p>
+
+<p>What separated them was not the quality of strategy, but the ability to execute it. kimi-k3 built 266 archers and 10 spearmen, expanding consistently from turn 2 (Santarem, Évora, Coimbra, Faro). nemotron-3.5-lightning suffered from a very high order rejection rate: <b>81 orders rejected against 8</b> for kimi-k3. Even so, kimi-k3 had 4 invalid turns — but this did not alter the outcome.</p>
+
+<h3>Expansion without contest</h3>
+<p>By turn 9, kimi-k3 already controlled 11 villages while nemotron-3.5-lightning held only 4. The pace did not change afterward: while nemotron-3.5 continued to face rejections, kimi-k3 maintained steady progression. By turn 12, nemotron-3.5 had 7 villages; by the end, only 2. kimi-k3 built its hegemony turn by turn — turn 17, 21 villages.</p>
+
+<h3>Order efficiency</h3>
+<p>The fundamental difference: nemotron-3.5-lightning spent 81 attempts to capture and build (a number indicating system confusion or misunderstanding of rules); kimi-k3 used only 8. A victory of consistency, not tactical brilliance.</p>
 `}
 };
