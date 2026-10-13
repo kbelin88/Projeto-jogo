@@ -1619,6 +1619,11 @@ diffuseColor.a *= vAlfa;`);
   // Corta-se no ponto em que a passagem comecava: 16 pixeis por figura, que num
   // ecra de 1080 com campo de 42 graus sao 464 m de camara.
   const PX_PLACA_ABRE = 16;
+  // ── A PLACA JA NAO SE ABRE (13/10/2026) ─────────────────────────────────
+  // O Lucas: "os numeros se dividem, e isso confunde no zoom; quero que fique
+  // sempre o numero total". De perto continua UMA placa por coluna, com o
+  // total (o tipo ve-se nas figuras). `true` volta a abrir uma por tipo.
+  const PLACA_POR_TIPO = false;
   // tamanho no ECRÃ e não no mundo (`sizeAttenuation: false`): uma placa que
   // encolhe com a distância é inútil justamente quando é mais precisa
   // medido no ecra: `scale` aqui vale cerca de 1,67 vezes a fracao da
@@ -2048,10 +2053,14 @@ diffuseColor.a *= vAlfa;`);
     for (const { via, bruto, m } of lista) {
       noCaminho(via, bruto, _p);
       const dist = cam.position.distanceTo(_p);
-      if (ALT_FIGURA * pxPorMetro(dist) >= PX_PLACA_ABRE) continue;
+      if (PLACA_POR_TIPO && ALT_FIGURA * pxPorMetro(dist) >= PX_PLACA_ABRE) continue;
       const aqui = _p.clone();
       const pxM = pxPorMetro(dist);
-      const g = juntas.find((j) => j.dono === m.dono && j.pos.distanceTo(aqui) * pxM < PX_JUNTAR_PLACAS);
+      // a placa mede-se pela altura do ecra; os 48 px eram de um ecra de 1080. Num video vertical (1920) as placas
+      // crescem e encostavam-se sem se juntar ("8" e "2" colados): a distancia cresce com o ecra (13/10/2026)
+      // e, com a placa sempre fechada (PLACA_POR_TIPO), juntam-se as que se TOCAM: ~1,2 placa (64 px num 1080)
+      const pxJuntar = (PLACA_POR_TIPO ? PX_JUNTAR_PLACAS : 64) * Math.max(1, (rend.domElement.clientHeight || 1080) / 1080);
+      const g = juntas.find((j) => j.dono === m.dono && j.pos.distanceTo(aqui) * pxM < pxJuntar);
       if (g) g.tropas += m.tropas || 0;
       else juntas.push({ dono: m.dono, tropas: m.tropas || 0, pos: aqui });
     }
@@ -2070,7 +2079,7 @@ diffuseColor.a *= vAlfa;`);
     for (const { via, bruto, m } of lista) {
       noCaminho(via, bruto, _p);
       const px = ALT_FIGURA * pxPorMetro(cam.position.distanceTo(_p));
-      const aberta = px >= PX_PLACA_ABRE;
+      const aberta = PLACA_POR_TIPO && px >= PX_PLACA_ABRE;
       if (aberta && m.composicao) {
         for (const bl of blocosDe(via, bruto, m)) {
           if (nb >= estandartes.length) break;

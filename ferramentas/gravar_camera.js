@@ -111,13 +111,15 @@ async function abrirNavegador(exe, flagsGpu, [W, H]) {
     "--hide-scrollbars", "--mute-audio", "--no-first-run", "--no-default-browser-check",
     "--disable-background-timer-throttling", "--disable-renderer-backgrounding",
     "--window-size=" + W + "," + H, ...flagsGpu, "about:blank"], { stdio: "ignore" });
-  let saiu = false;
-  proc.on("exit", () => { saiu = true; });
+  // 13/10/2026: o msedge.exe passou a ser so um lancador -- abre o navegador e sai logo com codigo 0. Sair com 0 nao e
+  // falha: conta o ficheiro DevToolsActivePort. Por isso o fechar() fecha o navegador pelo protocolo (Browser.close).
+  let saiu = false, codigo = null;
+  proc.on("exit", (c) => { saiu = true; codigo = c; });
   const fich = path.join(perfil, "DevToolsActivePort");
-  let porta = null;
+  let porta = null, rotaNavegador = null;
   for (let i = 0; i < 200 && !porta; i++) {
-    if (saiu) throw new Error("o navegador fechou ao arrancar");
-    if (fs.existsSync(fich)) porta = fs.readFileSync(fich, "utf8").split(/\r?\n/)[0].trim();
+    if (saiu && codigo !== 0) throw new Error("o navegador fechou ao arrancar (codigo " + codigo + ")");
+    if (fs.existsSync(fich)) [porta, rotaNavegador] = fs.readFileSync(fich, "utf8").split(/\r?\n/).map((s) => s.trim());
     if (!porta) await dorme(100);
   }
   if (!porta) { proc.kill(); throw new Error("o navegador nao abriu a porta DevTools"); }
@@ -134,6 +136,14 @@ async function abrirNavegador(exe, flagsGpu, [W, H]) {
   await cdp.pronto;
   const fechar = async () => {
     cdp.fecha();
+    if (rotaNavegador) {             // o navegador de verdade (o lancador ja saiu)
+      try {
+        const nav = new Cdp("ws://127.0.0.1:" + porta + rotaNavegador);
+        await Promise.race([nav.pronto, dorme(2000)]);
+        await Promise.race([nav.envia("Browser.close"), dorme(2000)]);
+        nav.fecha();
+      } catch (e) {}
+    }
     try { proc.kill(); } catch (e) {}
     await dorme(300);
     try { fs.rmSync(perfil, { recursive: true, force: true }); } catch (e) {}
@@ -264,4 +274,8 @@ async function main() {
   }
 }
 
-main().then(() => process.exit(0), (e) => { console.error("erro: " + e.message); process.exit(1); });
+// o gravar_clipes.js (os clipes dos Shorts da cidade, 13/10/2026) usa estas pecas
+module.exports = { FPS, FORMATOS, GPUS, servidor, acharNavegador, abrirNavegador, avaliar, dorme, Cdp };
+
+if (require.main === module)
+  main().then(() => process.exit(0), (e) => { console.error("erro: " + e.message); process.exit(1); });

@@ -2158,10 +2158,14 @@
     M3D.ctrl.enableDamping = tinha;
   }
   var _erroRoteiro = false;
+  // os clipes dos Shorts da cidade (13/10/2026, configurarGravacao): a camera pode andar no tempo do FILME
+  // (o quadro / 30), e nao no do replay -- o replay para no turno do momento e a camera continua a andar
+  var _camFilme = false, _tFilme = null, _fimIdx = null;
   function aplicarRoteiroAgora() {
     if (!roteiro || !M3D || !rep || !emReplay) return;
     try {
-      aplicarPoseCamera(CameraRoteiro.poseNoTempo(roteiro, tempoDoReplay(), resolverAlvoRoteiro));
+      const tCam = _camFilme && _tFilme != null ? _tFilme : tempoDoReplay();
+      aplicarPoseCamera(CameraRoteiro.poseNoTempo(roteiro, tCam, resolverAlvoRoteiro));
     } catch (e) {
       if (!_erroRoteiro) { _erroRoteiro = true; console.error("roteiro:", e); window.erroGravacao = String(e.message || e); }
     }
@@ -2200,7 +2204,9 @@
       throw new Error("recarregue a pagina: gravarQuadro so anda para a frente (pediu " + n + " depois de " + _ultimoQuadro + ")");
     _ultimoQuadro = n;
     const L = linhaDoTempo(), fr = rep.dados.frames;
-    const t = n / FPS_GRAVACAO;
+    _tFilme = n / FPS_GRAVACAO;
+    // com um turno final (configurarGravacao), o replay para nele; o filme continua (tropas, mar, camera)
+    const t = _fimIdx != null ? Math.min(_tFilme, L.off[_fimIdx]) : _tFilme;
     let k = L.inicioIdx;
     while (k + 1 < fr.length && L.off[k + 1] <= t) k++;
     // os turnos que faltam, por ordem (so para a frente)
@@ -2214,6 +2220,46 @@
     draw();                       // empurra para o mapa e aplica a pose do roteiro
     if (M3D) M3D.avancar(1000 / FPS_GRAVACAO);   // tropas, mar, batalhas: um passo fixo
     return { n, t, turno: game.turno, repFrac };
+  };
+
+  // ----- os clipes dos Shorts da cidade (13/10/2026; ferramentas/gravar_clipes.js) -----
+  // configurarGravacao({ seg, fimTurno, cameraNoFilme, roteiro }), ANTES do primeiro gravarQuadro:
+  //   seg          segundos por turno (refaz a linha do tempo)
+  //   fimTurno     o replay para quando chega a este turno (fica no estado dele)
+  //   cameraNoFilme  o roteiro anda no tempo do filme (quadro / 30), nao no do replay
+  //   roteiro      os keyframes; o alvo pode ser tambem "mapa" (o centro do mapa) ou uma lista de aldeias (o centro delas)
+  // -> { tFim: segundos do filme em que o replay chega ao fimTurno, total, seg }
+  function centroDoMapa() {
+    const ps = Object.values(M3D.MAPA.aldeias).map((a) => a.p);
+    const xs = ps.map((q) => q[0]), ys = ps.map((q) => q[1]);
+    return [(Math.min.apply(null, xs) + Math.max.apply(null, xs)) / 2, 0, -(Math.min.apply(null, ys) + Math.max.apply(null, ys)) / 2];
+  }
+  function alvoDoClipe(a) {
+    if (a === "mapa") return centroDoMapa();
+    if (Array.isArray(a) && a.length && a.every((x) => typeof x === "string")) {
+      const ps = a.map(resolverAlvoRoteiro).filter(Boolean);
+      if (!ps.length) return centroDoMapa();
+      return [0, 1, 2].map((i) => ps.reduce((s, p) => s + p[i], 0) / ps.length);
+    }
+    return a;
+  }
+  window.configurarGravacao = function (o) {
+    if (!modoGravar) throw new Error("configurarGravacao: abra a pagina com ?gravar=1");
+    if (_ultimoQuadro >= 0) throw new Error("configurarGravacao: antes do primeiro gravarQuadro");
+    o = o || {};
+    if (o.seg > 0) segPorTurno = o.seg;
+    _camFilme = !!o.cameraNoFilme;
+    if (o.roteiro) ligarRoteiro({ keyframes: (o.roteiro.keyframes || []).map((k) => Object.assign({}, k, { alvo: alvoDoClipe(k.alvo) })) });
+    const L = linhaDoTempo(), fr = rep.dados.frames;
+    _fimIdx = null;
+    let tFim = L.total;
+    if (o.fimTurno != null) {
+      const F = fr.findIndex((f) => f.turno >= o.fimTurno);
+      if (F > L.inicioIdx) { _fimIdx = F; tFim = L.off[F]; }
+      else if (F === L.inicioIdx) { _fimIdx = F; tFim = 0; }
+    }
+    window.duracaoGravacao = L.total;
+    return { tFim, total: L.total, seg: segPorTurno };
   };
 
   // ===== BANNERS DE EVENTO (fila; um de cada vez) =====
