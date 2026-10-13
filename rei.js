@@ -298,7 +298,7 @@ function criarCliente(id, opcoes) {
   if (backend === "openrouter") return clienteOpenRouter(opc);
   if (COMPATIVEIS[backend]) return clienteCompativel(backend, opc);
   if (backend === "falso") return require("./sessao.js").clienteFalso(opc); // ensaio a seco: nao toca a rede
-  throw new Error(`backend desconhecido: "${backend}" (use "ollama", "gemini", "openrouter", "nvidia" ou "cloudflare")`);
+  throw new Error(`backend desconhecido: "${backend}" (use "ollama", "gemini", "openrouter", "nvidia", "cloudflare" ou "plano")`);
 }
 
 // ---- BACKENDS COMPATIVEIS COM A OPENAI (11/10/2026, o Banco da Cidade) ─────
@@ -315,12 +315,16 @@ const COMPATIVEIS = {
     url: () => "https://api.cloudflare.com/client/v4/accounts/" + process.env.CLOUDFLARE_ACCOUNT_ID + "/ai/v1/chat/completions",
     chave: "CLOUDFLARE_API_TOKEN", teto: 16384, precisa: "CLOUDFLARE_ACCOUNT_ID",
   },
+  // A PONTE DOS PLANOS (14/10/2026, os Grandes Combates da Cidade de Agentes): o Claude (pelo SDK do Claude Code) e o
+  // GPT (pelo Codex) dos planos do Lucas, num servidor local da cidade (agentes/ponte_jogo.py) que fala este formato.
+  // Ex.: "plano:claude-sonnet-5-5@medium", "plano:gpt-6.1-sol@medium". Sem chave: so escuta em 127.0.0.1.
+  plano: { url: () => (process.env.PONTE_PLANOS_URL || "http://127.0.0.1:8110") + "/v1/chat/completions", chave: null, teto: 32768 },
 };
 
 function clienteCompativel(backend, opcoes) {
   const b = COMPATIVEIS[backend];
   carregarEnv();
-  const apiKey = process.env[b.chave];
+  const apiKey = b.chave ? process.env[b.chave] : "local";
   if (!apiKey) throw new Error(b.chave + " ausente (defina no .env desta pasta ou no ambiente)");
   if (b.precisa && !process.env[b.precisa]) throw new Error(b.precisa + " ausente");
   if (!opcoes.modelo) throw new Error(`diga o modelo: "${backend}:<modelo>"`);

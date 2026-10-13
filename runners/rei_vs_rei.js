@@ -527,7 +527,7 @@ async function main() {
         const dd = d && d[L];
         // So vale para lados que sao MODELO: o `burro` nao produz JSON nenhum e
         // sem esta guarda o freio matava a partida no turno 1 (apanhado a testar).
-        const ehModelo = /^openrouter:|^gemini|^grok|^nvidia:|^cloudflare:/.test(String(etiquetaDe[L] || ""));
+        const ehModelo = /^openrouter:|^gemini|^grok|^nvidia:|^cloudflare:|^plano:/.test(String(etiquetaDe[L] || ""));
         if (!ehModelo || !dd) continue;
         if (dd.correcaoFormato) {
           correcoesFormato[L]++;
