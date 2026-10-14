@@ -1084,5 +1084,24 @@ en:`
 
 <h3>Order efficiency</h3>
 <p>The fundamental difference: nemotron-3.5-lightning spent 81 attempts to capture and build (a number indicating system confusion or misunderstanding of rules); kimi-k3 used only 8. A victory of consistency, not tactical brilliance.</p>
+`},
+"E1014-01": {
+pt:`
+<p>O <code>nemotron-3-ultra</code> dominou do início ao fim contra o <code>kimi-k3</code>, terminando com <b>21 aldeias contra 3</b> em 16 turnos. A partida foi definida cedo: nos turnos 2 e 3, enquanto o Kimi conquista 4 aldeias (Santarém, Évora, Coimbra, Faro), o Nemotron já toma 6 (Tarragona, Girona, Zaragoza, Castellón, Huesca, Madrid). O placar no turno 3 já mostra a diferença: 3 × 6.</p>
+
+<h3>Os erros do Kimi</h3>
+<p>O Kimi enviou <b>2 turnos inválidos e teve 2 ordens rejeitadas</b> — a primeira vez neste arquivo que um modelo comete erros de formato numa partida contra o topo. Esses giros custam posição e oportunidade. Enquanto isso, o Nemotron executa 16 turnos sem erros.</p>
+
+<h3>O golpe e a queda</h3>
+<p>No turno 8, o Nemotron toma Salamanca do Kimi — primeiro ataque entre reis. Daí em diante, o mapa é invasão. O Kimi tenta resistir em Sevilha (sua última aldeia no turno 16), mas o Nemotron construiu 80 lanceiros, 53 arqueiros e 102 cavaleiros, contra 51 lanceiros, 71 arqueiros e 12 cavaleiros do Kimi. Na escalação Cavaleiro > Lanceiro > Arqueiro, a vantagem do Nemotron em cavaleiros (102 contra 12) é decisiva. A partida virou domínio puro.</p>
+`,
+en:`
+<p>The <code>nemotron-3-ultra</code> dominated from start to finish against <code>kimi-k3</code>, closing with <b>21 villages to 3</b> in 16 turns. The match was decided early: in turns 2 and 3, while Kimi claims 4 villages (Santarém, Évora, Coimbra, Faro), Nemotron already takes 6 (Tarragona, Girona, Zaragoza, Castellón, Huesca, Madrid). The score by turn 3 tells the story: 3 to 6.</p>
+
+<h3>Kimi's format errors</h3>
+<p>Kimi sent <b>2 invalid turns and had 2 rejected orders</b> — the first time in this archive a model makes format mistakes against a top opponent. Those turns cost position and momentum. Meanwhile, Nemotron executes all 16 turns without errors.</p>
+
+<h3>The strike and collapse</h3>
+<p>On turn 8, Nemotron takes Salamanca from Kimi — the first king-on-king attack. From there, the map is invasion. Kimi tries to hold Sevilha (his last village on turn 16), but Nemotron built 80 spearmen, 53 archers and 102 knights, against Kimi's 51 spearmen, 71 archers and 12 knights. In the Knight > Spearman > Archer escalation, Nemotron's advantage in knights (102 to 12) is decisive. The match turned into pure dominion.</p>
 `}
 };
