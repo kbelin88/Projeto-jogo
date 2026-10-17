@@ -1103,5 +1103,24 @@ en:`
 
 <h3>The strike and collapse</h3>
 <p>On turn 8, Nemotron takes Salamanca from Kimi — the first king-on-king attack. From there, the map is invasion. Kimi tries to hold Sevilha (his last village on turn 16), but Nemotron built 80 spearmen, 53 archers and 102 knights, against Kimi's 51 spearmen, 71 archers and 12 knights. In the Knight > Spearman > Archer escalation, Nemotron's advantage in knights (102 to 12) is decisive. The match turned into pure dominion.</p>
+`},
+"E1017-02": {
+pt:`
+<p>O <code>dots-3-note-preview</code> dominou de forma consistente, ganhando <b>20 aldeias contra 4 do Nemotron</b> em 14 turnos. Não foi surpresa: do turno 6 em diante, a partida era apenas o Dots avançando. A leitura muda quando se olha a curva — no turno 5, o Nemotron liderava com <b>8 aldeias contra 7</b>, e parou de lá.</p>
+
+<h3>Salamanca, o gatilho</h3>
+<p>No turno 6, o Dots tomou Salamanca do Nemotron. O próprio Nemotron mandava mensagem de que tinha mandado nove arqueiros para retomar — e conseguiu no turno 7. Mas era tarde. O Dots já estava expandindo para Valencia (turno 7) e Murcia (turno 8) enquanto o Nemotron se dividia em contra-ataques. Quando você perde uma aldeia central e tem de reconquistar, perde ritmo no resto do mapa.</p>
+
+<h3>Quem construiu certo</h3>
+<p>O Dots construiu <b>18 lanceiros, 101 arqueiros e 63 cavaleiros</b>. O Nemotron construiu <b>7 lanceiros, 83 arqueiros e 6 cavaleiros</b>. A diferença de cavaleiros — 63 contra 6 — é a história: o Dots antecipou o tipo de tropa e construiu para vencer. Enquanto isso, o Nemotron teve <b>2 ordens rejeitadas</b> (erros que custam tempo e tropas em movimento), e o Dots teve zero. Quem constrói certo e sem erro expande, e é isso que vê aqui.</p>
+`,
+en:`
+<p>The <code>dots-3-note-preview</code> dominated consistently, winning <b>20 villages to Nemotron's 4</b> in 14 turns. Not a surprise: from turn 6 onward, the match was just Dots advancing. The curve tells a different story — by turn 5, Nemotron led with <b>8 villages against 7</b>, and never recovered.</p>
+
+<h3>Salamanca, the trigger</h3>
+<p>On turn 6, Dots took Salamanca from Nemotron. Nemotron's own message said it had sent nine archers to retake it — and succeeded on turn 7. But it was too late. Dots was already expanding to Valencia (turn 7) and Murcia (turn 8) while Nemotron split itself on counter-attacks. Lose a central village and have to retake it, you lose pace everywhere else on the map.</p>
+
+<h3>Who built right</h3>
+<p>Dots built <b>18 spearmen, 101 archers, and 63 knights</b>. Nemotron built <b>7 spearmen, 83 archers, and 6 knights</b>. The knight difference — 63 to 6 — is the story: Dots anticipated the troop type and built to win. Meanwhile, Nemotron had <b>2 rejected orders</b> (errors that cost time and troops in transit), and Dots had zero. Whoever builds right and without error expands, and that's what you see here.</p>
 `}
 };
