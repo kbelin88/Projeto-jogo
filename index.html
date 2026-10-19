@@ -1155,6 +1155,8 @@
       .then((m) => m.iniciar(palco))
       .then((mapa) => {
         M3D = mapa;
+        // a roda e o arrasto (o "start" do OrbitControls so vem da mao, nunca do ctrl.update() do jogo)
+        mapa.ctrl.addEventListener("start", () => assumirCamera());
         // `game` sai para a janela SO como ajuda de diagnostico (conferir uma
         // cena de batalha sem gastar uma partida); ninguem do jogo o le daqui
         Object.assign(window, { M3D: mapa, empurrarPara3D, eventosDeEstrada,
@@ -1382,8 +1384,18 @@
   // Chamavam o `zoomAt`, que mudava um `scale` que nenhum pixel obedece desde
   // 11/09: dois botoes visiveis, clicaveis, e sem efeito nenhum. Agora
   // aproximam e afastam a camara a serio, pelo mesmo eixo que a roda do rato.
+  // (19/10) mexer na camara no replay desliga a "cam auto": o botao dizia "arraste/role o mapa p/ assumir", mas
+  // ninguem a desligava -- a camara automatica voltava a apontar a cada combate (a 160/420 m) e o zoom do Lucas
+  // saltava para tras 1 a 2 s depois. Volta a liga-la o botao "cam auto".
+  function assumirCamera() {
+    if (!emReplay || !camAuto || roteiro) return;
+    camAuto = false;
+    const g = document.getElementById("grepCam");
+    if (g) g.classList.remove("ativo");
+  }
   function aproximar(k) {
     if (!M3D) return;
+    assumirCamera();
     const alvo = M3D.ctrl.target;
     const v = M3D.cam.position.clone().sub(alvo);
     const d = Math.max(M3D.ctrl.minDistance,
