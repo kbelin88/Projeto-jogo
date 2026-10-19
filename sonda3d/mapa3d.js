@@ -152,6 +152,8 @@ vec3 CustomToneMapping( vec3 color ) { return gradingCanal( AgXToneMapping( colo
     // a nevoa de distancia, dourada: da escala ao mapa inteiro
     cena.fog = new THREE.Fog(0xd9c09a, LX * 0.75, LX * 2.4);
   }
+  // (19/10) a nevoa e o alcance da camara de fabrica; de mais longe acompanham a camara (ver "A CAMARA AFASTADA")
+  const NEVOA = { perto: cena.fog.near, longe: cena.fog.far };
 
   // ── o mar ───────────────────────────────────────────────────────────────
   // ── A AGUA A 0 m, ONDE O FORNO A ESPERA ───────────────────────────────────
@@ -466,7 +468,9 @@ roughnessFactor = mix(roughnessFactor, 0.95, espuma);`)
   ctrl.enableDamping = true;
   ctrl.maxPolarAngle = Math.PI * 0.497;
   ctrl.minDistance = 12;
-  ctrl.maxDistance = LX * 1.3;
+  // (19/10) o Lucas quer o mapa inteiro no Short VERTICAL: em 9:16 a camara so abre ~24 graus na horizontal, e as
+  // 2,8 km do mapa so cabem a ~7 km. Era LX * 1.3 (3,65 km): o zoom parava antes de o mapa caber.
+  ctrl.maxDistance = LX * 2.8;
   // ── APROXIMAR PARA O CURSOR, e nao para o centro do mapa ────────────────
   // Sem isto o alvo da orbita fica cravado no meio da ilha: aproxima-se de uma
   // aldeia no canto, e ao girar a camara descreve um arco de dois quilometros
@@ -2502,6 +2506,18 @@ diffuseColor.a *= vAlfa;`);
     for (const rei of Object.keys(panos))
       if (panos[rei].mat.userData.sh)
         panos[rei].mat.userData.sh.uniforms.tempo.value = relogio * 0.001;
+    // ── A CAMARA AFASTADA (19/10) ────────────────────────────────────────
+    // De perto tudo fica como era; passada a distancia de fabrica, a nevoa
+    // afasta-se com a camara (a 7 km ela apagava o mapa todo) e o alcance da
+    // camara cresce (o mapa do outro lado ficava cortado). O `near` sobe com a
+    // distancia para o buffer de profundidade nao perder precisao.
+    const dCam = cam.position.distanceTo(ctrl.target);
+    cena.fog.near = Math.max(NEVOA.perto, dCam * 1.05);
+    cena.fog.far = Math.max(NEVOA.longe, dCam * 2.4);
+    const longe = Math.max(LX * 2.2, dCam * 2.6), perto = Math.min(40, Math.max(2, dCam * 0.004));
+    if (Math.abs(cam.far - longe) > cam.far * 0.04 || Math.abs(cam.near - perto) > 0.5) {
+      cam.far = longe; cam.near = perto; cam.updateProjectionMatrix();
+    }
     rend.render(cena, cam);
   }
   function laco() {
