@@ -3897,6 +3897,102 @@
   }
   iniciarPorURL();
 
+  // ===== MARCAR A CAMERA DOS SHORTS (19/10/2026, Cidade de Agentes) =====
+  // A cidade serve o jogo em /jogo/ e abre o replay com &camera=1. O Lucas para no turno, arrasta/roda a camera ate
+  // ficar como quer e carrega em "Marcar camera": a pose exata (o inverso do posicaoDe do camera-roteiro.js) vai para
+  // POST /api/camera/marcas na propria cidade, e o Short usa-a no momento desse turno. A moldura 9:16 mostra o que o
+  // Short vertical ve (a mesma altura de ecra: o campo de visao da camera e vertical).
+  function poseAtualDaCamera() {
+    const t = M3D.ctrl.target, c = M3D.cam.position;
+    const dx = c.x - t.x, dy = c.y - t.y, dz = c.z - t.z, dist = Math.hypot(dx, dy, dz);
+    return { alvo: [t.x, t.y, t.z], dist, angulo: (Math.atan2(dx, dz) * 180 / Math.PI + 360) % 360,
+             elevacao: Math.asin(Math.max(-1, Math.min(1, dy / dist))) * 180 / Math.PI };
+  }
+  function irParaPose(m) {
+    const az = m.angulo * Math.PI / 180, el = m.elevacao * Math.PI / 180, a = m.alvo;
+    camAuto = false;
+    const g = document.getElementById("grepCam");
+    if (g) g.classList.remove("ativo");
+    aplicarPoseCamera({ alvo: a, posicao: [a[0] + m.dist * Math.cos(el) * Math.sin(az), a[1] + m.dist * Math.sin(el),
+                                           a[2] + m.dist * Math.cos(el) * Math.cos(az)] });
+  }
+  async function iniciarMarcar() {
+    let q;
+    try { q = new URLSearchParams((window.location && window.location.search) || ""); } catch (e) { return; }
+    if (q.get("camera") !== "1") return;     // ?marcar e o das marcas do mapa (marcas.js)
+    const partida = q.get("partida") || decodeURIComponent((q.get("replay") || "").split("/").pop().replace(/\.replay\.json$/, ""));
+    const t0 = Date.now();
+    while (!M3D) {
+      if (Date.now() - t0 > 120000) return;
+      await new Promise((s) => setTimeout(s, 200));
+    }
+    const css = document.createElement("style");
+    css.textContent =
+      "#mcMoldura{position:fixed;pointer-events:none;z-index:40;border:2px solid #ffd54a;box-shadow:0 0 0 9999px rgba(0,0,0,.42)}" +
+      "#mcPainel{position:fixed;right:14px;bottom:14px;z-index:60;width:290px;max-height:70vh;overflow:auto;background:rgba(12,18,28,.94);" +
+      "color:#e8eef6;font:13px system-ui,sans-serif;border:1px solid #2c3a4f;border-radius:10px;padding:12px;box-shadow:0 6px 24px rgba(0,0,0,.5)}" +
+      "#mcPainel h3{margin:0 0 6px;font-size:14px}#mcPainel small{color:#9fb0c4}#mcPainel button{cursor:pointer;border:0;border-radius:6px;padding:6px 9px;font:inherit}" +
+      "#mcMarcar{width:100%;background:#ffd54a;color:#111;font-weight:700;margin:8px 0;padding:9px}" +
+      "#mcPainel input[type=text]{width:100%;box-sizing:border-box;margin-top:6px;padding:6px;border-radius:6px;border:1px solid #2c3a4f;background:#0b111a;color:inherit}" +
+      ".mcItem{display:flex;gap:6px;align-items:center;justify-content:space-between;border-top:1px solid #243246;padding:6px 0}" +
+      ".mcItem button{background:#243246;color:#e8eef6}";
+    document.head.appendChild(css);
+    const moldura = document.createElement("div");
+    moldura.id = "mcMoldura";
+    document.body.appendChild(moldura);
+    const painel = document.createElement("div");
+    painel.id = "mcPainel";
+    painel.innerHTML = '<h3>&#127909; Câmara do Short</h3><small>Pare no turno, arraste e role o mapa até a câmara ficar como quer. ' +
+      'O retângulo amarelo é o que o Short (vertical) mostra.</small>' +
+      '<div style="margin-top:8px">Turno agora: <b id="mcTurno">?</b></div>' +
+      '<input id="mcNota" type="text" maxlength="300" placeholder="Nota para a Iris (opcional)">' +
+      '<button id="mcMarcar">&#128247; Marcar câmara neste turno</button>' +
+      '<label><input id="mcVer" type="checkbox" checked> moldura 9:16</label>' +
+      '<div id="mcAviso" style="margin-top:6px;color:#9fe39f"></div><div id="mcLista" style="margin-top:6px"></div>';
+    document.body.appendChild(painel);
+    const $ = (id) => document.getElementById(id);
+    function ajustarMoldura() {
+      const r = M3D.rend.domElement.getBoundingClientRect(), w = r.height * 9 / 16;
+      Object.assign(moldura.style, { left: (r.left + (r.width - w) / 2) + "px", top: r.top + "px", width: w + "px", height: r.height + "px",
+                                     display: $("mcVer").checked ? "block" : "none" });
+      $("mcTurno").textContent = game && game.turno != null ? game.turno : "?";
+    }
+    setInterval(ajustarMoldura, 300);
+    async function lista() {
+      const r = await fetch("/api/camera/marcas?partida=" + encodeURIComponent(partida), { cache: "no-store" });
+      const ms = r.ok ? (await r.json()).marcas : [];
+      const caixa = $("mcLista");
+      caixa.replaceChildren();
+      for (const m of ms) {
+        const d = document.createElement("div");
+        d.className = "mcItem";
+        const t = document.createElement("span");
+        t.textContent = "Turno " + m.turno + " · " + Math.round(m.dist) + " m" + (m.nota ? " · " + m.nota : "");
+        const ver = document.createElement("button");
+        ver.textContent = "ver";
+        ver.onclick = () => irParaPose(m);
+        const apagar = document.createElement("button");
+        apagar.textContent = "apagar";
+        apagar.onclick = async () => {
+          await fetch("/api/camera/marcas/apagar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: m.id }) });
+          lista();
+        };
+        d.append(t, ver, apagar);
+        caixa.append(d);
+      }
+    }
+    $("mcMarcar").onclick = async () => {
+      const p = poseAtualDaCamera();
+      const corpo = Object.assign({ partida, turno: game.turno, nota: $("mcNota").value }, p);
+      const r = await fetch("/api/camera/marcas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+      $("mcAviso").style.color = r.ok ? "#9fe39f" : "#ff8f8f";
+      $("mcAviso").textContent = r.ok ? "Marcada: turno " + corpo.turno + ", " + Math.round(p.dist) + " m. A Iris vai usá-la." : "Não gravou: " + await r.text();
+      if (r.ok) { $("mcNota").value = ""; lista(); }
+    };
+    lista();
+  }
+  iniciarMarcar();
+
 
 })();
 </script>
