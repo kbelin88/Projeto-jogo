@@ -3933,6 +3933,7 @@
       "color:#e8eef6;font:13px system-ui,sans-serif;border:1px solid #2c3a4f;border-radius:10px;padding:12px;box-shadow:0 6px 24px rgba(0,0,0,.5)}" +
       "#mcPainel h3{margin:0 0 6px;font-size:14px}#mcPainel small{color:#9fb0c4}#mcPainel button{cursor:pointer;border:0;border-radius:6px;padding:6px 9px;font:inherit}" +
       "#mcMarcar{width:100%;background:#ffd54a;color:#111;font-weight:700;margin:8px 0;padding:9px}" +
+      "#mcPadrao{width:100%;background:#2f6fb0;color:#fff;font-weight:700;margin:0 0 4px;padding:9px}" +
       "#mcPainel input[type=text]{width:100%;box-sizing:border-box;margin-top:6px;padding:6px;border-radius:6px;border:1px solid #2c3a4f;background:#0b111a;color:inherit}" +
       ".mcItem{display:flex;gap:6px;align-items:center;justify-content:space-between;border-top:1px solid #243246;padding:6px 0}" +
       ".mcItem button{background:#243246;color:#e8eef6}";
@@ -3942,11 +3943,14 @@
     document.body.appendChild(moldura);
     const painel = document.createElement("div");
     painel.id = "mcPainel";
-    painel.innerHTML = '<h3>&#127909; Câmara do Short</h3><small>Pare no turno, arraste e role o mapa até a câmara ficar como quer. ' +
-      'O retângulo amarelo é o que o Short (vertical) mostra.</small>' +
+    painel.innerHTML = '<h3>&#127909; Câmara do Short</h3><small>Arraste (esquerdo gira, direito desliza) e role até a câmara ficar como quer; ' +
+      'o retângulo amarelo é o que o Short vertical mostra. &#11088; guarda a distância e o ângulo para TODOS os próximos Shorts; ' +
+      '&#128247; marca só este turno desta partida.</small>' +
       '<div style="margin-top:8px">Turno agora: <b id="mcTurno">?</b></div>' +
       '<input id="mcNota" type="text" maxlength="300" placeholder="Nota para a Iris (opcional)">' +
       '<button id="mcMarcar">&#128247; Marcar câmara neste turno</button>' +
+      '<button id="mcPadrao">&#11088; Usar esta distância e ângulo em todos os Shorts</button>' +
+      '<div id="mcPadraoAtual" style="color:#9fb0c4;font-size:12px"></div>' +
       '<label><input id="mcVer" type="checkbox" checked> moldura 9:16</label>' +
       '<div id="mcAviso" style="margin-top:6px;color:#9fe39f"></div><div id="mcLista" style="margin-top:6px"></div>';
     document.body.appendChild(painel);
@@ -3981,6 +3985,22 @@
         caixa.append(d);
       }
     }
+    // a camara PADRAO dos proximos Shorts: so a distancia, a inclinacao e o angulo (o sitio continua a ser o de cada momento)
+    async function padraoAtual() {
+      const r = await fetch("/api/camera/padrao", { cache: "no-store" });
+      const p = r.ok ? (await r.json()).padrao : null;
+      $("mcPadraoAtual").textContent = p ? "Padrão atual: " + Math.round(p.dist) + " m, inclinação " + Math.round(p.elevacao) + "°, ângulo " + Math.round(p.angulo) + "°"
+                                         : "Padrão atual: o de fábrica (1100 m, 47°)";
+    }
+    $("mcPadrao").onclick = async () => {
+      const p = poseAtualDaCamera();
+      const r = await fetch("/api/camera/padrao", { method: "POST", headers: { "Content-Type": "application/json" },
+                                                    body: JSON.stringify({ dist: p.dist, elevacao: p.elevacao, angulo: p.angulo }) });
+      $("mcAviso").style.color = r.ok ? "#9fe39f" : "#ff8f8f";
+      $("mcAviso").textContent = r.ok ? "Câmara padrão guardada: os próximos Shorts usam esta distância e este ângulo." : "Não gravou: " + await r.text();
+      padraoAtual();
+    };
+    padraoAtual();
     $("mcMarcar").onclick = async () => {
       const p = poseAtualDaCamera();
       const corpo = Object.assign({ partida, turno: game.turno, nota: $("mcNota").value }, p);
