@@ -15,7 +15,7 @@ Quem clona o repositório recebe só a primeira metade, e o jogo diz o que falta
 | `bancada.html` | bancada: os soldados de perto, para ver a malha e a animação |
 | `montanhas.html` | bancada: os estilos de montanha (parados por decisão de 21/09) |
 | `tamanhos.html` | bancada: as peças lado a lado, à escala |
-| `vendor/` | three.js e o `GLTFLoader` |
+| `vendor/` | three.js e o `GLTFLoader` (r160). ⚠ `vendor/controls/OrbitControls.js` está no git à força: tem a correção do zoom (19/10, `getZoomScale`: com o zoom do navegador < 100% um clique ia ao máximo/mínimo). Se trocar o three.js, reponha-a |
 
 ## O que NÃO está no git, e como se coze
 
