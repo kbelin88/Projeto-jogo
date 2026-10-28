@@ -3107,6 +3107,20 @@
     if (salvamento) {
       normalizacoes.push(`salvamento parcial (${erroBase}): construir ${construirCru.length} item(ns), envios ${envios.length} item(ns) recuperados`);
     }
+    // ID COM ASPAS (28/10/2026): o Sonnet escreveu "villageId":"22" em 4 dos 13
+    // turnos do Q4 do torneio, e o aldeiaPorId (===) recusou tudo como "nao
+    // existe" — o turno inteiro passava. O prompt diz <id of one of YOUR
+    // villages> sem dizer que e numero, entao o desvio e trivial: "22" -> 22,
+    // so para texto que e um inteiro puro. Fica registado em `normalizacoes`.
+    const idNumerico = (it, campo, rotulo) => {
+      if (!it || typeof it !== "object" || typeof it[campo] !== "string") return;
+      const t = it[campo].trim();
+      if (!/^\d+$/.test(t)) return;
+      normalizacoes.push(`${rotulo}: id "${it[campo]}" -> ${Number(t)}`);
+      it[campo] = Number(t);
+    };
+    for (const c of construirCru) idNumerico(c, "aldeiaId", "construir");
+    for (const e of envios) { idNumerico(e, "origemId", "envio origem"); idNumerico(e, "destinoId", "envio destino"); }
     // P4 (F6): campo `quantidade` no construir — {"aldeiaId":12,"tipo":"lanceiro",
     // "quantidade":8} vale por 8 ordens de 1. Mata a classe de falha do T7 do
     // Nemotron (loop de 44 objetos identicos ate os 32k tokens) e corta o custo
