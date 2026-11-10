@@ -1360,5 +1360,35 @@ pt:`
 `,
 en:`
 <p><code>plano:claude-sonnet-5-5@medium</code> won by dominance, with 20 villages against 1 for <code>gemma-4-31b-it</code> in 13 turns. The match took a clear direction early: Gemma stayed at one village throughout the replay while Sonnet raised its count to 20.</p><h3>Expansion without a reply</h3><p>Sonnet began by taking Tarragona and Girona on turn 2. Castellon and Huesca followed on turn 3, Zaragoza and Valencia on turn 4, and Madrid on turn 5. On turn 7, the model captured Teruel, Murcia and Pamplona. From there, its expansion reached villages in different parts of the map: Salamanca on turn 8; Cordoba, Burgos, Toledo and Coimbra on turn 10; Sevilha, Vigo and Badajoz on turn 12. The score moved from 8 to 1 on turn 6 to 20 to 1 on turn 13.</p><h3>Difference in the replay</h3><p>Gemma had 13 invalid turns and built no units. Sonnet had no invalid turns; it built 5 spearmen, 35 archers and 41 knights. In its turn 13 statement, Sonnet said it was holding position after reaching 20 of 24 villages. The score confirms that decisive majority. Rejected orders were zero for both.</p>
+`},
+"E1110-01": {
+pt:`
+<p>O <code>gpt-6-astra</code> venceu o <code>claude-haiku-5-5</code> por 18 aldeias a 6, em 13 turnos. A vantagem veio da expansão inicial: o Astra abriu mais frentes e manteve a liderança durante toda a partida.</p>
+<h3>Expansão e resposta</h3>
+<p>No turno 2, os dois modelos conquistaram aldeias neutras. O Astra tomou Santarém e Évora; o Haiku, Tarragona e Girona. Nos turnos seguintes, o Astra ampliou o controle com Coimbra, Badajoz, Faro, Toledo e Sevilha. No turno 5, já tinha 10 aldeias contra 7. O Haiku conquistou Madrid no turno 7, mas o Astra tomou Vigo no mesmo turno e seguiu aumentando a diferença.</p>
+<h3>Defesa no fim</h3>
+<p>O placar chegou a 18 a 6 no turno 12 e não mudou no último turno. No depoimento final, o Astra disse que priorizaria proteger as fronteiras e reforçar as áreas expostas. O Haiku afirmou que Zaragoza era forte demais para atacar e descreveu uma estratégia de defesa e reforço. O replay mostra o resultado: nenhuma nova conquista depois do turno 7, e a vantagem do Astra permaneceu intacta.</p>
+`,
+en:`
+<p><code>gpt-6-astra</code> beat <code>claude-haiku-5-5</code> by 18 villages to 6 in 13 turns. The lead came from the early expansion: Astra opened more fronts and held the lead throughout the match.</p>
+<h3>Expansion and response</h3>
+<p>In turn 2, both models captured neutral villages. Astra took Santarém and Évora; Haiku took Tarragona and Girona. Over the next turns, Astra expanded its control with Coimbra, Badajoz, Faro, Toledo, and Sevilha. By turn 5, it had 10 villages to Haiku’s 7. Haiku captured Madrid in turn 7, but Astra took Vigo that same turn and continued to widen the gap.</p>
+<h3>Defense at the end</h3>
+<p>The score reached 18 to 6 in turn 12 and did not change in the final turn. In its final statement, Astra said it would prioritize protecting the borders and reinforcing exposed areas. Haiku said Zaragoza was too strong to attack and described a defensive strategy built around reinforcement. The replay shows the outcome: no further captures after turn 7, and Astra’s lead remained intact.</p>
+`},
+"E1110-02": {
+pt:`
+<p>O <code>gpt-6-luna</code> venceu o <code>minimax-m3.1-flash</code> por 21 aldeias a 3, em 19 turnos. A virada no placar aconteceu no turno 4; depois disso, o Minimax ficou com 5 aldeias até o turno 15, enquanto a Luna seguiu expandindo.</p>
+<h3>A virada e o avanço</h3>
+<p>Até o turno 3, o Minimax tinha 5 aldeias contra 4 da Luna. No turno 4, a Luna tomou Zaragoza e Valência e passou à frente, com 6 contra 5. Conquistou Múrcia no turno seguinte, mas a expansão desacelerou: sua próxima conquista registrada foi Huesca, no turno 8. A partir do turno 12, o avanço ganhou ritmo, com Teruel, Pamplona e Toledo; Madrid e Córdoba vieram no turno 14.</p>
+<h3>Desfecho</h3>
+<p>A Luna chegou a 14 aldeias no turno 15 e capturou Coimbra do adversário no turno 16. No turno 19, terminou com 21 contra 3. Seu depoimento final menciona a tomada de Porto e a preparação de um avanço concentrado. O replay registra Porto no turno 17, seguido pelas conquistas de Salamanca e Coimbra. O Minimax teve 16 turnos inválidos e 37 ordens rejeitadas; a Luna, nenhum turno inválido.</p>
+`,
+en:`
+<p><code>gpt-6-luna</code> beat <code>minimax-m3.1-flash</code> by 21 villages to 3 in 19 turns. The score turned in turn 4; after that, Minimax remained at 5 villages through turn 15 while Luna kept expanding.</p>
+<h3>The lead change and advance</h3>
+<p>Through turn 3, Minimax had 5 villages to Luna’s 4. In turn 4, Luna took Zaragoza and Valencia and moved ahead, 6 to 5. It captured Murcia the next turn, then expansion slowed: its next recorded capture was Huesca in turn 8. From turn 12, the advance picked up with Teruel, Pamplona, and Toledo; Madrid and Córdoba followed in turn 14.</p>
+<h3>The finish</h3>
+<p>Luna reached 14 villages in turn 15 and captured Coimbra from its opponent in turn 16. It finished turn 19 with 21 to 3. Its final statement mentions taking Porto and preparing a concentrated advance. The replay records Porto in turn 17, followed by the captures of Salamanca and Coimbra. Minimax had 16 invalid turns and 37 rejected orders; Luna had no invalid turns.</p>
 `}
 };
