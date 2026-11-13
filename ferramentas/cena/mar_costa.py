@@ -42,6 +42,7 @@
 # FINAL do forno (com as aldeias carimbadas), e terra so o que fica acima de 0.
 import json
 import os
+import sys
 
 import numpy as np
 from PIL import Image
@@ -49,7 +50,9 @@ from scipy import ndimage
 
 RAIZ = os.getcwd()
 CENA = os.path.join(RAIZ, "ferramentas", "cena")
-SAIDA = os.path.join(RAIZ, "sonda3d")
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import mapa_ativo as M                                     # noqa: E402  (QUE mapa: MAPA=usa)
+SAIDA = M.SAIDA
 
 LIMIAR = 110 / 255.0          # exportar_mapa.py, `encostar` -- tem de ser o mesmo
 SOBE = 4                      # 4x a grelha do chao: ~1,2 m por pixel
@@ -154,9 +157,9 @@ def gravar(nome, dist, prof, escuro):
 
 
 # ── PERTO: o retangulo do mapa ───────────────────────────────────────────────
-alfa = np.load(os.path.join(CENA, "_alfa.npy")).astype(np.float32)
-fin = os.path.join(CENA, "_terra_final.npy")
-terra = np.load(fin if os.path.exists(fin) else os.path.join(CENA, "_terra.npy")).astype(bool)
+alfa = np.load(M.cena("_alfa.npy")).astype(np.float32)
+fin = M.cena("_terra_final.npy")
+terra = np.load(fin if os.path.exists(fin) else M.cena("_terra.npy")).astype(bool)
 th, tw = alfa.shape
 px, py = LX / tw, LY / th     # exportar_mapa.py: px, py = LX / tw, LY / th
 
@@ -171,7 +174,7 @@ dx, dy = px * (tw - 1) / (W - 1), py * (th - 1) / (H - 1)
 # ao contorno do alfa (`encostar`); aqui le-se o mesmo contorno, liso. Da
 # mascara so entram os carimbos das aldeias, que o alfa nao conhece.
 terra_g = ndimage.zoom(alfa, Z, order=1) > LIMIAR
-ori = os.path.join(CENA, "_terra.npy")
+ori = M.cena("_terra.npy")
 if os.path.exists(fin) and os.path.exists(ori):
     carimbo = terra & ~np.load(ori).astype(bool)
     terra_g |= ndimage.zoom(carimbo.astype(np.float32), Z, order=1) > 0.5
@@ -181,7 +184,7 @@ if os.path.exists(fin) and os.path.exists(ori):
 # estar debaixo de agua. Com o relevo FINAL (o que saiu do forno), terra e so o
 # que esta acima do mar. Fora da mascara o relevo nao e chao (ha la valores
 # ate 90 m): conta como fundo, para a passagem por zero ficar do lado de dentro.
-rel = os.path.join(CENA, "_relevo_final.npy")
+rel = M.cena("_relevo_final.npy")
 if os.path.exists(rel):
     relevo = np.where(terra, np.load(rel).astype(np.float32), -3.0)
     relevo_g = ndimage.zoom(relevo, Z, order=1)

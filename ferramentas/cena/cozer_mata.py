@@ -133,6 +133,77 @@ BIOMAS = [
 ESPACO = {"atlantico": 4.2, "montado": 12.0, "costeiro": 7.0, "mato": 6.0, "ribeira": 4.0}
 MOITAS = {"atlantico": 0.5, "montado": 0.25, "costeiro": 0.6, "mato": 3.0, "ribeira": 0.4}
 
+# ── M3: OS BIOMAS DOS EUA (12/11) ───────────────────────────────────────────
+# Os mesmos pesos do chao pintado (`biomas_usa.py`), arvore a arvore. A pradaria
+# e o alpino nao tem arvores (a pradaria tera os tufos de erva do passo 2). As
+# moitas sao todas a `proto_artemisia` com a folha do sitio: 80 triangulos de
+# longe, contra 320 da moita da Iberia, e ha milhares.
+BIOMAS_USA = [
+    ("pac_1", "pacifico", 44, 24.0, 601), ("pac_2", "pacifico", 30, 19.0, 602),
+    ("cal_1", "california", 8, 34.0, 611), ("cal_2", "california", 6, 26.0, 612),
+    ("con_1", "coniferas", 30, 24.0, 621), ("con_2", "coniferas", 20, 19.0, 622),
+    ("son_1", "sonora", 10, 30.0, 631), ("son_2", "sonora", 7, 24.0, 632),
+    ("moj_1", "mojave", 7, 30.0, 641), ("moj_2", "mojave", 5, 22.0, 642),
+    ("bac_1", "bacia", 6, 30.0, 651), ("bac_2", "bacia", 4, 24.0, 652),
+    ("out_1", "outono", 44, 25.0, 661), ("out_2", "outono", 32, 20.0, 662),
+    ("out_3", "outono", 52, 28.0, 663),
+    ("cad_1", "caduca", 40, 24.0, 671), ("cad_2", "caduca", 30, 19.0, 672),
+    ("sud_1", "sudeste", 36, 24.0, 681), ("sud_2", "sudeste", 26, 19.0, 682),
+    ("flo_1", "florida", 14, 20.0, 691), ("flo_2", "florida", 9, 16.0, 692),
+]
+ESPACO.update({"pacifico": 4.6, "california": 11.0, "coniferas": 5.6, "sonora": 9.0, "mojave": 10.0,
+               "bacia": 9.0, "outono": 4.2, "caduca": 4.3, "sudeste": 4.8, "florida": 6.0})
+# (a mata cerrada esconde o sub-bosque: la poucas moitas; no deserto e na bacia sao elas a paisagem)
+MOITAS.update({"pacifico": 0.15, "california": 1.6, "coniferas": 0.2, "sonora": 2.2, "mojave": 2.6,
+               "bacia": 4.0, "outono": 0.15, "caduca": 0.2, "sudeste": 0.4, "florida": 1.0})
+
+
+def _especies_usa(bioma):
+    """(peso, [variantes]) de cada bioma dos EUA e as moitas do sub-bosque"""
+    if bioma == "pacifico":
+        esp = [(0.50, [P.proto_abeto(26.0, "folha_abeto", 1), P.proto_abeto(21.0, "folha_abeto", 2)]),
+               (0.35, [P.proto_sequoia(34.0, "folha_sequoia", 3), P.proto_sequoia(29.0, "folha_sequoia", 4)]),
+               (0.15, [P.proto_bordo(13.0, "folha_bordo_verde", 5)])]
+        moi = [P.proto_artemisia(1.6, "folha_bravo", 51)]
+    elif bioma == "california":
+        esp = [(1.0, [P.proto_sobreiro(11.0, "folha_carvalho_ca", 24), P.proto_sobreiro(9.0, "folha_carvalho_ca", 26)])]
+        moi = [P.proto_artemisia(1.8, "folha_chaparral", 52), P.proto_artemisia(1.3, "folha_chaparral", 53)]
+    elif bioma == "coniferas":
+        esp = [(0.60, [P.proto_ponderosa(22.0, "folha_ponderosa", 3), P.proto_ponderosa(18.0, "folha_ponderosa", 6)]),
+               (0.40, [P.proto_abeto(20.0, "folha_abeto", 7), P.proto_abeto(16.0, "folha_abeto", 8)])]
+        moi = [P.proto_artemisia(1.2, "folha_artemisia", 54)]
+    elif bioma == "sonora":
+        esp = [(0.55, [P.proto_saguaro(10.0, 2), P.proto_saguaro(8.0, 1), P.proto_saguaro(11.0, 3)]),
+               (0.45, [P.proto_oliveira(5.0, "folha_paloverde", 6)])]
+        moi = [P.proto_artemisia(1.0, "folha_creosoto", 55), P.proto_artemisia(0.8, "folha_creosoto", 56)]
+    elif bioma == "mojave":
+        esp = [(1.0, [P.proto_josue(8.0, 1), P.proto_josue(6.5, 2)])]
+        moi = [P.proto_artemisia(0.9, "folha_creosoto", 57), P.proto_artemisia(0.7, "folha_creosoto", 58)]
+    elif bioma == "bacia":
+        esp = [(1.0, [P.proto_junipero(5.5, "folha_junipero", 5), P.proto_junipero(4.5, "folha_junipero", 9)])]
+        moi = [P.proto_artemisia(1.3, "folha_artemisia", 43), P.proto_artemisia(1.0, "folha_artemisia", 44)]
+    elif bioma == "outono":
+        esp = [(0.30, [P.proto_bordo(14.0, "folha_bordo_verm", 5), P.proto_bordo(12.0, "folha_bordo_verm", 10)]),
+               (0.22, [P.proto_bordo(13.0, "folha_bordo_lar", 6), P.proto_bordo(11.5, "folha_bordo_lar", 11)]),
+               (0.18, [P.proto_bordo(12.0, "folha_bordo_amar", 7)]),
+               (0.15, [P.proto_betula(13.0, "folha_betula", 8), P.proto_betula(11.0, "folha_betula", 9)]),
+               (0.15, [P.proto_abeto(18.0, "folha_abeto", 12)])]
+        moi = [P.proto_artemisia(1.4, "folha_mato", 41)]
+    elif bioma == "caduca":
+        esp = [(0.45, [P.proto_carvalho(15.0, "folha_carvalho", 11), P.proto_carvalho(12.5, "folha_carvalho", 12)]),
+               (0.35, [P.proto_bordo(14.0, "folha_bordo_verde", 9), P.proto_bordo(12.0, "folha_bordo_verde", 13)]),
+               (0.20, [P.proto_pinheiro_bravo(18.0, "folha_loblolly", 14)])]
+        moi = [P.proto_artemisia(1.4, "folha_mato", 41)]
+    elif bioma == "sudeste":
+        esp = [(0.60, [P.proto_pinheiro_bravo(20.0, "folha_loblolly", 17), P.proto_pinheiro_bravo(17.0, "folha_loblolly", 18)]),
+               (0.40, [P.proto_sobreiro(11.0, "folha_sobro", 25), P.proto_sobreiro(9.5, "folha_sobro", 27)])]
+        moi = [P.proto_artemisia(1.5, "folha_palmito", 59)]
+    else:  # florida
+        esp = [(0.65, [P.proto_palmeira(14.0, 4), P.proto_palmeira(11.0, 5), P.proto_palmeira(12.5, 6)]),
+               (0.35, [P.proto_sobreiro(10.0, "folha_sobro", 25)])]
+        moi = [P.proto_artemisia(1.5, "folha_palmito", 59), P.proto_artemisia(1.1, "folha_palmito", 60)]
+    return esp, moi
+
 
 def construir_bioma(nome, bioma, quantas, raio, semente):
     rnd = random.Random(semente)
@@ -141,7 +212,11 @@ def construir_bioma(nome, bioma, quantas, raio, semente):
     P.LIXO = None
     P.MASTROS_CENA.clear()
     # duas variantes de cada especie (sementes fixas: a MESMA peca em todo o mapa)
-    if bioma == "atlantico":
+    usa = bioma in ("pacifico", "california", "coniferas", "sonora", "mojave", "bacia", "outono",
+                    "caduca", "sudeste", "florida")
+    if usa:
+        esp, moitas_usa = _especies_usa(bioma)
+    elif bioma == "atlantico":
         esp = [(0.55, [P.proto_carvalho(15.0, "folha_carvalho", 11), P.proto_carvalho(12.5, "folha_carvalho", 12)]),
                (0.35, [P.proto_pinheiro_bravo(20.0, "folha_bravo", 13), P.proto_pinheiro_bravo(17.0, "folha_bravo", 14)]),
                (0.10, [P.proto_choupo(16.0, "folha_choupo", 15)])]
@@ -159,7 +234,8 @@ def construir_bioma(nome, bioma, quantas, raio, semente):
     else:  # ribeira
         esp = [(0.75, [P.proto_choupo(18.0, "folha_choupo", 6), P.proto_choupo(15.0, "folha_choupo", 16)]),
                (0.25, [P.proto_carvalho(12.5, "folha_carvalho", 12)])]
-    moitas = [P.proto_moita(1.8, "folha_mato", 41), P.proto_moita(1.3, "folha_mato", 42)]
+    moitas = (moitas_usa if usa else
+              [P.proto_moita(1.8, "folha_mato", 41), P.proto_moita(1.3, "folha_mato", 42)])
     esp_min = ESPACO[bioma] ** 2
     postas = []
     for i in range(quantas):
@@ -181,7 +257,7 @@ def construir_bioma(nome, bioma, quantas, raio, semente):
     for i in range(int(round(quantas * MOITAS[bioma]))):
         a = rnd.random() * 2 * math.pi
         d = raio * math.sqrt(rnd.random())
-        P.onde(moitas[i % 2], d * math.cos(a), d * math.sin(a), -0.2, rnd.random() * 6.3,
+        P.onde(moitas[i % len(moitas)], d * math.cos(a), d * math.sin(a), -0.2, rnd.random() * 6.3,
                0.7 + rnd.random() * 0.6)
     return (raio + 5) * 2.3
 

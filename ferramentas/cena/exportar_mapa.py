@@ -35,6 +35,7 @@ import bpy
 import numpy as np
 
 sys.path.append(os.path.join(os.getcwd(), "ferramentas", "cena"))
+import mapa_ativo as M                                     # noqa: E402  (QUE mapa se coze)
 import pecas as P                                          # noqa: E402
 import cozer as C                                          # noqa: E402
 import aldeia2 as A2                                       # noqa: E402
@@ -42,7 +43,7 @@ import aldeia2 as A2                                       # noqa: E402
 ARGS = [int(a) for a in (sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
         if a.isdigit()]
 TEX_PX = ARGS[0] if ARGS else 512
-SAIDA = os.path.join(os.getcwd(), "sonda3d")
+SAIDA = M.SAIDA
 
 # viewBox do mapa -> metros. Vem da aldeia media: 98,9 m de peca desenhados em
 # 3,8 celulas de 13,23 unidades. Um numero so, e o mapa inteiro obedece-lhe.
@@ -62,8 +63,8 @@ M_POR_VB = 98.9 / (3.8 * DIV)
 #
 # A licao e a de sempre neste projeto: quando duas coisas nao batem certo, o
 # suspeito nao e o valor, e o SISTEMA DE COORDENADAS.
-IB_OX, IB_OY, IB_LARG = 130.0, 144.0, 1429.0
-IB_ALT = 864.0 * 1.17613                     # a altura da ARTE, nao da caixa
+IB_OX, IB_OY, IB_LARG = M.OX, M.OY, M.LARG
+IB_ALT = M.ALT                               # a altura da ARTE, nao da caixa
 
 
 def em_metros(vx, vy):
@@ -82,7 +83,9 @@ bpy.ops.wm.read_factory_settings(use_empty=True)
 P._mats.clear(); P.LIXO = None
 
 REDE = C.REDE
-MATA = json.load(open(os.path.join(os.getcwd(), "assets/sprites/mata.json"), encoding="utf-8"))
+# as manchas de mata da Iberia vem do tempo dos sprites; o segundo mapa ainda nao tem mata
+MATA = (json.load(open(os.path.join(os.getcwd(), "assets/sprites/mata.json"), encoding="utf-8"))
+        if M.IBERIA else [])
 
 copias = []
 protos = {}          # nome curto -> receita (para reconstruir)
@@ -184,12 +187,30 @@ for _e in REDE.get("e", []):
         _VIA0[tuple(sorted((_e["de"], _e["para"])))] = em_metros(*_e["via"][0])
 
 
+# ── VIAS COM VARIOS PONTOS (2.o mapa, 11/11) ────────────────────────────────
+# Na Iberia o `via` e UM ponto de controlo de uma Bezier. No mapa dos EUA uma
+# estrada contorna um lago por varios pontos e PASSA neles (`M.curva_por`).
+# `vias_de(a, b)`: os pontos, em metros, na ordem de `a` para `b`.
+_VIAS = {}
+for _e in REDE.get("e", []):
+    if _e.get("via"):
+        _VIAS[(_e["de"], _e["para"])] = [em_metros(*v) for v in _e["via"]]
+
+
+def vias_de(a, b):
+    if (a, b) in _VIAS:
+        return list(_VIAS[(a, b)])
+    return list(reversed(_VIAS.get((b, a), [])))
+
+
 def rumos_metricos(cid):
     cx, cy = em_metros(REDE["c"][cid]["x"], REDE["c"][cid]["y"])
     saida = []
     for outra in REDE["v"][cid]:
         alvo = _VIA0.get(tuple(sorted((cid, outra)))) \
             or em_metros(REDE["c"][outra]["x"], REDE["c"][outra]["y"])
+        if not M.IBERIA and vias_de(cid, outra):
+            alvo = vias_de(cid, outra)[0]          # o 1.o ponto a sair DESTA aldeia
         saida.append(math.atan2(alvo[1] - cy, alvo[0] - cx))
     return saida
 
@@ -267,14 +288,16 @@ CM.ALGARVE = COSTA2
 # F2 (27/09): os arranjos sao por BIOMA (`CM.BIOMAS`); `MATA2=0` volta aos
 # seis antigos. `BIOMA_DE[bioma]` = os indices dos arranjos desse bioma.
 MATA2 = os.environ.get("MATA2", "1") != "0"
-_lista_bosques = ([(n, b_, q, r) for n, b_, q, r, _s in CM.BIOMAS] if MATA2
+# M3 (12/11): o 2.o mapa tem os SEUS arranjos (`CM.BIOMAS_USA`); a Iberia nao muda
+_BIO_LISTA = CM.BIOMAS if M.IBERIA else CM.BIOMAS_USA
+_lista_bosques = ([(n, b_, q, r) for n, b_, q, r, _s in _BIO_LISTA] if MATA2
                   else [(n, None, q, (r, f)) for n, q, r, f in CM.BOSQUES])
 BIOMA_DE = {}
 bosques = []
 for i, (nome, bioma_, quantas, raio) in enumerate(_lista_bosques):
     P.registar(True)
     if MATA2:
-        CM.construir_bioma(nome, bioma_, quantas, raio, CM.BIOMAS[i][4])
+        CM.construir_bioma(nome, bioma_, quantas, raio, _BIO_LISTA[i][4])
         BIOMA_DE.setdefault(bioma_, []).append(i)
     else:
         CM.construir(nome, quantas, raio[0], raio[1], 40 + i * 7)
@@ -344,7 +367,10 @@ if faltam:
 # de 20 faces) e o jogo escolhe por distancia a camara.
 LODS = {}
 _COM_LOD = {"proto_sobreiro", "proto_carvalho", "proto_pinheiro_bravo", "proto_choupo",
-            "proto_oliveira", "proto_moita", "proto_pinheiro_manso"}   # (28/09) as que faltavam
+            "proto_oliveira", "proto_moita", "proto_pinheiro_manso",   # (28/09) as que faltavam
+            # M3 (12/11): as dos EUA
+            "proto_abeto", "proto_sequoia", "proto_ponderosa", "proto_saguaro", "proto_josue",
+            "proto_palmeira", "proto_bordo", "proto_betula", "proto_junipero", "proto_artemisia"}
 for nome in list(feitas):
     receita = protos.get(nome)
     if not receita:
@@ -363,7 +389,50 @@ for nome in list(feitas):
     LODS[nome] = nl
 print("SONDA arvores de longe: %d" % len(LODS), flush=True)
 
-terra = np.load(os.path.join(os.getcwd(), "ferramentas/cena/_terra.npy"))
+# ── (M3, 13/11) A ARVORE MUITO DE LONGE, so no 2.o mapa ─────────────────────
+# O mapa dos EUA e 4 vezes a Iberia, e a floresta do Este so se le cerrada com
+# o dobro das arvores. A mais de ~1,1 km cada uma vira UM solido com as medidas
+# dela (a copa pelos vertices de folha, o tronco pelo resto): ~40 triangulos.
+LODS2 = {}
+if not M.IBERIA:
+    for nome in list(LODS):
+        ob = bpy.data.objects.get(nome)
+        receita = protos.get(nome)
+        if ob is None or not receita:
+            continue
+        me = ob.data
+        folha_, casca_, fz, cz_ = None, "madeira", [], []
+        for pol in me.polygons:
+            mn = me.materials[pol.material_index].name if me.materials else ""
+            alvo = fz if (mn.startswith("M_folha") or mn.startswith("M_cacto")) else cz_
+            if alvo is fz and folha_ is None:
+                folha_ = mn[2:]
+            elif alvo is cz_ and mn.startswith("M_"):
+                casca_ = mn[2:]
+            alvo.extend(pol.vertices)
+        if not fz or folha_ is None:
+            continue
+        V_ = np.array([tuple(me.vertices[i].co) for i in set(fz)])
+        lo, hi = V_.min(axis=0), V_.max(axis=0)
+        c_ = (lo + hi) / 2
+        r_ = (hi - lo) / 2
+        fn_ = json.loads(receita)[0]
+        conica = fn_ in ("proto_abeto", "proto_sequoia")
+        ob2 = P.proto_silhueta(round(float(c_[0]), 2), round(float(c_[1]), 2), round(float(c_[2]), 2),
+                               round(float(r_[0]) * 0.92, 2), round(float(r_[1]) * 0.92, 2),
+                               round(float(r_[2]) * (1.0 if conica else 0.95), 2), folha_, conica,
+                               round(float(lo[2]) + 0.3, 2) if cz_ else 0.0,
+                               round(max(0.25, float(r_[0]) * 0.12), 2), casca_)
+        for col in list(ob2.users_collection):
+            col.objects.unlink(ob2)
+        nl2 = re.sub(r"\.\d{3}$", "", ob2.name)
+        ob2.name = ob2.data.name = nl2
+        cena.objects.link(ob2)
+        feitas.append(nl2)
+        LODS2[nome] = nl2
+    print("SONDA arvores muito de longe: %d" % len(LODS2), flush=True)
+
+terra = np.load(M.cena("_terra.npy"))
 FUNDO = 18.0          # quanto a margem desce abaixo do nivel da terra
 th, tw = terra.shape
 LX, LY = IB_LARG * M_POR_VB, IB_ALT * M_POR_VB
@@ -408,7 +477,7 @@ print("SONDA chao carimbado sob as aldeias: %d -> %d celulas (+%.1f%%)"
          (terra.sum() - antes_terra) / max(antes_terra, 1) * 100))
 # a mascara FINAL, com as aldeias, fica em disco para o `mar_costa.py`: a
 # espuma do mar tem de seguir a mesma beira que a malha, carimbos incluidos
-np.save(os.path.join(os.getcwd(), "ferramentas/cena/_terra_final.npy"), terra)
+np.save(M.cena("_terra_final.npy"), terra)
 
 
 def em_terra(mx, my):
@@ -445,8 +514,8 @@ print("SONDA mata: %d manchas, %d fora de terra removidas"
 # 2. 150 m DE AMPLITUDE NUM MAPA DE 2,8 KM e exagero de proposito, como a
 #    largura das estradas: a Ibéria a serio tem 3400 m em 900 km, e a essa
 #    escala nao se via nada. O que se quer e que a serra LEIA como serra.
-ALTURA_MAX = 150.0
-RAIO_BORRAO = 18
+ALTURA_MAX = M.ALTURA_MAX        # Iberia: 150 m
+RAIO_BORRAO = M.RAIO_BORRAO      # Iberia: 18 celulas
 
 
 def _caixa(a, r):
@@ -468,7 +537,7 @@ def _caixa(a, r):
 # reamostrar aqui obrigaria a arrastar o PIL para dentro do Blender, que nao o
 # tem, e a ter DUAS reamostragens da mesma coisa a discordarem na beira -- que
 # foi exatamente o bug das aldeias na agua.
-relevo = np.load(os.path.join(os.getcwd(), "ferramentas/cena/_altura.npy"))
+relevo = np.load(M.cena("_altura.npy"))
 assert relevo.shape == terra.shape, (
     "o relevo e a mascara de terra tem de vir na MESMA grelha: %s vs %s"
     % (relevo.shape, terra.shape))
@@ -507,7 +576,7 @@ PRAIA = -3.5          # a praia MERGULHA: a linha de agua tem de ser molhada
 # contorno fica, em media, a meia celula dela -- a costa nao muda de sitio.
 _dc = subprocess.run(["python", os.path.join("ferramentas", "cena", "distancia_costa.py")],
                      capture_output=True, text=True)
-_fl = os.path.join(os.getcwd(), "ferramentas", "cena", "_dm_liso.npy")
+_fl = M.cena("_dm_liso.npy")
 if _dc.returncode == 0 and os.path.exists(_fl):
     print((_dc.stdout or "").strip(), flush=True)
     _liso = np.load(_fl).astype(np.float32) + 0.5
@@ -615,6 +684,8 @@ ENSEADAS = [
      "rio": False},
     {"c": (-905.5, 320.1), "r0": 70.0, "r1": 170.0, "porto": "barcos", "estrada": (20.0, 80.0)},
 ]
+if not M.IBERIA:
+    ENSEADAS = M.CFG["enseadas"]
 ENSEADA = {"graus": 14.0, "joelho": 9.0}
 _we = np.zeros(terra.shape, dtype=np.float32)
 for _en in ENSEADAS:
@@ -671,6 +742,10 @@ for _a, _b in LIGACOES:
     (_ax, _ay), (_bx, _by) = centros[_a], centros[_b]
     _ctl = VIA_DE.get(tuple(sorted((_a, _b))))
     _n = max(2, int(math.hypot(_bx - _ax, _by - _ay) / 10.0))
+    if not M.IBERIA:
+        for _x, _y in M.curva_por([(_ax, _ay)] + vias_de(_a, _b) + [(_bx, _by)], _n * 2):
+            _proteger(_x, _y, PROTEGE_ESTRADA)
+        continue
     for _i in range(_n + 1):
         _q = _i / _n
         if _ctl:
@@ -721,6 +796,8 @@ relevo = (np.minimum(relevo, _tecto_fim) * (1 - _we) + _chao_e * _we).astype(np.
 # a media da vizinhanca, varias vezes -- e a falesia fica continua por baixo.
 # (centro, raio cheio, raio de passagem), em metros; longe de aldeias e estradas.
 ATERROS = [((255.0, 805.0), 55.0, 100.0)]
+if not M.IBERIA:
+    ATERROS = M.CFG["aterros"]
 for (_ax0, _ay0), _ra0, _ra1 in ATERROS:
     _wa = np.clip((_ra1 - np.hypot(_gx - _ax0, _gy - _ay0)) / (_ra1 - _ra0), 0.0, 1.0).astype(np.float32)
     _wa = _wa * _wa * (3 - 2 * _wa) * terra
@@ -735,7 +812,7 @@ for (_ax0, _ay0), _ra0, _ra1 in ATERROS:
 # O tracado sai do `rios.py` (fora do Blender: precisa de scipy), pelo menor
 # custo no relevo ja esculpido, da nascente ate uma praia. Aqui so se lhe
 # entregam os dados; o vale, a agua e as pontes vem a seguir.
-RIOS = os.environ.get("RIOS", "1") != "0" and not RECT
+RIOS = os.environ.get("RIOS", "1") != "0" and not RECT and M.IBERIA      # o 2.o mapa: fase M4
 RIOS_TRACADOS = []
 RIOS_PROCURADOS = 1               # rios cuja nascente o `rios.py` procura (descem sempre)
 if RIOS:
@@ -752,7 +829,7 @@ if RIOS:
             else:
                 _pts_est.append((_ax + (_bx - _ax) * _q, _ay + (_by - _ay) * _q))
     np.savez_compressed(
-        os.path.join(os.getcwd(), "ferramentas/cena/_rios_dados.npz"),
+        M.cena("_rios_dados.npz"),
         relevo=relevo.astype(np.float32), terra=terra, lxly=np.array([LX, LY], dtype=np.float32),
         dm=_dm.astype(np.float32),
         # as fozes nas enseadas de costa baixa; a do noroeste e falesia alta
@@ -767,7 +844,7 @@ if RIOS:
                          capture_output=True, text=True)
     print((_rr.stdout or "").strip() if _rr.returncode == 0
           else "SONDA AVISO rios falhou: " + (_rr.stderr or "")[-600:], flush=True)
-    _fr = os.path.join(os.getcwd(), "ferramentas/cena/_rios.json")
+    _fr = M.cena("_rios.json")
     if _rr.returncode == 0 and os.path.exists(_fr):
         RIOS_TRACADOS = json.load(open(_fr, encoding="utf-8"))
     if os.environ.get("SO_RIOS"):
@@ -1016,11 +1093,12 @@ _rho_areia = _caixa((1.0 - _rocha) * (1.0 - _p)
 # ladrilho de relva mas em 7 m), e a cor de vertice pinta-o por REGIAO, do
 # verde escuro do norte ao palha do sul. O campo sai do `cor_prado.py`, que
 # le a humidade do gerador da ilha (a mesma que decide onde ha bosques).
-_cp = subprocess.run(["python", os.path.join("ferramentas", "cena", "cor_prado.py")],
-                     capture_output=True, text=True)
-print((_cp.stdout or "").strip() if _cp.returncode == 0
-      else "SONDA AVISO cor_prado falhou: " + (_cp.stderr or "")[-300:])
-_f_prado = os.path.join(os.getcwd(), "ferramentas/cena/_prado.npy")
+if M.IBERIA:        # o `cor_prado.py` le a arte da ilha; no 2.o mapa o `_prado.npy` vem do preparador
+    _cp = subprocess.run(["python", os.path.join("ferramentas", "cena", "cor_prado.py")],
+                         capture_output=True, text=True)
+    print((_cp.stdout or "").strip() if _cp.returncode == 0
+          else "SONDA AVISO cor_prado falhou: " + (_cp.stderr or "")[-300:])
+_f_prado = M.cena("_prado.npy")
 _prado = (np.load(_f_prado) if os.path.exists(_f_prado)
           else np.full(terra.shape, 0.5, dtype=np.float32))
 # ── DOIS TONS PROXIMOS, E NAO DOIS BIOMAS ───────────────────────────────
@@ -1064,14 +1142,17 @@ def bioma_em(mx, my):
     return "mato"
 
 
-if MATA2:
+if MATA2 and M.IBERIA:
     _rb = random.Random(2709)
     for m in manchas:
         m["bio"] = bioma_em(*m["p"])
         m["b"] = _rb.choice(BIOMA_DE[m["bio"]])
     _novas = 0
     _PASSO_M = 105.0
-    for _gxm in np.arange(-LX / 2 + 50, LX / 2 - 50, _PASSO_M):
+    # o montado e uma paisagem da Iberia: no 2.o mapa as arvores entram na fase
+    # dos biomas (M3), com as especies de la. (Na 1.a cozedura dos EUA sairam
+    # 60 manchas de sobreiro a volta de Denver.)
+    for _gxm in (np.arange(-LX / 2 + 50, LX / 2 - 50, _PASSO_M) if M.IBERIA else []):
         for _gym in np.arange(-LY / 2 + 50, LY / 2 - 50, _PASSO_M):
             x_ = float(_gxm + _rb.uniform(-40, 40))
             y_ = float(_gym + _rb.uniform(-40, 40))
@@ -1099,6 +1180,54 @@ if MATA2:
     from collections import Counter as _Cn
     print("SONDA biomas: %s; +%d manchas de montado, +%d de ribeira"
           % (dict(_Cn(m["bio"] for m in manchas)), _novas, _rib), flush=True)
+
+
+# ── M3: A MATA DOS EUA (12/11) ─────────────────────────────────────────────
+# A Iberia herdou as manchas dos sprites; o 2.o mapa nao tem nenhuma. Nascem
+# aqui, numa grelha com sacudidela, dos PESOS dos biomas (`_biomas.npz`, os do
+# chao pintado): em cada ponto sorteia-se o bioma pelo seu peso (nas fronteiras
+# misturam-se, como o chao) e a densidade do bioma decide se ha mancha. A
+# pradaria e o alpino nao tem arvores.
+# (13/11) a 1.a cozedura (grelha de 95 m, 454 manchas) deixou o Este em pontos
+# soltos na moldura de gravacao e a floresta do Pacifico quase vazia: a grelha
+# passou a 68 m e a mata cerrada a densidade cheia (a silhueta de longe paga-o)
+DENS_USA = {"pacifico": 1.0, "coniferas": 0.85, "outono": 1.0, "caduca": 0.9, "sudeste": 0.85,
+            "florida": 0.7, "california": 0.35, "sonora": 0.35, "mojave": 0.3, "bacia": 0.18}
+# quanto o chao escurece debaixo das manchas (o "chao de mata" do pintar_chao):
+# nada debaixo de um saguaro
+CHAO_MATA_USA = {"pacifico": 1.0, "coniferas": 0.8, "outono": 0.9, "caduca": 0.9, "sudeste": 0.8,
+                 "florida": 0.6, "california": 0.3, "sonora": 0.1, "mojave": 0.1, "bacia": 0.15}
+if MATA2 and not M.IBERIA:
+    _Bz = np.load(M.cena("_biomas.npz"))
+    _NB = list(_Bz.files)
+    _WB = np.stack([_Bz[n_].astype(np.float32) for n_ in _NB])
+    _rb = random.Random(1211)
+    _PASSO_U = 68.0
+    for _gxm in np.arange(-LX / 2 + 40, LX / 2 - 40, _PASSO_U):
+        for _gym in np.arange(-LY / 2 + 40, LY / 2 - 40, _PASSO_U):
+            x_ = float(_gxm + _rb.uniform(-26, 26))
+            y_ = float(_gym + _rb.uniform(-26, 26))
+            if not em_terra(x_, y_):
+                continue
+            _i = min(max(int(round((x_ + LX / 2) / px)), 0), tw - 1)
+            _j = min(max(int(round((LY / 2 - y_) / py)), 0), th - 1)
+            w_ = _WB[:, _j, _i]
+            tot_ = float(w_.sum())
+            if tot_ < 0.5:
+                continue
+            r_ = _rb.random() * tot_
+            for k_, n_ in enumerate(_NB):
+                r_ -= float(w_[k_])
+                if r_ <= 0:
+                    break
+            if n_ not in BIOMA_DE or _rb.random() > DENS_USA.get(n_, 0.0):
+                continue
+            manchas.append({"b": _rb.choice(BIOMA_DE[n_]), "p": [round(x_, 1), round(y_, 1)],
+                            "e": round(_rb.uniform(0.85, 1.2), 3), "bio": n_})
+    del _WB
+    from collections import Counter as _Cn
+    print("SONDA biomas EUA: %d manchas %s" % (len(manchas), dict(_Cn(m["bio"] for m in manchas))),
+          flush=True)
 
 
 def rho_areia_em(mx, my):
@@ -1250,8 +1379,53 @@ if RIOS_TRACADOS and _pts_est:
 # fora daqui e esqueci-me dos patamares das aldeias -- e a analise acusou 59 m
 # de erro que nao existiam. Quem quiser medir, mede contra o que SAIU, nao
 # contra uma reconstrucao.
+# ── O SUDOESTE (M2, 12/11; so no 2.o mapa) ─────────────────────────────────
+# O Grand Canyon e as mesas de Monument Valley sao malhas proprias
+# (`sudoeste.py`, a mesma conta que a bancada mostra). O canyon assenta no
+# chao ja final; o chao da grelha DESCE por baixo dele (cada quadrado que um
+# triangulo de dentro toca fica abaixo desse triangulo), e a aba do canyon,
+# pousada no planalto, tapa a costura. Mede-se aqui, e o forno para se furar.
+SUDOESTE = None
+_SW_BLOQ = None
+if not M.IBERIA and os.environ.get("SUDOESTE", "1") != "0":
+    import sudoeste as SW                                          # noqa: E402
+    _k_sw = M.ALTURA_MAX / SW.H_REF
+    _relevo_alto = relevo.copy()
+    _cy_sw = SW.canyon(relevo, k_h=_k_sw)
+    _dobras_c = SW._orientar.dobras
+    relevo, _nb_sw = SW.baixar_chao(relevo, _cy_sw)
+    _prova_sw = SW.provar_costura(relevo, _relevo_alto, _cy_sw)
+    _ms_sw = SW.mesas(_k_sw, templos=_cy_sw["templos"])
+    # o pe de cada mesa tem de ficar debaixo do chao (senao via-se a parede a flutuar)
+    _pe = _ms_sw["v"][[p_["v0"] + q for p_ in _ms_sw["pecas"] if p_["tipo"] != "templo" for q in range(96)]]
+    _pe_fora = int((SW.superficie(relevo, _pe[:, 0], _pe[:, 1]) < _pe[:, 2] + 0.3).sum())
+    print("SONDA sudoeste: canyon %d vertices / %d triangulos (%d dobras); chao baixado em %d vertices; "
+          "furos %d em %d amostras; abas no ar %d de %d; mesas %d pecas / %d triangulos; pes a vista %d de %d"
+          % (len(_cy_sw["v"]), len(_cy_sw["f"]), _dobras_c, _nb_sw, _prova_sw["furos"], _prova_sw["amostras"],
+             _prova_sw["abas_no_ar"], _prova_sw["abas"], len(_ms_sw["pecas"]), len(_ms_sw["f"]), _pe_fora, len(_pe)),
+          flush=True)
+    if _prova_sw["furos"] or _prova_sw["abas_no_ar"] or _pe_fora or _dobras_c:
+        raise SystemExit("o sudoeste nao fecha com o chao (ver a linha acima)")
+    _dec_c, _area_c = SW.declive(_cy_sw["v"], _cy_sw["f"])
+    _dentro_c = (_cy_sw["camada"][_cy_sw["f"]] >= 0).all(axis=1)
+    print("SONDA sudoeste: declive do canyon (por area) p50 %.0f / p90 %.0f graus; %.0f%% da area a mais de 75"
+          % (np.percentile(_dec_c[_dentro_c], 50), np.percentile(_dec_c[_dentro_c], 90),
+             100 * _area_c[_dentro_c & (_dec_c > 75)].sum() / _area_c[_dentro_c].sum()), flush=True)
+    SUDOESTE = (_cy_sw, _ms_sw)
+    # onde nao se pousam pedras: debaixo do canyon e das mesas
+    _SW_BLOQ = (relevo < _relevo_alto - 0.01) | np.load(M.cena("_sudoeste_pegada.npy"))
+    _SW_BLOQ = np.array(_SW_BLOQ)
+    for _ in range(3):
+        _b = _SW_BLOQ.copy()
+        _b[1:] |= _SW_BLOQ[:-1]; _b[:-1] |= _SW_BLOQ[1:]; _b[:, 1:] |= _SW_BLOQ[:, :-1]; _b[:, :-1] |= _SW_BLOQ[:, 1:]
+        _SW_BLOQ = _b
+    # o rio do canyon (so ali; a M4 liga-o ao resto): a fita de agua do forno
+    if _cy_sw["rio"] is not None:
+        _Pr, _Wr, _Zr = _cy_sw["rio"]
+        RIOS_AGUA.append((np.stack([_Pr[:, 0] * px - LX / 2, LY / 2 - _Pr[:, 1] * py], axis=1),
+                          np.asarray(_Wr, np.float64), np.asarray(_Zr, np.float64)))
 if not MONTANHAS:
-    np.save(os.path.join(os.getcwd(), "ferramentas/cena/_relevo_final.npy"), relevo)
+    np.save(M.cena("_relevo_final.npy"), relevo)
 
 _gy, _gx = np.gradient(relevo, px)
 _d = np.degrees(np.arctan(np.hypot(_gx, _gy)))[terra]
@@ -1514,10 +1688,21 @@ for a, b in LIGACOES:
     # o mesmo que o canvas usa -- e so lhe fica um bracejar pequeno por cima,
     # que e o que tira o ar de regua sem mentir sobre o traçado.
     ctl = VIA_DE.get(tuple(sorted((a, b))))
+    _por_vias = None
+    if not M.IBERIA and vias_de(a, b):
+        # 2.o mapa: a fita PASSA pelos pontos da via, e mede-se pelo que anda
+        _por_vias = M.curva_por([tuple(p0)] + vias_de(a, b) + [tuple(p1)], 400)
+        comp = sum(math.hypot(_por_vias[k + 1][0] - _por_vias[k][0], _por_vias[k + 1][1] - _por_vias[k][1])
+                   for k in range(400))
+        N = max(8, int(comp / 5))
+        _por_vias = M.curva_por([tuple(p0)] + vias_de(a, b) + [tuple(p1)], N)
+        ctl = None
     for i in range(N + 1):
         t = i / N
         cx = p0[0] + (p1[0] - p0[0]) * t
         cy = p0[1] + (p1[1] - p0[1]) * t
+        if _por_vias:
+            cx, cy = _por_vias[i]
         if ctl:
             # Bezier de segundo grau pelas duas bocas, com o ponto de controlo
             # levado para a mesma banda: a curva passa por onde o desenho passa
@@ -1685,7 +1870,9 @@ manchas = [m for m in manchas
 # (`instanceColor`), porque a cor de uma peca instanciada nao pode vir da
 # malha -- ela e a MESMA malha 22 mil vezes.
 for _m in manchas:
-    _m["h"] = round(prado_em(_m["p"][0], _m["p"][1]), 3)
+    # (M3) no 2.o mapa a cor ja e do bioma (o outono vermelho nao se tinge de
+    # "seco"): `h` nulo e o navegador nao mexe no tom
+    _m["h"] = round(prado_em(_m["p"][0], _m["p"][1]), 3) if M.IBERIA else None
 afogadas = antes_emp - len(manchas)
 for m in manchas:
     m["z"] = round(altura_em(m["p"][0], m["p"][1]), 2)
@@ -1783,7 +1970,7 @@ print("SONDA estradas por classe: %d reais, %d caminhos, %d carreiros"
 # do gradiente ate la chegar. A topologia nao muda, o numero de faces nao muda,
 # e o degrau desaparece.
 LIMIAR = 110 / 255.0
-alfa_c = np.load(os.path.join(os.getcwd(), "ferramentas/cena/_alfa.npy"))
+alfa_c = np.load(M.cena("_alfa.npy"))
 ga_y, ga_x = np.gradient(alfa_c)
 
 
@@ -2323,6 +2510,28 @@ def _pousar(nome, va, fa, cores, tinta, rugosidade, uv_altura=False, uv_caixa=Fa
                * (2 if len(f) == 4 else 1) for f in fa)
 
 
+# ── O GRAND CANYON E AS MESAS (M2, 12/11; so no 2.o mapa) ───────────────────
+# Duas malhas com o material `estratos`. A cor de vertice leva DADOS: R = quanto
+# o ponto e chao (1 na beira de fora da aba do canyon: ali a cor tem de ser a do
+# chao pintado, para a costura nao se ver; 0 na rocha). O `mapa3d.js`
+# (`pintarEstratos`) pinta as camadas pela altura do mundo. Sombreado liso, com
+# as arestas vivas acima de 32 graus: a beira de cada degrau fica viva.
+if SUDOESTE:
+    _cy_sw, _ms_sw = SUDOESTE
+
+    def _sw_metros(V):
+        return [(float(v[0] * px - LX / 2), float(LY / 2 - v[1] * py), float(v[2])) for v in V]
+    for _nome_sw, _g_sw, _k_sw_v in (("sudoeste_canyon", _cy_sw, _cy_sw["chao"]),
+                                      ("sudoeste_mesas", _ms_sw, np.zeros(len(_ms_sw["v"])))):
+        _va_sw = _sw_metros(_g_sw["v"])
+        # as faces do sudoeste.py estao viradas para fora no sistema do forno (y para norte)
+        _fa_sw = [tuple(int(q) for q in f_) for f_ in _g_sw["f"]]
+        _ca_sw = [(float(k_), 0.0, 1.0) for k_ in _k_sw_v]
+        _pousar(_nome_sw, _va_sw, _fa_sw, _ca_sw, "estratos", 0.93, liso=True)
+        _ob_sw = cena.objects[_nome_sw]
+        _ob_sw.data.set_sharp_from_angle(angle=math.radians(32.0))
+        print("SONDA sudoeste: %s, %d triangulos" % (_nome_sw, len(_fa_sw)), flush=True)
+
 def _valor_areia(vi):
     ci, cj = _ij[vi]
     x, y, z = verts[vi]
@@ -2391,6 +2600,8 @@ _perto_mar = np.clip((55.0 - _dm) / 25.0, 0.0, 1.0).astype(np.float32)
 # (a saia) continua de rocha. So a laje: a ravina ao lado foi cheia (`ATERROS`),
 # e com a relva forcada tambem la a parede dela ficava com picos verdes.
 RELVA_FORCADA = [((125.0, 790.0), 65.0)]          # (centro, raio), em metros
+if not M.IBERIA:
+    RELVA_FORCADA = M.CFG["relva_forcada"]
 
 
 def _relva_forcada(x, y):
@@ -2677,8 +2888,17 @@ def livre_para_campo(mx, my):
             and _longe_da_mata(mx, my, 7.0))
 
 
+def _no_sudoeste(mx, my):
+    """debaixo do canyon ou de uma mesa (so no 2.o mapa; na Iberia e sempre falso)"""
+    if _SW_BLOQ is None:
+        return False
+    i = min(max(int(round((mx + LX / 2) / px)), 0), tw - 1)
+    j = min(max(int(round((LY / 2 - my) / py)), 0), th - 1)
+    return bool(_SW_BLOQ[j, i])
+
+
 def livre_para_pedra(mx, my):
-    return (em_terra(mx, my) and no_recorte(mx, my)
+    return (em_terra(mx, my) and no_recorte(mx, my) and not _no_sudoeste(mx, my)
             and dist_estrada_em(mx, my) > 7.0
             and rho_areia_em(mx, my) < 0.02
             and all(math.hypot(c[0] - mx, c[1] - my) > raio_de(cid) + 8.0
@@ -2777,7 +2997,7 @@ if RIOS_AGUA:
 # carrocas paradas a beira (as duas ultimas sao modelos do TRELLIS, pontos
 # gravados em `MAPA.beira` para o jogo as instanciar). Nunca na estrada, nem
 # num rio, nem numa mata.
-BEIRA = os.environ.get("BEIRA", "1") != "0" and not RECT
+BEIRA = os.environ.get("BEIRA", "1") != "0" and not RECT and M.IBERIA    # o 2.o mapa: fase M5
 BEIRA_PONTOS = {"carroca": [], "marco": []}
 if BEIRA and ESTRADA2:
     from mathutils import Matrix as _Mx3                           # noqa: E402
@@ -3180,8 +3400,12 @@ with open(os.path.join(SAIDA, NOME_SAIDA + ".json" if (BANCADA or MONTANHAS) els
                "estrada2": ESTRADA2,
                # F2: a versao de longe de cada arvore (peca -> peca_lod)
                "lod": LODS,
+               # (M3, 13/11; so no 2.o mapa) a versao MUITO de longe (peca -> silhueta)
+               **({"lod2": LODS2} if LODS2 else {}),
                # (27/09) onde pousar as carrocas e os marcos (modelos TRELLIS)
-               "beira": BEIRA_PONTOS if (BEIRA and ESTRADA2) else {}}, f, separators=(",", ":"))
+               "beira": BEIRA_PONTOS if (BEIRA and ESTRADA2) else {},
+               # (M2, 12/11; so no 2.o mapa) a cor das camadas pela altura: [z m, r, g, b] sRGB
+               **({"estratos": SW.estratos(_k_sw)} if SUDOESTE else {})}, f, separators=(",", ":"))
 _saiu = NOME_SAIDA + ".json" if (BANCADA or MONTANHAS) else "mapa3d.json"
 print("SONDA -> sonda3d/%s  (%.0f KB)  em %.1f s"
       % (_saiu, os.path.getsize(os.path.join(SAIDA, _saiu)) / 1024, time.time() - t0))
@@ -3194,12 +3418,12 @@ print("SONDA -> sonda3d/%s  (%.0f KB)  em %.1f s"
 # precisa de saber do mundo, ja na forma final.
 if not (BANCADA or MONTANHAS) and CHAO2:
     np.savez_compressed(
-        os.path.join(os.getcwd(), "ferramentas/cena/_chao_dados.npz"),
+        M.cena("_chao_dados.npz"),
         relevo=relevo.astype(np.float32), terra=terra, dm=_dm.astype(np.float32),
         areia=_rho_areia.astype(np.float32), prado=_prado.astype(np.float32),
         rocha=_rocha.astype(np.float32),
         mata=np.array([[m["p"][0], m["p"][1], _raio_arr.get(m["b"], 10.0) * m.get("e", 1.0),
-                        DENS_BIOMA.get(m.get("bio"), 1.0)]
+                        DENS_BIOMA.get(m.get("bio"), CHAO_MATA_USA.get(m.get("bio"), 1.0))]
                        for m in manchas], dtype=np.float32).reshape(-1, 4),
         aldeias=np.array([[c[0], c[1], raio_de(cid)] for cid, c in centros.items()],
                          dtype=np.float32).reshape(-1, 3),
@@ -3224,14 +3448,14 @@ if _mc is not None:
 # para as tintas e a cena deste nao se misturarem (`ferramentas/cena/vida.py`)
 _vd = subprocess.run([bpy.app.binary_path, "-b", "--factory-startup", "-noaudio", "-P",
                       os.path.join("ferramentas", "cena", "vida.py")],
-                     capture_output=True, text=True) if not (BANCADA or MONTANHAS) else None
+                     capture_output=True, text=True) if not (BANCADA or MONTANHAS) and M.IBERIA else None
 if _vd is not None:
     _l = [x for x in (_vd.stdout or "").splitlines() if x.startswith("SONDA")]
     print(chr(10).join(_l) if _vd.returncode == 0 and _l
           else "SONDA AVISO vida falhou: " + ((_vd.stderr or "") + (_vd.stdout or ""))[-600:])
 # as ondas (28/09): nao dependem do mapa, mas quem clona so tem o que o forno faz
 _an = subprocess.run(["python", os.path.join("ferramentas", "cena", "agua_normais.py")],
-                     capture_output=True, text=True) if not (BANCADA or MONTANHAS) else None
+                     capture_output=True, text=True) if not (BANCADA or MONTANHAS) and M.IBERIA else None
 if _an is not None:
     print((_an.stdout or "").strip() if _an.returncode == 0
           else "SONDA AVISO agua_normais falhou: " + (_an.stderr or "")[-400:])

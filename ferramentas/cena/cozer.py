@@ -52,8 +52,10 @@ import pecas as P                                          # noqa: E402
 #   * o portão passa a apontar para onde as tropas de facto saem.
 # O preço é cozer 24 x 3 em vez de 4 x 3. A ~16 s cada, são uns vinte minutos —
 # uma vez.
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import mapa_ativo as _M                                       # noqa: E402  (QUE mapa: MAPA=usa)
 REDE = json.loads(subprocess.run(
-    ["node", "-e", "const W=require('./world-iberia.js');"
+    ["node", "-e", "const W=require('./%s');" % _M.MUNDO +
      "const g={};for(const c of W.CIDADES)g[c.id]=[];"
      "for(const e of W.ESTRADAS){if(g[e.de])g[e.de].push(e.para);"
      "if(g[e.para])g[e.para].push(e.de);}"

@@ -21,17 +21,20 @@
 # encosta a beira da malha (`encostar`, LIMIAR) --, numa grelha 4x mais fina, e
 # le-se em cada vertice. E lisa, e a beira fica onde a malha a poe.
 import os
+import sys
 
 import numpy as np
 from scipy import ndimage
 
 CENA = os.path.join(os.getcwd(), "ferramentas", "cena")
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import mapa_ativo as M                                     # noqa: E402  (QUE mapa: MAPA=usa)
 LIMIAR = 110 / 255.0          # exportar_mapa.py, `encostar` -- tem de ser o mesmo
 SOBE = 4
 
-alfa = np.load(os.path.join(CENA, "_alfa.npy")).astype(np.float32)
-terra = np.load(os.path.join(CENA, "_terra_final.npy")).astype(bool)
-ori = np.load(os.path.join(CENA, "_terra.npy")).astype(bool)
+alfa = np.load(M.cena("_alfa.npy")).astype(np.float32)
+terra = np.load(M.cena("_terra_final.npy")).astype(bool)
+ori = np.load(M.cena("_terra.npy")).astype(bool)
 th, tw = alfa.shape
 H, W = (th - 1) * SOBE + 1, (tw - 1) * SOBE + 1
 Z = (H / th, W / tw)
@@ -42,5 +45,5 @@ fina |= ndimage.zoom((terra & ~ori).astype(np.float32), Z, order=1) > 0.5
 d = ndimage.distance_transform_edt(fina) / SOBE   # em celulas do chao, ate a agua
 dm = d[::SOBE, ::SOBE].astype(np.float32)          # (th, tw): um valor por vertice
 dm = np.where(terra, dm, 0.0).astype(np.float32)
-np.save(os.path.join(CENA, "_dm_liso.npy"), dm)
+np.save(M.cena("_dm_liso.npy"), dm)
 print("SONDA distancia_costa: %dx%d, lida a 1/%d da celula" % (tw, th, SOBE))

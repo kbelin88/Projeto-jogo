@@ -40,6 +40,9 @@ gabarito escrito antes do experimento, artefato publicado antes da próxima fase
 |---|---|
 | **`engine.js`** | o MOTOR, puro e determinístico, corre em Node sem browser. `criarEstadoInicial`, `tick` (produção → construção → movimento+combate → endurecimento), `rodarTurno`, `checarVitoria`, `montarVisao` (o que o Rei sabe), `relatorioTexto`/`montarPrompt` (o prompt), `jogadorBurro` (o jogador-base, sem LLM), `resolverCombate`, `turnosDeCaminho` |
 | **`world-iberia.js`** | o mapa autoral: 24 cidades, 37 estradas, custos de rota, e o PAR de cada cidade (a gémea do outro lado). `verificarEquilibrio()` TEM de devolver 0 falhas |
+| **`world-usa.js`** | o SEGUNDO mapa (11/11), para **quatro** Reis: 45 cidades, 72 estradas, dois espelhos (Este-Oeste e Norte-Sul). **Ainda não está ligado ao motor** — o motor só sabe jogar a dois (ver `docs/MAPA_USA.md`). `verificarEquilibrio()` = 0 |
+| **`ferramentas/cena/preparar_usa.py`** | a terra, o mar e o relevo REAIS dos EUA na grelha do forno (ETOPO da NOAA + Natural Earth, fora do git). Os EUA são uma **ilha**: Canadá e México são mar. Mede aldeias e estradas na água (tem de dar 0) e coze a bancada `sonda3d/usa.html`, que mostra o relevo em bruto. |
+| **`ferramentas/cena/mapa_ativo.py`** | QUE mapa o forno coze. Sem `MAPA` é a Ibéria, igual ao que era (conferido byte a byte); com **`MAPA=usa`** o forno e os ajudantes leem as grelhas de `ferramentas/cena/usa/` e escrevem em `sonda3d/usa/`, que o `sonda3d/mapa.html?mapa=usa` abre. No 2.º mapa já há relevo, serras, biomas no chão e árvores; ainda não há rios nem beira de estrada |
 | **`index.html`** | o jogo no browser, onde as partidas do vídeo correm: o loop do duelo, o log `.txt`/RESUMO, o replay `.json`, o hover, a transmissão v5, o auto-save por turno. ~3 550 linhas num `<script>` inline |
 | **`ponte3d.js`** | a ÚNICA porta entre a partida e o desenho: fog, posição das marchas (do motor), composição dos exércitos, conversão dos combates de estrada |
 | **`marcas.js`** | o caderno de marcas (tecla M): o Lucas aponta um defeito no mapa e o Claude corrige na fonte. Fora do jogo de propósito |
@@ -65,11 +68,12 @@ gabarito escrito antes do experimento, artefato publicado antes da próxima fase
 | `ferramentas/acompanhar-partida.js` | partida a correr: os Reis estão a AGIR? (turno a turno, alarme de turnos sem envio) |
 | `ferramentas/analisar-sessao.js` | o que uma partida em sessão custou de verdade: tokens, cache, custo real contra o contrafactual de «um turno por vez», e o gabarito da spec linha a linha (lê o `.sessao.jsonl` ao lado do `.txt`) |
 | `ferramentas/verificar-replay.js` | **antes de gravar**: atravessamentos, identidades repetidas no desenho, saltos, costuras entre turnos, inimigas coladas sem lutar — tudo a 0 ou não se grava. Replays de antes de 25/09 não passam (o motor antigo só fazia lutar no mesmo ponto) |
+| `ferramentas/desenhar-rede.js` | a rede de um mapa (`usa` ou `iberia`) num SVG, com os custos, para se ver antes de haver 3D |
 | `ferramentas/medir-cruzamentos.js` | colunas que se atravessam no desenho sem lutar (jogador-base, ou `--replay`) |
 
 ### Os testes
 
-**39 ficheiros de teste** em `testes/` e **13 smokes** em `testes_arena/`. Os que
+**40 ficheiros de teste** em `testes/` e **13 smokes** em `testes_arena/`. Os que
 guardam mais:
 
 - `test_prompt_p4.js` — o P4, o fog e o parser tolerante;
@@ -82,6 +86,7 @@ guardam mais:
 - `test_prompt_compacto.js` — o formato compacto da sessão perde rótulos, nunca informação (mesmos registos que o P4, em estados reais);
 - `test_pacote2.js` — o prompt campeão está no motor (evento de combate completo, âncoras da mensagem 1, mapa da frente) e é o padrão do runner; `SESSAO_N=0` volta ao P4;
 - `test_sessao.js` — fronteiras de sessão, o que fica no histórico, o corpo dos pedidos ao OpenRouter (cache) e ao Gemini (multi-turno), sem tocar a rede;
+- `test_mapa_usa.js` — o mapa dos EUA é justo para os quatro lugares (três espelhos, quintais iguais, nenhuma estrada cruzada);
 - `test_guia_verdadeiro.js` — este ficheiro diz a verdade;
 - `test_index_carrega.js` — o `index.html` corre inteiro (`node --check` NÃO basta);
 - `Smoke5fog` / `Smoke8estrada` — correm a `ponte3d.js` a sério;

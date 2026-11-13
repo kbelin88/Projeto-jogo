@@ -29,6 +29,7 @@
 import json
 import math
 import os
+import sys
 
 import numpy as np
 from scipy import ndimage
@@ -38,7 +39,9 @@ from scipy.spatial import cKDTree
 
 RAIZ = os.getcwd()
 CENA = os.path.join(RAIZ, "ferramentas", "cena")
-D = np.load(os.path.join(CENA, "_rios_dados.npz"))
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import mapa_ativo as M                                     # noqa: E402  (QUE mapa: MAPA=usa)
+D = np.load(M.cena("_rios_dados.npz"))
 relevo, terra = D["relevo"].astype(np.float64), D["terra"].astype(bool)
 LX, LY = (float(v) for v in D["lxly"])
 th, tw = relevo.shape
@@ -275,5 +278,5 @@ for _ in range(N_PROCURADOS):
         r = int(70 / px)
         ocupado[max(0, j_ - r):j_ + r, max(0, i_ - r):i_ + r] = True
 
-json.dump(rios, open(os.path.join(CENA, "_rios.json"), "w", encoding="utf-8"))
+json.dump(rios, open(M.cena("_rios.json"), "w", encoding="utf-8"))
 print("SONDA rios: %d tracados (%s m)" % (len(rios), ", ".join("%.0f" % r["comprimento"] for r in rios)))

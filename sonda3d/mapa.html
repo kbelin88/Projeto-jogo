@@ -1,6 +1,6 @@
 <!doctype html>
 <meta charset="utf-8">
-<title>A Iberia em 3D</title>
+<title>O mapa em 3D</title>
 <style>
   html, body { margin: 0; height: 100%; background: #0d1418; color: #e8dcc0;
                font: 13px system-ui, sans-serif; overflow: hidden; }
@@ -22,7 +22,7 @@
 <div id="palco"></div>
 <div id="carga">a montar a Iberia...</div>
 <div id="hud">
-  <h1>A IBERIA EM 3D</h1>
+  <h1 id="titulo">A IBERIA EM 3D</h1>
   <label><input type="checkbox" id="sombras" checked> sombras</label>
   <label><input type="checkbox" id="nomes" checked> nomes das aldeias</label>
   <label><input type="checkbox" id="parar"> parar o tempo</label>
@@ -61,7 +61,12 @@ function queixa(msg) {
         + "ficheiros da cena (ver CLAUDE.md §8.2).") + "</div>";
 }
 
-const mapa = await iniciar(document.getElementById("palco"));
+// `mapa.html?mapa=usa` abre o segundo mapa (o forno deixa-o em sonda3d/usa/)
+const QUAL = new URLSearchParams(location.search).get("mapa");
+const mapa = await iniciar(document.getElementById("palco"), QUAL ? { mapa: QUAL } : {});
+// para as ferramentas de inspecao (e para o Claude): a camara e o mapa, pela consola
+window.mapa3d = mapa;
+if (QUAL) document.getElementById("titulo").textContent = QUAL.toUpperCase() + " EM 3D";
 Object.assign(window, { mapa, cena: mapa.cena, cam: mapa.cam, ctrl: mapa.ctrl,
                         MAPA: mapa.MAPA, THREE: mapa.THREE, rend: mapa.rend });
 document.getElementById("carga").remove();

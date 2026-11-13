@@ -47,6 +47,9 @@ COR = {
     "colmo2":     (0.205, 0.132, 0.048, 1),
     "pedra":      (0.185, 0.172, 0.150, 1),
     "falesia":    (0.120, 0.115, 0.104, 1),
+    # (M2, 12/11) as paredes do Grand Canyon e das mesas: a cor e das CAMADAS (no
+    # navegador, pela altura); a fotografia so da o grao
+    "estratos":   (0.50, 0.48, 0.45, 1),
     # a cor ja vem na imagem (tex_falesia_algarve.py); a tinta e neutra
     "falesia_algarve": (0.80, 0.66, 0.46, 1),
     "rocha_monte": (0.120, 0.115, 0.104, 1),
@@ -71,7 +74,35 @@ COR = {
     "folha_cipreste": (0.012, 0.026, 0.012, 1),
     "folha_mato":    (0.050, 0.062, 0.026, 1),
     "casca_sobro":   (0.120, 0.060, 0.030, 1),
-    "reboco":     (0.400, 0.340, 0.252, 1),   # taipa caiada
+    # M3 (12/11): as arvores dos EUA. O outono e o que se tem de ler do alto: o
+    # bordo vermelho, laranja e amarelo sao pecas DIFERENTES (a cor vive no
+    # material), e a betula amarela de tronco branco. As coniferas do Oeste sao
+    # verde-azulado escuro; o deserto e verde-poeira.
+    "folha_abeto":      (0.012, 0.030, 0.020, 1),
+    "folha_sequoia":    (0.020, 0.040, 0.016, 1),
+    "casca_sequoia":    (0.200, 0.062, 0.028, 1),
+    "folha_ponderosa":  (0.038, 0.062, 0.024, 1),
+    "casca_ponderosa":  (0.220, 0.100, 0.045, 1),
+    "cacto":            (0.048, 0.088, 0.040, 1),
+    "folha_josue":      (0.090, 0.108, 0.034, 1),
+    "casca_josue":      (0.110, 0.085, 0.060, 1),
+    "folha_palmeira":   (0.058, 0.125, 0.028, 1),
+    "casca_palmeira":   (0.200, 0.168, 0.120, 1),
+    "folha_bordo_verm": (0.300, 0.028, 0.012, 1),
+    "folha_bordo_lar":  (0.400, 0.105, 0.012, 1),
+    "folha_bordo_amar": (0.380, 0.240, 0.020, 1),
+    "folha_bordo_verde": (0.050, 0.115, 0.025, 1),
+    "folha_betula":     (0.420, 0.320, 0.045, 1),
+    "casca_betula":     (0.620, 0.600, 0.550, 1),
+    "folha_carvalho_ca": (0.075, 0.085, 0.030, 1),
+    "folha_loblolly":   (0.030, 0.056, 0.020, 1),
+    "folha_artemisia":  (0.062, 0.076, 0.036, 1),
+    "folha_junipero":   (0.025, 0.040, 0.028, 1),
+    "folha_chaparral":  (0.035, 0.045, 0.020, 1),
+    "folha_creosoto":   (0.065, 0.080, 0.025, 1),
+    "folha_paloverde":  (0.110, 0.140, 0.035, 1),
+    "folha_palmito":    (0.040, 0.085, 0.025, 1),
+    "reboco":    (0.400, 0.340, 0.252, 1),   # taipa caiada
     "reboco2":    (0.330, 0.268, 0.190, 1),
     "viga":       (0.052, 0.030, 0.016, 1),   # o prumo escuro do enxaimel
     "alicerce":   (0.172, 0.146, 0.110, 1),   # pedra QUENTE: a cinzenta lia azul
@@ -122,6 +153,13 @@ FAMILIA = {
     "folha_carvalho": "erva", "folha_sobro": "erva", "folha_bravo": "erva",
     "folha_choupo": "erva", "folha_cipreste": "erva", "folha_mato": "erva",
     "casca_sobro": "lenho",
+    **{k: "erva" for k in ("folha_abeto", "folha_sequoia", "folha_ponderosa", "cacto", "folha_josue",
+                           "folha_palmeira", "folha_bordo_verm", "folha_bordo_lar", "folha_bordo_amar",
+                           "folha_bordo_verde", "folha_betula", "folha_carvalho_ca", "folha_loblolly",
+                           "folha_artemisia", "folha_junipero", "folha_chaparral", "folha_creosoto",
+                           "folha_paloverde", "folha_palmito")},
+    **{k: "lenho" for k in ("casca_sequoia", "casca_ponderosa", "casca_josue", "casca_palmeira",
+                            "casca_betula")},
     "terra": "solo", "caminho": "solo", "lavrado": "solo", "areia": "solo",
     "prado": "erva",
 }
@@ -216,6 +254,10 @@ FICHEIRO = {
     # um ladrilho de 3 m repete vinte vezes e le-se como papel de parede.
     # A 9 m os estratos tem tamanho de estratos.
     "falesia":    ("falesia", 13.0, 1.0),
+    # a fotografia `penedo` sem cor e com passa-alto (assets/texturas/estratos/; o
+    # musgo verde nao existe no deserto). Abaixo do resto: falta uma pedra de
+    # arenito propria (SDXL), como as gen_* das estradas
+    "estratos":   ("estratos", 9.0, 1.0),
     # ── A FALESIA DO ALGARVE (25/09, COSTA2=1) ────────────────────────────
     # calcario dourado em bancos horizontais, gerado por codigo; 24 m por
     # ladrilho, como o METROS do tex_falesia_algarve.py
@@ -1397,6 +1439,334 @@ def proto_moita(raio=1.6, folha="folha_mato", semente=0, lod=False):
         _copa(math.cos(a) * d, math.sin(a) * d, raio * 0.22, raio * 0.42, raio * 0.28, 2,
               raio * 0.26, folha, rnd, sz=0.8, cima=0.1, partes=partes)
     LOD = False
+    return _guardar(_juntar(partes))
+
+
+# ── M3: AS ARVORES DOS EUA (12/11) ──────────────────────────────────────────
+# A mesma receita da F2 (tufos, galhos, versao de longe com `lod=True`), com as
+# silhuetas que dizem o sitio a distancia de mapa: o abeto e a sequoia em CONE
+# alto, o ponderosa de tronco cor de laranja e copa aberta, o saguaro em
+# CANDELABRO, a arvore-de-josue em garfos com bolas de espinhos, a palmeira em
+# PENACHO, o bordo redondo e cerrado (o outono e a cor), a betula de troncos
+# brancos. As outras do mapa (carvalho da California, carvalho-vivo do Sul,
+# pinheiro do Sul, junipero, palo verde) sao as formas da Iberia com folha
+# propria.
+def _tufo_espinhos(x, y, z, r, folha, rnd, sub=2):
+    """a bola de folhas-espada da arvore-de-josue: icosfera com os vertices
+    puxados a sorte para fora, de faces planas (le-se espinhosa, nao fofa)"""
+    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=sub, radius=r, location=(x, y, z))
+    o = bpy.context.object
+    for v in o.data.vertices:
+        v.co = v.co * rnd.uniform(0.35, 1.6)
+    return _novo(o, folha, 0)
+
+
+def _coluna(x0, y0, z0, x1, y1, z1, r, cor, lados=14, costela=0.13, topo=True):
+    """um ramo de cacto: cilindro com COSTELAS (um vertice sim, outro nao, puxado
+    para dentro) e a ponta redonda"""
+    dx, dy, dz = x1 - x0, y1 - y0, z1 - z0
+    L = math.sqrt(dx * dx + dy * dy + dz * dz) or 1.0
+    bpy.ops.mesh.primitive_cylinder_add(vertices=lados, radius=r, depth=L,
+                                        location=((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2))
+    o = bpy.context.object
+    if costela:
+        passo = 2 * math.pi / lados
+        for v in o.data.vertices:
+            k = int(round(math.atan2(v.co.y, v.co.x) / passo))
+            if k % 2:
+                v.co.x *= 1.0 - costela
+                v.co.y *= 1.0 - costela
+    o.rotation_euler = (0.0, math.acos(max(-1.0, min(1.0, dz / L))), math.atan2(dy, dx))
+    partes = [_novo(o, cor, 0)]
+    if topo:
+        bpy.ops.mesh.primitive_uv_sphere_add(segments=lados, ring_count=max(4, lados // 2),
+                                             radius=r * 0.97, location=(x1, y1, z1))
+        t = bpy.context.object
+        t.scale = (1.0, 1.0, 0.8)
+        _aplicar_escala()
+        bpy.ops.object.shade_smooth()
+        partes.append(_novo(t, cor, 0))
+    return partes
+
+
+def _andares(alt, z0, z1, r0, folha, rnd, n_andar, rim, rx_topo=0.025, partes=None):
+    """a copa de uma conifera em ANDARES: de `z0` a `z1` (fracoes da altura), o
+    raio cai de `r0` ao topo. Cada andar e uma SAIA (um cone baixo, mais largo
+    em baixo) com tufos pendurados na borda, e os andares tocam-se: com discos
+    separados a 1.a bancada saiu um pagode (12/11)."""
+    partes = [] if partes is None else partes
+    sub_n = 1 if LOD else 2
+    passo = (z1 - z0) / max(1, n_andar - 1)
+    for k in range(n_andar):
+        t = k / max(1, n_andar - 1)
+        z = alt * (z0 + (z1 - z0) * t)
+        rx = alt * (r0 * (1.0 - t) ** 0.85 + rx_topo)
+        # a saia: um lobo achatado e baixo, com a altura de quase dois andares
+        partes.append(_lobo(0, 0, z, rx, max(0.45, alt * passo * 1.15 / rx), folha, rnd,
+                            rugo=0.22, sub=sub_n))
+        n_rim = max(3, int(round(rim * (1.0 - 0.5 * t)))) if not LOD else 0
+        for i in range(n_rim):
+            a = (i + rnd.random() * 0.6) * 2 * math.pi / n_rim
+            partes.append(_lobo(math.cos(a) * rx * 0.86, math.sin(a) * rx * 0.86,
+                                z - alt * passo * 0.35, rx * 0.34, 0.8, folha, rnd, rugo=0.3, sub=1))
+    # a ponta, fina
+    partes.append(_lobo(0, 0, alt * (z1 + passo * 0.6), alt * 0.018, 3.0, folha, rnd, rugo=0.05, sub=1))
+    return partes
+
+
+def proto_abeto(alt=24.0, folha="folha_abeto", semente=0, lod=False):
+    """o abeto de Douglas / a picea: fuste direito ate ao topo e a copa em CONE
+    de andares, do chao (quase) a ponta. Verde-azulado escuro."""
+    import random as _r
+    rnd = _r.Random(semente)
+    global LOD
+    LOD = bool(lod)
+    partes = [_galho(0, 0, 0, 0, 0, alt * 0.97, alt * 0.022)]
+    _andares(alt, 0.12, 0.90, 0.18, folha, rnd, 5 if LOD else 9, 6, partes=partes)
+    LOD = False
+    return _guardar(_juntar(partes))
+
+
+def proto_sequoia(alt=34.0, folha="folha_sequoia", semente=0, lod=False):
+    """a sequoia: o TRONCO e que a diz -- grosso, vermelho, nu ate meia altura --
+    e a copa estreita e alta por cima, de ponta redonda"""
+    import random as _r
+    rnd = _r.Random(semente)
+    global LOD
+    LOD = bool(lod)
+    partes = [_galho(0, 0, 0, 0, 0, alt * 0.55, alt * 0.042, "casca_sequoia"),
+              _galho(0, 0, alt * 0.55, 0, 0, alt * 0.95, alt * 0.024, "casca_sequoia")]
+    _andares(alt, 0.42, 0.92, 0.11, folha, rnd, 5 if LOD else 9, 5, rx_topo=0.035, partes=partes)
+    LOD = False
+    return _guardar(_juntar(partes))
+
+
+def proto_ponderosa(alt=22.0, folha="folha_ponderosa", semente=0, lod=False):
+    """o pinheiro ponderosa das serras do Oeste: fuste alto cor de LARANJA e a
+    copa aberta no terco de cima, em molhos nas pontas de ramos curtos (ve-se o
+    ceu entre eles)"""
+    import random as _r
+    rnd = _r.Random(semente)
+    global LOD
+    LOD = bool(lod)
+    partes = [_galho(0, 0, 0, 0, 0, alt * 0.94, alt * 0.032, "casca_ponderosa")]
+    _copa(0, 0, alt * 0.84, alt * 0.11, alt * 0.12, 8, alt * 0.07, folha, rnd, sz=0.8, cima=0.2,
+          partes=partes)
+    n = 5 + (semente % 2)
+    for k in range(n):
+        a = k * 2.4 + rnd.uniform(-0.3, 0.3)
+        z = alt * (0.52 + 0.30 * k / (n - 1))
+        L = alt * (0.17 - 0.07 * k / (n - 1))
+        if LOD and k % 2:
+            continue                       # de longe, metade dos ramos chega
+        x1, y1 = math.cos(a) * L, math.sin(a) * L
+        partes.append(_galho(0, 0, z, x1, y1, z + alt * 0.05, alt * 0.012, "casca_ponderosa"))
+        _copa(x1, y1, z + alt * 0.07, alt * 0.075, alt * 0.05, 3, alt * 0.055, folha, rnd, sz=0.65,
+              cima=0.2, partes=partes)
+    LOD = False
+    return _guardar(_juntar(partes))
+
+
+def proto_saguaro(alt=10.0, semente=0, lod=False):
+    """o saguaro: uma coluna verde com costelas e dois ou tres BRACOS que saem
+    de lado e sobem -- o candelabro que diz Sonora a qualquer distancia"""
+    import random as _r
+    rnd = _r.Random(semente)
+    lados = 8 if lod else 14
+    cost = 0.0 if lod else 0.13
+    r = alt * 0.055
+    partes = _coluna(0, 0, 0, 0, 0, alt * 0.94, r, "cacto", lados, cost)
+    n = 1 + (semente % 3)
+    for i in range(n):
+        a = i * (2 * math.pi / n) + rnd.uniform(-0.5, 0.5)
+        z0 = alt * rnd.uniform(0.38, 0.55)
+        d = alt * rnd.uniform(0.11, 0.15)
+        ra = r * 0.78
+        x1, y1, z1 = math.cos(a) * d, math.sin(a) * d, z0 + alt * 0.05
+        # o cotovelo: sai quase na horizontal, e depois sobe
+        partes += _coluna(0, 0, z0, x1, y1, z1, ra, "cacto", lados, cost, topo=False)
+        bpy.ops.mesh.primitive_uv_sphere_add(segments=lados, ring_count=max(4, lados // 2),
+                                             radius=ra, location=(x1, y1, z1))
+        bpy.ops.object.shade_smooth()
+        partes.append(_novo(bpy.context.object, "cacto", 0))
+        partes += _coluna(x1, y1, z1, x1, y1, z1 + alt * rnd.uniform(0.22, 0.34), ra, "cacto",
+                          lados, cost)
+    return _guardar(_juntar(partes))
+
+
+def proto_josue(alt=8.0, semente=0, lod=False):
+    """a arvore-de-josue do Mojave: tronco curto que se parte em GARFOS, cada
+    ponta com uma bola de folhas-espada. Dois andares de garfos (um, de longe)."""
+    import random as _r
+    rnd = _r.Random(semente)
+    zt = alt * 0.36
+    partes = [_galho(0, 0, 0, 0, 0, zt, alt * 0.055, "casca_josue")]
+    pontas = []
+    n = 2 + (semente % 2)
+    for i in range(n):
+        a = i * (2 * math.pi / n) + rnd.uniform(-0.4, 0.4)
+        d = alt * rnd.uniform(0.16, 0.22)
+        p1 = (math.cos(a) * d, math.sin(a) * d, alt * rnd.uniform(0.58, 0.68))
+        partes.append(_galho(0, 0, zt * 0.95, *p1, alt * 0.04, "casca_josue"))
+        if lod:
+            pontas.append(p1)
+            continue
+        for s in (-1, 1):
+            b = a + s * rnd.uniform(0.4, 0.8)
+            e = alt * rnd.uniform(0.10, 0.15)
+            p2 = (p1[0] + math.cos(b) * e, p1[1] + math.sin(b) * e, p1[2] + alt * rnd.uniform(0.14, 0.24))
+            partes.append(_galho(*p1, *p2, alt * 0.028, "casca_josue"))
+            pontas.append(p2)
+    for p in pontas:
+        partes.append(_tufo_espinhos(p[0], p[1], p[2] + alt * 0.04, alt * (0.13 if not lod else 0.17),
+                                     "folha_josue", rnd, sub=1))
+    return _guardar(_juntar(partes))
+
+
+def proto_palmeira(alt=14.0, semente=0, lod=False):
+    """a palmeira da Florida: fuste fino e CURVO, e no topo um penacho de folhas
+    compridas que caem em arco. Cada folha e uma fita dobrada em V, de duas
+    faces (vista de baixo nao pode desaparecer)."""
+    import random as _r
+    rnd = _r.Random(semente)
+    a0 = rnd.uniform(0, 2 * math.pi)
+    curva = alt * rnd.uniform(0.10, 0.18)
+    nseg = 3 if lod else 5
+    pts = []
+    for k in range(nseg + 1):
+        t = k / nseg
+        pts.append((math.cos(a0) * curva * t * t, math.sin(a0) * curva * t * t, alt * 0.92 * t))
+    partes = []
+    for k in range(nseg):
+        r = alt * (0.030 - 0.008 * k / nseg)
+        partes.append(_galho(*pts[k], *pts[k + 1], r, "casca_palmeira"))
+    tx, ty, tz = pts[-1]
+    # o "coracao" de onde saem as folhas
+    partes.append(_lobo(tx, ty, tz, alt * 0.035, 1.2, "casca_palmeira", rnd, rugo=0.1, sub=1))
+    nf = 7 if lod else 11
+    ns = 3 if lod else 7
+    L = alt * 0.34
+    W = alt * 0.075
+    verts, faces = [], []
+    for f in range(nf):
+        a = f * 2 * math.pi / nf + rnd.uniform(-0.2, 0.2)
+        sobe = rnd.uniform(0.35, 0.75)                    # quanto a folha sobe antes de cair
+        ca, sa = math.cos(a), math.sin(a)
+        b0 = len(verts)
+        for s in range(ns + 1):
+            u = s / ns
+            h = L * u
+            z = tz + L * (sobe * u - (0.55 + sobe) * u * u)
+            w = W * math.sin(math.pi * min(1.0, 0.15 + u * 0.95)) * (1.0 - 0.3 * u)
+            cx, cy = tx + ca * h, ty + sa * h
+            # esquerda, nervura, direita: a nervura mais baixa (o V)
+            for lado, dz in ((-1, w * 0.35), (0, 0.0), (1, w * 0.35)):
+                verts.append((cx - sa * w * lado, cy + ca * w * lado, z + dz))
+        for s in range(ns):
+            for c in range(2):
+                i0 = b0 + s * 3 + c
+                faces.append((i0, i0 + 3, i0 + 4, i0 + 1))
+    # o verso: os MESMOS pontos noutros vertices (o `validate` apaga uma face
+    # que repete os vertices de outra, mesmo ao contrario)
+    nv = len(verts)
+    verts = verts + list(verts)
+    faces = faces + [tuple(i + nv for i in q[::-1]) for q in faces]
+    partes.append(_malha("palma", verts, faces, "folha_palmeira", bisel=0))
+    return _guardar(_juntar(partes))
+
+
+def proto_bordo(alt=14.0, folha="folha_bordo_verm", semente=0, lod=False):
+    """o bordo (acer) do Nordeste: tronco curto, tres pernadas e uma copa
+    REDONDA e cerrada, um pouco mais alta do que larga. No outono e a cor que o
+    diz; a forma tem de ser cheia para a cor ter onde estar."""
+    import random as _r
+    rnd = _r.Random(semente)
+    global LOD
+    LOD = bool(lod)
+    zt = alt * 0.32
+    partes = [_galho(0, 0, 0, 0, 0, zt, alt * 0.048)]
+    for i in range(3):
+        a = i * 2.1 + rnd.random()
+        partes.append(_galho(0, 0, zt * 0.85, math.cos(a) * alt * 0.14, math.sin(a) * alt * 0.14,
+                             alt * 0.60, alt * 0.028))
+    _copa(0, 0, alt * 0.62, alt * 0.34, alt * 0.27, 30, alt * 0.10, folha, rnd, sz=0.9, cima=0.2,
+          partes=partes)
+    LOD = False
+    return _guardar(_juntar(partes))
+
+
+def proto_betula(alt=13.0, folha="folha_betula", semente=0, lod=False):
+    """a betula: dois ou tres troncos BRANCOS e finos que abrem do pe, cada um
+    com uma copa estreita e solta. O branco ve-se entre os bordos."""
+    import random as _r
+    rnd = _r.Random(semente)
+    global LOD
+    LOD = bool(lod)
+    partes = []
+    n = 2 + (semente % 2)
+    for i in range(n):
+        a = i * (2 * math.pi / n) + rnd.uniform(-0.4, 0.4)
+        inc = alt * rnd.uniform(0.07, 0.12)
+        x1, y1, z1 = math.cos(a) * inc, math.sin(a) * inc, alt * rnd.uniform(0.80, 0.95)
+        partes.append(_galho(0, 0, 0, x1, y1, z1, alt * 0.022, "casca_betula"))
+        _copa(x1 * 0.9, y1 * 0.9, z1 * 0.70, alt * 0.17, alt * 0.26, 11, alt * 0.085, folha, rnd,
+              sz=1.0, cima=0.0, partes=partes)
+    LOD = False
+    return _guardar(_juntar(partes))
+
+
+def proto_junipero(alt=4.5, folha="folha_junipero", semente=0, lod=False):
+    """o junipero (e o pinheiro-pinyon) das bacias: arvore baixa e irregular,
+    um tronco torto e a copa num molho escuro e espesso, mais alta do que a
+    moita e mais escura do que a artemisia a volta"""
+    import random as _r
+    rnd = _r.Random(semente)
+    global LOD
+    LOD = bool(lod)
+    a = rnd.uniform(0, 2 * math.pi)
+    xt, yt = math.cos(a) * alt * 0.08, math.sin(a) * alt * 0.08
+    partes = [_galho(0, 0, 0, xt, yt, alt * 0.35, alt * 0.06)]
+    _copa(xt, yt, alt * 0.58, alt * 0.30, alt * 0.36, 9, alt * 0.15, folha, rnd, sz=0.85, cima=0.1,
+          partes=partes)
+    LOD = False
+    return _guardar(_juntar(partes))
+
+
+def proto_artemisia(raio=1.3, folha="folha_artemisia", semente=0, lod=False):
+    """a artemisia (sagebrush): a moita cinzento-esverdeada que cobre a bacia.
+    Ha quatro por arvore, por isso e barata (icosferas de 20 faces); mas tem a
+    borda partida em seis tufos de alturas diferentes, ou le-se como PEDRA (o
+    que ja tinha acontecido a moita da Iberia, 28/09)"""
+    import random as _r
+    rnd = _r.Random(semente)
+    partes = [_lobo(0, 0, raio * 0.40, raio * 0.75, 0.75, folha, rnd, rugo=0.35, sub=1)]
+    for i in range(3 if lod else 6):
+        a = i * (2 * math.pi / (3 if lod else 6)) + rnd.uniform(-0.4, 0.4)
+        d = raio * rnd.uniform(0.55, 0.85)
+        partes.append(_lobo(math.cos(a) * d, math.sin(a) * d, raio * rnd.uniform(0.25, 0.55),
+                            raio * rnd.uniform(0.35, 0.5), 0.9, folha, rnd, rugo=0.4, sub=1))
+    return _guardar(_juntar(partes))
+
+
+def proto_silhueta(cx, cy, cz, rx, ry, rz, folha, cone=False, tz=0.0, tr=0.0, casca="madeira"):
+    """(M3, 13/11) a arvore MUITO de longe (so no 2.o mapa, a mais de ~1,1 km):
+    a copa num so solido -- elipsoide de 20 faces, ou cone de 6 lados nas
+    coniferas -- e o tronco. O forno tira as medidas da arvore inteira, por isso
+    a silhueta e a cor sao as dela; custa ~40 triangulos contra ~220 da versao
+    de longe, e e o que deixa o Este ter floresta cerrada na moldura de gravacao."""
+    partes = []
+    if tz > 0.3:
+        partes.append(_galho(0, 0, 0, 0, 0, tz, tr, casca))
+    if cone:
+        bpy.ops.mesh.primitive_cone_add(vertices=6, radius1=1.0, radius2=0.0, depth=2.0,
+                                        location=(cx, cy, cz))
+    else:
+        bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=1, radius=1.0, location=(cx, cy, cz))
+    o = bpy.context.object
+    o.scale = (rx, ry, rz)
+    _aplicar_escala()
+    bpy.ops.object.shade_smooth()
+    partes.append(_novo(o, folha, 0))
     return _guardar(_juntar(partes))
 
 

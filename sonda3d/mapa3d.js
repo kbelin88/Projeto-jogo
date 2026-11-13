@@ -47,13 +47,20 @@ export async function iniciar(hospedeiro, opcoes = {}) {
   // para experimentar sem esperar pelo mapa todo. O modulo e o mesmo: o que
   // se ve na bancada e o que o jogo vai ver.
   const CENA = opcoes.cena || null;
+  // ── QUAL MAPA (11/11) ────────────────────────────────────────────────────
+  // Sem nada, a Iberia, com os ficheiros ao lado deste modulo, como sempre.
+  // Com `{ mapa: "usa" }` os ficheiros DO MAPA (pecas.glb, mapa3d.json, o chao
+  // pintado, a costa do mar) vem da pasta `usa/`, onde o forno os deixa com
+  // MAPA=usa. O que nao e de mapa nenhum -- os soldados, as ondas, as pecas
+  // que se mexem, as faixas das estradas -- continua a vir daqui.
+  const BASE_M = opcoes.mapa ? BASE + opcoes.mapa + "/" : BASE;
   // numa bancada o forno reescreve o ficheiro a cada volta: sem isto o
   // navegador servia o da cache e a volta nova parecia nao ter mudado nada
   const FRESCO = CENA ? "?t=" + Date.now() : "";
   const FICH_JSON = (CENA || "mapa3d") + ".json" + FRESCO;
   const FICH_GLB = CENA ? CENA + ".glb" + FRESCO : "pecas.glb";
   const cfgSol = await (await fetch(BASE + "cena.json")).json();
-  const MAPA = await (await fetch(BASE + FICH_JSON)).json();
+  const MAPA = await (await fetch(BASE_M + FICH_JSON)).json();
   const [LX, LY] = MAPA.mapa_m;
   // ── A AGUA VEM DO FORNO (26/09) ─────────────────────────────────────────
   // A costa do Algarve e a agua turquesa sao um par: o forno que coze uma
@@ -178,11 +185,11 @@ vec3 CustomToneMapping( vec3 color ) { return gradingCanal( AgXToneMapping( colo
   // depois o verde -- areia -> turquesa -> verde-agua -> azul-fundo.
   let costa = null;
   try {
-    const meta = await (await fetch(BASE + "mar_costa.json")).json();
+    const meta = await (await fetch(BASE_M + "mar_costa.json")).json();
     if (meta.versao !== 2) throw new Error("mar_costa.json antigo (versao " + meta.versao + ")");
     const tl = new THREE.TextureLoader();
     const ler = async (f) => {
-      const t = await tl.loadAsync(BASE + f);
+      const t = await tl.loadAsync(BASE_M + f);
       t.flipY = false;                      // a linha 0 da imagem e o norte (z0)
       t.colorSpace = THREE.NoColorSpace;    // sao metros, nao sao cor
       t.generateMipmaps = false;            // um mip misturava agua com terra
@@ -509,7 +516,7 @@ roughnessFactor = mix(roughnessFactor, 0.95, espuma);`)
   }
 
   const g = await new Promise((ok, mal) =>
-    new GLTFLoader().load(BASE + FICH_GLB, ok, undefined, mal));
+    new GLTFLoader().load(BASE_M + FICH_GLB, ok, undefined, mal));
 
   // ── AS PECAS QUE SE MEXEM (28/09) ───────────────────────────────────────
   // Pas, barcos, gaivotas e bandeiras: modeladas no forno (`vida.py`), no
@@ -967,10 +974,10 @@ gl_Position = projectionMatrix * mvPosition;`);
   // claro-escuro, a cor e a da pintura. Sem os ficheiros, o chao fica como era.
   let chaoPintado = null;
   try {
-    const meta = await (await fetch(BASE + "chao.json")).json();
+    const meta = await (await fetch(BASE_M + "chao.json")).json();
     const tl = new THREE.TextureLoader();
     const ler = async (f, srgb, repetir) => {
-      const t = await tl.loadAsync(BASE + f);
+      const t = await tl.loadAsync(BASE_M + f);
       t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
       t.flipY = false;
       if (repetir) { t.wrapS = t.wrapT = THREE.RepeatWrapping; }
@@ -1011,6 +1018,8 @@ gl_Position = projectionMatrix * mvPosition;`);
     sh.uniforms.chCampo = { value: campo };
     sh.uniforms.chLado = { value: new THREE.Vector2(meta.LX, meta.LY) };
     sh.uniforms.chForca = { value: 0.6 };
+    // (M2, 11/11) as serras do 2.o mapa: o `chao.json` diz se as ha
+    sh.uniforms.chSerras = { value: meta.serras ? 1.0 : 0.0 };
     det.forEach((t, k) => {
       sh.uniforms["chDet" + k] = { value: t };
       sh.uniforms["chEsc" + k] = { value: 1.0 / meta.detalhe[k].metros };
@@ -1018,15 +1027,26 @@ gl_Position = projectionMatrix * mvPosition;`);
     });
   }
   const GLSL_CHAO = `uniform sampler2D chCor; uniform sampler2D chTipo; uniform sampler2D chCampo;
-uniform vec2 chLado; uniform float chForca;
+uniform vec2 chLado; uniform float chForca; uniform float chSerras;
 ${[0, 1, 2, 3].map((k) => `uniform sampler2D chDet${k}; uniform float chEsc${k}; uniform vec3 chMed${k};`).join(" ")}
 vec3 chaoPintado() {
   // o pixel (0,0) da pintura e o canto NOROESTE; no three o norte e -z
   vec2 uvc = vec2((vMundoSL.x + chLado.x * 0.5) / chLado.x, (vMundoSL.z + chLado.y * 0.5) / chLado.y);
   vec3 c = texture2D(chCor, uvc).rgb;
   vec4 w = texture2D(chTipo, uvc);
-  w /= max(w.r + w.g + w.b + w.a, 1e-3);
+  float soma = w.r + w.g + w.b + w.a;
+  w /= max(soma, 1e-3);
   vec2 p = vMundoSL.xz;
+  // ── AS SERRAS (M2, 11/11; so no mapa que as tem) ──────────────────────
+  // Numa parede de 60 graus a fotografia da pedra, projetada de cima, estica
+  // para o dobro ao longo da queda: le-se pelos tres eixos, como a falesia.
+  // E a NEVE nao tem grao: o forno baixa-lhe a soma dos pesos, e o detalhe
+  // apaga-se na mesma medida. Na Iberia a soma e sempre 1 e nada muda.
+  // (a pedra numa escala so desenhava um pontilhado regular na encosta inteira:
+  // le-se em duas, a segunda 4,3x maior, e a de longe manda)
+  vec3 ped = chSerras > 0.5 ? slTriplanar(chDet3, chEsc3) * 0.4 + slTriplanar(chDet3, chEsc3 * 0.23) * 0.6
+                            : slLer(chDet3, p * chEsc3).rgb;
+  float forcaDet = chSerras > 0.5 ? chForca * min(1.0, soma * 1.15) : chForca;
   // relva e erva seca lidas DUAS vezes (outra escala, rodada 37 graus) e
   // misturadas: um ladrilho so, por mais pintado, desenha uma grelha ao
   // longe (marca do Lucas no sul arido, 27/09)
@@ -1034,7 +1054,7 @@ vec3 chaoPintado() {
   vec3 d = (slLer(chDet0, p * chEsc0).rgb * 0.55 + slLer(chDet0, q * chEsc0).rgb * 0.45) / chMed0 * w.r
          + (slLer(chDet1, p * chEsc1).rgb * 0.55 + slLer(chDet1, q * chEsc1).rgb * 0.45) / chMed1 * w.g
          + slLer(chDet2, p * chEsc2).rgb / chMed2 * w.b
-         + slLer(chDet3, p * chEsc3).rgb / chMed3 * w.a;
+         + ped / chMed3 * w.a;
   // ── OS SULCOS, desenhados aqui (nitidos a qualquer distancia) ─────────
   // rumo, forca e passo da parcela vem do forno; a risca some quando fica mais
   // fina do que um pixel (senao era moire a distancia)
@@ -1049,7 +1069,7 @@ vec3 chaoPintado() {
     forca *= 1.0 - smoothstep(0.25, 0.6, larg);
     c *= 1.0 - forca * risca;
   }
-  return c * mix(vec3(1.0), d, chForca);
+  return c * mix(vec3(1.0), d, forcaDet);
 }
 `;
   function pintarChao(mat) {
@@ -1229,6 +1249,75 @@ void main() {`)
       }
   }
 
+  // ── O GRAND CANYON E AS MESAS (M2, 12/11; so no 2.o mapa) ───────────────
+  // Malhas proprias do forno (`ferramentas/cena/sudoeste.py`). A cor NAO vem da
+  // pintura de cima: uma parede de 14 m cabe em 2 m de mapa, dois pixeis. Vem
+  // das CAMADAS, pela altura do mundo (`MAPA.estratos`: [z, r, g, b] sRGB, de
+  // baixo para cima), com a linha de cada camada a ondular um pouco e bandas
+  // finas por dentro. A fotografia da pedra (sem cor) da o grao, lida pelos tres
+  // eixos. A cor de vertice e DADO: R = 1 na beira da aba do canyon, onde a cor
+  // passa a ser a do chao pintado (a costura com o planalto nao se ve).
+  if (MAPA.estratos && MAPA.estratos.length) {
+    const N = MAPA.estratos.length;
+    const estZ = MAPA.estratos.map((e) => e[0]);
+    const estC = MAPA.estratos.map((e) => new THREE.Color().setRGB(e[1], e[2], e[3], THREE.SRGBColorSpace));
+    const pintarEstratos = (mat) => {
+      // o canyon e as mesas partilham o material "estratos": pinta-se UMA vez
+      // (duas vezes declarava o chao e os estratos em dobro e o shader nao compilava)
+      if (mat.userData.estPintado) return;
+      mat.userData.estPintado = true;
+      semLadrilho(mat, { macro: 0.0, escalaRocha: 1 / 9.0, forcaRocha: 0.0, triplanarProprio: true });
+      const antes = mat.onBeforeCompile;
+      mat.onBeforeCompile = (sh, r) => {
+        if (antes) antes(sh, r);
+        if (chaoPintado) uniformesChao(sh);
+        sh.uniforms.estZ = { value: estZ };
+        sh.uniforms.estC = { value: estC };
+        // a media da fotografia (em luz linear): o grao divide-se por ela
+        sh.uniforms.estMed = { value: new THREE.Vector3(0.26, 0.24, 0.21) };
+        mat.userData.est = sh.uniforms;
+        sh.fragmentShader = sh.fragmentShader
+          .replace("void main() {", (chaoPintado ? GLSL_CHAO : "") + `
+#define EST_N ${N}
+uniform float estZ[EST_N]; uniform vec3 estC[EST_N]; uniform vec3 estMed;
+vec3 estratoCor(float y) {
+  vec3 c = estC[0];
+  for (int k = 1; k < EST_N; k++) {
+    float t = clamp((y - estZ[k - 1]) / max(estZ[k] - estZ[k - 1], 0.01), 0.0, 1.0);
+    if (y >= estZ[k - 1]) c = mix(estC[k - 1], estC[k], t);
+  }
+  return c;
+}
+void main() {`)
+          .replace("diffuseColor *= sampledDiffuseColor;", `{
+  vec2 q_ = vMundoSL.xz;
+  // a linha das camadas ondula (senao lia-se a regua) e cada camada tem bandas finas
+  float y_ = vMundoSL.y + (slRuido(q_ / 38.0) - 0.5) * 1.4 + (slRuido(q_ / 9.0) - 0.5) * 0.5;
+  vec3 est_ = estratoCor(y_);
+  est_ *= 0.93 + 0.07 * sin(y_ * 2.3 + slRuido(q_ / 21.0) * 3.0) * sin(y_ * 0.71 + 1.3);
+  vec3 det_ = sampledDiffuseColor.rgb / estMed;
+  vec3 rocha_ = est_ * mix(vec3(1.0), det_, 0.75);
+  // nos patamares e nos topos assenta po: mais claro e mais quente
+  float plano_ = smoothstep(0.78, 0.96, abs(normalize(vNorSL).y));
+  rocha_ = mix(rocha_, est_ * vec3(1.10, 1.0, 0.86) * mix(vec3(1.0), det_, 0.4), plano_ * 0.45);
+  ${chaoPintado ? "rocha_ = mix(rocha_, chaoPintado(), clamp(vColor.r, 0.0, 1.0));" : ""}
+  diffuseColor.rgb = rocha_;
+}`)
+          // a cor de vertice sao DADOS: nao multiplica
+          .replace("#include <color_fragment>", "");
+      };
+      mat.needsUpdate = true;
+    };
+    for (const nome of ["sudoeste_canyon", "sudoeste_mesas"])
+      for (const ch of (banco[nome] || [])) {
+        pintarEstratos(ch.material);
+        ch.castShadow = true;
+        ch.receiveShadow = true;
+        cena.add(ch);
+        nTri += contaTri(ch);
+      }
+  }
+
   // ── AS ALDEIAS NOVAS (26/09) ────────────────────────────────────────────
   // As povoacoes no estilo de Faro (`ferramentas/cena/aldeia2.py`) nao sao
   // pecas repetidas: cada uma e geometria propria, e o forno junta TODAS numa
@@ -1262,6 +1351,9 @@ void main() {`)
   // as duas nascem com lugar para todas.
   const LOD = MAPA.lod || {};
   for (const [nome, nl] of Object.entries(LOD)) if (quantas[nome]) quantas[nl] = quantas[nome];
+  // (M3, 13/11; so no 2.o mapa) a terceira, MUITO de longe: um solido por arvore
+  const LOD2 = MAPA.lod2 || {};
+  for (const [nome, nl] of Object.entries(LOD2)) if (quantas[nome]) quantas[nl] = quantas[nome];
   const inst = {};
   for (const [nome, n] of Object.entries(quantas)) {
     const partes = banco[nome];
@@ -1333,7 +1425,9 @@ void main() {`)
       const r = Math.sin((m.p[0] + t.p[0]) * 12.9898 + (m.p[1] + t.p[1]) * 78.233
                          + k++ * 3.17) * 43758.5453;
       const d = 0.90 + 0.20 * (r - Math.floor(r));
-      _cor.copy(MATA_SECA).lerp(MATA_HUMIDA, h).multiplyScalar(d);
+      // (M3) `h` nulo: o 2.o mapa, onde a cor ja e a do bioma -- so o desvio
+      if (m.h === null) _cor.setRGB(d, d, d);
+      else _cor.copy(MATA_SECA).lerp(MATA_HUMIDA, h).multiplyScalar(d);
       if (temLod) {
         // guarda-se; quem a poe numa das listas e o `redistribuirLOD`
         V.set(m.p[0] + t.p[0] * m.e, z + t.p[2] * m.e, -(m.p[1] + t.p[1] * m.e));
@@ -1358,22 +1452,25 @@ void main() {`)
   // tufos. So se refaz quando a camara anda mais de 25 m: e uma passagem pelas
   // 12 mil arvores, barata, mas nao e para cada quadro.
   const LOD_M = 420;
+  const LOD2_M = 1100;       // (M3) so conta onde o mapa traz `lod2`
   const _ultLod = new THREE.Vector3(1e9, 0, 0);
   function redistribuirLOD(forcar) {
     const cp = cam.position;
     if (!forcar && Math.hypot(cp.x - _ultLod.x, cp.z - _ultLod.z) < 25 && Math.abs(cp.y - _ultLod.y) < 25) return;
     _ultLod.copy(cp);
-    const lim2 = LOD_M * LOD_M;
+    const lim2 = LOD_M * LOD_M, lim2b = LOD2_M * LOD2_M;
     for (const [peca, lista] of Object.entries(arvLod)) {
       const perto = inst[peca], longe = inst[LOD[peca]];
-      for (const im of perto) im.count = 0;
-      for (const im of longe) im.count = 0;
+      const muito = (LOD2[peca] && inst[LOD2[peca]]) || null;
+      const todas = muito ? perto.concat(longe, muito) : perto.concat(longe);
+      for (const im of todas) im.count = 0;
       for (const a of lista) {
         const dx = a.x - cp.x, dz = a.z - cp.z, dy = cp.y;
-        const alvo = (dx * dx + dz * dz + dy * dy * 0.3) < lim2 ? perto : longe;
+        const d2 = dx * dx + dz * dz + dy * dy * 0.3;
+        const alvo = d2 < lim2 ? perto : (muito && d2 > lim2b ? muito : longe);
         for (const im of alvo) { im.setMatrixAt(im.count, a.m); im.setColorAt(im.count, a.c); im.count++; }
       }
-      for (const im of perto.concat(longe)) {
+      for (const im of todas) {
         im.instanceMatrix.needsUpdate = true;
         if (im.instanceColor) im.instanceColor.needsUpdate = true;
       }
